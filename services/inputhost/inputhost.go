@@ -90,7 +90,6 @@ type (
 		maxConnLimit           int32
 		extMsgsLimitPerSecond  int32
 		connMsgsLimitPerSecond int32
-		useWebsocket           int32 // flag of whether to use websocket to connect to store, under uConfig control
 		hostMetrics            *load.HostMetrics
 		lastLoadReportedTime   int64 // unix nanos when the last load report was sent
 		common.SCommon
@@ -657,16 +656,6 @@ func (h *InputHost) GetMaxConnPerDest() int {
 // GetNumConnections is the number of connections on this host
 func (h *InputHost) GetNumConnections() int {
 	return int(h.hostMetrics.Get(load.HostMetricNumOpenConns))
-}
-
-// SetUseWebsocket gets the flag of whether to use websocket to connect to store
-func (h *InputHost) SetUseWebsocket(useWebsocket int32) {
-	atomic.StoreInt32(&h.useWebsocket, useWebsocket)
-}
-
-// GetUseWebsocket gets the flag of whether to use websocket to connect to store
-func (h *InputHost) GetUseWebsocket() int {
-	return int(atomic.LoadInt32(&h.useWebsocket))
 }
 
 // Shutdown shutsdown all the InputHost cleanly

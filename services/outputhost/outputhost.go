@@ -77,7 +77,6 @@ type (
 		m3Client          metrics.Client
 		dClient           dconfig.Client
 		numConsConn       int32                  // number of active pubConnection
-		useWebsocket      int32                  // flag of whether to use websocket to connect to store, under uConfig control
 		ackMgrMap         map[uint32]*ackManager // map of all the ack managers on this output
 		ackMgrMutex       sync.RWMutex           // mutex protecting the above map
 		sessionID         uint16
@@ -593,16 +592,6 @@ func (h *OutputHost) ConsumerGroupsUpdated(ctx thrift.Context, request *admin.Co
 		}
 	}
 	return err
-}
-
-// SetUseWebsocket gets the flag of whether to use websocket to connect to store
-func (h *OutputHost) SetUseWebsocket(useWebsocket int32) {
-	atomic.StoreInt32(&h.useWebsocket, useWebsocket)
-}
-
-// GetUseWebsocket gets the flag of whether to use websocket to connect to store
-func (h *OutputHost) GetUseWebsocket() int {
-	return 1
 }
 
 // unloadAll tries to unload everything on this OutputHost

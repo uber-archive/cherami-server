@@ -37,8 +37,6 @@ const (
 	UkeyExtMsgs = "inputhost.HostPerExtentMsgsLimitPerSecond"
 	// UkeyConnMsgs is the uconfig key for HostPerConnMsgsLimitPerSecond
 	UkeyConnMsgs = "inputhost.HostPerConnMsgsLimitPerSecond"
-	// UkeyUseWebsocket is the uconfig key for UseWebsocket
-	UkeyUseWebsocket = "inputhost.UseWebsocket"
 )
 
 func (h *InputHost) registerInt() {
@@ -49,7 +47,6 @@ func (h *InputHost) registerInt() {
 	handlerMap[UkeyMaxConnPerDest] = dconfig.GenerateIntHandler(UkeyMaxConnPerDest, h.SetMaxConnPerDest, h.GetMaxConnPerDest)
 	handlerMap[UkeyExtMsgs] = dconfig.GenerateIntHandler(UkeyExtMsgs, h.SetExtMsgsLimitPerSecond, h.GetExtMsgsLimitPerSecond)
 	handlerMap[UkeyConnMsgs] = dconfig.GenerateIntHandler(UkeyConnMsgs, h.SetConnMsgsLimitPerSecond, h.GetConnMsgsLimitPerSecond)
-	handlerMap[UkeyUseWebsocket] = dconfig.GenerateIntHandler(UkeyUseWebsocket, h.SetUseWebsocket, h.GetUseWebsocket)
 	h.dConfigClient.AddHandlers(handlerMap)
 	// Add verify function for the dynamic config value
 	verifierMap := make(map[string]dconfig.Verifier)
@@ -70,16 +67,6 @@ func (h *InputHost) LoadUconfig() {
 			Info("Update the uconfig value")
 	} else {
 		log.Errorf("Cannot get %s from uconfig, Using right format", UkeyHostOverall)
-	}
-
-	// UseWebsocket
-	valueUcfg, ok = h.dConfigClient.GetOrDefault(UkeyUseWebsocket, 0).(int)
-	if ok {
-		h.SetUseWebsocket(int32(valueUcfg))
-		log.WithField(UkeyUseWebsocket, valueUcfg).
-			Info("Update the uconfig value")
-	} else {
-		log.Errorf("Cannot get %s from uconfig, Using right format", UkeyUseWebsocket)
 	}
 }
 

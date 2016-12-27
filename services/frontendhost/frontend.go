@@ -30,7 +30,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	c "github.com/uber/cherami-thrift/.generated/go/cherami"
@@ -81,7 +80,6 @@ type Frontend struct {
 	outputClientByUUID          map[string]c.TChanBOut
 	m3Client                    metrics.Client
 	dClient                     dconfig.Client
-	useWebsocket                int32 // flag of whether ask client to use websocket to connect with input/output, under uConfig control
 }
 
 type publisherInstance struct {
@@ -470,13 +468,14 @@ func isRunnerDestination(destPath string) bool {
 
 // getHostAddressWithProtocol returns host address with different protocols with correct ports, together with deprecation info
 // this could be moved once ringpop supports rich meta information so we can store mutiple ports for different protocols
-func (h *Frontend) getHostAddressWithProtocol(hostAddresses []*c.HostAddress, serviceName string, forceUseWebsocket bool) []*c.HostProtocol {
+func (h *Frontend) getHostAddressWithProtocol(hostAddresses []*c.HostAddress, serviceName string) []*c.HostProtocol {
 
 	tchannelHosts := &c.HostProtocol{
 		HostAddresses: make([]*c.HostAddress, 0, len(hostAddresses)),
 		Protocol:      c.ProtocolPtr(c.Protocol_TCHANNEL),
-		Deprecated:    common.BoolPtr(forceUseWebsocket || h.GetUseWebsocket() > 0),
+		Deprecated:    common.BoolPtr(true),
 	}
+
 	websocketHosts := &c.HostProtocol{
 		HostAddresses: make([]*c.HostAddress, 0, len(hostAddresses)),
 		Protocol:      c.ProtocolPtr(c.Protocol_WS),
@@ -682,12 +681,10 @@ func (h *Frontend) ReadPublisherOptions(ctx thrift.Context, r *c.ReadPublisherOp
 
 	inputHostIds := getInputHostResp.GetInputHostIds()
 
-	forceUseWebsocket := isRunnerDestination(r.GetPath()) // force runners to use websocket
-
 	// Build our result
 	rDHResult := c.NewReadPublisherOptionsResult_()
 	rDHResult.HostAddresses = buildHostAddressesFromHostIds(inputHostIds, h.logger)
-	rDHResult.HostProtocols = h.getHostAddressWithProtocol(rDHResult.HostAddresses, common.InputServiceName, forceUseWebsocket)
+	rDHResult.HostProtocols = h.getHostAddressWithProtocol(rDHResult.HostAddresses, common.InputServiceName)
 	rDHResult.ChecksumOption = c.ChecksumOptionPtr(c.ChecksumOption(checksumOption))
 
 	if len(rDHResult.HostAddresses) > 0 {
@@ -752,12 +749,10 @@ func (h *Frontend) ReadDestinationHosts(ctx thrift.Context, r *c.ReadDestination
 
 	inputHostIds := getInputHostResp.GetInputHostIds()
 
-	forceUseWebsocket := isRunnerDestination(r.GetPath()) // force runners to use websocket
-
 	// Build our result
 	rDHResult := c.NewReadDestinationHostsResult_()
 	rDHResult.HostAddresses = buildHostAddressesFromHostIds(inputHostIds, h.logger)
-	rDHResult.HostProtocols = h.getHostAddressWithProtocol(rDHResult.HostAddresses, common.InputServiceName, forceUseWebsocket)
+	rDHResult.HostProtocols = h.getHostAddressWithProtocol(rDHResult.HostAddresses, common.InputServiceName)
 
 	if len(rDHResult.HostAddresses) > 0 {
 		return rDHResult, nil
@@ -907,12 +902,10 @@ func (h *Frontend) ReadConsumerGroupHosts(ctx thrift.Context, readRequest *c.Rea
 
 	outputHostIds := getOutputHostResp.GetOutputHostIds()
 
-	forceUseWebsocket := isRunnerDestination(readRequest.GetDestinationPath()) // force runners to use websocket
-
 	// Build our result
 	rCGHResult = c.NewReadConsumerGroupHostsResult_()
 	rCGHResult.HostAddresses = buildHostAddressesFromHostIds(outputHostIds, h.logger)
-	rCGHResult.HostProtocols = h.getHostAddressWithProtocol(rCGHResult.HostAddresses, common.OutputServiceName, forceUseWebsocket)
+	rCGHResult.HostProtocols = h.getHostAddressWithProtocol(rCGHResult.HostAddresses, common.OutputServiceName)
 
 	if len(rCGHResult.HostAddresses) > 0 {
 		return
@@ -1340,16 +1333,6 @@ func (h *Frontend) allowMutatePath(path *string) bool {
 	}
 
 	return false
-}
-
-// SetUseWebsocket sets the flag of whether ask client to use websocket to connect with input/output
-func (h *Frontend) SetUseWebsocket(useWebsocket int32) {
-	atomic.StoreInt32(&h.useWebsocket, useWebsocket)
-}
-
-// GetUseWebsocket gets the flag of whether ask client to use websocket to connect with input/output
-func (h *Frontend) GetUseWebsocket() int {
-	return int(atomic.LoadInt32(&h.useWebsocket))
 }
 
 func (h *Frontend) incFailureCounterHelper(scope int, errC metrics.ErrorClass, err error) {

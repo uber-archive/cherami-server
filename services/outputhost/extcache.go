@@ -124,9 +124,6 @@ type extentCache struct {
 	// initialCredits is the credits that should be given to the stores at the start
 	initialCredits int32
 
-	// useWebsocket is the flag of whether to use websocket to connect to store
-	useWebsocket bool
-
 	// loadReporter to report metrics to controller
 	loadReporter common.LoadReporterDaemon
 
