@@ -1,0 +1,8 @@
+{
+    "CurrVersion": 5,
+    "MinCompatibleVersion": 4,
+    "Description": "Added DLQ merge and purge metadata",
+    "SchemaUpdateCqlFiles": [
+       "201606301842_add_dlq_merge_and_purge.cql" 
+    ]
+}

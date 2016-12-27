@@ -1,0 +1,8 @@
+{
+	"CurrVersion": 2,
+	"MinCompatibleVersion": 2,
+	"Description": "Cherami base set of tables",
+	"SchemaUpdateCqlFiles": [
+		"201605031500_cherami_base_tables.cql"
+	]
+}

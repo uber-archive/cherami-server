@@ -1,0 +1,8 @@
+{
+	"CurrVersion": 11,
+	"MinCompatibleVersion": 8,
+	"Description": "create index on multiple tables for xdc",
+	"SchemaUpdateCqlFiles": [
+		"201610050000_xdc_create_index_on_multipe_tables.cql"
+	]
+}

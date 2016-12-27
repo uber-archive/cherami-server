@@ -1,0 +1,15 @@
+#!/bin/bash
+set -uxeo pipefail
+# this script is used to setup the "cherami" keyspace
+# and load all the tables in the .cql file within this keyspace,
+# assuming cassandra is up and running
+#
+# this script is only intended to be used in test environments
+
+# the default keyspace is cherami
+keyspace="cherami"
+CHERAMI_CQLSH_DIR="/usr/local/bin"
+CHERAMI_SCHEMA_DIR="clients/metadata/schema"
+
+$CHERAMI_CQLSH_DIR/cqlsh -f $CHERAMI_SCHEMA_DIR/metadata_keyspace_test.cql
+$CHERAMI_CQLSH_DIR/cqlsh -k $keyspace -f $CHERAMI_SCHEMA_DIR/metadata_test.cql

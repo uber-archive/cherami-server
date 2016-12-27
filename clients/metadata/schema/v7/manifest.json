@@ -1,0 +1,10 @@
+{
+	"CurrVersion": 7,
+	"MinCompatibleVersion": 5,
+	"Description": "Added dynamic_config table, destination checksum_option field",
+	"SchemaUpdateCqlFiles": [
+	"201607251200_add_host_info.cql",
+        "201607251200_add_service_config.cql",
+        "201607281200_add_destination_checksumoption.cql"
+	]
+}

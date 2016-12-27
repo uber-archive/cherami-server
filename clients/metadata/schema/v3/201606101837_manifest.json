@@ -1,0 +1,9 @@
+{
+    "CurrVersion": 3,
+    "MinCompatibleVersion": 2,
+    "Description": "Added store and store_version to extent_replica_stats",
+    "SchemaUpdateCqlFiles": [
+        "201606101837_add_store_and_store_version.cql",
+        "201606131500_add_extent_created_time.cql"
+    ]
+}

@@ -1,0 +1,8 @@
+{
+	"CurrVersion": 10,
+	"MinCompatibleVersion": 8,
+	"Description": "add is_multi_zone index in destinations table",
+	"SchemaUpdateCqlFiles": [
+		"201609290000_destinations_is_multi_zone_index.cql"
+	]
+}

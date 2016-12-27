@@ -1,0 +1,1745 @@
+# Copyright (c) 2016 Uber Technologies, Inc.
+
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+# THE SOFTWARE.
+distance: 1024
+entities:
+- distance: 4
+  entities:
+  - distance: 2
+    entities:
+    - distance: 1
+      entities:
+      - resource: test84-foo1
+        type: host
+      resource: 9.26.38.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test83-foo1
+        type: host
+      resource: 9.26.36.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test46-foo1
+        type: host
+      resource: 9.26.20.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test69-foo1
+        type: host
+      - resource: test54-foo1
+        type: host
+      resource: 9.26.6.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test59-foo1
+        type: host
+      - resource: test44-foo1
+        type: host
+      resource: 9.26.18.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test135-foo1
+        type: host
+      - resource: test136-foo1
+        type: host
+      - resource: test133-foo1
+        type: host
+      - resource: test129-foo1
+        type: host
+      - resource: test123-foo1
+        type: host
+      resource: 9.26.45.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test45-foo1
+        type: host
+      resource: 9.26.19.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test61-foo1
+        type: host
+      resource: 9.26.2.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test90-foo1
+        type: host
+      resource: 9.26.30.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test64-foo1
+        type: host
+      - resource: test49-foo1
+        type: host
+      resource: 9.26.10.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test68-foo1
+        type: host
+      - resource: test57-foo1
+        type: host
+      resource: 9.26.17.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test41-foo1
+        type: host
+      resource: 9.26.0.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test80-foo1
+        type: host
+      resource: 9.26.41.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test78-foo1
+        type: host
+      - resource: test79-foo1
+        type: host
+      - resource: test81-foo1
+        type: host
+      resource: 9.26.42.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test66-foo1
+        type: host
+      - resource: test60-foo1
+        type: host
+      resource: 9.26.13.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test70-foo1
+        type: host
+      - resource: test56-foo1
+        type: host
+      resource: 9.26.15.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test52-foo1
+        type: host
+      - resource: test65-foo1
+        type: host
+      resource: 9.26.4.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test42-foo1
+        type: host
+      resource: 9.26.12.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test63-foo1
+        type: host
+      - resource: test43-foo1
+        type: host
+      resource: 9.26.11.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test47-foo1
+        type: host
+      resource: 9.26.21.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test82-foo1
+        type: host
+      resource: 9.26.37.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test89-foo1
+        type: host
+      resource: 9.26.25.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test141-foo1
+        type: host
+      - resource: test100-foo1
+        type: host
+      - resource: test103-foo1
+        type: host
+      - resource: test106-foo1
+        type: host
+      - resource: test105-foo1
+        type: host
+      resource: 9.26.44.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test76-foo1
+        type: host
+      resource: 9.26.29.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test74-foo1
+        type: host
+      - resource: test58-foo1
+        type: host
+      resource: 9.26.16.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test140-foo1
+        type: host
+      - resource: test138-foo1
+        type: host
+      - resource: test132-foo1
+        type: host
+      - resource: test137-foo1
+        type: host
+      - resource: test130-foo1
+        type: host
+      resource: 9.26.47.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test85-foo1
+        type: host
+      resource: 9.26.39.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test127-foo1
+        type: host
+      - resource: test131-foo1
+        type: host
+      - resource: test128-foo1
+        type: host
+      - resource: test134-foo1
+        type: host
+      - resource: test139-foo1
+        type: host
+      resource: 9.26.46.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test107-foo1
+        type: host
+      resource: 9.26.43.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test53-foo1
+        type: host
+      - resource: test62-foo1
+        type: host
+      resource: 9.26.3.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test67-foo1
+        type: host
+      - resource: test55-foo1
+        type: host
+      resource: 9.26.5.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test51-foo1
+        type: host
+      resource: 9.26.9.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test88-foo1
+        type: host
+      - resource: test87-foo1
+        type: host
+      resource: 9.26.28.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test73-foo1
+        type: host
+      - resource: test48-foo1
+        type: host
+      resource: 9.26.22.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test71-foo1
+        type: host
+      - resource: test50-foo1
+        type: host
+      resource: 9.26.7.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test86-foo1
+        type: host
+      resource: 9.26.40.0/24
+      type: rack
+    resource: 9.26.0.0/16
+    type: pod
+  - distance: 2
+    entities:
+    - distance: 1
+      entities:
+      - resource: test39-foo1
+        type: host
+      - resource: test01-foo1
+        type: host
+      - resource: test26-foo1
+        type: host
+      - resource: test28-foo1
+        type: host
+      - resource: test10-foo1
+        type: host
+      - resource: test30-foo1
+        type: host
+      - resource: test38-foo1
+        type: host
+      resource: 9.27.7.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test95-foo1
+        type: host
+      - resource: test96-foo1
+        type: host
+      - resource: test97-foo1
+        type: host
+      resource: 9.27.39.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test35-foo1
+        type: host
+      - resource: test17-foo1
+        type: host
+      resource: 9.27.3.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test02-foo1
+        type: host
+      - resource: test11-foo1
+        type: host
+      - resource: test33-foo1
+        type: host
+      - resource: test29-foo1
+        type: host
+      resource: 9.27.8.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test120-foo1
+        type: host
+      - resource: test113-foo1
+        type: host
+      - resource: test110-foo1
+        type: host
+      - resource: test114-foo1
+        type: host
+      - resource: test119-foo1
+        type: host
+      - resource: test121-foo1
+        type: host
+      resource: 9.27.46.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test111-foo1
+        type: host
+      - resource: test109-foo1
+        type: host
+      - resource: test118-foo1
+        type: host
+      - resource: test115-foo1
+        type: host
+      - resource: test126-foo1
+        type: host
+      - resource: test112-foo1
+        type: host
+      resource: 9.27.45.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test06-foo1
+        type: host
+      - resource: test27-foo1
+        type: host
+      - resource: test08-foo1
+        type: host
+      resource: 9.27.4.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test23-foo1
+        type: host
+      - resource: test32-foo1
+        type: host
+      - resource: test12-foo1
+        type: host
+      - resource: test05-foo1
+        type: host
+      - resource: test14-foo1
+        type: host
+      resource: 9.27.5.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test15-foo1
+        type: host
+      - resource: test03-foo1
+        type: host
+      - resource: test19-foo1
+        type: host
+      - resource: test21-foo1
+        type: host
+      resource: 9.27.6.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test37-foo1
+        type: host
+      - resource: test40-foo1
+        type: host
+      - resource: test18-foo1
+        type: host
+      - resource: test09-foo1
+        type: host
+      resource: 9.27.2.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test91-foo1
+        type: host
+      - resource: test92-foo1
+        type: host
+      - resource: test93-foo1
+        type: host
+      - resource: test94-foo1
+        type: host
+      resource: 9.27.38.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test98-foo1
+        type: host
+      - resource: test99-foo1
+        type: host
+      resource: 9.27.40.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test20-foo1
+        type: host
+      - resource: test22-foo1
+        type: host
+      - resource: test24-foo1
+        type: host
+      - resource: test04-foo1
+        type: host
+      - resource: test31-foo1
+        type: host
+      - resource: test13-foo1
+        type: host
+      resource: 9.27.10.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test77-foo1
+        type: host
+      resource: 9.27.37.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test25-foo1
+        type: host
+      - resource: test34-foo1
+        type: host
+      - resource: test36-foo1
+        type: host
+      - resource: test07-foo1
+        type: host
+      resource: 9.27.9.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test117-foo1
+        type: host
+      - resource: test116-foo1
+        type: host
+      - resource: test122-foo1
+        type: host
+      - resource: test124-foo1
+        type: host
+      - resource: test125-foo1
+        type: host
+      resource: 9.27.47.0/24
+      type: rack
+    resource: 9.27.0.0/16
+    type: pod
+  - distance: 2
+    entities:
+    - distance: 1
+      entities:
+      - resource: test201-foo1
+        type: host
+      resource: 9.184.26.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test151-foo1
+        type: host
+      - resource: test150-foo1
+        type: host
+      resource: 9.184.10.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test148-foo1
+        type: host
+      - resource: test149-foo1
+        type: host
+      resource: 9.184.9.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test222-foo1
+        type: host
+      - resource: test195-foo1
+        type: host
+      - resource: test194-foo1
+        type: host
+      - resource: test196-foo1
+        type: host
+      resource: 9.184.23.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test206-foo1
+        type: host
+      resource: 9.184.28.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test187-foo1
+        type: host
+      - resource: test185-foo1
+        type: host
+      - resource: test186-foo1
+        type: host
+      resource: 9.184.17.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test204-foo1
+        type: host
+      - resource: test203-foo1
+        type: host
+      - resource: test205-foo1
+        type: host
+      - resource: test202-foo1
+        type: host
+      resource: 9.184.27.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test154-foo1
+        type: host
+      - resource: test153-foo1
+        type: host
+      resource: 9.184.1.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test180-foo1
+        type: host
+      - resource: test166-foo1
+        type: host
+      - resource: test181-foo1
+        type: host
+      resource: 9.184.13.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test175-foo1
+        type: host
+      - resource: test173-foo1
+        type: host
+      - resource: test174-foo1
+        type: host
+      resource: 9.184.19.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test200-foo1
+        type: host
+      resource: 9.184.25.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test169-foo1
+        type: host
+      - resource: test170-foo1
+        type: host
+      - resource: test183-foo1
+        type: host
+      resource: 9.184.15.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test146-foo1
+        type: host
+      - resource: test147-foo1
+        type: host
+      resource: 9.184.8.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test159-foo1
+        type: host
+      - resource: test158-foo1
+        type: host
+      resource: 9.184.4.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test193-foo1
+        type: host
+      - resource: test192-foo1
+        type: host
+      - resource: test191-foo1
+        type: host
+      resource: 9.184.21.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test211-foo1
+        type: host
+      resource: 9.184.31.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test184-foo1
+        type: host
+      - resource: test172-foo1
+        type: host
+      - resource: test171-foo1
+        type: host
+      resource: 9.184.16.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test210-foo1
+        type: host
+      - resource: test209-foo1
+        type: host
+      - resource: test208-foo1
+        type: host
+      resource: 9.184.29.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test142-foo1
+        type: host
+      resource: 9.184.0.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test157-foo1
+        type: host
+      resource: 9.184.3.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test162-foo1
+        type: host
+      - resource: test164-foo1
+        type: host
+      - resource: test163-foo1
+        type: host
+      resource: 9.184.11.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test182-foo1
+        type: host
+      - resource: test168-foo1
+        type: host
+      - resource: test167-foo1
+        type: host
+      resource: 9.184.14.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test221-foo1
+        type: host
+      - resource: test220-foo1
+        type: host
+      - resource: test224-foo1
+        type: host
+      resource: 9.184.34.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test198-foo1
+        type: host
+      - resource: test197-foo1
+        type: host
+      - resource: test199-foo1
+        type: host
+      resource: 9.184.24.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test177-foo1
+        type: host
+      - resource: test178-foo1
+        type: host
+      - resource: test176-foo1
+        type: host
+      resource: 9.184.20.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test225-foo1
+        type: host
+      resource: 9.184.36.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test161-foo1
+        type: host
+      - resource: test160-foo1
+        type: host
+      resource: 9.184.5.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test179-foo1
+        type: host
+      - resource: test165-foo1
+        type: host
+      resource: 9.184.12.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test213-foo1
+        type: host
+      - resource: test214-foo1
+        type: host
+      - resource: test212-foo1
+        type: host
+      resource: 9.184.32.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test143-foo1
+        type: host
+      - resource: test152-foo1
+        type: host
+      resource: 9.184.6.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test218-foo1
+        type: host
+      - resource: test219-foo1
+        type: host
+      - resource: test223-foo1
+        type: host
+      resource: 9.184.33.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test144-foo1
+        type: host
+      - resource: test145-foo1
+        type: host
+      resource: 9.184.7.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test156-foo1
+        type: host
+      - resource: test155-foo1
+        type: host
+      resource: 9.184.2.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test190-foo1
+        type: host
+      - resource: test188-foo1
+        type: host
+      - resource: test189-foo1
+        type: host
+      resource: 9.184.18.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test216-foo1
+        type: host
+      - resource: test217-foo1
+        type: host
+      - resource: test215-foo1
+        type: host
+      resource: 9.184.22.0/24
+      type: rack
+    resource: 9.184.0.0/16
+    type: pod
+  resource: foo1
+  type: dc
+- distance: 4
+  entities:
+  - distance: 2
+    entities:
+    - distance: 1
+      entities:
+      - resource: test237-bar1
+        type: host
+      - resource: test233-bar1
+        type: host
+      - resource: test235-bar1
+        type: host
+      - resource: test238-bar1
+        type: host
+      - resource: test239-bar1
+        type: host
+      - resource: test240-bar1
+        type: host
+      resource: 9.163.15.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test247-bar1
+        type: host
+      - resource: test248-bar1
+        type: host
+      resource: 9.163.31.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test236-bar1
+        type: host
+      - resource: test215-bar1
+        type: host
+      - resource: test217-bar1
+        type: host
+      - resource: test234-bar1
+        type: host
+      - resource: test232-bar1
+        type: host
+      - resource: test216-bar1
+        type: host
+      resource: 9.163.29.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test251-bar1
+        type: host
+      - resource: test249-bar1
+        type: host
+      resource: 9.163.17.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test295-bar1
+        type: host
+      - resource: test294-bar1
+        type: host
+      resource: 9.163.33.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test224-bar1
+        type: host
+      - resource: test225-bar1
+        type: host
+      - resource: test213-bar1
+        type: host
+      - resource: test218-bar1
+        type: host
+      - resource: test222-bar1
+        type: host
+      - resource: test228-bar1
+        type: host
+      resource: 9.163.16.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test298-bar1
+        type: host
+      resource: 9.163.13.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test242-bar1
+        type: host
+      - resource: test241-bar1
+        type: host
+      - resource: test220-bar1
+        type: host
+      - resource: test210-bar1
+        type: host
+      - resource: test219-bar1
+        type: host
+      resource: 9.163.10.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test261-bar1
+        type: host
+      - resource: test292-bar1
+        type: host
+      - resource: test262-bar1
+        type: host
+      resource: 9.163.0.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test246-bar1
+        type: host
+      - resource: test243-bar1
+        type: host
+      - resource: test244-bar1
+        type: host
+      resource: 9.163.4.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test250-bar1
+        type: host
+      - resource: test293-bar1
+        type: host
+      - resource: test255-bar1
+        type: host
+      resource: 9.163.32.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test258-bar1
+        type: host
+      resource: 9.163.18.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test209-bar1
+        type: host
+      - resource: test205-bar1
+        type: host
+      - resource: test206-bar1
+        type: host
+      - resource: test207-bar1
+        type: host
+      - resource: test208-bar1
+        type: host
+      resource: 9.163.8.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test245-bar1
+        type: host
+      - resource: test260-bar1
+        type: host
+      - resource: test257-bar1
+        type: host
+      - resource: test252-bar1
+        type: host
+      resource: 9.163.5.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test301-bar1
+        type: host
+      resource: 9.163.14.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test259-bar1
+        type: host
+      - resource: test254-bar1
+        type: host
+      - resource: test253-bar1
+        type: host
+      resource: 9.163.1.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test300-bar1
+        type: host
+      resource: 9.163.22.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test227-bar1
+        type: host
+      - resource: test212-bar1
+        type: host
+      - resource: test214-bar1
+        type: host
+      - resource: test231-bar1
+        type: host
+      - resource: test223-bar1
+        type: host
+      resource: 9.163.28.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test256-bar1
+        type: host
+      - resource: test290-bar1
+        type: host
+      resource: 9.163.19.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test221-bar1
+        type: host
+      - resource: test230-bar1
+        type: host
+      - resource: test211-bar1
+        type: host
+      - resource: test229-bar1
+        type: host
+      - resource: test226-bar1
+        type: host
+      resource: 9.163.9.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test296-bar1
+        type: host
+      resource: 9.163.12.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test263-bar1
+        type: host
+      - resource: test264-bar1
+        type: host
+      - resource: test291-bar1
+        type: host
+      resource: 9.163.21.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test302-bar1
+        type: host
+      - resource: test299-bar1
+        type: host
+      - resource: test297-bar1
+        type: host
+      resource: 9.163.34.0/24
+      type: rack
+    resource: 9.163.0.0/16
+    type: pod
+  - distance: 2
+    entities:
+    - distance: 1
+      entities:
+      - resource: test179-bar1
+        type: host
+      resource: 9.160.39.0/24
+      type: rack
+    resource: 9.160.0.0/16
+    type: pod
+  - distance: 2
+    entities:
+    - distance: 1
+      entities:
+      - resource: test195-bar1
+        type: host
+      resource: 9.162.0.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test193-bar1
+        type: host
+      resource: 9.162.3.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test204-bar1
+        type: host
+      resource: 9.162.40.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test200-bar1
+        type: host
+      resource: 9.162.11.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test190-bar1
+        type: host
+      resource: 9.162.20.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test196-bar1
+        type: host
+      resource: 9.162.17.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test188-bar1
+        type: host
+      resource: 9.162.37.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test192-bar1
+        type: host
+      resource: 9.162.32.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test186-bar1
+        type: host
+      resource: 9.162.29.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test198-bar1
+        type: host
+      resource: 9.162.28.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test185-bar1
+        type: host
+      resource: 9.162.30.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test189-bar1
+        type: host
+      resource: 9.162.15.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test197-bar1
+        type: host
+      resource: 9.162.10.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test191-bar1
+        type: host
+      resource: 9.162.1.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test203-bar1
+        type: host
+      resource: 9.162.36.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test202-bar1
+        type: host
+      resource: 9.162.23.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test199-bar1
+        type: host
+      resource: 9.162.35.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test194-bar1
+        type: host
+      resource: 9.162.2.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test187-bar1
+        type: host
+      resource: 9.162.19.0/24
+      type: rack
+    resource: 9.162.0.0/16
+    type: pod
+  overrides:
+  - distance: 128
+    target: bar2
+  resource: bar1
+  type: dc
+- distance: 4
+  entities:
+  - distance: 2
+    entities:
+    - distance: 1
+      entities:
+      - resource: test92-bar2
+        type: host
+      - resource: test148-bar2
+        type: host
+      - resource: test120-bar2
+        type: host
+      - resource: test96-bar2
+        type: host
+      - resource: test85-bar2
+        type: host
+      - resource: test89-bar2
+        type: host
+      resource: 9.28.11.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test141-bar2
+        type: host
+      - resource: test104-bar2
+        type: host
+      resource: 9.28.22.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test03-bar2
+        type: host
+      - resource: test127-bar2
+        type: host
+      - resource: test02-bar2
+        type: host
+      resource: 9.28.25.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test151-bar2
+        type: host
+      - resource: test84-bar2
+        type: host
+      - resource: test150-bar2
+        type: host
+      resource: 9.28.13.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test118-bar2
+        type: host
+      resource: 9.28.30.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test139-bar2
+        type: host
+      - resource: test100-bar2
+        type: host
+      resource: 9.28.19.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test174-bar2
+        type: host
+      - resource: test175-bar2
+        type: host
+      - resource: test173-bar2
+        type: host
+      resource: 9.28.41.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test130-bar2
+        type: host
+      - resource: test140-bar2
+        type: host
+      - resource: test103-bar2
+        type: host
+      resource: 9.28.21.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test113-bar2
+        type: host
+      resource: 9.28.27.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test177-bar2
+        type: host
+      - resource: test176-bar2
+        type: host
+      resource: 9.28.42.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test10-bar2
+        type: host
+      - resource: test09-bar2
+        type: host
+      resource: 9.28.44.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test93-bar2
+        type: host
+      - resource: test154-bar2
+        type: host
+      - resource: test153-bar2
+        type: host
+      - resource: test162-bar2
+        type: host
+      - resource: test158-bar2
+        type: host
+      - resource: test121-bar2
+        type: host
+      resource: 9.28.15.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test115-bar2
+        type: host
+      - resource: test116-bar2
+        type: host
+      - resource: test117-bar2
+        type: host
+      resource: 9.28.29.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test167-bar2
+        type: host
+      - resource: test168-bar2
+        type: host
+      resource: 9.28.39.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test172-bar2
+        type: host
+      - resource: test170-bar2
+        type: host
+      - resource: test171-bar2
+        type: host
+      resource: 9.28.40.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test133-bar2
+        type: host
+      - resource: test166-bar2
+        type: host
+      - resource: test126-bar2
+        type: host
+      resource: 9.28.24.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test114-bar2
+        type: host
+      resource: 9.28.28.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test97-bar2
+        type: host
+      - resource: test145-bar2
+        type: host
+      - resource: test147-bar2
+        type: host
+      - resource: test90-bar2
+        type: host
+      - resource: test94-bar2
+        type: host
+      - resource: test146-bar2
+        type: host
+      - resource: test87-bar2
+        type: host
+      resource: 9.28.10.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test165-bar2
+        type: host
+      resource: 9.28.23.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test144-bar2
+        type: host
+      - resource: test91-bar2
+        type: host
+      resource: 9.28.9.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test159-bar2
+        type: host
+      - resource: test156-bar2
+        type: host
+      - resource: test160-bar2
+        type: host
+      - resource: test88-bar2
+        type: host
+      - resource: test122-bar2
+        type: host
+      - resource: test161-bar2
+        type: host
+      - resource: test155-bar2
+        type: host
+      resource: 9.28.14.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test12-bar2
+        type: host
+      - resource: test11-bar2
+        type: host
+      resource: 9.28.35.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test99-bar2
+        type: host
+      resource: 9.28.18.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test123-bar2
+        type: host
+      - resource: test119-bar2
+        type: host
+      - resource: test163-bar2
+        type: host
+      - resource: test98-bar2
+        type: host
+      resource: 9.28.16.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test152-bar2
+        type: host
+      - resource: test86-bar2
+        type: host
+      - resource: test95-bar2
+        type: host
+      - resource: test149-bar2
+        type: host
+      resource: 9.28.12.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test08-bar2
+        type: host
+      - resource: test06-bar2
+        type: host
+      - resource: test07-bar2
+        type: host
+      - resource: test05-bar2
+        type: host
+      resource: 9.28.3.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test102-bar2
+        type: host
+      - resource: test101-bar2
+        type: host
+      - resource: test136-bar2
+        type: host
+      resource: 9.28.20.0/24
+      type: rack
+    resource: 9.28.0.0/16
+    type: pod
+  - distance: 2
+    entities:
+    - distance: 1
+      entities:
+      - resource: test26-bar2
+        type: host
+      - resource: test22-bar2
+        type: host
+      - resource: test24-bar2
+        type: host
+      - resource: test25-bar2
+        type: host
+      - resource: test21-bar2
+        type: host
+      - resource: test23-bar2
+        type: host
+      resource: 9.30.1.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test32-bar2
+        type: host
+      - resource: test29-bar2
+        type: host
+      - resource: test34-bar2
+        type: host
+      - resource: test28-bar2
+        type: host
+      - resource: test27-bar2
+        type: host
+      - resource: test31-bar2
+        type: host
+      - resource: test30-bar2
+        type: host
+      - resource: test33-bar2
+        type: host
+      resource: 9.30.2.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test51-bar2
+        type: host
+      - resource: test59-bar2
+        type: host
+      - resource: test43-bar2
+        type: host
+      resource: 9.30.28.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test42-bar2
+        type: host
+      - resource: test58-bar2
+        type: host
+      - resource: test50-bar2
+        type: host
+      resource: 9.30.30.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test61-bar2
+        type: host
+      - resource: test45-bar2
+        type: host
+      - resource: test53-bar2
+        type: host
+      resource: 9.30.22.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test56-bar2
+        type: host
+      - resource: test48-bar2
+        type: host
+      resource: 9.30.23.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test47-bar2
+        type: host
+      - resource: test55-bar2
+        type: host
+      resource: 9.30.26.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test18-bar2
+        type: host
+      - resource: test20-bar2
+        type: host
+      - resource: test13-bar2
+        type: host
+      - resource: test17-bar2
+        type: host
+      - resource: test15-bar2
+        type: host
+      - resource: test19-bar2
+        type: host
+      - resource: test14-bar2
+        type: host
+      - resource: test16-bar2
+        type: host
+      resource: 9.30.0.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test36-bar2
+        type: host
+      - resource: test41-bar2
+        type: host
+      - resource: test39-bar2
+        type: host
+      - resource: test37-bar2
+        type: host
+      - resource: test40-bar2
+        type: host
+      - resource: test35-bar2
+        type: host
+      resource: 9.30.3.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test57-bar2
+        type: host
+      - resource: test49-bar2
+        type: host
+      resource: 9.30.25.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test54-bar2
+        type: host
+      - resource: test46-bar2
+        type: host
+      resource: 9.30.29.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test44-bar2
+        type: host
+      - resource: test60-bar2
+        type: host
+      - resource: test52-bar2
+        type: host
+      resource: 9.30.27.0/24
+      type: rack
+    resource: 9.30.0.0/16
+    type: pod
+  - distance: 2
+    entities:
+    - distance: 1
+      entities:
+      - resource: test128-bar2
+        type: host
+      - resource: test109-bar2
+        type: host
+      - resource: test110-bar2
+        type: host
+      resource: 9.29.39.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test80-bar2
+        type: host
+      - resource: test81-bar2
+        type: host
+      - resource: test79-bar2
+        type: host
+      - resource: test82-bar2
+        type: host
+      - resource: test83-bar2
+        type: host
+      - resource: test78-bar2
+        type: host
+      - resource: test77-bar2
+        type: host
+      resource: 9.29.15.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test132-bar2
+        type: host
+      - resource: test135-bar2
+        type: host
+      - resource: test129-bar2
+        type: host
+      resource: 9.29.41.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test62-bar2
+        type: host
+      - resource: test64-bar2
+        type: host
+      - resource: test63-bar2
+        type: host
+      - resource: test66-bar2
+        type: host
+      - resource: test65-bar2
+        type: host
+      resource: 9.29.16.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test157-bar2
+        type: host
+      resource: 9.29.23.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test138-bar2
+        type: host
+      - resource: test111-bar2
+        type: host
+      - resource: test112-bar2
+        type: host
+      - resource: test134-bar2
+        type: host
+      resource: 9.29.40.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test107-bar2
+        type: host
+      - resource: test108-bar2
+        type: host
+      - resource: test125-bar2
+        type: host
+      - resource: test137-bar2
+        type: host
+      resource: 9.29.38.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test69-bar2
+        type: host
+      - resource: test67-bar2
+        type: host
+      - resource: test68-bar2
+        type: host
+      - resource: test70-bar2
+        type: host
+      resource: 9.29.17.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test76-bar2
+        type: host
+      - resource: test72-bar2
+        type: host
+      - resource: test73-bar2
+        type: host
+      - resource: test75-bar2
+        type: host
+      - resource: test74-bar2
+        type: host
+      - resource: test71-bar2
+        type: host
+      resource: 9.29.18.0/24
+      type: rack
+    - distance: 1
+      entities:
+      - resource: test124-bar2
+        type: host
+      resource: 9.29.37.0/24
+      type: rack
+    resource: 9.29.0.0/16
+    type: pod
+  overrides:
+  - distance: 128
+    target: bar1
+  resource: bar2
+  type: dc

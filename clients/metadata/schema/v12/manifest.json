@@ -1,0 +1,8 @@
+{
+	"CurrVersion": 12,
+	"MinCompatibleVersion": 8,
+	"Description": "add replication status to store_extent table",
+	"SchemaUpdateCqlFiles": [
+		"201611100000_xdc_add_replication_status.cql"
+	]
+}

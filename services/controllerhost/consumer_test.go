@@ -1,0 +1,380 @@
+// Copyright (c) 2016 Uber Technologies, Inc.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
+
+package controllerhost
+
+import (
+	"time"
+
+	m "github.com/uber/cherami-server/.generated/go/metadata"
+	"github.com/uber/cherami-server/.generated/go/shared"
+	"github.com/uber/cherami-server/common"
+	"github.com/uber/cherami-server/common/metrics"
+	"github.com/pborman/uuid"
+)
+
+func (s *McpSuite) TestCGExtentSelectorWithNoExtents() {
+	dstPath := s.generateName("/test/selector")
+	dstDesc, err := s.createDestination(dstPath, shared.DestinationType_PLAIN)
+	s.Nil(err, "Failed to create destination")
+
+	cgPath := s.generateName("/test/selector-cg")
+	cgDesc, err := s.createConsumerGroup(dstPath, cgPath)
+	s.Nil(err, "Failed to create consumer group")
+
+	context := s.mcp.context
+	cgExtents := newCGExtentsByCategory()
+	extents, avail, err := selectNextExtentsToConsume(context, dstDesc, cgDesc, cgExtents, metrics.GetOutputHostsScope)
+	s.Nil(err, "selectNextExtentsToConsume() error")
+	s.Equal(0, len(extents), "Wrong number of next extents")
+	s.Equal(0, avail, "Wrong number of total extents")
+}
+
+func (s *McpSuite) TestCGExtentSelectorWithNoConsumableExtents() {
+	dstPath := s.generateName("/test/selector")
+	dstDesc, err := s.createDestination(dstPath, shared.DestinationType_PLAIN)
+	s.Nil(err, "Failed to create destination")
+
+	cgPath := s.generateName("/test/selector-cg")
+	cgDesc, err := s.createConsumerGroup(dstPath, cgPath)
+	s.Nil(err, "Failed to create consumer group")
+
+	stores := []string{uuid.New(), uuid.New(), uuid.New()}
+	for _, id := range stores {
+		s.mockrpm.Add(common.StoreServiceName, id, "127.2.2.2:0")
+	}
+
+	nExtents := 0
+	context := s.mcp.context
+	dstID := dstDesc.GetDestinationUUID()
+	inhosts, _ := s.mockrpm.GetHosts(common.InputServiceName)
+
+	// add some extents with unhealthy store
+	for i := 0; i < 15; i++ {
+		extID := uuid.New()
+		storeIDs := []string{uuid.New(), uuid.New(), uuid.New()}
+		context.mm.CreateExtent(dstID, extID, inhosts[0].UUID, storeIDs, "zone1")
+		if i%3 == 0 {
+			context.mm.SealExtent(dstID, extID)
+		}
+		nExtents++
+	}
+
+	cgExtents := newCGExtentsByCategory()
+
+	// add some healthy consumed extents
+	for i := 0; i < 2; i++ {
+		extID := uuid.New()
+		storeIDs := []string{stores[0], stores[1], stores[2]}
+		context.mm.CreateExtent(dstID, extID, inhosts[0].UUID, storeIDs, "zone1")
+		cgExtents.consumed[extID] = struct{}{}
+	}
+
+	extents, avail, err := selectNextExtentsToConsume(context, dstDesc, cgDesc, cgExtents, metrics.GetOutputHostsScope)
+	s.Nil(err, "selectNextExtentsToConsume() error")
+	s.Equal(0, len(extents), "Wrong number of next extents to consume")
+	s.Equal(0, avail, "Wrong number of available extents")
+}
+
+func (s *McpSuite) TestCGExtentSelectorHonorsCreatedTime() {
+	dstPath := s.generateName("/test/selector")
+	dstDesc, err := s.createDestination(dstPath, shared.DestinationType_PLAIN)
+	s.Nil(err, "Failed to create destination")
+
+	cgPath := s.generateName("/test/selector-cg")
+	cgDesc, err := s.createConsumerGroup(dstPath, cgPath)
+	s.Nil(err, "Failed to create consumer group")
+
+	hosts, _ := s.mockrpm.GetHosts(common.StoreServiceName)
+	stores := []string{hosts[0].UUID, hosts[1].UUID, hosts[2].UUID}
+	inhosts, _ := s.mockrpm.GetHosts(common.InputServiceName)
+
+	nExtents := 0
+	context := s.mcp.context
+	dstID := dstDesc.GetDestinationUUID()
+	extents := make([]string, 0, 10)
+
+	for i := 0; i < 10; i++ {
+		extID := uuid.New()
+		context.mm.CreateExtent(dstID, extID, inhosts[0].UUID, stores, "zone1")
+		if i%3 == 0 {
+			context.mm.SealExtent(dstID, extID)
+		}
+		extents = append(extents, extID)
+		// sleep to advance createdTime for next extent
+		time.Sleep(2 * time.Millisecond)
+		nExtents++
+	}
+
+	cgExtents := newCGExtentsByCategory()
+
+	gotExtents, avail, err := selectNextExtentsToConsume(context, dstDesc, cgDesc, cgExtents, metrics.GetOutputHostsScope)
+	s.Nil(err, "selectNextExtentsToConsume() error")
+
+	s.Equal(maxExtentsToConsumeForDstPlain, len(gotExtents), "Wrong number of next extents to consume")
+	s.Equal(nExtents, avail, "Wrong number of available extents")
+
+	for i := 0; i < len(gotExtents); i++ {
+		s.Equal(extents[i], gotExtents[i].GetExtentUUID(), "Extents not served in time order")
+	}
+}
+
+func (s *McpSuite) TestCGExtentSelectorHonorsDlqQuota() {
+	dstPath := s.generateName("/test/selector")
+	dstDesc, err := s.createDestination(dstPath, shared.DestinationType_PLAIN)
+	s.Nil(err, "Failed to create destination")
+
+	cgPath := s.generateName("/test/selector-cg")
+	cgDesc, err := s.createConsumerGroup(dstPath, cgPath)
+	s.Nil(err, "Failed to create consumer group")
+
+	hosts, _ := s.mockrpm.GetHosts(common.StoreServiceName)
+	stores := []string{hosts[0].UUID, hosts[1].UUID, hosts[2].UUID}
+	inhosts, _ := s.mockrpm.GetHosts(common.InputServiceName)
+
+	context := s.mcp.context
+	dstID := dstDesc.GetDestinationUUID()
+
+	dlqExtID := ""
+	cgExtents := newCGExtentsByCategory()
+
+	for i := 0; i <= maxExtentsToConsumeForDstPlain; i++ {
+		extID := uuid.New()
+		context.mm.CreateExtent(dstID, extID, inhosts[0].UUID, stores, "zone1")
+		if i == maxExtentsToConsumeForDstPlain {
+			// make the last extent a DLQExtent
+			// don't add it to the list of open CGExtents
+			dlqExtID = extID
+			context.mm.SealExtent(dstID, extID)
+			context.mm.MoveExtent(dstID, dstID, extID, cgDesc.GetConsumerGroupUUID())
+		} else {
+			cgExtents.open[extID] = struct{}{}
+		}
+	}
+
+	gotExtents, avail, err := selectNextExtentsToConsume(context, dstDesc, cgDesc, cgExtents, metrics.GetOutputHostsScope)
+	s.Nil(err, "selectNextExtentsToConsume() error")
+	s.Equal(1, len(gotExtents), "Wrong number of next extents to consume")
+	s.Equal(1, avail, "Wrong number of available extents")
+	s.Equal(dlqExtID, gotExtents[0].GetExtentUUID(), "DLQ quota not honored")
+
+	cgExtents.open[dlqExtID] = struct{}{}
+	gotExtents, avail, err = selectNextExtentsToConsume(context, dstDesc, cgDesc, cgExtents, metrics.GetOutputHostsScope)
+	s.Nil(err, "selectNextExtentsToConsume() error")
+	s.Equal(0, len(gotExtents), "Wrong number of next extents to consume")
+	s.Equal(0, avail, "Wrong number of available extents")
+
+	// make all currently open CGExtents consumed and start fresh
+	cgExtents.consumed, cgExtents.open = cgExtents.open, cgExtents.consumed
+
+	// create a bunch of dlq and regular extents
+	dstExtents := make(map[string]struct{})
+	dlqExtents := make(map[string]struct{})
+	for i := 0; i < 15; i++ {
+		extID := uuid.New()
+		context.mm.CreateExtent(dstID, extID, inhosts[0].UUID, stores, "zone1")
+		if i < 5 {
+			dlqExtents[extID] = struct{}{}
+			context.mm.SealExtent(dstID, extID)
+			context.mm.MoveExtent(dstID, dstID, extID, cgDesc.GetConsumerGroupUUID())
+			if i == 0 {
+				// add the first one to the CGE table
+				cgExtents.open[extID] = struct{}{}
+			}
+			continue
+		}
+		dstExtents[extID] = struct{}{}
+	}
+
+	gotExtents, avail, err = selectNextExtentsToConsume(context, dstDesc, cgDesc, cgExtents, metrics.GetOutputHostsScope)
+	s.Nil(err, "selectNextExtentsToConsume() error")
+	s.Equal(maxExtentsToConsumeForDstPlain, len(gotExtents), "Wrong number of next extents to consume")
+	s.Equal(14, avail, "Wrong number of available extents")
+
+	nDlq := 0
+	for _, ext := range gotExtents {
+		if _, ok := dlqExtents[ext.GetExtentUUID()]; ok {
+			nDlq++
+		}
+	}
+
+	dlqQuota := maxExtentsToConsumeForDstPlain/4 - 1 // 25% minus the already added one
+	s.Equal(dlqQuota, nDlq, "Wrong number of dlq extents, reservation not honored")
+
+	// now make all the regular extents as consumed
+	for k := range dstExtents {
+		delete(cgExtents.open, k)
+		cgExtents.consumed[k] = struct{}{}
+	}
+
+	gotExtents, avail, err = selectNextExtentsToConsume(context, dstDesc, cgDesc, cgExtents, metrics.GetOutputHostsScope)
+	s.Nil(err, "selectNextExtentsToConsume() error")
+	for _, ext := range gotExtents {
+		_, ok := dlqExtents[ext.GetExtentUUID()]
+		s.True(ok, "DLQ extent added, when there is room and there is no other extent available")
+	}
+}
+
+func (s *McpSuite) TestCGExtentSelectorHonorsRemoteExtent() {
+	dstPath := s.generateName("/test/selector")
+	dstDesc, err := s.createMultiZoneDestination(dstPath, shared.DestinationType_PLAIN, []string{`sjc1`, `zone1`})
+	s.Nil(err, "Failed to create destination")
+
+	cgPath := s.generateName("/test/selector-cg")
+	cgDesc, err := s.createConsumerGroup(dstPath, cgPath)
+	s.Nil(err, "Failed to create consumer group")
+
+	hosts, _ := s.mockrpm.GetHosts(common.StoreServiceName)
+	stores := []string{hosts[0].UUID, hosts[1].UUID, hosts[2].UUID}
+	inhosts, _ := s.mockrpm.GetHosts(common.InputServiceName)
+
+	nExtents := 0
+	context := s.mcp.context
+	dstID := dstDesc.GetDestinationUUID()
+	extents := make([]string, 0, 10)
+
+	for i := 0; i < 20; i++ {
+		extID := uuid.New()
+		zone := ``
+		if i%2 == 0 {
+			zone = `zone1`
+		}
+		context.mm.CreateExtent(dstID, extID, inhosts[0].UUID, stores, zone)
+		extents = append(extents, extID)
+		nExtents++
+	}
+
+	cgExtents := newCGExtentsByCategory()
+
+	gotExtents, avail, err := selectNextExtentsToConsume(context, dstDesc, cgDesc, cgExtents, metrics.GetOutputHostsScope)
+	s.Nil(err, "selectNextExtentsToConsume() error")
+
+	s.Equal(maxExtentsToConsumeForDstPlain+extentsToConsumePerRemoteZone, len(gotExtents), "Wrong number of next extents to consume")
+	s.Equal(nExtents, avail, "Wrong number of available extents")
+
+	var curZoneExtent int
+	var remoteZoneExtent int
+	for i := 0; i < len(gotExtents); i++ {
+		if len(gotExtents[i].GetOriginZone()) == 0 {
+			curZoneExtent++
+		} else {
+			remoteZoneExtent++
+		}
+	}
+	s.Equal(curZoneExtent, len(gotExtents)/2)
+	s.Equal(remoteZoneExtent, len(gotExtents)/2)
+}
+
+func (s *McpSuite) updateCGExtentStatus(cgID string, extID string, status m.ConsumerGroupExtentStatus) error {
+	return s.mcp.mClient.UpdateConsumerGroupExtentStatus(nil, &m.UpdateConsumerGroupExtentStatusRequest{
+		ConsumerGroupUUID: &cgID,
+		ExtentUUID:        &extID,
+		Status:            &status,
+	})
+}
+
+func (s *McpSuite) TestCGExtentSelectorWithBacklog() {
+	dstPath := s.generateName("/test/selector")
+	dstDesc, err := s.createDestination(dstPath, shared.DestinationType_PLAIN)
+	s.Nil(err, "Failed to create destination")
+
+	cgPath := s.generateName("/test/selector-cg")
+	cgDesc, err := s.createConsumerGroup(dstPath, cgPath)
+	s.Nil(err, "Failed to create consumer group")
+
+	hosts, _ := s.mockrpm.GetHosts(common.StoreServiceName)
+	stores := []string{hosts[0].UUID, hosts[1].UUID, hosts[2].UUID}
+	inhosts, _ := s.mockrpm.GetHosts(common.InputServiceName)
+
+	nExtents := 0
+	context := s.mcp.context
+	dstID := dstDesc.GetDestinationUUID()
+	var openExtents []string
+	var dlqExtents []string
+
+	for i := 0; i < 100; i++ {
+		extID := uuid.New()
+		// create 96 DLQ dstExtents and 4 regular dstExtents
+		// with dlq extents preceding in creation time
+		context.mm.CreateExtent(dstID, extID, inhosts[0].UUID, stores, "zone1")
+		if i < 96 {
+			context.mm.SealExtent(dstID, extID)
+			context.mm.MoveExtent(dstID, dstID, extID, cgDesc.GetConsumerGroupUUID())
+			dlqExtents = append(dlqExtents, extID)
+		} else {
+			openExtents = append(openExtents, extID)
+		}
+		// sleep to advance createdTime for next extent
+		time.Sleep(2 * time.Millisecond)
+		nExtents++
+	}
+
+	cgExtents := newCGExtentsByCategory()
+	dlqExtsAvail, dlqExtsAssigned := len(dlqExtents), 0
+	openExtsAvail, openExtsAssigned := len(openExtents), 0
+
+	for dlqExtsAvail > 0 || openExtsAvail > 0 {
+
+		totalAvail := openExtsAvail + dlqExtsAvail
+
+		gotExtents, avail, err1 := selectNextExtentsToConsume(context, dstDesc, cgDesc, cgExtents, metrics.GetOutputHostsScope)
+		s.Nil(err1, "selectNextExtentsToConsume() error")
+		expectedCount := common.MinInt(maxExtentsToConsumeForDstPlain, totalAvail)
+		s.Equal(expectedCount, len(gotExtents), "Wrong number of next extents to consume")
+		s.Equal(totalAvail, avail, "Wrong number of available extents")
+
+		dlqQuota := common.MinInt(maxExtentsToConsumeForDstPlain/4, dlqExtsAvail)
+		dlqQuota = common.MaxInt(0, dlqQuota-dlqExtsAssigned)
+
+		for _, ext := range gotExtents {
+
+			extID := ext.GetExtentUUID()
+
+			if dlqQuota > 0 {
+				// if there are both dlq and regular extents, selectNextExtents()
+				// is supposed to reserve 25% of total capacity (maxExtentsToConsumeForDstPlain)
+				// for DLQ extents. So, this will appear first
+				s.Equal(dlqExtents[dlqExtsAssigned], extID, "Incorrect extent serving order")
+				cgExtents.open[extID] = struct{}{}
+				dlqExtsAssigned++
+				dlqExtsAvail--
+				dlqQuota--
+			} else if openExtsAvail > 0 {
+				// Once the dlqQuota is satisfied, we expect all of our regular
+				// extents to be added to CG, because we have only (4) extents
+				s.Equal(openExtents[openExtsAssigned], extID, "Incorrect extent serving order")
+				cgExtents.open[extID] = struct{}{}
+				openExtsAssigned++
+				openExtsAvail--
+			} else {
+				// If there are still dlq extents left, then should show up next
+				s.Equal(dlqExtents[dlqExtsAssigned], extID, "Incorrect extent serving order")
+				cgExtents.open[extID] = struct{}{}
+				dlqExtsAssigned++
+				dlqExtsAvail--
+			}
+		}
+
+		target := gotExtents[0].GetExtentUUID()
+		s.updateCGExtentStatus(cgDesc.GetConsumerGroupUUID(), target, m.ConsumerGroupExtentStatus_CONSUMED)
+		delete(cgExtents.open, target)
+		cgExtents.consumed[target] = struct{}{}
+	}
+}

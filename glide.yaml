@@ -1,0 +1,59 @@
+package: github.com/uber/cherami-server
+import:
+- package: github.com/Sirupsen/logrus
+- package: github.com/apache/thrift
+  subpackages:
+  - lib/go/thrift
+- package: github.com/aws/aws-sdk-go
+  subpackages:
+  - aws
+  - aws/awserr
+  - aws/credentials
+  - aws/session
+  - service/s3
+  - service/s3/s3manager
+- package: github.com/cactus/go-statsd-client
+  subpackages:
+  - statsd
+- package: github.com/codegangsta/cli
+- package: github.com/gocql/gocql
+- package: github.com/pborman/uuid
+- package: github.com/stretchr/testify
+  subpackages:
+  - mock
+  - require
+  - suite
+- package: github.com/tecbot/gorocksdb
+- package: github.com/uber-common/bark
+- package: github.com/uber/cherami-client-go
+  subpackages:
+  - client/cherami
+  - common
+  - common/backoff
+  - common/websocket
+  - stream
+- package: github.com/uber/cherami-thrift
+  subpackages:
+  - .generated/go/cherami
+- package: github.com/uber/ringpop-go
+  version: ^0.7.0
+  subpackages:
+  - discovery
+  - discovery/statichosts
+  - events
+  - forward
+  - hashring
+  - logging
+  - shared
+  - swim
+  - util
+- package: github.com/uber/tchannel-go
+  version: ^1.2.1
+  subpackages:
+  - hyperbahn
+  - thrift
+- package: golang.org/x/net
+  subpackages:
+  - context
+- package: gopkg.in/validator.v2
+- package: gopkg.in/yaml.v2

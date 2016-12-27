@@ -1,0 +1,8 @@
+{
+	"CurrVersion": 1,
+	"MinCompatibleVersion": 1,
+	"Description": "Initial schema_version tables for versioning",
+	"SchemaUpdateCqlFiles": [
+		"201605031500_create_schema_version_tables.cql"
+	]
+}

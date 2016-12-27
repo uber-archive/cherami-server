@@ -1,0 +1,1066 @@
+// Copyright (c) 2016 Uber Technologies, Inc.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
+
+package metrics
+
+// types used/defined by the package
+type (
+	// MetricName is the name of the metric
+	MetricName string
+
+	// MetricType is the type of the metric
+	MetricType int
+
+	// metricDefinition contains the definition for a metric
+	metricDefinition struct {
+		metricType int    // metric type
+		metricName string // metric name
+	}
+
+	// scopeDefinition holds the tag definitions for a scope
+	scopeDefinition struct {
+		operation string            // 'operation' tag for scope
+		tags      map[string]string // additional tags for scope
+	}
+
+	// ServiceIdx is an index that uniquely identifies the service
+	ServiceIdx int
+)
+
+// MetricTypes which are supported
+const (
+	Counter = iota
+	Timer
+	Gauge
+)
+
+// Service names for all services that emit M3
+const (
+	Common ServiceIdx = iota
+	Frontend
+	Controller
+	Inputhost
+	Outputhost
+	Storage
+	Replicator
+)
+
+// Common tags for all services
+const (
+	HostnameTagName      = "hostname"
+	OperationTagName     = "operation"
+	DestinationTagName   = "destination"
+	ConsumerGroupTagName = "consumerGroup"
+)
+
+// This package should hold all the metrics and tags for cherami
+const (
+	UnknownDirectoryTagValue = "Unknown"
+)
+
+// Common service base metrics
+const (
+	RestartCount         = "restarts"
+	NumGoRoutinesGauge   = "num-goroutines"
+	GoMaxProcsGauge      = "gomaxprocs"
+	MemoryAllocatedGauge = "memory.allocated"
+	MemoryHeapGauge      = "memory.heap"
+	MemoryHeapIdleGauge  = "memory.heapidle"
+	MemoryHeapInuseGauge = "memory.heapinuse"
+	MemoryStackGauge     = "memory.stack"
+	NumGCCounter         = "memory.num-gc"
+	GcPauseMsTimer       = "memory.gc-pause-ms"
+)
+
+// ServiceMetrics are types for common service base metrics
+var ServiceMetrics = map[MetricName]MetricType{
+	RestartCount: Counter,
+}
+
+// GoRuntimeMetrics represent the runtime stats from go runtime
+var GoRuntimeMetrics = map[MetricName]MetricType{
+	NumGoRoutinesGauge:   Gauge,
+	GoMaxProcsGauge:      Gauge,
+	MemoryAllocatedGauge: Gauge,
+	MemoryHeapGauge:      Gauge,
+	MemoryHeapIdleGauge:  Gauge,
+	MemoryHeapInuseGauge: Gauge,
+	MemoryStackGauge:     Gauge,
+	NumGCCounter:         Counter,
+	GcPauseMsTimer:       Timer,
+}
+
+// Scope enum
+const (
+	// -- Operation scopes for Metadata (common) --
+
+	// MetadataListDestinationsScope represents method within metadatamgr
+	MetadataListDestinationsScope = iota
+	// MetadataListDestinationsPageScope represents method within metadatamgr
+	MetadataListDestinationsPageScope
+	// MetadataReadDstScope represents method within metadatamgr
+	MetadataReadDstScope
+	// MetadataReadExtentStatsScope represents method within metadatamgr
+	MetadataReadExtentStatsScope
+	// MetadataReadStoreExtentStatsScope represents method within metadatamgr
+	MetadataReadStoreExtentStatsScope
+	// MetadataReadConsumerGroupExtentScope represents method within metadatamgr
+	MetadataReadConsumerGroupExtentScope
+	// MetadataListExtentsByDstScope represents method within metadatamgr
+	MetadataListExtentsByDstScope
+	// MetadataListExtentsByInputScope represents method within metadatamgr
+	MetadataListExtentsByInputScope
+	// MetadataListExtentsByStoreScope represents method within metadatamgr
+	MetadataListExtentsByStoreScope
+	// MetadataListExtentsByConsGroupScope represents method within metadatamgr
+	MetadataListExtentsByConsGroupScope
+	// MetadataListConsGroupsByDstScope represents method within metadatamgr
+	MetadataListConsGroupsByDstScope
+	// MetadataListConsumerGroupsPageScope represents method within metadatamgr
+	MetadataListConsumerGroupsPageScope
+	// MetadataAddExtentToConsGroupScope represents method within metadatamgr
+	MetadataAddExtentToConsGroupScope
+	// MetadataCreateExtentScope represents method within metadatamgr
+	MetadataCreateExtentScope
+	// MetadataUpdateOutputScope represents method within metadatamgr
+	MetadataUpdateOutputScope
+	// MetadataSealExtentScope represents method within metadatamgr
+	MetadataSealExtentScope
+	// MetadataDeleteConsumerGroupScope represents method within metadatamgr
+	MetadataDeleteConsumerGroupScope
+	// MetadataUpdateDLQCursorScope represents a method within metadatamgr
+	MetadataUpdateDLQCursorScope
+	// MetadataMoveExtentScope lorem ipsum
+	MetadataMoveExtentScope
+	// MetadataReadConsumerGroupScope lorem ipsum
+	MetadataReadConsumerGroupScope
+	// MetadataReadConsumerGroupByUUIDScope lorem ipsum
+	MetadataReadConsumerGroupByUUIDScope
+	// MetadataUpdateExtentStatsScope lorem ipsum
+	MetadataUpdateExtentStatsScope
+	// MetadataUpdateConsumerGroupExtentStatusScope lorem ipsum
+	MetadataUpdateConsumerGroupExtentStatusScope
+	// MetadataDeleteDestinationUUIDScope lorem ipsum
+	MetadataDeleteDestinationUUIDScope
+
+	// -- Operation scopes for InputHost --
+
+	// OpenPublisherStreamScope  represents  OpenPublisherStream API
+	OpenPublisherStreamScope
+	// DestinationsUpdatedScope represents DestinationsUpdated API
+	DestinationsUpdatedScope
+	// PubConnectionStreamScope  represents Streaming Message received by inputhost
+	PubConnectionStreamScope
+	// PutMessageBatchInputHostScope represents PutMessageBatch API
+	PutMessageBatchInputHostScope
+	//PubConnectionScope  represents Streaming Message received by inputhost
+	PubConnectionScope
+	//PutMessageBatchInputHostDestScope represent API PutMessageBatch for per destination
+	PutMessageBatchInputHostDestScope
+
+	// -- Operation scopes for OutputHost --
+
+	//OpenConsumerStreamScope  represents  OpenConsumerStream API
+	OpenConsumerStreamScope
+	//AckMessagesScope represents AckMessages API
+	AckMessagesScope
+	// ConsumerGroupsUpdatedScope represents ConsumerGroupsUpdated API
+	ConsumerGroupsUpdatedScope
+	// ConsConnectionStreamScope  represents  Streamming Message sent by outputhost
+	ConsConnectionStreamScope
+	// ReceiveMessageBatchOutputHostScope represents ReceiveMessageBatch API
+	ReceiveMessageBatchOutputHostScope
+	// UnloadConsumerGroupsScope represents UnloadConsumerGroups API
+	UnloadConsumerGroupsScope
+	// ConsConnectionScope  represents  Streamming Message sent by outputhost
+	ConsConnectionScope
+	// ReceiveMessageBatchOutputHostCGScope represents API ReceiveMessageBatch for per destination
+	ReceiveMessageBatchOutputHostCGScope
+
+	// -- Operation scopes for ControllerHost --
+
+	// GetInputHostsScope represents GetInputHost API
+	GetInputHostsScope
+	// GetOutputHostsScope represents GetOutputHost API
+	GetOutputHostsScope
+	// ReportNodeMetricScope represents ReportNodeMetric API
+	ReportNodeMetricScope
+	// ReportDestinationMetricScope represents ReportDestinationMetric API
+	ReportDestinationMetricScope
+	// ReportDestinationExtentMetricScope represents ReportDestinationMetric API
+	ReportDestinationExtentMetricScope
+	// ReportConsumerGroupMetricScope represents ReportConsumerGroupMetric API
+	ReportConsumerGroupMetricScope
+	// ReportConsumerGroupExtentMetricScope represents ReportConsumerGroupExtentMetric API
+	ReportConsumerGroupExtentMetricScope
+	// ReportStoreExtentMetricScope represents ReportStoreExtentMetric API
+	ReportStoreExtentMetricScope
+	// RefreshInputHostsForDstScope represents the internal
+	// API for handling GetInputHosts
+	RefreshInputHostsForDstScope
+	// RefreshOutputHostsForConsGroupScope represents the internal
+	// API for handling GetOutputHosts
+	RefreshOutputHostsForConsGroupScope
+	// EventPipelineScope represents the EventPipeline operation
+	EventPipelineScope
+	// ExtentsUnreachableScope represents ExtentsUnreachable API
+	ExtentsUnreachableScope
+	// ExtentCreatedEventScope represents ExtentCreatedEvent
+	ExtentCreatedEventScope
+	// ConsGroupUpdatedEventScope represents event handler
+	ConsGroupUpdatedEventScope
+	// ExtentDownEventScope represents event handler
+	ExtentDownEventScope
+	// InputNotifyEventScope represents event handler
+	InputNotifyEventScope
+	// OutputNotifyEventScope represents event handler
+	OutputNotifyEventScope
+	// InputFailedEventScope represents event handler
+	InputFailedEventScope
+	// StoreFailedEventScope represents event handler
+	StoreFailedEventScope
+	// StoreExtentStatusOutOfSyncEventScope represents an event handler
+	StoreExtentStatusOutOfSyncEventScope
+	// RemoteZoneExtentCreatedEventScope represents event handler
+	RemoteZoneExtentCreatedEventScope
+	// ExtentMonitorScope represents the extent monitor daemon
+	ExtentMonitorScope
+	// RetentionMgrScope represents the retention manager
+	RetentionMgrScope
+	// DLQOperationScope represents the dlqMonitor
+	DLQOperationScope
+	// ControllerCreateDestinationScope represents controller CreateDestination API
+	ControllerCreateDestinationScope
+	// ControllerUpdateDestinationScope represents controller UpdateDestination API
+	ControllerUpdateDestinationScope
+	// ControllerDeleteDestinationScope represents controller DeleteDestination API
+	ControllerDeleteDestinationScope
+	// ControllerCreateConsumerGroupScope represents controller CreateConsumerGroup API
+	ControllerCreateConsumerGroupScope
+	// ControllerUpdateConsumerGroupScope represents controller UpdateConsumerGroup API
+	ControllerUpdateConsumerGroupScope
+	// ControllerDeleteConsumerGroupScope represents controller DeleteConsumerGroup API
+	ControllerDeleteConsumerGroupScope
+	// ControllerCreateRemoteZoneExtentScope represents controller CreateRemoteZoneExtent API
+	ControllerCreateRemoteZoneExtentScope
+	// QueueDepthBacklogCGScope represents metrics within queuedepth per consumer group
+	QueueDepthBacklogCGScope
+
+	// -- Operation scopes for FrontendHost --
+
+	// CreateDestinationScope  represents CreateDestination API in frontend
+	CreateDestinationScope
+	// ReadDestinationScope represents ReadDestination API in frontend
+	ReadDestinationScope
+	// UpdateDestinationScope represents  UpdateDestination API in frontend
+	UpdateDestinationScope
+	// DeleteDestinationScope represents DeleteDestination API in frontend
+	DeleteDestinationScope
+	// ListDestinationsScope ListDestinations API in frontend
+	ListDestinationsScope
+
+	// CreateConsumerGroupScope represents CreateConsumerGroup API in frontend
+	CreateConsumerGroupScope
+	// ReadConsumerGroupScope represents ReadConsumerGroup API in frontend
+	ReadConsumerGroupScope
+	// UpdateConsumerGroupScope represents UpdateConsumerGroup API in frontend
+	UpdateConsumerGroupScope
+	// DeleteConsumerGroupScope represents DeleteConsumerGroup API in frontend
+	DeleteConsumerGroupScope
+	// ListConsumerGroupsScope represents ListConsumerGroups API in frontend
+	ListConsumerGroupsScope
+
+	// ReadDestinationHostsScope represents ReadDestinationHosts API in frontend
+	ReadDestinationHostsScope
+	// ReadConsumerGroupHostsScope represents ReadConsumerGroupHosts API in frontend
+	ReadConsumerGroupHostsScope
+	// PutMessageBatchScope represents PutMessageBatch API in frontend
+	PutMessageBatchScope
+	// ReceiveMessageBatchScope  represents ReseiveMessageBatch API in frontend
+	ReceiveMessageBatchScope
+	// CompleteMessageBatchScope represents CompleteMessageBatch API in frontend
+	CompleteMessageBatchScope
+
+	// PurgeDLQForConsumerGroupScope represents PurgeDLQForConsumerGroup API in frontend
+	PurgeDLQForConsumerGroupScope
+	// MergeDLQForConsumerGroupScope represents MergeDLQForConsumerGroup API in frontend
+	MergeDLQForConsumerGroupScope
+
+	// -- Operation scopes for StoreHost --
+
+	// OpenAppendStreamScope  represents  OpenAppendStream API
+	OpenAppendStreamScope
+	// OpenReadStreamScope  represents  OpenReadStream API
+	OpenReadStreamScope
+	// GetAddressFromTimestampScope  represents StGetAddressFromTimestamp API
+	GetAddressFromTimestampScope
+	// GetExtentInfoScope  represents GetExtentInfo API
+	GetExtentInfoScope
+	// SealExtentScope  represents SealExtent API
+	SealExtentScope
+	// PurgeMessagesScope represents PurgeMessagesScope API
+	PurgeMessagesScope
+	// InConnScope represents related metrics for inConn in storage
+	InConnScope
+	// OutConnScope represents related metrics for OutConn in storage
+	OutConnScope
+	// ExtentManagerScope represents related metrics for ExtentManager in storage
+	ExtentManagerScope
+	// SystemResourceScope represenets related metrics for system resource in storage
+	SystemResourceScope
+	// ReplicateExtentScope represents related metrics for ReplicateExtent API
+	ReplicateExtentScope
+
+	// -- Operation scopes for Replicator --
+
+	// OpenReplicationRemoteReadScope represents OpenReplicationRemoteRead API
+	OpenReplicationRemoteReadScope
+	// OpenReplicationReadScope represents OpenReplicationRead API
+	OpenReplicationReadScope
+	// ReplicatorCreateDestUUIDScope represents replicator CreateDestinationUUID API
+	ReplicatorCreateDestUUIDScope
+	// ReplicatorCreateRmtDestUUIDScope represents replicator CreateRemoteDestinationUUID API
+	ReplicatorCreateRmtDestUUIDScope
+	// ReplicatorUpdateDestScope represents replicator UpdateDestination API
+	ReplicatorUpdateDestScope
+	// ReplicatorUpdateRmtDestScope represents replicator UpdateRemoteDestination API
+	ReplicatorUpdateRmtDestScope
+	// ReplicatorDeleteDestScope represents replicator DeleteDestination API
+	ReplicatorDeleteDestScope
+	// ReplicatorDeleteRmtDestScope represents replicator DeleteRemoteDestination API
+	ReplicatorDeleteRmtDestScope
+	// ReplicatorCreateExtentScope represents replicator CreateExtent API
+	ReplicatorCreateExtentScope
+	// ReplicatorCreateRmtExtentScope represents replicator CreateRemoteExtent API
+	ReplicatorCreateRmtExtentScope
+	// ReplicatorReconcileScope represents replicator's reconcile process
+	ReplicatorReconcileScope
+)
+
+var scopeDefs = map[ServiceIdx]map[int]scopeDefinition{
+
+	// Common operation tag values (shared by all services)
+	Common: {
+		// Metadata operation tag values as seen by the M3 backend
+		MetadataListDestinationsScope:                {operation: "MetadataListDestinations"},
+		MetadataListDestinationsPageScope:            {operation: "MetadataListDestinationsPage"},
+		MetadataReadDstScope:                         {operation: "MetadataReadDst"},
+		MetadataReadExtentStatsScope:                 {operation: "MetadataReadExtentStats"},
+		MetadataReadStoreExtentStatsScope:            {operation: "MetadataReadStoreExtentStats"},
+		MetadataReadConsumerGroupExtentScope:         {operation: "MetadataReadConsumerGroupExtent"},
+		MetadataListExtentsByDstScope:                {operation: "MetadataListExtentsByDst"},
+		MetadataListExtentsByInputScope:              {operation: "MetadataListExtentsByInput"},
+		MetadataListExtentsByStoreScope:              {operation: "MetadataListExtentsByStore"},
+		MetadataListExtentsByConsGroupScope:          {operation: "MetadataListExtentsByConsGroup"},
+		MetadataListConsGroupsByDstScope:             {operation: "MetadataListConsGroupsByDst"},
+		MetadataListConsumerGroupsPageScope:          {operation: "MetadataListConsumerGroupsPage"},
+		MetadataAddExtentToConsGroupScope:            {operation: "MetadataAddExtentToConsGroup"},
+		MetadataCreateExtentScope:                    {operation: "MetadataCreateExtent"},
+		MetadataUpdateOutputScope:                    {operation: "MetadataUpdateOutput"},
+		MetadataSealExtentScope:                      {operation: "MetadataSealExtent"},
+		MetadataDeleteConsumerGroupScope:             {operation: "MetadataDeleteConsumerGroup"},
+		MetadataUpdateDLQCursorScope:                 {operation: "MetadataUpdateDLQCursor"},
+		MetadataMoveExtentScope:                      {operation: "MetadataMoveExtent"},
+		MetadataReadConsumerGroupScope:               {operation: "MetadataReadConsumerGroup"},
+		MetadataReadConsumerGroupByUUIDScope:         {operation: "MetadataReadConsumerGroupByUUID"},
+		MetadataUpdateExtentStatsScope:               {operation: "MetadataUpdateExtentStats"},
+		MetadataUpdateConsumerGroupExtentStatusScope: {operation: "MetadataUpdateConsumerGroupExtentStatus"},
+		MetadataDeleteDestinationUUIDScope:           {operation: "MetadataDeleteDestinationUUID"},
+	},
+
+	// Frontend operation tag values as seen by the M3 backend
+	Frontend: {
+		CreateDestinationScope:        {operation: "CreateDestination"},
+		ReadDestinationScope:          {operation: "ReadDestination"},
+		UpdateDestinationScope:        {operation: "UpdateDestination"},
+		DeleteDestinationScope:        {operation: "DeleteDestination"},
+		ListDestinationsScope:         {operation: "ListDestinations"},
+		CreateConsumerGroupScope:      {operation: "CreateConsumerGroup"},
+		ReadConsumerGroupScope:        {operation: "ReadConsmerGroup"},
+		UpdateConsumerGroupScope:      {operation: "UpdateConsumerGroup"},
+		DeleteConsumerGroupScope:      {operation: "DeleteConsumerGroup"},
+		ListConsumerGroupsScope:       {operation: "ListConsumerGroups"},
+		ReadDestinationHostsScope:     {operation: "ReadDestinationHosts"},
+		ReadConsumerGroupHostsScope:   {operation: "ReadConsumerGroupHosts"},
+		PutMessageBatchScope:          {operation: "PutMessageBatch"},
+		ReceiveMessageBatchScope:      {operation: "ReceiveMessageBatch"},
+		CompleteMessageBatchScope:     {operation: "CompleteMessageBatch"},
+		PurgeDLQForConsumerGroupScope: {operation: "PurgeDLQForConsumerGroup"},
+		MergeDLQForConsumerGroupScope: {operation: "MergeDLQForConsumerGroup"},
+	},
+
+	// Inputhost operation tag values as seen by the M3 backend
+	Inputhost: {
+		OpenPublisherStreamScope:      {operation: "OpenPublisherStream"},
+		DestinationsUpdatedScope:      {operation: "DestinationsUpdated"},
+		PubConnectionStreamScope:      {operation: "PubConnection"},
+		PutMessageBatchInputHostScope: {operation: "PutMessageBatchInputHost"},
+	},
+
+	// Outputhost operation tag values as seen by the M3 backend
+	Outputhost: {
+		OpenConsumerStreamScope:            {operation: "OpenConsumerStream"},
+		AckMessagesScope:                   {operation: "AckMessage"},
+		ConsumerGroupsUpdatedScope:         {operation: "ConsumerGroupsUpdated"},
+		ConsConnectionStreamScope:          {operation: "ConsConnection"},
+		ReceiveMessageBatchOutputHostScope: {operation: "ReceiveMessageBatchOutputHost"},
+		UnloadConsumerGroupsScope:          {operation: "UnloadConsumerGroups"},
+	},
+
+	// Storage operation tag values as seen by the M3 backend
+	Storage: {
+		OpenAppendStreamScope:        {operation: "OpenAppendStream"},
+		OpenReadStreamScope:          {operation: "OpenReadStream"},
+		GetAddressFromTimestampScope: {operation: "GetAddressFromTimestamp"},
+		GetExtentInfoScope:           {operation: "GetExtentInfo"},
+		SealExtentScope:              {operation: "SealExtent"},
+		PurgeMessagesScope:           {operation: "PurgeMessages"},
+		InConnScope:                  {operation: "InConn"},
+		OutConnScope:                 {operation: "OutConn"},
+		ExtentManagerScope:           {operation: "ExtentInfo"},
+		SystemResourceScope:          {operation: "GetSystemResourceInfo"},
+		ReplicateExtentScope:         {operation: "ReplicateExtent"},
+	},
+
+	// Replicator operation tag valuies as seen by the M3 backend
+	Replicator: {
+		OpenReplicationRemoteReadScope:   {operation: "OpenReplicationRemoteReadStream"},
+		OpenReplicationReadScope:         {operation: "OpenReplicationReadStream"},
+		ReplicatorCreateDestUUIDScope:    {operation: "ReplicatorCreateDestinationUUID"},
+		ReplicatorCreateRmtDestUUIDScope: {operation: "ReplicatorCreateRemoteDestinationUUID"},
+		ReplicatorUpdateDestScope:        {operation: "ReplicatorUpdateDestination"},
+		ReplicatorUpdateRmtDestScope:     {operation: "ReplicatorUpdateRemoteDestination"},
+		ReplicatorDeleteDestScope:        {operation: "ReplicatorDeleteDestination"},
+		ReplicatorDeleteRmtDestScope:     {operation: "ReplicatorDeleteRemoteDestination"},
+		ReplicatorCreateExtentScope:      {operation: "ReplicatorCreateExtent"},
+		ReplicatorCreateRmtExtentScope:   {operation: "ReplicatorCreateRemoteExtent"},
+		ReplicatorReconcileScope:         {operation: "ReplicatorReconcile"},
+	},
+
+	// Controller operation tag values as seen by the M3 backend
+	Controller: {
+		GetInputHostsScope:                    {operation: "GetInputHosts"},
+		GetOutputHostsScope:                   {operation: "GetOutputHosts"},
+		ReportNodeMetricScope:                 {operation: "ReportNodeMetric"},
+		ReportDestinationMetricScope:          {operation: "ReportDestinationMetric"},
+		ReportDestinationExtentMetricScope:    {operation: "ReportDestinatoinExtentMetric"},
+		ReportConsumerGroupMetricScope:        {operation: "ReportConsumerGroupMetric"},
+		ReportConsumerGroupExtentMetricScope:  {operation: "ReportConsumerGroupExtentMetric"},
+		ReportStoreExtentMetricScope:          {operation: "ReportStoreExtentMetric"},
+		RefreshInputHostsForDstScope:          {operation: "RefreshInputHostsForDst"},
+		RefreshOutputHostsForConsGroupScope:   {operation: "RefreshOutputHostsForConsGroup"},
+		EventPipelineScope:                    {operation: "EventPipeline"},
+		ExtentsUnreachableScope:               {operation: "ExtentsUnreachable"},
+		ExtentCreatedEventScope:               {operation: "ExtentCreatedEvent"},
+		ConsGroupUpdatedEventScope:            {operation: "ConsGroupUpdatedEvent"},
+		ExtentDownEventScope:                  {operation: "ExtentDownEvent"},
+		InputNotifyEventScope:                 {operation: "InputNotifyEvent"},
+		OutputNotifyEventScope:                {operation: "OutputNotifyEvent"},
+		InputFailedEventScope:                 {operation: "InputFailedEvent"},
+		StoreFailedEventScope:                 {operation: "StoreFailedEvent"},
+		StoreExtentStatusOutOfSyncEventScope:  {operation: "StoreExtentStatusOutOfSyncEvent"},
+		RemoteZoneExtentCreatedEventScope:     {operation: "RemoteZoneExtentCreatedEvent"},
+		QueueDepthBacklogCGScope:              {operation: "QueueDepthBacklog"},
+		ExtentMonitorScope:                    {operation: "ExtentMonitor"},
+		RetentionMgrScope:                     {operation: "RetentionMgr"},
+		DLQOperationScope:                     {operation: "DLQOperation"},
+		ControllerCreateDestinationScope:      {operation: "CreateDestination"},
+		ControllerUpdateDestinationScope:      {operation: "UpdateDestination"},
+		ControllerDeleteDestinationScope:      {operation: "DeleteDestination"},
+		ControllerCreateConsumerGroupScope:    {operation: "CreateConsumerGroup"},
+		ControllerUpdateConsumerGroupScope:    {operation: "UpdateConsumerGroup"},
+		ControllerDeleteConsumerGroupScope:    {operation: "DeleteConsumerGroup"},
+		ControllerCreateRemoteZoneExtentScope: {operation: "CreateRemoteZoneExtent"},
+	},
+}
+
+var dynamicScopeDefs = map[ServiceIdx]map[int]scopeDefinition{
+
+	// Inputhost Scope Names
+	Inputhost: {
+		PubConnectionScope:                {operation: "PubConnection"},
+		PutMessageBatchInputHostDestScope: {operation: "PutMessageBatchInputHost"},
+	},
+
+	// Outputhost Scope Names
+	Outputhost: {
+		ConsConnectionScope:                  {operation: "ConsConnection"},
+		ReceiveMessageBatchOutputHostCGScope: {operation: "ReceiveMessageBatchInputHost"},
+	},
+
+	// Controller Scope Names
+	Controller: {
+		QueueDepthBacklogCGScope: {operation: "QueueDepthBacklog"},
+	},
+}
+
+// Metric enum
+const (
+
+	// -- Common metrics -- //
+
+	// MetadataRequests is the count of requests to metadata
+	MetadataRequests = iota
+	// MetadataFailures is the count of requests to metadata that have failed
+	MetadataFailures
+	// MetadataLatency is the latency of requests to metadata
+	MetadataLatency
+
+	// --Inputhost metrics -- //
+
+	// InputhostRequests indicates the request count for inputhost
+	InputhostRequests
+	// InputhostFailures indicates failure count for inputhost
+	InputhostFailures
+	// InputhostMessageReceived records the count of messages received
+	InputhostMessageReceived
+	// InputhostMessageFailures records the count of messages received failures
+	InputhostMessageFailures
+	//InputhostReconfClientRequests indicates the request count for reconfige clients
+	InputhostReconfClientRequests
+	//InputhostMessageLimitThrottled indicates the request has been throttled due to our rate limit
+	InputhostMessageLimitThrottled
+	//InputhostMessageChannelFullThrottled indicates the request has been throttled due to the channel being full
+	InputhostMessageChannelFullThrottled
+	// InputhostUserFailures indicates this is a user failure (~HTTP 4xx)
+	InputhostUserFailures
+	// InputhostInternalFailures indicates this is an internal failure (HTTP 5xx)
+	InputhostInternalFailures
+	// InputhostMessageUserFailures records the count of messages received failures
+	InputhostMessageUserFailures
+	// InputhostMessageInternalFailures records the count of messages received failures
+	InputhostMessageInternalFailures
+	// InputhostGauges is the gauges for inputhost
+	InputhostGauges
+	// InputhostPubConnection is the gauges for active pubconnection
+	InputhostPubConnection
+	// InputhostLatencyTimer represents time taken by an operation
+	InputhostLatencyTimer
+	// InputhostReceiveMessageLatency is the latency to recieve a message
+	InputhostReceiveMessageLatency
+	// InputhostDestMessageReceived  indicates prefix name for destinations request counter
+	// append the destination path will be the actual name for the counter.
+	// each destination has a unique name tag
+	InputhostDestMessageReceived
+	// InputhostDestMessageFailures indicates prefix nmae of destinations failure counter
+	// append the destination path will be the actual name for the counter.
+	// each destination has a unique name tag
+	InputhostDestMessageFailures
+	// InputhostDestMessageLimitThrottled is used to indicate that this particular destination
+	// is throttled due to token bucket rate limit
+	InputhostDestMessageLimitThrottled
+	// InputhostDestMessageChannelFullThrottled is used to indicate that this particular destination
+	// is throttled due to the channel being full
+	InputhostDestMessageChannelFullThrottled
+	// InputhostDestMessageUserFailures indicates prefix nmae of destinations failure counter
+	// append the destination path will be the actual name for the counter.
+	// each destination has a unique name tag
+	InputhostDestMessageUserFailures
+	// InputhostDestMessageInternalFailures indicates prefix nmae of destinations failure counter
+	// append the destination path will be the actual name for the counter.
+	// each destination has a unique name tag
+	InputhostDestMessageInternalFailures
+	// InputhostDestReceiveMessageLatency  indicates name for destinations request latency
+	InputhostDestReceiveMessageLatency
+	// InputhostDestPubConnection is the gauge of active connections per destination
+	InputhostDestPubConnection
+
+	// -- Outputhost metrics -- //
+
+	// OutputhostRequests indicates the request count for outputhost
+	OutputhostRequests
+	// OutputhostFailures indicates failure count for outputhost
+	OutputhostFailures
+	// OutputhostLongPollingTimeOut indicates time out for long polling
+	OutputhostLongPollingTimeOut
+	// OutputhostMessageSent records the count of messages sent
+	OutputhostMessageSent
+	// OutputhostMessageFailures records the count of messages sent failures
+	OutputhostMessageFailures
+	// OutputhostCreditsReceived indicates the count of the credits
+	OutputhostCreditsReceived
+	// OutputhostDLQMessageRequests records the count of DLQ messages requests
+	OutputhostDLQMessageRequests
+	// OutputhostDLQMessageFailures records the count of DLQ messages sent failures
+	OutputhostDLQMessageFailures
+	// OutputhostMessageRedelivered records the count of messages redeliverd
+	OutputhostMessageRedelivered
+	// OutputhostMessageSentAck records the count of ack messages
+	OutputhostMessageSentAck
+	// OutputhostMessageSentNAck records the count of nack messages
+	OutputhostMessageSentNAck
+	//OutputhostMessageAckFailures recores the count of messages ack failures
+	OutputhostMessageAckFailures
+	//OutputhostMessageNackFailures recores the count of messages nack failures
+	OutputhostMessageNackFailures
+	// OutputhostMessageNoAckManager records the count of acks which came where there was no Ack Manager
+	OutputhostMessageNoAckManager
+	// OutputhostMessageDiffSession records the count of acks which came for a different session
+	OutputhostMessageDiffSession
+	// OutputhostMessageAckManagerError records the count of errors from the ack manager
+	OutputhostMessageAckManagerError
+	// OutputhostUserFailures indicates this is a user failure (~HTTP 4xx)
+	OutputhostUserFailures
+	// OutputhostInternalFailures indicates this is an internal failure (HTTP 5xx)
+	OutputhostInternalFailures
+	// OutputhostConsConnection is the number of active connections
+	OutputhostConsConnection
+	// OutputhostLatencyTimer represents time taken by an operation
+	OutputhostLatencyTimer
+	// OutputhostCGMessageSent records the count of messages sent per consumer group
+	OutputhostCGMessageSent
+	// OutputhostCGMessageFailures records the count of messages sent failures per consumer group
+	OutputhostCGMessageFailures
+	// OutputhostCGCreditsReceived indicates the count of the credits per consumer group
+	OutputhostCGCreditsReceived
+	// OutputhostCGDLQMessageRequests records the count of DLQ messages requests per consumer group
+	OutputhostCGDLQMessageRequests
+	// OutputhostCGDLQMessageFailures records the count of DLQ messages sent failures per consumer group
+	OutputhostCGDLQMessageFailures
+	// OutputhostCGMessageRedelivered records the count of messages redelivered
+	OutputhostCGMessageRedelivered
+	// OutputhostCGMessageSentAck records the count of ack messages
+	OutputhostCGMessageSentAck
+	// OutputhostCGMessageSentNAck records the count of nack messages
+	OutputhostCGMessageSentNAck
+	// OutputhostCGMessagesThrottled records the count of messages throttled
+	OutputhostCGMessagesThrottled
+	// OutputhostCGMessageSentLatency is the latency to send a message
+	OutputhostCGMessageSentLatency
+	//OutputhostCGMessageCacheSize is the cashe size of consumer group message
+	OutputhostCGMessageCacheSize
+	// OutputhostCGConsConnection is the number of active connections per consumer group
+	OutputhostCGConsConnection
+	// OutputhostCGOutstandingDeliveries is the number of outstanding messages for a single consumer group
+	OutputhostCGOutstandingDeliveries
+	// OutputhostCGHealthState is the most recent health state for the consumer group
+	OutputhostCGHealthState
+	// OutputhostCGNumExtents is the number of active extents for this CG
+	OutputhostCGNumExtents
+	// OutputhostCGAckMgrSize is a gauge for the size of the ack manager
+	OutputhostCGAckMgrSize
+	// OutputhostCGAckMgrLevelUpdate is a gauge to track the last time ack level moved
+	OutputhostCGAckMgrLevelUpdate
+	// OutputhostCGAckMgrConsumed is a gauge for the extents marked as consumed
+	OutputhostCGAckMgrConsumed
+	// OutputhostCGAckMgrResetMsg is the gauge to track the resets to the ackMgrMap
+	OutputhostCGAckMgrResetMsg
+	// OutputhostCGAckMgrResetMsgError is the gauge to track errors on reset to the ackMgrMap
+	OutputhostCGAckMgrResetMsgError
+	// OutputhostCGSkippedMessages is the gauge to track skipped messages
+	OutputhostCGSkippedMessages
+
+	// -- Frontend metrics -- //
+
+	// FrontendRequests indicates the request count for frontend
+	FrontendRequests
+	// FrontendFailures indicates failure count for frontend
+	FrontendFailures
+	// FrontendEntityNotExist indicates entityNotExist Error for frontend
+	FrontendEntityNotExist
+	// FrontendUserFailures indicates this is a user failure (~HTTP 4xx)
+	FrontendUserFailures
+	// FrontendInternalFailures indicates this is an internal failure (HTTP 5xx)
+	FrontendInternalFailures
+	// FrontendLatencyTimer represents time taken by an operation
+	FrontendLatencyTimer
+
+	// -- Storehost metrics -- //
+
+	// StorageRequests is the count of requests
+	StorageRequests
+	// StorageFailures is the count of requests that have failed
+	StorageFailures
+	// StorageStoreFailures is the count of requests that have failed due to storage errors
+	StorageStoreFailures
+	// StorageMessageReceived records the count of messages received
+	StorageMessageReceived
+	// StorageMessageSent records the count of messages sent
+	StorageMessageSent
+	// WatermarksReceived records the count of fully replicated watermarks received
+	WatermarksReceived
+	// StorageOpenExtents is the number of active extents
+	StorageOpenExtents
+	// StorageWriteStreams is the number of active write streams
+	StorageWriteStreams
+	// StorageReadStreams is the number of active read streams
+	StorageReadStreams
+	// StorageInMsgChanDepth is the depth of the msg-chan buffer during writes
+	StorageInMsgChanDepth
+	// StorageInAckChanDepth is the depth of the ack-chan buffer during writes
+	StorageInAckChanDepth
+	// StorageOutMsgChanDepth is the depth of the msg-chan buffer during reads
+	StorageOutMsgChanDepth
+	// StorageDiskAvailableSpaceMB is the available disk space in MB
+	StorageDiskAvailableSpaceMB
+	// StorageDiskAvailableSpacePcnt is the available disk space percentage
+	StorageDiskAvailableSpacePcnt
+
+	// StorageLatencyTimer is the latency for every (non-streaming) request
+	StorageLatencyTimer
+	// StorageWriteStoreLatency is the latency to write message to store
+	StorageWriteStoreLatency
+	// StorageWriteMessageLatency is the latency to write message to store and ack
+	StorageWriteMessageLatency
+	// StorageReadStoreLatency is the latency to read message from store
+	StorageReadStoreLatency
+	// StorageReadMessageLatency is the latency to read and send out a message
+	StorageReadMessageLatency
+	// StorageInWriteTChannelLatency is the latency to write ack to tchannel in stream
+	StorageInWriteTChannelLatency
+	// StorageInFlushTChannelLatency is the latency to flush ack to tchannel in stream
+	StorageInFlushTChannelLatency
+	// StorageOutWriteTChannelLatency is the latench to write msg to tchannel out stream
+	StorageOutWriteTChannelLatency
+	// StorageOutFlushTChannelLatency is the latency to flush msg to tchannel out stream
+	StorageOutFlushTChannelLatency
+
+	// -- Controller metrics -- //
+
+	// ControllerErrMetadataReadCounter indicates an error from metadata
+	ControllerErrMetadataReadCounter
+	// ControllerErrMetadataUpdateCounter indicates failure to update metadata
+	ControllerErrMetadataUpdateCounter
+	// ControllerErrMetadataEntityNotFoundCounter indicates non-existent entity
+	ControllerErrMetadataEntityNotFoundCounter
+	// ControllerErrTryLockCounter indicates failure to acquire try lock
+	ControllerErrTryLockCounter
+	// ControllerErrCreateExtentCounter indicates failure to create extent
+	ControllerErrCreateExtentCounter
+	// ControllerErrPickInHostCounter indicates failure to pick input host for extent
+	ControllerErrPickInHostCounter
+	// ControllerErrPickOutHostCounter indicates failure to pick output host for extent
+	ControllerErrPickOutHostCounter
+	// ControllerErrCallReplicatorCounter indicates failure to call replicator
+	ControllerErrCallReplicatorCounter
+
+	// ControllerErrPickStoreHostCounter indicates failure to pick store host for extent
+	ControllerErrPickStoreHostCounter
+	// ControllerErrResolveUUIDCounter indicates failure to resolve UUID to ip:port
+	ControllerErrResolveUUIDCounter
+	// ControllerErrCreateTChanClientCounter indicates failure to create tchannel client
+	ControllerErrCreateTChanClientCounter
+	// ControllerErrNoHealthyStoreCounter indicates unavailability of store hosts
+	ControllerErrNoHealthyStoreCounter
+	// ControllerErrSealFailed indicates failure of seal operation
+	ControllerErrSealFailed
+	// ControllerErrTooManyOpenCGExtents indicates too many open extents for some CG
+	ControllerErrTooManyOpenCGExtents
+	// ControllerErrNoRetryWorkers indicates that an event cannot be retried
+	// because all of the retry workers are busy
+	ControllerErrNoRetryWorkers
+	// ControllerErrBadRequestCounter indicates a malformed request
+	ControllerErrBadRequestCounter
+	// ControllerErrBadEntityCounter indicates either an entity not exists or disabled error
+	ControllerErrBadEntityCounter
+
+	// ControllerEventsDropped indicates an event drop due to queue full
+	ControllerEventsDropped
+	// ControllerRequests indicates the request count
+	ControllerRequests
+	// ControllerFailures indicates failure count
+	ControllerFailures
+	// ControllerRetries represents retry attempts on an operation
+	ControllerRetries
+
+	// ControllerRetriesExceeded indicates max retries being exceeded on an operation
+	ControllerRetriesExceeded
+	//ControllerRateLimited indicates count of the times that throttle kicked in
+	ControllerRateLimited
+
+	// ControllerRetentionJobStartCounter indicates the started retention job count
+	ControllerRetentionJobStartCounter
+	// ControllerRetentionJobFailedCounter indicates the failed retention job count
+	ControllerRetentionJobFailedCounter
+	// ControllerRetentionJobCompletedCounter indicates the completed retention job count
+	ControllerRetentionJobCompletedCounter
+	// ControllerRetentionJobCancelledCounter indicates the cancelled retention job count
+	ControllerRetentionJobCancelledCounter
+	// ControllerGetAddressFailedCounter indicates the failed getAddress calls
+	ControllerGetAddressFailedCounter
+	// ControllerGetAddressCompletedCounter indicates the completed getAddress calls
+	ControllerGetAddressCompletedCounter
+	// ControllerPurgeMessagesRequestCounter indicates the purge messages request count
+	ControllerPurgeMessagesRequestCounter
+
+	// ControllerLatencyTimer represents time taken by an operation
+	ControllerLatencyTimer
+	// ControllerRetentionJobDuration is the time spent to finish retention on an extent
+	ControllerRetentionJobDuration
+	// ControllerGetAddressLatency is the latency of getAddressFromTS
+	ControllerGetAddressLatency
+	// ControllerPurgeMessagesLatency is the letency of purge messages request
+	ControllerPurgeMessagesLatency
+
+	// ControllerCGBacklogAvailable is the numbers for availbale back log
+	ControllerCGBacklogAvailable
+	// ControllerCGBacklogUnavailable is the numbers for unavailbale back log
+	ControllerCGBacklogUnavailable
+	// ControllerCGBacklogInflight is the numbers for inflight back log
+	ControllerCGBacklogInflight
+	// ControllerCGBacklogDLQ is the numbers for DLQ back log
+	ControllerCGBacklogDLQ
+	// ControllerCGBacklogProgress is an indication of progress made on the backlog
+	ControllerCGBacklogProgress
+
+	// -- Replicator metrics -- //
+
+	// ReplicatorWsFailure indicates websocket failure
+	ReplicatorWsFailure
+	// ReplicatorRequests indicates non-messaging request count for replicator
+	ReplicatorRequests
+	// ReplicatorFailures indicates non-messaging failure count for replicator
+	ReplicatorFailures
+	// ReplicatorBadRequest indicates bad request
+	ReplicatorBadRequest
+
+	// ReplicatorInConnCreditsReceived indicates how many credits InConn received
+	ReplicatorInConnCreditsReceived
+	// ReplicatorInConnMsgWritten indicates how many messages InConn writes to client
+	ReplicatorInConnMsgWritten
+
+	// ReplicatorOutConnCreditsSent indicates how many credits OutConn sent
+	ReplicatorOutConnCreditsSent
+	// ReplicatorOutConnMsgRead indicates how many messages OutConn read
+	ReplicatorOutConnMsgRead
+	// ReplicatorReconcileDestRun indicates the reconcile for dest runs
+	ReplicatorReconcileDestRun
+	// ReplicatorReconcileDestFail indicates the reconcile for dest fails
+	ReplicatorReconcileDestFail
+	// ReplicatorReconcileDestFoundMissing indicates the reconcile for dest found a missing dest
+	ReplicatorReconcileDestFoundMissing
+	// ReplicatorReconcileDestExtentRun indicates the reconcile for dest extent runs
+	ReplicatorReconcileDestExtentRun
+	// ReplicatorReconcileDestExtentFail indicates the reconcile for dest extent fails
+	ReplicatorReconcileDestExtentFail
+	// ReplicatorReconcileDestExtentFoundMissing indicates the reconcile for dest extent found a missing dest extent
+	ReplicatorReconcileDestExtentFoundMissing
+	// ReplicatorReconcileDestExtentInconsistentStatus indicates the reconcile for dest extent found an inconsistent extent status
+	ReplicatorReconcileDestExtentInconsistentStatus
+
+	numMetrics
+)
+
+// var metricDefs = [NumServices][]map[int]metricDefinition{
+var metricDefs = map[ServiceIdx]map[int]metricDefinition{
+
+	// definition for Common metrics (for all services)
+	Common: {
+		MetadataRequests: {Counter, "metadata.requests"},
+		MetadataFailures: {Counter, "metadata.failures"},
+		MetadataLatency:  {Timer, "metadata.latency"},
+	},
+
+	// definitions for Inputhost metrics
+	Inputhost: {
+		InputhostRequests:                    {Counter, "inputhost.requests"},
+		InputhostFailures:                    {Counter, "inputhost.errors"},
+		InputhostMessageReceived:             {Counter, "inputhost.message.received"},
+		InputhostMessageFailures:             {Counter, "inputhost.message.errors"},
+		InputhostReconfClientRequests:        {Counter, "inputhost.reconfigure.client.request"},
+		InputhostMessageLimitThrottled:       {Counter, "inputhost.message.limit.throttled"},
+		InputhostMessageChannelFullThrottled: {Counter, "inputhost.message.channel.throttled"},
+		InputhostUserFailures:                {Counter, "inputhost.user-errors"},
+		InputhostInternalFailures:            {Counter, "inputhost.internal-errors"},
+		InputhostMessageUserFailures:         {Counter, "inputhost.message.user-errors"},
+		InputhostMessageInternalFailures:     {Counter, "inputhost.message.internal-errors"},
+		InputhostPubConnection:               {Gauge, "inputhost.pubconnection"},
+		InputhostLatencyTimer:                {Timer, "inputhost.latency"},
+		InputhostReceiveMessageLatency:       {Timer, "inputhost.message.recv-latency"},
+	},
+
+	// definitions for Outputhost metrics
+	Outputhost: {
+		OutputhostRequests:               {Counter, "outputhost.requests"},
+		OutputhostFailures:               {Counter, "outputhost.errors"},
+		OutputhostLongPollingTimeOut:     {Counter, "outputhost.timeout-longpoll"},
+		OutputhostMessageSent:            {Counter, "outputhost.message.sent"},
+		OutputhostMessageFailures:        {Counter, "outputhost.message.errors"},
+		OutputhostCreditsReceived:        {Counter, "outputhost.credit-received"},
+		OutputhostDLQMessageRequests:     {Counter, "outputhost.message.sent-dlq"},
+		OutputhostDLQMessageFailures:     {Counter, "outputhost.message.errors-dlq"},
+		OutputhostMessageRedelivered:     {Counter, "outputhost.message.redelivered"},
+		OutputhostMessageSentAck:         {Counter, "outputhost.message.sent-ack"},
+		OutputhostMessageSentNAck:        {Counter, "outputhost.message.sent-nack"},
+		OutputhostMessageAckFailures:     {Counter, "outputhost.message.errors-ack"},
+		OutputhostMessageNackFailures:    {Counter, "outputhost.message.errors-nack"},
+		OutputhostMessageNoAckManager:    {Counter, "outputhost.message.no-ackmgr"},
+		OutputhostMessageDiffSession:     {Counter, "outputhost.message.diff-session"},
+		OutputhostMessageAckManagerError: {Counter, "outputhost.message.errors-ackmgr"},
+		OutputhostUserFailures:           {Counter, "outputhost.user-errors"},
+		OutputhostInternalFailures:       {Counter, "outputhost.internal-errors"},
+		OutputhostConsConnection:         {Gauge, "outputhost.consconnection"},
+		OutputhostLatencyTimer:           {Timer, "outputhost.latency"},
+	},
+
+	// definitions for Frontend metrics
+	Frontend: {
+		FrontendRequests:         {Counter, "frontend.requests"},
+		FrontendFailures:         {Counter, "frontend.errors"},
+		FrontendEntityNotExist:   {Counter, "frontend.errors.entitynotexist"},
+		FrontendUserFailures:     {Counter, "frontend.user-errors"},
+		FrontendInternalFailures: {Counter, "frontend.internal-errors"},
+		FrontendLatencyTimer:     {Timer, "frontend.latency"},
+	},
+
+	// definitions for Storehost metrics
+	Storage: {
+		StorageRequests:                {Counter, "storage.requests"},
+		StorageFailures:                {Counter, "storage.errors"},
+		StorageStoreFailures:           {Counter, "storage.store-error"},
+		StorageMessageReceived:         {Counter, "storage.message.received"},
+		StorageMessageSent:             {Counter, "storage.message.sent"},
+		WatermarksReceived:             {Counter, "storage.watermarks"},
+		StorageOpenExtents:             {Gauge, "storage.open-extents"},
+		StorageWriteStreams:            {Gauge, "storage.write.streams"},
+		StorageReadStreams:             {Gauge, "storage.read.streams"},
+		StorageInMsgChanDepth:          {Gauge, "storage.in.msgchan-depth"},
+		StorageInAckChanDepth:          {Gauge, "storage.in.ackchan-depth"},
+		StorageOutMsgChanDepth:         {Gauge, "storage.out.msgchan-depth"},
+		StorageDiskAvailableSpaceMB:    {Gauge, "storage.disk.availablespace.mb"},
+		StorageDiskAvailableSpacePcnt:  {Gauge, "storage.disk.availablespace.pcnt"},
+		StorageLatencyTimer:            {Timer, "storage.latency"},
+		StorageWriteStoreLatency:       {Timer, "storage.write.store-latency"},
+		StorageWriteMessageLatency:     {Timer, "storage.write.message-latency"},
+		StorageReadStoreLatency:        {Timer, "storage.read.store-latency"},
+		StorageReadMessageLatency:      {Timer, "storage.read.message-latency"},
+		StorageInWriteTChannelLatency:  {Timer, "storage.in.write-tchannel-latency"},
+		StorageInFlushTChannelLatency:  {Timer, "storage.in.flush-tchannel-latency"},
+		StorageOutWriteTChannelLatency: {Timer, "storage.out.write-tchannel-latency"},
+		StorageOutFlushTChannelLatency: {Timer, "storage.out.flush-tchannel-latency"},
+	},
+
+	// definitions for Controller metrics
+	Controller: {
+		ControllerErrMetadataReadCounter:           {Counter, "controller.errors.metadata-read"},
+		ControllerErrMetadataUpdateCounter:         {Counter, "controller.errors.metadata-update"},
+		ControllerErrMetadataEntityNotFoundCounter: {Counter, "controller.errors.metadata-entitynotfound"},
+		ControllerErrTryLockCounter:                {Counter, "controller.errors.try-lock"},
+		ControllerErrCreateExtentCounter:           {Counter, "controller.errors.create-extent"},
+		ControllerErrPickInHostCounter:             {Counter, "controller.errors.pick-inputhost"},
+		ControllerErrPickOutHostCounter:            {Counter, "controller.errors.pick-outputhost"},
+		ControllerErrCallReplicatorCounter:         {Counter, "controller.errors.call-replicator"},
+		ControllerErrPickStoreHostCounter:          {Counter, "controller.errors.pick-storehost"},
+		ControllerErrResolveUUIDCounter:            {Counter, "controller.errors.resolve-uuid"},
+		ControllerErrCreateTChanClientCounter:      {Counter, "controller.errors.create-tchannel-client"},
+		ControllerErrNoHealthyStoreCounter:         {Counter, "controller.errors.no-healthy-store"},
+		ControllerErrSealFailed:                    {Counter, "controller.errors.seal-failed"},
+		ControllerErrTooManyOpenCGExtents:          {Counter, "controller.errors.too-many-open-cgextents"},
+		ControllerErrNoRetryWorkers:                {Counter, "controller.errors.no-retry-workers"},
+		ControllerErrBadRequestCounter:             {Counter, "controller.errors.bad-requests"},
+		ControllerErrBadEntityCounter:              {Counter, "controller.errors.bad-entity"},
+		ControllerEventsDropped:                    {Counter, "controller.events-dropped"},
+		ControllerRequests:                         {Counter, "controller.requests"},
+		ControllerFailures:                         {Counter, "controller.errors"},
+		ControllerRetries:                          {Counter, "controller.retries"},
+		ControllerRetriesExceeded:                  {Counter, "controller.retries-exceeded"},
+		ControllerRateLimited:                      {Counter, "controller.rate-limited"},
+		ControllerRetentionJobStartCounter:         {Counter, "controller.retentionmgr.job.started"},
+		ControllerRetentionJobFailedCounter:        {Counter, "controller.retentionmgr.job.failed"},
+		ControllerRetentionJobCompletedCounter:     {Counter, "controller.retentionmgr.job.completed"},
+		ControllerRetentionJobCancelledCounter:     {Counter, "controller.retentionmgr.job.cancelled"},
+		ControllerGetAddressFailedCounter:          {Counter, "controller.retentionmgr.getaddress.failed"},
+		ControllerGetAddressCompletedCounter:       {Counter, "controller.retentionmgr.getaddress.completed"},
+		ControllerPurgeMessagesRequestCounter:      {Counter, "controller.retentionmgr.purgemessagesrequest"},
+		ControllerLatencyTimer:                     {Timer, "controller.latency"},
+		ControllerRetentionJobDuration:             {Timer, "controller.retentionmgr.jobduration"},
+		ControllerGetAddressLatency:                {Timer, "controller.retentionmgr.getaddresslatency"},
+		ControllerPurgeMessagesLatency:             {Timer, "controller.retentionmgr.purgemessageslatency"},
+	},
+
+	// definitions for Replicator metrics
+	Replicator: {
+		ReplicatorWsFailure:                             {Counter, "replicator.websocket.failure"},
+		ReplicatorRequests:                              {Counter, "replicator.requests"},
+		ReplicatorFailures:                              {Counter, "replicator.errors"},
+		ReplicatorBadRequest:                            {Counter, "replicator.requests.bad"},
+		ReplicatorInConnCreditsReceived:                 {Counter, "replicator.inconn.creditsreceived"},
+		ReplicatorInConnMsgWritten:                      {Counter, "replicator.inconn.msgwritten"},
+		ReplicatorOutConnCreditsSent:                    {Counter, "replicator.outconn.creditssent"},
+		ReplicatorOutConnMsgRead:                        {Counter, "replicator.outconn.msgread"},
+		ReplicatorReconcileDestRun:                      {Counter, "replicator.reconcile.dest.run"},
+		ReplicatorReconcileDestFail:                     {Counter, "replicator.reconcile.dest.fail"},
+		ReplicatorReconcileDestFoundMissing:             {Counter, "replicator.reconcile.dest.foundmissing"},
+		ReplicatorReconcileDestExtentRun:                {Counter, "replicator.reconcile.destextent.run"},
+		ReplicatorReconcileDestExtentFail:               {Counter, "replicator.reconcile.destextent.fail"},
+		ReplicatorReconcileDestExtentFoundMissing:       {Counter, "replicator.reconcile.destextent.foundmissing"},
+		ReplicatorReconcileDestExtentInconsistentStatus: {Counter, "replicator.reconcile.destextent.inconsistentstatus"},
+	},
+}
+
+var dynamicMetricDefs = map[ServiceIdx]map[int]metricDefinition{
+	// definitions for Inputhost metrics
+	Inputhost: {
+		InputhostDestMessageReceived:             {Counter, "inputhost.message.received.dest"},
+		InputhostDestMessageFailures:             {Counter, "inputhost.message.errors.dest"},
+		InputhostDestMessageLimitThrottled:       {Counter, "inputhost.message.limit.throttled.dest"},
+		InputhostDestMessageChannelFullThrottled: {Counter, "inputhost.message.channel.throttled.dest"},
+		InputhostDestMessageUserFailures:         {Counter, "inputhost.message.user-errors.dest"},
+		InputhostDestMessageInternalFailures:     {Counter, "inputhost.message.internal-errors.dest"},
+		InputhostDestReceiveMessageLatency:       {Timer, "inputhost.message.recv-latency.dest"},
+		InputhostDestPubConnection:               {Gauge, "inputhost.pubconnection.dest"},
+	},
+
+	// definitions for Outputhost metrics
+	Outputhost: {
+		OutputhostCGMessageSent:           {Counter, "outputhost.message.sent.cg"},
+		OutputhostCGMessageFailures:       {Counter, "outputhost.message.errors.cg"},
+		OutputhostCGCreditsReceived:       {Counter, "outputhost.credit-received.cg"},
+		OutputhostCGDLQMessageRequests:    {Counter, "outputhost.message.sent-dlq.cg"},
+		OutputhostCGDLQMessageFailures:    {Counter, "outputhost.message.errors-dlq.cg"},
+		OutputhostCGMessageRedelivered:    {Counter, "outputhost.message.redelivered.cg"},
+		OutputhostCGMessageSentAck:        {Counter, "outputhost.message.sent-ack.cg"},
+		OutputhostCGMessageSentNAck:       {Counter, "outputhost.message.sent-nack.cg"},
+		OutputhostCGMessagesThrottled:     {Counter, "outputhost.message.throttled"},
+		OutputhostCGMessageSentLatency:    {Timer, "outputhost.message.sent-latency.cg"},
+		OutputhostCGMessageCacheSize:      {Gauge, "outputhost.message.cache.size.cg"},
+		OutputhostCGConsConnection:        {Gauge, "outputhost.consconnection.cg"},
+		OutputhostCGOutstandingDeliveries: {Gauge, "outputhost.outstandingdeliveries.cg"},
+		OutputhostCGHealthState:           {Gauge, "outputhost.healthstate.cg"},
+		OutputhostCGNumExtents:            {Gauge, "outputhost.numextents.cg"},
+		OutputhostCGAckMgrSize:            {Gauge, "outputhost.ackmgr.size.cg"},
+		OutputhostCGAckMgrLevelUpdate:     {Gauge, "outputhost.ackmgr.level.updated.cg"},
+		OutputhostCGAckMgrConsumed:        {Gauge, "outputhost.ackmgr.consumed.cg"},
+		OutputhostCGAckMgrResetMsg:        {Gauge, "outputhost.ackmgr.reset.message.cg"},
+		OutputhostCGAckMgrResetMsgError:   {Gauge, "outputhost.ackmgr.reset.message.error.cg"},
+		OutputhostCGSkippedMessages:       {Gauge, "outputhost.skipped.messages.cg"},
+	},
+
+	// definitions for Controller metrics
+	Controller: {
+		ControllerCGBacklogAvailable:   {Gauge, "controller.backlog.available.cg"},
+		ControllerCGBacklogUnavailable: {Gauge, "controller.backlog.unavailable.cg"},
+		ControllerCGBacklogInflight:    {Gauge, "controller.backlog.inflight.cg"},
+		ControllerCGBacklogDLQ:         {Gauge, "controller.backlog.DLQ.cg"},
+		ControllerCGBacklogProgress:    {Gauge, "controller.backlog.progress.cg"},
+	},
+}
+
+// ErrorClass is an enum to help with classifying SLA vs. non-SLA errors (SLA = "service level agreement")
+type ErrorClass uint8
+
+const (
+	// NoError indicates that there is no error (error should be nil)
+	NoError ErrorClass = iota
+	// UserError indicates that this is NOT an SLA-reportable error
+	UserError
+	// InternalError indicates that this is an SLA-reportable error
+	InternalError
+)

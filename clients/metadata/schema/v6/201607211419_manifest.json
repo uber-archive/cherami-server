@@ -1,0 +1,9 @@
+{
+	"CurrVersion": 6,
+	"MinCompatibleVersion": 5,
+	"Description": "Added dest and cg audit log; added consumer-group visibility column to destination_extents",
+	"SchemaUpdateCqlFiles": [
+		"201607151340_add_dest_cg_audit_table.cql",
+                "201607151842_add_extent_cg_visibility.cql"
+	]
+}

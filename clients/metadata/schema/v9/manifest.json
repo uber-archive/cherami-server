@@ -1,0 +1,8 @@
+{
+	"CurrVersion": 9,
+	"MinCompatibleVersion": 8,
+	"Description": "added extent status updated time",
+	"SchemaUpdateCqlFiles": [
+		"201609140010_extent_status_updated_time.cql"
+	]
+}

@@ -1,0 +1,11 @@
+{
+	"CurrVersion": 8,
+	"MinCompatibleVersion": 7,
+	"Description": "1.Add xdc related metadata 2.Added caller hostname, servicename for user operation audit",
+	"SchemaUpdateCqlFiles": [
+		"201608191200_xdc.cql",
+		"201608151200_add_user_ops_audit_info.cql",
+		"201608251200_xdc_extent.cql",
+		"201609011200_add_schema_info.cql"
+	]
+}

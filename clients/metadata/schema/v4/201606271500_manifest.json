@@ -1,0 +1,8 @@
+{
+    "CurrVersion": 4,
+    "MinCompatibleVersion": 2,
+    "Description": "Added start_from to consumer_group",
+    "SchemaUpdateCqlFiles": [
+        "201606271500_add_cg_start_from.cql"
+    ]
+}
