@@ -27,7 +27,7 @@ import (
 	"os/signal"
 	"time"
 
-	"github.com/uber/cherami-server/.generated/go/cherami"
+	"github.com/uber/cherami-thrift/.generated/go/cherami"
 	"github.com/uber/cherami-server/common"
 )
 

@@ -30,9 +30,9 @@ import (
 	"sync/atomic"
 
 	c "github.com/uber/cherami-thrift/.generated/go/cherami"
-	"github.com/uber/cherami-server/.generated/go/controller"
-	"github.com/uber/cherami-server/.generated/go/metadata"
-	"github.com/uber/cherami-server/.generated/go/shared"
+	"github.com/uber/cherami-thrift/.generated/go/controller"
+	"github.com/uber/cherami-thrift/.generated/go/metadata"
+	"github.com/uber/cherami-thrift/.generated/go/shared"
 	"github.com/uber/cherami-server/common"
 	"github.com/uber/cherami-server/common/configure"
 	dconfig "github.com/uber/cherami-server/common/dconfigclient"

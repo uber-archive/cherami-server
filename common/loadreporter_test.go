@@ -30,7 +30,7 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 
-	"github.com/uber/cherami-server/.generated/go/controller"
+	"github.com/uber/cherami-thrift/.generated/go/controller"
 
 	"errors"
 

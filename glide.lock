@@ -113,9 +113,15 @@ imports:
   - common/websocket
   - stream
 - name: github.com/uber/cherami-thrift
-  version: 07226f4510ac9818d905a94708b8dcbe9dc24cc0
+  version: b5a622234b1832fb55217f4b80e7fe54cfdab9b0
   subpackages:
+  - .generated/go/admin
   - .generated/go/cherami
+  - .generated/go/controller
+  - .generated/go/metadata
+  - .generated/go/replicator
+  - .generated/go/shared
+  - .generated/go/store
 - name: github.com/uber/ringpop-go
   version: 8b1085ca9b31007b996e411f2cb88256b2fedd12
   subpackages:

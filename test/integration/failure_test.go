@@ -35,8 +35,8 @@ import (
 
 	"github.com/uber/cherami-thrift/.generated/go/cherami"
 	client "github.com/uber/cherami-client-go/client/cherami"
-	m "github.com/uber/cherami-server/.generated/go/metadata"
-	"github.com/uber/cherami-server/.generated/go/shared"
+	m "github.com/uber/cherami-thrift/.generated/go/metadata"
+	"github.com/uber/cherami-thrift/.generated/go/shared"
 	"github.com/uber/cherami-server/common"
 	localMetrics "github.com/uber/cherami-server/common/metrics"
 	"github.com/uber/cherami-server/services/controllerhost"

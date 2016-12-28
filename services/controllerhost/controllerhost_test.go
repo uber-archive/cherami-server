@@ -30,9 +30,9 @@ import (
 	"testing"
 	"time"
 
-	c "github.com/uber/cherami-server/.generated/go/controller"
-	m "github.com/uber/cherami-server/.generated/go/metadata"
-	"github.com/uber/cherami-server/.generated/go/shared"
+	c "github.com/uber/cherami-thrift/.generated/go/controller"
+	m "github.com/uber/cherami-thrift/.generated/go/metadata"
+	"github.com/uber/cherami-thrift/.generated/go/shared"
 	mc "github.com/uber/cherami-server/clients/metadata"
 	"github.com/uber/cherami-server/common"
 	"github.com/uber/cherami-server/common/configure"

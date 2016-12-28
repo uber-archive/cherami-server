@@ -22,8 +22,8 @@
 package controllerhost
 
 import (
-	"github.com/uber/cherami-server/.generated/go/controller"
-	"github.com/uber/cherami-server/.generated/go/shared"
+	"github.com/uber/cherami-thrift/.generated/go/controller"
+	"github.com/uber/cherami-thrift/.generated/go/shared"
 
 	"github.com/stretchr/testify/mock"
 	"github.com/uber/tchannel-go/thrift"

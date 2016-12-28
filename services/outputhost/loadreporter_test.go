@@ -21,8 +21,8 @@
 package outputhost
 
 import (
-	"github.com/uber/cherami-server/.generated/go/controller"
-	"github.com/uber/cherami-server/.generated/go/shared"
+	"github.com/uber/cherami-thrift/.generated/go/controller"
+	"github.com/uber/cherami-thrift/.generated/go/shared"
 	"github.com/uber/cherami-server/common"
 	"github.com/uber/cherami-server/common/configure"
 	"github.com/uber/cherami-server/common/metrics"

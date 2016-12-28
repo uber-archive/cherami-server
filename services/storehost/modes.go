@@ -24,8 +24,8 @@ import (
 	"math"
 	"time"
 
-	"github.com/uber/cherami-server/.generated/go/cherami"
-	"github.com/uber/cherami-server/.generated/go/store"
+	"github.com/uber/cherami-thrift/.generated/go/cherami"
+	"github.com/uber/cherami-thrift/.generated/go/store"
 	"github.com/uber/cherami-server/storage"
 )
 

@@ -26,7 +26,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/uber/cherami-server/.generated/go/controller"
+	"github.com/uber/cherami-thrift/.generated/go/controller"
 
 	"github.com/uber-common/bark"
 	"github.com/uber/tchannel-go/thrift"

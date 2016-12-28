@@ -30,12 +30,12 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/uber/cherami-server/.generated/go/admin"
-	"github.com/uber/cherami-server/.generated/go/cherami"
-	"github.com/uber/cherami-server/.generated/go/controller"
-	"github.com/uber/cherami-server/.generated/go/metadata"
-	"github.com/uber/cherami-server/.generated/go/shared"
-	"github.com/uber/cherami-server/.generated/go/store"
+	"github.com/uber/cherami-thrift/.generated/go/admin"
+	"github.com/uber/cherami-thrift/.generated/go/cherami"
+	"github.com/uber/cherami-thrift/.generated/go/controller"
+	"github.com/uber/cherami-thrift/.generated/go/metadata"
+	"github.com/uber/cherami-thrift/.generated/go/shared"
+	"github.com/uber/cherami-thrift/.generated/go/store"
 	"github.com/uber/cherami-server/common"
 	"github.com/uber/cherami-server/common/configure"
 	dconfig "github.com/uber/cherami-server/common/dconfigclient"

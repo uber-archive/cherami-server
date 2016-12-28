@@ -31,8 +31,8 @@ import (
 	"time"
 
 	"github.com/uber/cherami-thrift/.generated/go/cherami"
-	"github.com/uber/cherami-server/.generated/go/metadata"
-	"github.com/uber/cherami-server/.generated/go/shared"
+	"github.com/uber/cherami-thrift/.generated/go/metadata"
+	"github.com/uber/cherami-thrift/.generated/go/shared"
 	mcli "github.com/uber/cherami-server/clients/metadata"
 	"github.com/uber/cherami-server/common"
 	toolscommon "github.com/uber/cherami-server/tools/common"

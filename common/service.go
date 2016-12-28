@@ -27,7 +27,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/uber/cherami-server/.generated/go/controller"
+	"github.com/uber/cherami-thrift/.generated/go/controller"
 	"github.com/uber/cherami-server/common/configure"
 	dconfig "github.com/uber/cherami-server/common/dconfigclient"
 	"github.com/uber/cherami-server/common/metrics"

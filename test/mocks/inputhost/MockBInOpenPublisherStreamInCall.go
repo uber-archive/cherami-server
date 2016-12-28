@@ -22,7 +22,7 @@
 package inputhost
 
 import (
-	"github.com/uber/cherami-server/.generated/go/cherami"
+	"github.com/uber/cherami-thrift/.generated/go/cherami"
 
 	"github.com/stretchr/testify/mock"
 )

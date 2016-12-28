@@ -25,13 +25,12 @@ import (
 	"net/http"
 	"reflect"
 
-	"github.com/uber/cherami-thrift/.generated/go/cherami"
 	"github.com/uber/cherami-client-go/common"
 	"github.com/uber/cherami-client-go/common/websocket"
 	"github.com/uber/cherami-client-go/stream"
-	sc "github.com/uber/cherami-server/.generated/go/cherami"
-	"github.com/uber/cherami-server/.generated/go/store"
 	serverStream "github.com/uber/cherami-server/stream"
+	"github.com/uber/cherami-thrift/.generated/go/cherami"
+	"github.com/uber/cherami-thrift/.generated/go/store"
 )
 
 type (
@@ -121,13 +120,13 @@ func NewWSConnector() WSConnector {
 	return &wsConnectorImpl{
 		wsHub: websocket.NewWebsocketHub(),
 		openPublisherOutStreamReadType: reflect.TypeOf((*cherami.InputHostCommand)(nil)).Elem(),
-		openPublisherInStreamReadType:  reflect.TypeOf((*sc.PutMessage)(nil)).Elem(),
+		openPublisherInStreamReadType:  reflect.TypeOf((*cherami.PutMessage)(nil)).Elem(),
 		openConsumerOutStreamReadType:  reflect.TypeOf((*cherami.OutputHostCommand)(nil)).Elem(),
-		openConsumerInStreamReadType:   reflect.TypeOf((*sc.ControlFlow)(nil)).Elem(),
+		openConsumerInStreamReadType:   reflect.TypeOf((*cherami.ControlFlow)(nil)).Elem(),
 		openAppendOutStreamReadType:    reflect.TypeOf((*store.AppendMessageAck)(nil)).Elem(),
 		openAppendInStreamReadType:     reflect.TypeOf((*store.AppendMessage)(nil)).Elem(),
 		openReadOutStreamReadType:      reflect.TypeOf((*store.ReadMessageContent)(nil)).Elem(),
-		openReadInStreamReadType:       reflect.TypeOf((*sc.ControlFlow)(nil)).Elem(),
+		openReadInStreamReadType:       reflect.TypeOf((*cherami.ControlFlow)(nil)).Elem(),
 	}
 }
 
@@ -317,7 +316,7 @@ func NewOpenPublisherInWebsocketStream(stream websocket.StreamServer) *OpenPubli
 }
 
 // Write writes a result to the response stream
-func (s *OpenPublisherInWebsocketStream) Write(arg *sc.InputHostCommand) error {
+func (s *OpenPublisherInWebsocketStream) Write(arg *cherami.InputHostCommand) error {
 	return s.stream.Write(arg)
 }
 
@@ -327,14 +326,14 @@ func (s *OpenPublisherInWebsocketStream) Flush() error {
 }
 
 // Read returns the next argument, if any is available.
-func (s *OpenPublisherInWebsocketStream) Read() (*sc.PutMessage, error) {
+func (s *OpenPublisherInWebsocketStream) Read() (*cherami.PutMessage, error) {
 
 	msg, err := s.stream.Read()
 	if err != nil {
 		return nil, err
 	}
 
-	return msg.(*sc.PutMessage), err
+	return msg.(*cherami.PutMessage), err
 }
 
 // SetResponseHeaders sets the response headers.
@@ -389,7 +388,7 @@ func NewOpenConsumerInWebsocketStream(stream websocket.StreamServer) *OpenConsum
 }
 
 // Write writes a result to the response stream
-func (s *OpenConsumerInWebsocketStream) Write(arg *sc.OutputHostCommand) error {
+func (s *OpenConsumerInWebsocketStream) Write(arg *cherami.OutputHostCommand) error {
 	return s.stream.Write(arg)
 }
 
@@ -399,14 +398,14 @@ func (s *OpenConsumerInWebsocketStream) Flush() error {
 }
 
 // Read returns the next argument, if any is available.
-func (s *OpenConsumerInWebsocketStream) Read() (*sc.ControlFlow, error) {
+func (s *OpenConsumerInWebsocketStream) Read() (*cherami.ControlFlow, error) {
 
 	msg, err := s.stream.Read()
 	if err != nil {
 		return nil, err
 	}
 
-	return msg.(*sc.ControlFlow), err
+	return msg.(*cherami.ControlFlow), err
 }
 
 // SetResponseHeaders sets the response headers.
@@ -497,7 +496,7 @@ func NewOpenReadOutWebsocketStream(stream websocket.StreamClient) *OpenReadOutWe
 }
 
 // Write writes a result to the response stream
-func (s *OpenReadOutWebsocketStream) Write(arg *sc.ControlFlow) error {
+func (s *OpenReadOutWebsocketStream) Write(arg *cherami.ControlFlow) error {
 	return s.stream.Write(arg)
 }
 
@@ -543,14 +542,14 @@ func (s *OpenReadInWebsocketStream) Flush() error {
 }
 
 // Read returns the next argument, if any is available.
-func (s *OpenReadInWebsocketStream) Read() (*sc.ControlFlow, error) {
+func (s *OpenReadInWebsocketStream) Read() (*cherami.ControlFlow, error) {
 
 	msg, err := s.stream.Read()
 	if err != nil {
 		return nil, err
 	}
 
-	return msg.(*sc.ControlFlow), err
+	return msg.(*cherami.ControlFlow), err
 }
 
 // SetResponseHeaders sets the response headers.

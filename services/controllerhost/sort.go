@@ -23,7 +23,7 @@ package controllerhost
 import (
 	"sort"
 
-	"github.com/uber/cherami-server/.generated/go/shared"
+	"github.com/uber/cherami-thrift/.generated/go/shared"
 )
 
 type extentStatsSorter struct {

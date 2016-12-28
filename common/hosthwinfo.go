@@ -24,7 +24,7 @@ import (
 	"errors"
 	"strings"
 
-	m "github.com/uber/cherami-server/.generated/go/metadata"
+	m "github.com/uber/cherami-thrift/.generated/go/metadata"
 )
 
 type (

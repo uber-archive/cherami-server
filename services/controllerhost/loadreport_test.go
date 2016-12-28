@@ -26,8 +26,8 @@ import (
 	"testing"
 	"time"
 
-	c "github.com/uber/cherami-server/.generated/go/controller"
-	"github.com/uber/cherami-server/.generated/go/shared"
+	c "github.com/uber/cherami-thrift/.generated/go/controller"
+	"github.com/uber/cherami-thrift/.generated/go/shared"
 	"github.com/uber/cherami-server/common"
 	"github.com/uber/cherami-server/services/controllerhost/load"
 	log "github.com/Sirupsen/logrus"
