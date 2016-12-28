@@ -49,8 +49,19 @@ One can use the CLI to verify if cherami is running properly:
 ./cmd/tools/cli/cherami-cli --hostport=<localIP>:4922 create destination /test/cherami
 ```
 
+Contributing
+------------
+
+We'd love your help in making Cherami great. If you find a bug or need a new feature, Open an issue and we will respond as fast as we can. If you want to implement new feature(s) and/or fix bug(s) yourself, open a pull request with the appropriate unit tests and we will merge it after review.
+
+**Note:** All contributors also need to fill out the [Uber Contributor License Agreement](http://t.uber.com/cla) before we can merge in any of your changes.
+
 Documentation
 --------------
 
 Interested in learning more about Cherami? Read the blog post:
 [eng.uber.com.cherami](https://eng.uber.com/cherami/)
+
+License
+-------
+MIT License, please see [LICENSE](https://github.com/uber/cherami-server/blob/master/LICENSE) for details.
