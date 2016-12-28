@@ -41,6 +41,7 @@ import (
 	"github.com/uber/cherami-thrift/.generated/go/shared"
 	"github.com/uber/cherami-server/common"
 	dconfig "github.com/uber/cherami-server/common/dconfigclient"
+	mm "github.com/uber/cherami-server/common/metadata"
 	"github.com/uber/cherami-server/common/metrics"
 	"github.com/uber/cherami-server/services/outputhost/load"
 	"github.com/uber/cherami-server/stream"
@@ -710,7 +711,6 @@ func NewOutputHost(serviceName string, sVice common.SCommon, metadataClient meta
 	bs := OutputHost{
 		logger:         (sVice.GetConfig().GetLogger()).WithFields(bark.Fields{common.TagOut: common.FmtOut(sVice.GetHostUUID()), common.TagDplName: common.FmtDplName(deploymentName)}),
 		SCommon:        sVice,
-		metaClient:     metadataClient,
 		frontendClient: frontendClient,
 		cgCache:        make(map[string]*consumerGroupCache),
 		cacheTimeout:   defaultIdleTimeout,
@@ -729,6 +729,8 @@ func NewOutputHost(serviceName string, sVice common.SCommon, metadataClient meta
 	if opts != nil {
 		bs.cacheTimeout = opts.CacheIdleTimeout
 	}
+
+	bs.metaClient = mm.NewMetadataMetricsMgr(metadataClient, bs.m3Client, bs.logger)
 
 	// manage uconfig, regiester handerFunc and verifyFunc for uConfig values
 	bs.dClient = sVice.GetDConfigClient()

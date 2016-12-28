@@ -40,6 +40,7 @@ import (
 	"github.com/uber/cherami-server/common"
 	"github.com/uber/cherami-server/common/configure"
 	dconfig "github.com/uber/cherami-server/common/dconfigclient"
+	mm "github.com/uber/cherami-server/common/metadata"
 	"github.com/uber/cherami-server/common/metrics"
 	storeStream "github.com/uber/cherami-server/stream"
 )
@@ -121,10 +122,11 @@ func NewReplicator(serviceName string, sVice common.SCommon, metadataClient meta
 		defaultAuthoritativeZone: config.GetReplicatorConfig().GetDefaultAuthoritativeZone(),
 		tenancy:                  tenancy,
 		clientFactory:            clientFactory,
-		metaClient:               metadataClient,
 		remoteReplicatorConn:     make(map[string]*outConnection),
 		storehostConn:            make(map[string]*outConnection),
 	}
+
+	r.metaClient = mm.NewMetadataMetricsMgr(metadataClient, r.m3Client, r.logger)
 
 	r.uconfigClient = sVice.GetDConfigClient()
 	r.dynamicConfigManage()

@@ -39,6 +39,7 @@ import (
 	"github.com/uber/cherami-thrift/.generated/go/shared"
 	"github.com/uber/cherami-server/common"
 	dconfig "github.com/uber/cherami-server/common/dconfigclient"
+	mm "github.com/uber/cherami-server/common/metadata"
 	"github.com/uber/cherami-server/common/metrics"
 	"github.com/uber/cherami-server/services/inputhost/load"
 	"github.com/uber/cherami-server/stream"
@@ -705,7 +706,6 @@ func NewInputHost(serviceName string, sVice common.SCommon, mClient metadata.TCh
 	bs := InputHost{
 		logger:               (sVice.GetConfig().GetLogger()).WithFields(bark.Fields{common.TagIn: common.FmtIn(sVice.GetHostUUID()), common.TagDplName: common.FmtDplName(deploymentName)}),
 		SCommon:              sVice,
-		mClient:              mClient,
 		pathCache:            make(map[string]*inPathCache),
 		pathCacheByDestPath:  make(map[string]string), // simple map which just resolves the path to uuid
 		cacheTimeout:         defaultIdleTimeout,
@@ -728,6 +728,8 @@ func NewInputHost(serviceName string, sVice common.SCommon, mClient metadata.TCh
 	if opts != nil {
 		bs.cacheTimeout = opts.CacheIdleTimeout
 	}
+
+	bs.mClient = mm.NewMetadataMetricsMgr(mClient, bs.m3Client, bs.logger)
 
 	// manage uconfig, regiester handerFunc and verifyFunc for uConfig values
 	bs.dConfigClient = sVice.GetDConfigClient()
