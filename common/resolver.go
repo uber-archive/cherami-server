@@ -24,7 +24,7 @@ import (
 	"regexp"
 	"sync"
 
-	"github.com/uber/cherami-server/.generated/go/metadata"
+	"github.com/uber/cherami-thrift/.generated/go/metadata"
 )
 
 type (

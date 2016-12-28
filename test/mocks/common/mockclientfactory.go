@@ -22,10 +22,10 @@
 package common
 
 import (
-	"github.com/uber/cherami-server/.generated/go/admin"
-	"github.com/uber/cherami-server/.generated/go/controller"
-	"github.com/uber/cherami-server/.generated/go/replicator"
-	"github.com/uber/cherami-server/.generated/go/store"
+	"github.com/uber/cherami-thrift/.generated/go/admin"
+	"github.com/uber/cherami-thrift/.generated/go/controller"
+	"github.com/uber/cherami-thrift/.generated/go/replicator"
+	"github.com/uber/cherami-thrift/.generated/go/store"
 
 	"github.com/stretchr/testify/mock"
 )

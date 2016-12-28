@@ -24,7 +24,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/uber/cherami-server/.generated/go/admin"
+	"github.com/uber/cherami-thrift/.generated/go/admin"
 	"github.com/uber/cherami-server/common"
 
 	tchannel "github.com/uber/tchannel-go"

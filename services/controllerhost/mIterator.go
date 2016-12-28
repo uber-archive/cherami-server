@@ -23,8 +23,8 @@ package controllerhost
 import (
 	"fmt"
 
-	"github.com/uber/cherami-server/.generated/go/metadata"
-	"github.com/uber/cherami-server/.generated/go/shared"
+	"github.com/uber/cherami-thrift/.generated/go/metadata"
+	"github.com/uber/cherami-thrift/.generated/go/shared"
 
 	"github.com/uber-common/bark"
 )

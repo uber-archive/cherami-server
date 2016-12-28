@@ -21,7 +21,7 @@
 package controller
 
 import (
-	"github.com/uber/cherami-server/.generated/go/controller"
+	"github.com/uber/cherami-thrift/.generated/go/controller"
 	"github.com/uber/cherami-server/common"
 	"github.com/uber/tchannel-go"
 	"github.com/uber/tchannel-go/thrift"

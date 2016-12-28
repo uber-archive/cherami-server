@@ -28,8 +28,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/uber/cherami-server/.generated/go/replicator"
-	"github.com/uber/cherami-server/.generated/go/shared"
+	"github.com/uber/cherami-thrift/.generated/go/replicator"
+	"github.com/uber/cherami-thrift/.generated/go/shared"
 	"github.com/uber/cherami-server/common"
 	"github.com/uber/cherami-server/common/configure"
 

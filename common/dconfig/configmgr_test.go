@@ -25,7 +25,7 @@ import (
 	"reflect"
 	"testing"
 
-	m "github.com/uber/cherami-server/.generated/go/metadata"
+	m "github.com/uber/cherami-thrift/.generated/go/metadata"
 	mc "github.com/uber/cherami-server/clients/metadata"
 	"github.com/Sirupsen/logrus"
 	"github.com/stretchr/testify/require"

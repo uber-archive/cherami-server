@@ -25,9 +25,9 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/uber/cherami-server/.generated/go/cherami"
-	"github.com/uber/cherami-server/.generated/go/shared"
-	"github.com/uber/cherami-server/.generated/go/store"
+	"github.com/uber/cherami-thrift/.generated/go/cherami"
+	"github.com/uber/cherami-thrift/.generated/go/shared"
+	"github.com/uber/cherami-thrift/.generated/go/store"
 )
 
 // Key names to use in the stream headers for various args

@@ -26,7 +26,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/uber/cherami-server/.generated/go/admin"
+	"github.com/uber/cherami-thrift/.generated/go/admin"
 )
 
 // TagErr is the tag for error object message

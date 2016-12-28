@@ -34,7 +34,13 @@ import:
   - stream
 - package: github.com/uber/cherami-thrift
   subpackages:
+  - .generated/go/admin
   - .generated/go/cherami
+  - .generated/go/controller
+  - .generated/go/metadata
+  - .generated/go/replicator
+  - .generated/go/shared
+  - .generated/go/store
 - package: github.com/uber/ringpop-go
   version: ^0.7.0
   subpackages:

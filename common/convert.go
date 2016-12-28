@@ -27,14 +27,13 @@ import (
 
 	"github.com/uber/tchannel-go"
 
-	c "github.com/uber/cherami-thrift/.generated/go/cherami"
-	"github.com/uber/cherami-server/.generated/go/admin"
-	"github.com/uber/cherami-server/.generated/go/cherami"
-	"github.com/uber/cherami-server/.generated/go/controller"
-	"github.com/uber/cherami-server/.generated/go/metadata"
-	"github.com/uber/cherami-server/.generated/go/shared"
-	"github.com/uber/cherami-server/common/metrics"
 	"github.com/uber-common/bark"
+	"github.com/uber/cherami-server/common/metrics"
+	"github.com/uber/cherami-thrift/.generated/go/admin"
+	"github.com/uber/cherami-thrift/.generated/go/cherami"
+	"github.com/uber/cherami-thrift/.generated/go/controller"
+	"github.com/uber/cherami-thrift/.generated/go/metadata"
+	"github.com/uber/cherami-thrift/.generated/go/shared"
 )
 
 // IntPtr makes a copy and returns the pointer to an int.
@@ -263,73 +262,52 @@ func checkForWrappedError(l bark.Logger, in error, checkForInternalServiceError 
 func ConvertDownstreamErrors(l bark.Logger, in error) (metrics.ErrorClass, error) {
 	switch e := in.(type) {
 	case *shared.BadRequestError:
-		return metrics.UserError, &c.BadRequestError{
+		return metrics.UserError, &cherami.BadRequestError{
 			Message: e.Message,
 		}
 	case *shared.EntityNotExistsError:
-		return metrics.UserError, &c.EntityNotExistsError{
+		return metrics.UserError, &cherami.EntityNotExistsError{
 			Message: e.Message,
 		}
 	case *shared.EntityAlreadyExistsError:
-		return metrics.UserError, &c.EntityAlreadyExistsError{
+		return metrics.UserError, &cherami.EntityAlreadyExistsError{
 			Message: e.Message,
 		}
 	case *shared.EntityDisabledError:
-		return metrics.UserError, &c.EntityDisabledError{
+		return metrics.UserError, &cherami.EntityDisabledError{
 			Message: e.Message,
 		}
 	case *shared.InternalServiceError:
 		checkForWrappedError(l, in, false)
-		return metrics.InternalError, &c.InternalServiceError{
+		return metrics.InternalError, &cherami.InternalServiceError{
 			Message: e.Message,
 		}
 	case *cherami.BadRequestError:
-		return metrics.UserError, &c.BadRequestError{
-			Message: e.Message,
-		}
+		return metrics.UserError, in
 	case *cherami.EntityNotExistsError:
-		return metrics.UserError, &c.EntityNotExistsError{
-			Message: e.Message,
-		}
+		return metrics.UserError, in
 	case *cherami.EntityAlreadyExistsError:
-		return metrics.UserError, &c.EntityAlreadyExistsError{
-			Message: e.Message,
-		}
+		return metrics.UserError, in
 	case *cherami.EntityDisabledError:
-		return metrics.UserError, &c.EntityDisabledError{
-			Message: e.Message,
-		}
+		return metrics.UserError, in
 	case *cherami.InternalServiceError:
-		checkForWrappedError(l, in, false)
-		return metrics.InternalError, &c.InternalServiceError{
-			Message: e.Message,
-		}
-	case *c.BadRequestError:
-		return metrics.UserError, in
-	case *c.EntityNotExistsError:
-		return metrics.UserError, in
-	case *c.EntityAlreadyExistsError:
-		return metrics.UserError, in
-	case *c.EntityDisabledError:
-		return metrics.UserError, in
-	case *c.InternalServiceError:
 		checkForWrappedError(l, in, false)
 		return metrics.InternalError, in
 	case tchannel.SystemError:
 		switch {
 		case strings.Contains(e.Error(), `EntityNotExistsError`):
-			return metrics.UserError, &c.EntityNotExistsError{
+			return metrics.UserError, &cherami.EntityNotExistsError{
 				Message: e.Error(),
 			}
 		default:
 			checkForWrappedError(l, in, false)
-			return metrics.InternalError, &c.InternalServiceError{
+			return metrics.InternalError, &cherami.InternalServiceError{
 				Message: e.Error(),
 			}
 		}
 	default:
 		checkForWrappedError(l, in, true /*Also check for InternalServiceError*/) // This also catches any Cherami errors that aren't pointers
-		return metrics.InternalError, &c.InternalServiceError{
+		return metrics.InternalError, &cherami.InternalServiceError{
 			Message: e.Error(),
 		}
 	}
@@ -357,16 +335,6 @@ func ClassifyErrorByType(in error) metrics.ErrorClass {
 	case *cherami.EntityDisabledError:
 		return metrics.UserError
 	case *cherami.InternalServiceError:
-		return metrics.InternalError
-	case *c.BadRequestError:
-		return metrics.UserError
-	case *c.EntityNotExistsError:
-		return metrics.UserError
-	case *c.EntityAlreadyExistsError:
-		return metrics.UserError
-	case *c.EntityDisabledError:
-		return metrics.UserError
-	case *c.InternalServiceError:
 		return metrics.InternalError
 	}
 	return metrics.InternalError

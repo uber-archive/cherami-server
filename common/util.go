@@ -38,7 +38,7 @@ import (
 	"time"
 
 	"github.com/uber/cherami-thrift/.generated/go/cherami"
-	"github.com/uber/cherami-server/.generated/go/admin"
+	"github.com/uber/cherami-thrift/.generated/go/admin"
 	"github.com/uber/cherami-server/common/configure"
 	"github.com/uber/cherami-server/common/metrics"
 	log "github.com/Sirupsen/logrus"

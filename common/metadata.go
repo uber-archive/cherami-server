@@ -23,7 +23,7 @@ package common
 import (
 	"strings"
 
-	"github.com/uber/cherami-server/.generated/go/shared"
+	"github.com/uber/cherami-thrift/.generated/go/shared"
 )
 
 // IsDLQDestination checks whether a destination is dlq type

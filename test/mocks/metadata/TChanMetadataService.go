@@ -21,8 +21,8 @@
 
 package metadata
 
-import "github.com/uber/cherami-server/.generated/go/metadata"
-import "github.com/uber/cherami-server/.generated/go/shared"
+import "github.com/uber/cherami-thrift/.generated/go/metadata"
+import "github.com/uber/cherami-thrift/.generated/go/shared"
 import "github.com/stretchr/testify/mock"
 
 import "github.com/uber/tchannel-go/thrift"

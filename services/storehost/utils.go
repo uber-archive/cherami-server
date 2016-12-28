@@ -26,7 +26,7 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/uber/cherami-server/.generated/go/store"
+	"github.com/uber/cherami-thrift/.generated/go/store"
 	"github.com/apache/thrift/lib/go/thrift"
 )
 

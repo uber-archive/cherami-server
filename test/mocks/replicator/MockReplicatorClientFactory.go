@@ -22,7 +22,7 @@
 package replicator
 
 import (
-	"github.com/uber/cherami-server/.generated/go/replicator"
+	"github.com/uber/cherami-thrift/.generated/go/replicator"
 
 	"github.com/stretchr/testify/mock"
 	"github.com/uber/tchannel-go"
