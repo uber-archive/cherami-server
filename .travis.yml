@@ -7,7 +7,7 @@ go:
 addons:
   apt:
     packages:
-    - python2.7
+    - python
 
 before_install:
   - sudo add-apt-repository ppa:ubuntu-toolchain-r/test -y
@@ -24,9 +24,9 @@ install:
   - go get github.com/axw/gocov/gocov
   - go get github.com/mattn/goveralls
   - go get golang.org/x/tools/cmd/cover
+  - pip install --user ccm
+  - pip install --user cqlsh=4.1.1
   - ./scripts/travis/get-rocksdb.sh
-  - pip install ccm
-  - pip install cqlsh=4.1.1
   - ccm create test -v 2.2.8 -n 1 -s
   - make bins
 
