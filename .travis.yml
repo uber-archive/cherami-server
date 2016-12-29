@@ -28,7 +28,6 @@ install:
   - go get github.com/mattn/goveralls
   - go get golang.org/x/tools/cmd/cover
   - ./scripts/travis/get-rocksdb.sh
-  - sudo ln -s /usr/bin/cqlsh /usr/local/bin/cqlsh
   - make bins
 
 script:
