@@ -70,8 +70,8 @@ cover_profile: clean bins
 	@echo Testing packages:
 	@for dir in $(TEST_DIRS); do \
 		mkdir -p $(BUILD)/"$$dir"; \
-		go test "$$dir" $(TEST_ARG) -coverprofile=$(BUILD)/"$$dir"/coverage.out; \
-	done;
+		go test "$$dir" $(TEST_ARG) -coverprofile=$(BUILD)/"$$dir"/coverage.out || exit 1; \
+	done
 
 cover: cover_profile
 	@for dir in $(TEST_DIRS); do \
@@ -79,8 +79,9 @@ cover: cover_profile
 	done
 
 cover_ci: cover_profile
-	goveralls -coverprofile=$(BUILD)/coverage.out -service=travis-ci || echo -e "\x1b[31mCoveralls failed\x1b[m"
-
+	@for dir in $(TEST_DIRS); do \
+		goveralls -coverprofile=$(BUILD)/"$$dir"/coverage.out -service=travis-ci || echo -e "\x1b[31mCoveralls failed\x1b[m"; \
+	done
 
 clean:
 	rm -f cmd/standalone/standalone
