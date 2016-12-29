@@ -25,7 +25,7 @@ install:
   - go get github.com/mattn/goveralls
   - go get golang.org/x/tools/cmd/cover
   - pip install --user ccm
-  - pip install --user cqlsh==4.1.1
+  - pip install --user cqlsh==5.0.3
   - ./scripts/travis/get-rocksdb.sh
   - ccm create test -v 2.2.8 -n 1 -s
   - make bins
