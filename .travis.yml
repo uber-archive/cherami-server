@@ -1,0 +1,35 @@
+language: go
+go:
+  - 1.7
+  - 1.6
+  - 1.5
+
+addons:
+  apt:
+    packages:
+    - python
+
+before_install:
+  - sudo add-apt-repository ppa:ubuntu-toolchain-r/test -y
+  - sudo apt-get update -q
+  - sudo apt-get install gcc-4.8 -y
+  - sudo apt-get install g++-4.8 -y
+  - sudo apt-get install zlib1g-dev -y
+  - sudo apt-get install libbz2-dev -y
+  - sudo apt-get install libsnappy-dev -y
+  - sudo apt-get install libgflags-dev -y
+
+services:
+  - cassandra
+
+install:
+  - go get -u github.com/Masterminds/glide
+  - go get github.com/axw/gocov/gocov
+  - go get github.com/mattn/goveralls
+  - go get golang.org/x/tools/cmd/cover
+  - ./scripts/travis/get-rocksdb.sh
+  - sudo ln -s /usr/bin/cqlsh /usr/local/bin/cqlsh
+  - make bins
+
+script:
+ - make cover_ci
