@@ -219,6 +219,7 @@ func (mcp *Mcp) Start(thriftService []thrift.TChanServer) {
 		clientFactory:  context.clientFactory,
 		log:            context.log,
 		m3Client:       context.m3Client,
+		localZone:      context.localZone,
 	})
 	context.retMgr.Start()
 

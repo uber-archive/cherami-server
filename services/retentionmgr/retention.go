@@ -52,6 +52,7 @@ type (
 		SingleCGVisibleExtentGracePeriod time.Duration
 		ExtentDeleteDeferPeriod          time.Duration
 		NumWorkers                       int
+		LocalZone                        string
 	}
 
 	// RetentionManager context
@@ -114,6 +115,7 @@ type (
 		softRetention int32 // in seconds
 		hardRetention int32 // in seconds
 		path          string
+		isMultiZone   bool
 	}
 
 	extentInfo struct {
@@ -122,6 +124,7 @@ type (
 		statusUpdatedTime  time.Time
 		storehosts         []storehostID
 		singleCGVisibility consumerGroupID
+		originZone         string
 		// destID  destinationID
 		// dest    *destinationInfo
 	}
@@ -596,6 +599,14 @@ func (t *RetentionManager) computeRetention(job *retentionJob, log bark.Logger) 
 		if consumed {
 			softRetentionConsumed = true
 		}
+	}
+
+	// If this is a multi_zone destination and local extent, disable soft retention
+	// The reason is if soft retention is very short, we may delete messages before remote zone has a chance to replicate the messages
+	// Long term solution should create a fake consumer for the remote zone
+	if dest.isMultiZone && !common.IsRemoteZoneExtent(ext.originZone, t.Options.LocalZone) {
+		log.Info(`overridden: soft retention overridden for multi_zone extent`)
+		softRetentionAddr = int64(store.ADDR_BEGIN)
 	}
 
 	log.WithFields(bark.Fields{

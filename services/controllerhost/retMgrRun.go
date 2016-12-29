@@ -55,6 +55,7 @@ type (
 		clientFactory  common.ClientFactory
 		log            bark.Logger
 		m3Client       metrics.Client
+		localZone      string
 	}
 
 	// retMgrRunner holds the instance context
@@ -162,6 +163,7 @@ func (t *retMgrRunner) startRetentionMgr() {
 				SingleCGVisibleExtentGracePeriod: singleCGVisibleExtentGracePeriod,
 				ExtentDeleteDeferPeriod:          extentDeleteDeferPeriod,
 				NumWorkers:                       retentionMgrWorkers,
+				LocalZone:                        t.retMgrRunnerContext.localZone,
 			}
 
 			t.retentionMgr = retentionMgr.New(opts, t.metadataClient, t.clientFactory, t.m3Client, t.log)

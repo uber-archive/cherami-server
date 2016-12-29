@@ -76,7 +76,8 @@ func (t *metadataDepImpl) GetDestinations() (destinations []*destinationInfo) {
 				softRetention: destDesc.GetConsumedMessagesRetention(),
 				hardRetention: destDesc.GetUnconsumedMessagesRetention(),
 				// type: mDestDesc.GetType(),
-				path: destDesc.GetPath(),
+				path:        destDesc.GetPath(),
+				isMultiZone: destDesc.GetIsMultiZone(),
 			}
 
 			destinations = append(destinations, dest)
@@ -137,6 +138,7 @@ func (t *metadataDepImpl) GetExtents(destID destinationID) (extents []*extentInf
 				statusUpdatedTime:  time.Unix(0, extStats.GetStatusUpdatedTimeMillis()*int64(time.Millisecond)),
 				storehosts:         make([]storehostID, 0, len(storeUUIDs)),
 				singleCGVisibility: consumerGroupID(extStats.GetConsumerGroupVisibility()),
+				originZone:         extStats.GetExtent().GetOriginZone(),
 			}
 
 			for j := range storeUUIDs {
@@ -151,7 +153,6 @@ func (t *metadataDepImpl) GetExtents(destID destinationID) (extents []*extentInf
 				`status`:      extInfo.status,
 				`replicas`:    extInfo.storehosts,
 			}).Debug(`GetExtents: ListExtentStats output`)
-
 		}
 
 		if len(resp.GetNextPageToken()) == 0 {

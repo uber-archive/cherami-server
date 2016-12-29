@@ -76,6 +76,8 @@ func (s *RetentionMgrSuite) TestRetentionManager() {
 	// DEST2,EXT1: minAckAddr < hardRetentionAddr -> retentionAddr = hardRetentionAddr
 	// DEST2,EXT2: softRetentionAddr < minAckAddr -> retentionAddr = softRetentionAddr
 	// DEST2,EXT3: hardRetentionAddr < minAckAddr < softRetentionAddr -> retentionAddr = minAckAddr
+	// DEST2,EXT31: hardRetentionAddr < minAckAddr < softRetentionAddr but is multi_zone(extent in source zone) -> retentionAddr = hardRetentionAddr
+	// DEST2,EXT32: hardRetentionAddr < minAckAddr < softRetentionAddr but is multi_zone(extent in remote zone) -> retentionAddr = minAckAddr
 	// DEST2,EXT4: minAckAddr < softRetentionAddr; softRetentionAddr == seal -> retentionAddr = minAckAddr
 	// DEST2,EXT5: minAckAddr == seal; softRetentionAddr == seal -> retentionAddr = seal (and delete)
 	// DEST2,EXT6: minAckAddr == seal; softRetentionAddr != seal -> retentionAddr = softRetentionAddr
@@ -104,45 +106,49 @@ func (s *RetentionMgrSuite) TestRetentionManager() {
 	// fmt.Printf("addrSeal=%v", addrSeal)
 
 	destinations := []*destinationInfo{
-		{id: "DEST2", status: shared.DestinationStatus_ENABLED, softRetention: softRetSecs, hardRetention: hardRetSecs},
+		{id: "DEST2", status: shared.DestinationStatus_ENABLED, softRetention: softRetSecs, hardRetention: hardRetSecs, isMultiZone: true},
 	}
 
 	extStoreMap := map[extentID][]storehostID{
-		"EXT1": {"STOR1", "STOR2", "STOR3"},
-		"EXT2": {"STOR4", "STOR5", "STOR6"},
-		"EXT3": {"STOR1", "STOR3", "STOR5"},
-		"EXT4": {"STOR2", "STOR4", "STOR6"},
-		"EXT5": {"STOR2", "STOR3", "STOR4"},
-		"EXT6": {"STOR3", "STOR5", "STOR4"},
-		"EXT7": {"STOR7", "STOR6", "STOR5"},
-		"EXT8": {"STOR3", "STOR4", "STOR6"},
-		"EXT9": {"STOR1", "STOR2", "STOR5"},
-		"EXTA": {"STOR2", "STOR3", "STOR4"},
-		"EXTB": {"STOR2", "STOR3", "STOR4"},
-		"EXTC": {"STOR2", "STOR4", "STOR6"},
-		"EXTD": {"STOR2", "STOR4", "STOR6"},
-		"EXTE": {"STOR3", "STOR5", "STOR4"},
-		"EXTm": {"STOR3"}, // Single CG Visible
-		"EXTn": {"STOR7"}, // Single CG Visible
+		"EXT1":  {"STOR1", "STOR2", "STOR3"},
+		"EXT2":  {"STOR4", "STOR5", "STOR6"},
+		"EXT3":  {"STOR1", "STOR3", "STOR5"},
+		"EXT31": {"STOR1", "STOR3", "STOR5"},
+		"EXT32": {"STOR1", "STOR3", "STOR5"},
+		"EXT4":  {"STOR2", "STOR4", "STOR6"},
+		"EXT5":  {"STOR2", "STOR3", "STOR4"},
+		"EXT6":  {"STOR3", "STOR5", "STOR4"},
+		"EXT7":  {"STOR7", "STOR6", "STOR5"},
+		"EXT8":  {"STOR3", "STOR4", "STOR6"},
+		"EXT9":  {"STOR1", "STOR2", "STOR5"},
+		"EXTA":  {"STOR2", "STOR3", "STOR4"},
+		"EXTB":  {"STOR2", "STOR3", "STOR4"},
+		"EXTC":  {"STOR2", "STOR4", "STOR6"},
+		"EXTD":  {"STOR2", "STOR4", "STOR6"},
+		"EXTE":  {"STOR3", "STOR5", "STOR4"},
+		"EXTm":  {"STOR3"}, // Single CG Visible
+		"EXTn":  {"STOR7"}, // Single CG Visible
 	}
 
 	extStatusMap := map[extentID]shared.ExtentStatus{
-		"EXT1": shared.ExtentStatus_OPEN,
-		"EXT2": shared.ExtentStatus_OPEN,
-		"EXT3": shared.ExtentStatus_OPEN,
-		"EXT4": shared.ExtentStatus_OPEN,
-		"EXT5": shared.ExtentStatus_SEALED,
-		"EXT6": shared.ExtentStatus_CONSUMED,
-		"EXT7": shared.ExtentStatus_DELETED,
-		"EXT8": shared.ExtentStatus_OPEN,
-		"EXT9": shared.ExtentStatus_SEALED,
-		"EXTA": shared.ExtentStatus_SEALED,
-		"EXTB": shared.ExtentStatus_SEALED,
-		"EXTC": shared.ExtentStatus_OPEN,
-		"EXTD": shared.ExtentStatus_SEALED,
-		"EXTE": shared.ExtentStatus_CONSUMED,
-		"EXTm": shared.ExtentStatus_SEALED, // Merged DLQ extents should always be sealed
-		"EXTn": shared.ExtentStatus_SEALED, //
+		"EXT1":  shared.ExtentStatus_OPEN,
+		"EXT2":  shared.ExtentStatus_OPEN,
+		"EXT3":  shared.ExtentStatus_OPEN,
+		"EXT31": shared.ExtentStatus_OPEN,
+		"EXT32": shared.ExtentStatus_OPEN,
+		"EXT4":  shared.ExtentStatus_OPEN,
+		"EXT5":  shared.ExtentStatus_SEALED,
+		"EXT6":  shared.ExtentStatus_CONSUMED,
+		"EXT7":  shared.ExtentStatus_DELETED,
+		"EXT8":  shared.ExtentStatus_OPEN,
+		"EXT9":  shared.ExtentStatus_SEALED,
+		"EXTA":  shared.ExtentStatus_SEALED,
+		"EXTB":  shared.ExtentStatus_SEALED,
+		"EXTC":  shared.ExtentStatus_OPEN,
+		"EXTD":  shared.ExtentStatus_SEALED,
+		"EXTE":  shared.ExtentStatus_CONSUMED,
+		"EXTm":  shared.ExtentStatus_SEALED, // Merged DLQ extents should always be sealed
+		"EXTn":  shared.ExtentStatus_SEALED, //
 	}
 
 	extSingleCGVisibilityMap := map[extentID]consumerGroupID{
@@ -182,11 +188,17 @@ func (s *RetentionMgrSuite) TestRetentionManager() {
 	s.metadata.On("GetExtents", destinationID("DEST2")).Return(extents).Once()
 
 	for ext, storehosts := range extStoreMap {
+		originZone := `zone2`
+		if ext == "EXT31" {
+			originZone = ``
+		}
+
 		extInfo := &extentInfo{
 			id:                 extentID(ext),
 			status:             extStatusMap[ext],
 			storehosts:         storehosts,
 			singleCGVisibility: extSingleCGVisibilityMap[ext],
+			originZone:         originZone,
 		}
 		s.metadata.On("GetExtentInfo", destinationID("DEST2"), extentID(ext)).Return(extInfo, nil).Once()
 	}
@@ -200,11 +212,13 @@ func (s *RetentionMgrSuite) TestRetentionManager() {
 
 	// hard retention addr
 	gaftHard := map[extentID]map[storehostID]gaftRet{
-		"EXT1": {"STOR1": {addrHard, false}, "STOR2": {addrHard - 5, false}, "STOR3": {addrHard - 10, false}},
-		"EXT2": {"STOR4": {addrHard - 10, false}, "STOR5": {addrHard - 8, false}, "STOR6": {addrHard, false}},
-		"EXT3": {"STOR1": {addrHard - 30, false}, "STOR3": {addrHard, false}, "STOR5": {addrHard - 7, false}},
-		"EXT4": {"STOR2": {addrHard, false}, "STOR4": {addrHard - 1, false}, "STOR6": {addrHard, false}},
-		"EXT5": {"STOR2": {addrHard - 10, false}, "STOR3": {addrHard, false}, "STOR4": {addrHard - 20, false}},
+		"EXT1":  {"STOR1": {addrHard, false}, "STOR2": {addrHard - 5, false}, "STOR3": {addrHard - 10, false}},
+		"EXT2":  {"STOR4": {addrHard - 10, false}, "STOR5": {addrHard - 8, false}, "STOR6": {addrHard, false}},
+		"EXT3":  {"STOR1": {addrHard - 30, false}, "STOR3": {addrHard, false}, "STOR5": {addrHard - 7, false}},
+		"EXT31": {"STOR1": {addrHard - 30, false}, "STOR3": {addrHard, false}, "STOR5": {addrHard - 7, false}},
+		"EXT32": {"STOR1": {addrHard - 30, false}, "STOR3": {addrHard, false}, "STOR5": {addrHard - 7, false}},
+		"EXT4":  {"STOR2": {addrHard, false}, "STOR4": {addrHard - 1, false}, "STOR6": {addrHard, false}},
+		"EXT5":  {"STOR2": {addrHard - 10, false}, "STOR3": {addrHard, false}, "STOR4": {addrHard - 20, false}},
 		// "EXT6": {}, // should not get called
 		// "EXT7": {}, // should not get called
 		"EXT8": {"STOR3": {addrHard, false}, "STOR4": {addrHard - 5, false}, "STOR6": {addrHard - 20, false}},
@@ -219,11 +233,13 @@ func (s *RetentionMgrSuite) TestRetentionManager() {
 
 	// soft retention addr
 	gaftSoft := map[extentID]map[storehostID]gaftRet{
-		"EXT1": {"STOR1": {addrSoft - 3, false}, "STOR2": {addrSoft - 1, false}, "STOR3": {addrSoft, false}},
-		"EXT2": {"STOR4": {addrSoft, false}, "STOR5": {addrSoft - 5, false}, "STOR6": {addrSoft - 42, false}},
-		"EXT3": {"STOR1": {addrSoft - 9, false}, "STOR3": {addrSoft, false}, "STOR5": {addrSoft - 12, false}},
-		"EXT4": {"STOR2": {addrSoft, false}, "STOR4": {addrSoft + 51, true}, "STOR6": {addrSoft + 50, false}},
-		"EXT5": {"STOR2": {addrSoft + 10, false}, "STOR3": {addrSoft - 100, false}, "STOR4": {addrSoft + 11, true}},
+		"EXT1":  {"STOR1": {addrSoft - 3, false}, "STOR2": {addrSoft - 1, false}, "STOR3": {addrSoft, false}},
+		"EXT2":  {"STOR4": {addrSoft, false}, "STOR5": {addrSoft - 5, false}, "STOR6": {addrSoft - 42, false}},
+		"EXT3":  {"STOR1": {addrSoft - 9, false}, "STOR3": {addrSoft, false}, "STOR5": {addrSoft - 12, false}},
+		"EXT31": {"STOR1": {addrSoft - 9, false}, "STOR3": {addrSoft, false}, "STOR5": {addrSoft - 12, false}},
+		"EXT32": {"STOR1": {addrSoft - 9, false}, "STOR3": {addrSoft, false}, "STOR5": {addrSoft - 12, false}},
+		"EXT4":  {"STOR2": {addrSoft, false}, "STOR4": {addrSoft + 51, true}, "STOR6": {addrSoft + 50, false}},
+		"EXT5":  {"STOR2": {addrSoft + 10, false}, "STOR3": {addrSoft - 100, false}, "STOR4": {addrSoft + 11, true}},
 		// "EXT6": {}, // should not get called
 		// "EXT7": {}, // should not get called
 		"EXT8": {"STOR3": {addrSoft + 51, true}, "STOR4": {addrSoft + 50, false}, "STOR6": {addrSoft - 20, false}},
@@ -238,11 +254,13 @@ func (s *RetentionMgrSuite) TestRetentionManager() {
 
 	// get ack level
 	gal := map[extentID]map[consumerGroupID]int64{
-		"EXT1": {"CGm": addrSeal, "CG1": addrPreHard, "CG2": addrPostHard, "CG3": addrSoft},
-		"EXT2": {"CGm": addrSeal, "CG1": addrPostSoft - 10, "CG2": addrSoft + 100, "CG3": addrPostSoft - 20},
-		"EXT3": {"CGm": addrSeal, "CG1": addrPreSoft, "CG2": addrPreSoft - 20, "CG3": addrPreSoft + 50},
-		"EXT4": {"CGm": addrSeal, "CG1": addrPreSoft, "CG2": addrSoft, "CG3": addrPostSoft},
-		"EXT5": {"CGm": addrSeal, "CG1": addrSeal, "CG2": addrSeal, "CG3": addrSeal},
+		"EXT1":  {"CGm": addrSeal, "CG1": addrPreHard, "CG2": addrPostHard, "CG3": addrSoft},
+		"EXT2":  {"CGm": addrSeal, "CG1": addrPostSoft - 10, "CG2": addrSoft + 100, "CG3": addrPostSoft - 20},
+		"EXT3":  {"CGm": addrSeal, "CG1": addrPreSoft, "CG2": addrPreSoft - 20, "CG3": addrPreSoft + 50},
+		"EXT31": {"CGm": addrSeal, "CG1": addrPreSoft, "CG2": addrPreSoft - 20, "CG3": addrPreSoft + 50},
+		"EXT32": {"CGm": addrSeal, "CG1": addrPreSoft, "CG2": addrPreSoft - 20, "CG3": addrPreSoft + 50},
+		"EXT4":  {"CGm": addrSeal, "CG1": addrPreSoft, "CG2": addrSoft, "CG3": addrPostSoft},
+		"EXT5":  {"CGm": addrSeal, "CG1": addrSeal, "CG2": addrSeal, "CG3": addrSeal},
 		// "EXT6": {}, // should not get called
 		// "EXT7": {}, // should not get called
 		"EXT8": {"CGm": addrSeal, "CG1": addrSeal, "CG2": addrSeal, "CG3": addrSeal},
@@ -281,11 +299,13 @@ func (s *RetentionMgrSuite) TestRetentionManager() {
 
 	// expected retention addresses
 	purgeAddrMap := map[extentID]int64{
-		"EXT1": addrHard,
-		"EXT2": addrSoft,
-		"EXT3": addrPreSoft,
-		"EXT4": addrPreSoft,
-		"EXT5": addrSoft + 11,
+		"EXT1":  addrHard,
+		"EXT2":  addrSoft,
+		"EXT3":  addrPreSoft,
+		"EXT31": addrHard,
+		"EXT32": addrPreSoft,
+		"EXT4":  addrPreSoft,
+		"EXT5":  addrSoft + 11,
 		// "EXT6": addrSeal,
 		// "EXT7": ,
 		"EXT8": addrSoft + 51,
@@ -321,7 +341,7 @@ func (s *RetentionMgrSuite) TestRetentionManager() {
 
 	var retMgr *RetentionManager
 
-	opts := &Options{NumWorkers: 3, RetentionInterval: 5 * time.Second, ExtentDeleteDeferPeriod: time.Hour}
+	opts := &Options{NumWorkers: 3, RetentionInterval: 5 * time.Second, ExtentDeleteDeferPeriod: time.Hour, LocalZone: `zone1`}
 
 	metricsClient := metrics.NewClient(common.NewMetricReporterWithHostname(configure.NewCommonServiceConfig()), metrics.Controller)
 	retMgr = tNew(opts, s.metadata, s.storehost, metricsClient, common.GetDefaultLogger())
@@ -397,7 +417,7 @@ func (s *RetentionMgrSuite) TestRetentionManagerOnDeletedDestinations() {
 
 	var retMgr *RetentionManager
 
-	opts := &Options{NumWorkers: 3, RetentionInterval: 5 * time.Second}
+	opts := &Options{NumWorkers: 3, RetentionInterval: 5 * time.Second, LocalZone: `zone1`}
 
 	metricsClient := metrics.NewClient(common.NewMetricReporterWithHostname(configure.NewCommonServiceConfig()), metrics.Controller)
 	retMgr = tNew(opts, s.metadata, s.storehost, metricsClient, common.GetDefaultLogger())
