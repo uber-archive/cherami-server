@@ -115,7 +115,8 @@ CREATE TYPE extent (
   input_host_uuid uuid,
   status int, -- ExtentStatus enum
   archival_location text,
-  origin_zone text
+  origin_zone text,
+  remote_extent_primary_store text, // the primary store for remote extent
 );
 
 CREATE TYPE extent_replica_stats (

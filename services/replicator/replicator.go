@@ -284,8 +284,8 @@ func (r *Replicator) CreateDestinationUUID(ctx thrift.Context, createRequest *sh
 	destDesc, err := r.metaClient.CreateDestinationUUID(ctx, createRequest)
 	if err != nil {
 		r.logger.WithFields(bark.Fields{
-			common.TagDst:    common.FmtDst(destDesc.GetDestinationUUID()),
-			common.TagDstPth: common.FmtDstPth(destDesc.GetPath()),
+			common.TagDst:    common.FmtDst(createRequest.GetDestinationUUID()),
+			common.TagDstPth: common.FmtDstPth(createRequest.GetRequest().GetPath()),
 			common.TagErr:    err,
 		}).Error(`Error creating destination`)
 		r.m3Client.IncCounter(metrics.ReplicatorCreateDestUUIDScope, metrics.ReplicatorFailures)

@@ -284,8 +284,8 @@ const (
 	StoreFailedEventScope
 	// StoreExtentStatusOutOfSyncEventScope represents an event handler
 	StoreExtentStatusOutOfSyncEventScope
-	// RemoteZoneExtentCreatedEventScope represents event handler
-	RemoteZoneExtentCreatedEventScope
+	// StartReplicationForRemoteZoneExtentScope represents event handler
+	StartReplicationForRemoteZoneExtentScope
 	// ExtentMonitorScope represents the extent monitor daemon
 	ExtentMonitorScope
 	// RetentionMgrScope represents the retention manager
@@ -525,38 +525,38 @@ var scopeDefs = map[ServiceIdx]map[int]scopeDefinition{
 
 	// Controller operation tag values as seen by the M3 backend
 	Controller: {
-		GetInputHostsScope:                    {operation: "GetInputHosts"},
-		GetOutputHostsScope:                   {operation: "GetOutputHosts"},
-		ReportNodeMetricScope:                 {operation: "ReportNodeMetric"},
-		ReportDestinationMetricScope:          {operation: "ReportDestinationMetric"},
-		ReportDestinationExtentMetricScope:    {operation: "ReportDestinatoinExtentMetric"},
-		ReportConsumerGroupMetricScope:        {operation: "ReportConsumerGroupMetric"},
-		ReportConsumerGroupExtentMetricScope:  {operation: "ReportConsumerGroupExtentMetric"},
-		ReportStoreExtentMetricScope:          {operation: "ReportStoreExtentMetric"},
-		RefreshInputHostsForDstScope:          {operation: "RefreshInputHostsForDst"},
-		RefreshOutputHostsForConsGroupScope:   {operation: "RefreshOutputHostsForConsGroup"},
-		EventPipelineScope:                    {operation: "EventPipeline"},
-		ExtentsUnreachableScope:               {operation: "ExtentsUnreachable"},
-		ExtentCreatedEventScope:               {operation: "ExtentCreatedEvent"},
-		ConsGroupUpdatedEventScope:            {operation: "ConsGroupUpdatedEvent"},
-		ExtentDownEventScope:                  {operation: "ExtentDownEvent"},
-		InputNotifyEventScope:                 {operation: "InputNotifyEvent"},
-		OutputNotifyEventScope:                {operation: "OutputNotifyEvent"},
-		InputFailedEventScope:                 {operation: "InputFailedEvent"},
-		StoreFailedEventScope:                 {operation: "StoreFailedEvent"},
-		StoreExtentStatusOutOfSyncEventScope:  {operation: "StoreExtentStatusOutOfSyncEvent"},
-		RemoteZoneExtentCreatedEventScope:     {operation: "RemoteZoneExtentCreatedEvent"},
-		QueueDepthBacklogCGScope:              {operation: "QueueDepthBacklog"},
-		ExtentMonitorScope:                    {operation: "ExtentMonitor"},
-		RetentionMgrScope:                     {operation: "RetentionMgr"},
-		DLQOperationScope:                     {operation: "DLQOperation"},
-		ControllerCreateDestinationScope:      {operation: "CreateDestination"},
-		ControllerUpdateDestinationScope:      {operation: "UpdateDestination"},
-		ControllerDeleteDestinationScope:      {operation: "DeleteDestination"},
-		ControllerCreateConsumerGroupScope:    {operation: "CreateConsumerGroup"},
-		ControllerUpdateConsumerGroupScope:    {operation: "UpdateConsumerGroup"},
-		ControllerDeleteConsumerGroupScope:    {operation: "DeleteConsumerGroup"},
-		ControllerCreateRemoteZoneExtentScope: {operation: "CreateRemoteZoneExtent"},
+		GetInputHostsScope:                       {operation: "GetInputHosts"},
+		GetOutputHostsScope:                      {operation: "GetOutputHosts"},
+		ReportNodeMetricScope:                    {operation: "ReportNodeMetric"},
+		ReportDestinationMetricScope:             {operation: "ReportDestinationMetric"},
+		ReportDestinationExtentMetricScope:       {operation: "ReportDestinatoinExtentMetric"},
+		ReportConsumerGroupMetricScope:           {operation: "ReportConsumerGroupMetric"},
+		ReportConsumerGroupExtentMetricScope:     {operation: "ReportConsumerGroupExtentMetric"},
+		ReportStoreExtentMetricScope:             {operation: "ReportStoreExtentMetric"},
+		RefreshInputHostsForDstScope:             {operation: "RefreshInputHostsForDst"},
+		RefreshOutputHostsForConsGroupScope:      {operation: "RefreshOutputHostsForConsGroup"},
+		EventPipelineScope:                       {operation: "EventPipeline"},
+		ExtentsUnreachableScope:                  {operation: "ExtentsUnreachable"},
+		ExtentCreatedEventScope:                  {operation: "ExtentCreatedEvent"},
+		ConsGroupUpdatedEventScope:               {operation: "ConsGroupUpdatedEvent"},
+		ExtentDownEventScope:                     {operation: "ExtentDownEvent"},
+		InputNotifyEventScope:                    {operation: "InputNotifyEvent"},
+		OutputNotifyEventScope:                   {operation: "OutputNotifyEvent"},
+		InputFailedEventScope:                    {operation: "InputFailedEvent"},
+		StoreFailedEventScope:                    {operation: "StoreFailedEvent"},
+		StoreExtentStatusOutOfSyncEventScope:     {operation: "StoreExtentStatusOutOfSyncEvent"},
+		StartReplicationForRemoteZoneExtentScope: {operation: "StartReplicationForRemoteZoneExtent"},
+		QueueDepthBacklogCGScope:                 {operation: "QueueDepthBacklog"},
+		ExtentMonitorScope:                       {operation: "ExtentMonitor"},
+		RetentionMgrScope:                        {operation: "RetentionMgr"},
+		DLQOperationScope:                        {operation: "DLQOperation"},
+		ControllerCreateDestinationScope:         {operation: "CreateDestination"},
+		ControllerUpdateDestinationScope:         {operation: "UpdateDestination"},
+		ControllerDeleteDestinationScope:         {operation: "DeleteDestination"},
+		ControllerCreateConsumerGroupScope:       {operation: "CreateConsumerGroup"},
+		ControllerUpdateConsumerGroupScope:       {operation: "UpdateConsumerGroup"},
+		ControllerDeleteConsumerGroupScope:       {operation: "DeleteConsumerGroup"},
+		ControllerCreateRemoteZoneExtentScope:    {operation: "CreateRemoteZoneExtent"},
 	},
 }
 

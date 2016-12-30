@@ -141,7 +141,7 @@ func (s *EventPipelineSuite) TestExtentCreatedEvent() {
 	storeIDs := []string{uuid.New(), uuid.New(), uuid.New()}
 
 	for i := 0; i < len(extentIDs); i++ {
-		_, err := s.mcp.context.mm.CreateExtent(dstID, extentIDs[i], inHostIDs[i], storeIDs, ``)
+		_, err := s.mcp.context.mm.CreateExtent(dstID, extentIDs[i], inHostIDs[i], storeIDs)
 		s.Nil(err, "Failed to create extent")
 	}
 
@@ -245,7 +245,7 @@ func (s *EventPipelineSuite) TestStoreHostFailedEvent() {
 	storeIDs := []string{uuid.New(), uuid.New(), uuid.New()}
 
 	for i := 0; i < len(extentIDs); i++ {
-		_, err := s.mcp.context.mm.CreateExtent(dstID, extentIDs[i], inHostIDs[i], storeIDs, ``)
+		_, err := s.mcp.context.mm.CreateExtent(dstID, extentIDs[i], inHostIDs[i], storeIDs)
 		s.Nil(err, "Failed to create extent")
 	}
 
@@ -259,7 +259,7 @@ func (s *EventPipelineSuite) TestStoreHostFailedEvent() {
 	}
 	s.mcp.context.rpm = rpm
 
-	event := NewStoreHostFailedEvent(storeIDs[0])
+	event := NewStoreHostFailedEvent(storeIDs[0], hostDownStage1)
 	s.mcp.context.eventPipeline.Add(event)
 
 	for i := 0; i < len(extentIDs); i++ {
@@ -298,6 +298,65 @@ func (s *EventPipelineSuite) TestStoreHostFailedEvent() {
 	}
 }
 
+func (s *EventPipelineSuite) TestStoreHostFailedEventStage2() {
+
+	path := s.generateName("/cherami/event-test")
+	dstDesc, err := s.createDestination(path)
+	s.Nil(err, "Failed to create destination")
+	s.Equal(common.UUIDStringLength, len(dstDesc.GetDestinationUUID()), "Invalid destination uuid")
+
+	dstID := dstDesc.GetDestinationUUID()
+	inHostIDs := []string{uuid.New(), uuid.New()}
+	extentIDs := []string{uuid.New()}
+	storeIDs := []string{uuid.New(), uuid.New(), uuid.New()}
+	primaryStoreIdx := 1
+	originZone := `zone1`
+
+	for i := 0; i < len(extentIDs); i++ {
+		_, err := s.mcp.context.mm.CreateRemoteZoneExtent(dstID, extentIDs[i], inHostIDs[i], storeIDs, originZone, storeIDs[primaryStoreIdx])
+		s.Nil(err, "Failed to create extent")
+	}
+
+	// verify the primary store is correctly set
+	stats, err := s.mcp.context.mm.ListExtentsByDstIDStatus(dstID, nil)
+	s.Nil(err, "Failed to list extents")
+	for _, stat := range stats {
+		s.Equal(storeIDs[primaryStoreIdx], stat.GetExtent().GetRemoteExtentPrimaryStore())
+	}
+
+	rpm := common.NewMockRingpopMonitor()
+
+	stores := make([]*MockStoreService, len(storeIDs))
+	for i := 0; i < len(storeIDs); i++ {
+		stores[i] = NewMockStoreService()
+		stores[i].Start()
+		rpm.Add(common.StoreServiceName, storeIDs[i], stores[i].hostPort)
+	}
+	s.mcp.context.rpm = rpm
+
+	event := NewStoreHostFailedEvent(storeIDs[1], hostDownStage2)
+	s.mcp.context.eventPipeline.Add(event)
+
+	cond := func() bool {
+		newStats, err := s.mcp.context.mm.ListExtentsByDstIDStatus(dstID, nil)
+		if err != nil {
+			return false
+		}
+		for _, stat := range newStats {
+			if stat.GetExtent().GetRemoteExtentPrimaryStore() == storeIDs[primaryStoreIdx] {
+				return false
+			}
+		}
+		return true
+	}
+	succ := common.SpinWaitOnCondition(cond, 60*time.Second)
+	s.True(succ, "Timed out waiting for primary store to be changed")
+
+	for i := 0; i < len(stores); i++ {
+		stores[i].Stop()
+	}
+}
+
 func (s *EventPipelineSuite) TestInputHostFailedEvent() {
 
 	path := s.generateName("/cherami/event-test")
@@ -311,7 +370,7 @@ func (s *EventPipelineSuite) TestInputHostFailedEvent() {
 	storeIDs := []string{uuid.New(), uuid.New(), uuid.New()}
 
 	for i := 0; i < len(extentIDs); i++ {
-		_, err := s.mcp.context.mm.CreateExtent(dstID, extentIDs[i], inHostIDs[i], storeIDs, ``)
+		_, err := s.mcp.context.mm.CreateExtent(dstID, extentIDs[i], inHostIDs[i], storeIDs)
 		s.Nil(err, "Failed to create extent")
 	}
 
@@ -380,7 +439,7 @@ func (s *EventPipelineSuite) TestRemoteZoneExtentCreatedEvent() {
 	}
 	s.mcp.context.rpm = rpm
 
-	event := NewRemoteZoneExtentCreatedEvent(destID, extentID, storeIDs)
+	event := NewStartReplicationForRemoteZoneExtent(destID, extentID, storeIDs, storeIDs[0])
 	s.mcp.context.eventPipeline.Add(event)
 
 	// The first store is expected to be remote replicated

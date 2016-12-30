@@ -1,0 +1,8 @@
+{
+	"CurrVersion": 13,
+	"MinCompatibleVersion": 8,
+	"Description": "add remote_extent_primary_store to extent type",
+	"SchemaUpdateCqlFiles": [
+		"201612180000_xdc_add_remote_extent_primary_store.cql"
+	]
+}

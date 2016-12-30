@@ -143,9 +143,13 @@ func (runner *replicationJobRunner) run() {
 			}).Error(`No store Ids for extent from metadata`)
 			continue
 		}
-		sort.Strings(storeIds)
 
-		primaryStore := storeIds[0]
+		// If the primary store field doesn't exist, the first store will be treated as primary store
+		primaryStore := extentStats.GetExtent().GetRemoteExtentPrimaryStore()
+		if len(primaryStore) == 0 {
+			sort.Strings(storeIds)
+			primaryStore = storeIds[0]
+		}
 
 		if primaryStore == runner.storeID {
 			primaryExtents++

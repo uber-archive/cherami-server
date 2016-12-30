@@ -57,10 +57,14 @@ type (
 		ListExtentsByInputIDStatus(inputID string, status *shared.ExtentStatus) ([]*shared.ExtentStats, error)
 		// ListExtentsByStoreIDStatus lists extents by storeID/Status
 		ListExtentsByStoreIDStatus(storeID string, status *shared.ExtentStatus) ([]*shared.ExtentStats, error)
+		// ListExtentsByReplicationStatus lists extents by storeID/ReplicationStatus
+		ListExtentsByReplicationStatus(storeID string, status *shared.ExtentReplicaReplicationStatus) ([]*shared.ExtentStats, error)
 		// ListExtentsByConsumerGroup lists all extents for the given destination / consumer group
 		ListExtentsByConsumerGroup(dstID string, cgID string, filterByStatus []m.ConsumerGroupExtentStatus) ([]*m.ConsumerGroupExtent, error)
 		// CreateExtent creates a new extent for the given destination and marks the status as OPEN
-		CreateExtent(dstID string, extentID string, inhostID string, storeIDs []string, originZone string) (*shared.CreateExtentResult_, error)
+		CreateExtent(dstID string, extentID string, inhostID string, storeIDs []string) (*shared.CreateExtentResult_, error)
+		// CreateRemoteZoneExtent creates a new remote zone extent for the given destination and marks the status as OPEN
+		CreateRemoteZoneExtent(dstID string, extentID string, inhostID string, storeIDs []string, originZone string, remoteExtentPrimaryStore string) (*shared.CreateExtentResult_, error)
 		// AddExtentToConsumerGroup adds an open extent to consumer group for consumption
 		AddExtentToConsumerGroup(dstID string, cgID string, extentID string, outHostID string, storeIDs []string) error
 		// ListConsumerGroupsByDstID lists all consumer groups for a given destination uuid
@@ -83,6 +87,8 @@ type (
 		ReadConsumerGroupByUUID(cgUUID string) (*shared.ConsumerGroupDescription, error)
 		// UpdateExtentStatus updates the status of an extent
 		UpdateExtentStatus(dstID, extID string, status shared.ExtentStatus) error
+		// UpdateRemoteExtentPrimaryStore updates remoteExtentPrimaryStore
+		UpdateRemoteExtentPrimaryStore(dstID string, extentID string, remoteExtentPrimaryStore string) (*m.UpdateExtentStatsResult_, error)
 		// UpdateConsumerGroupExtentStatus updates the status of a consumer group extent
 		UpdateConsumerGroupExtentStatus(cgID, extID string, status m.ConsumerGroupExtentStatus) error
 		// DeleteDestination marks a destination to be deleted
@@ -308,6 +314,26 @@ func (mm *metadataMgrImpl) ListExtentsByStoreIDStatus(storeID string, status *sh
 	return resp.GetExtentStatsList(), nil
 }
 
+func (mm *metadataMgrImpl) ListExtentsByReplicationStatus(storeID string, status *shared.ExtentReplicaReplicationStatus) ([]*shared.ExtentStats, error) {
+
+	mm.m3Client.IncCounter(metrics.MetadataListStoreExtentsStatsScope, metrics.MetadataRequests)
+
+	listReq := &m.ListStoreExtentsStatsRequest{
+		StoreUUID:         StringPtr(storeID),
+		ReplicationStatus: status,
+	}
+
+	sw := mm.m3Client.StartTimer(metrics.MetadataListStoreExtentsStatsScope, metrics.MetadataLatency)
+	resp, err := mm.mClient.ListStoreExtentsStats(nil, listReq)
+	sw.Stop()
+	if err != nil {
+		mm.m3Client.IncCounter(metrics.MetadataListStoreExtentsStatsScope, metrics.MetadataFailures)
+		return nil, err
+	}
+
+	return resp.GetExtentStatsList(), nil
+}
+
 func (mm *metadataMgrImpl) ListExtentsByConsumerGroup(dstID string, cgID string, filterByStatus []m.ConsumerGroupExtentStatus) ([]*m.ConsumerGroupExtent, error) {
 
 	mm.m3Client.IncCounter(metrics.MetadataReadConsumerGroupExtentScope, metrics.MetadataRequests)
@@ -370,16 +396,26 @@ func (mm *metadataMgrImpl) ListExtentsByConsumerGroup(dstID string, cgID string,
 }
 
 // CreateExtent creates a new extent for the given destination and marks the status as OPEN
-func (mm *metadataMgrImpl) CreateExtent(dstID string, extentID string, inhostID string, storeIDs []string, originZone string) (*shared.CreateExtentResult_, error) {
+func (mm *metadataMgrImpl) CreateExtent(dstID string, extentID string, inhostID string, storeIDs []string) (*shared.CreateExtentResult_, error) {
+	return mm.createExtentInternal(dstID, extentID, inhostID, storeIDs, ``, ``)
+}
+
+// CreateRemoteZoneExtent creates a new remote zone extent for the given destination and marks the status as OPEN
+func (mm *metadataMgrImpl) CreateRemoteZoneExtent(dstID string, extentID string, inhostID string, storeIDs []string, originZone string, remoteExtentPrimaryStore string) (*shared.CreateExtentResult_, error) {
+	return mm.createExtentInternal(dstID, extentID, inhostID, storeIDs, originZone, remoteExtentPrimaryStore)
+}
+
+func (mm *metadataMgrImpl) createExtentInternal(dstID string, extentID string, inhostID string, storeIDs []string, originZone string, remoteExtentPrimaryStore string) (*shared.CreateExtentResult_, error) {
 
 	mm.m3Client.IncCounter(metrics.MetadataCreateExtentScope, metrics.MetadataRequests)
 
 	extent := &shared.Extent{
-		ExtentUUID:      StringPtr(extentID),
-		DestinationUUID: StringPtr(dstID),
-		InputHostUUID:   StringPtr(inhostID),
-		StoreUUIDs:      storeIDs,
-		OriginZone:      StringPtr(originZone),
+		ExtentUUID:               StringPtr(extentID),
+		DestinationUUID:          StringPtr(dstID),
+		InputHostUUID:            StringPtr(inhostID),
+		StoreUUIDs:               storeIDs,
+		OriginZone:               StringPtr(originZone),
+		RemoteExtentPrimaryStore: StringPtr(remoteExtentPrimaryStore),
 	}
 	mReq := &shared.CreateExtentRequest{Extent: extent}
 
@@ -712,6 +748,33 @@ func (mm *metadataMgrImpl) UpdateExtentStatus(dstID, extID string, status shared
 	}
 
 	return nil
+}
+
+func (mm *metadataMgrImpl) UpdateRemoteExtentPrimaryStore(dstID string, extentID string, remoteExtentPrimaryStore string) (*m.UpdateExtentStatsResult_, error) {
+	mm.m3Client.IncCounter(metrics.MetadataUpdateExtentStatsScope, metrics.MetadataRequests)
+
+	mReq := &m.UpdateExtentStatsRequest{
+		DestinationUUID:          StringPtr(dstID),
+		ExtentUUID:               StringPtr(extentID),
+		RemoteExtentPrimaryStore: StringPtr(remoteExtentPrimaryStore),
+	}
+
+	if len(remoteExtentPrimaryStore) == 0 {
+		mm.m3Client.IncCounter(metrics.MetadataUpdateExtentStatsScope, metrics.MetadataFailures)
+		return nil, &shared.BadRequestError{
+			Message: "remoteExtentPrimaryStore is empty",
+		}
+	}
+
+	sw := mm.m3Client.StartTimer(metrics.MetadataUpdateExtentStatsScope, metrics.MetadataLatency)
+	res, err := mm.mClient.UpdateExtentStats(nil, mReq)
+	sw.Stop()
+	if err != nil {
+		mm.m3Client.IncCounter(metrics.MetadataUpdateExtentStatsScope, metrics.MetadataFailures)
+		return nil, err
+	}
+
+	return res, err
 }
 
 func (mm *metadataMgrImpl) UpdateConsumerGroupExtentStatus(cgID, extID string, status m.ConsumerGroupExtentStatus) error {
