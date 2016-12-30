@@ -31,14 +31,14 @@ import (
 	"github.com/uber-common/bark"
 	"github.com/uber/tchannel-go/thrift"
 
-	"github.com/uber/cherami-thrift/.generated/go/cherami"
+	"github.com/stretchr/testify/suite"
 	client "github.com/uber/cherami-client-go/client/cherami"
-	"github.com/uber/cherami-thrift/.generated/go/metadata"
-	"github.com/uber/cherami-thrift/.generated/go/shared"
 	"github.com/uber/cherami-server/common"
 	"github.com/uber/cherami-server/services/controllerhost"
 	"github.com/uber/cherami-server/services/storehost"
-	"github.com/stretchr/testify/suite"
+	"github.com/uber/cherami-thrift/.generated/go/cherami"
+	"github.com/uber/cherami-thrift/.generated/go/metadata"
+	"github.com/uber/cherami-thrift/.generated/go/shared"
 
 	"testing"
 )
@@ -551,7 +551,7 @@ ReadLoop2:
 // then starts the consumer and a publisher. The consumer reads half the messages
 // that were published before waiting for the publisher to finish publishing all of the
 // messages -- the consumer then reads the rest of the messages, from the "backlog".
-func (s *NetIntegrationSuiteParallelB) TestTimerQueue() {
+func (s *NetIntegrationSuiteParallelB) _TestTimerQueue() {
 
 	destPath, cg1Path, cg2Path := "/test.dest/TestTimerQueue", "/test.cg/TestTimerQueue", "/test.cg.backlog/TestTimerQueue"
 
