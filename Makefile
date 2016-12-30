@@ -1,10 +1,13 @@
-.PHONY: bins clean setup test test-race thriftc
+.PHONY: bins clean setup test test-race cover cover_ci cover_profile
 
 SHELL = /bin/bash
 
 PROJECT_ROOT=github.com/uber/cherami-server
 export GO15VENDOREXPERIMENT=1
 NOVENDOR = $(shell GO15VENDOREXPERIMENT=1 glide novendor)
+TEST_ARG ?= -race -v -timeout 5m
+TEST_NO_RACE_ARG ?= -timeout 5m
+BUILD := ./build
 
 export PATH := $(GOPATH)/bin:$(PATH)
 
@@ -30,12 +33,12 @@ TEST_DIRS := $(sort $(dir $(filter %_test.go,$(ALL_SRC))))
 
 test: bins
 	@for dir in $(TEST_DIRS); do \
-		go test "$$dir" | tee -a test.log; \
+		go test "$$dir" $(TEST_NO_RACE_ARG) $(shell glide nv); \
 	done;
 
 test-race:
 	@for dir in $(TEST_DIRS); do \
-		go test -race "$$dir" | tee -a "$$dir"_test.log; \
+		go test "$$dir" $(TEST_ARG) | tee -a "$$dir"_test.log; \
 	done;	       
 
 checkrocksdb:
@@ -62,6 +65,23 @@ bins: server_dep checkrocksdb checkcassandra
 	go build -i -o cmd/tools/admin/cherami-admin cmd/tools/admin/main.go
 	go build -i -o cmd/tools/replicator/cherami-replicator-tool cmd/tools/replicator/main.go
 	go build -i -o cmd/tools/cassandra/cherami-cassandra-tool cmd/tools/cassandra/main.go
+
+cover_profile: clean bins
+	@echo Testing packages:
+	@for dir in $(TEST_DIRS); do \
+		mkdir -p $(BUILD)/"$$dir"; \
+		go test "$$dir" $(TEST_ARG) -coverprofile=$(BUILD)/"$$dir"/coverage.out || exit 1; \
+	done
+
+cover: cover_profile
+	@for dir in $(TEST_DIRS); do \
+		go tool cover -html=$(BUILD)/"$$dir"/coverage.out; \
+	done
+
+cover_ci: cover_profile
+	@for dir in $(TEST_DIRS); do \
+		goveralls -coverprofile=$(BUILD)/"$$dir"/coverage.out -service=travis-ci || echo -e "\x1b[31mCoveralls failed\x1b[m"; \
+	done
 
 clean:
 	rm -f cmd/standalone/standalone
