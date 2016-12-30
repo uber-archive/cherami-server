@@ -14,13 +14,12 @@ test.log
 .tmp
 .generated
 vendor/
-rocksdb/
+librocksdb*
 
 # Executables produced by Cherami repo
-cmd/standalone/standalone
-cmd/replicator/replicator
-cmd/tools/admin/cherami-admin
-cmd/tools/cli/cherami-cli
-cmd/tools/replicator/cherami-replicator-tool
-cmd/tools/store/cherami-store-tool
-cmd/tools/cassandra/cherami-cassandra-tool
+cherami-admin
+cherami-cassandra-tool
+cherami-cli
+cherami-replicator-tool
+cherami-server
+cherami-replicator-server

@@ -42,7 +42,7 @@ imports:
   subpackages:
   - statsd
 - name: github.com/cockroachdb/c-jemalloc
-  version: 42e6a32cd7a4dff9c70d80323681d46d046181ef
+  version: d726b40f0bc9c90ced1e00c044cf172ae094c083
 - name: github.com/cockroachdb/c-lz4
   version: 834d3303c9e84b1045bc57c3eb3723ee8cb4d33b
 - name: github.com/cockroachdb/c-rocksdb
@@ -98,7 +98,7 @@ imports:
   - require
   - suite
 - name: github.com/tecbot/gorocksdb
-  version: 762103f8ef378b89332183a9ca2fe9cebc8d88db
+  version: f2a0b10f7228cff360e2d9efa081a15a8cbd68b7
 - name: github.com/uber-common/bark
   version: 8841a0f8e7ca869284ccb29c08a14cf3f4310f46
 - name: github.com/uber-go/atomic
