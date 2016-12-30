@@ -51,7 +51,7 @@ const (
 	Gauge
 )
 
-// Service names for all services that emit M3
+// Service names for all services that emit Metrics
 const (
 	Common ServiceIdx = iota
 	Frontend
@@ -404,7 +404,7 @@ var scopeDefs = map[ServiceIdx]map[int]scopeDefinition{
 
 	// Common operation tag values (shared by all services)
 	Common: {
-		// Metadata operation tag values as seen by the M3 backend
+		// Metadata operation tag values as seen by the Metrics backend
 		MetadataListEntityOpsScope:                     {operation: "MetadataListEntityOps"},
 		MetadataHostAddrToUUIDScope:                    {operation: "MetadataHostAddrToUUID"},
 		MetadataListAllConsumerGroupsScope:             {operation: "MetadataListAllConsumerGroups"},
@@ -454,7 +454,7 @@ var scopeDefs = map[ServiceIdx]map[int]scopeDefinition{
 		MetadataUpdateStoreExtentReplicaStatsScope:     {operation: "MetadataUpdateStoreExtentReplicaStats"},
 	},
 
-	// Frontend operation tag values as seen by the M3 backend
+	// Frontend operation tag values as seen by the Metrics backend
 	Frontend: {
 		CreateDestinationScope:        {operation: "CreateDestination"},
 		ReadDestinationScope:          {operation: "ReadDestination"},
@@ -475,7 +475,7 @@ var scopeDefs = map[ServiceIdx]map[int]scopeDefinition{
 		MergeDLQForConsumerGroupScope: {operation: "MergeDLQForConsumerGroup"},
 	},
 
-	// Inputhost operation tag values as seen by the M3 backend
+	// Inputhost operation tag values as seen by the Metrics backend
 	Inputhost: {
 		OpenPublisherStreamScope:      {operation: "OpenPublisherStream"},
 		DestinationsUpdatedScope:      {operation: "DestinationsUpdated"},
@@ -483,7 +483,7 @@ var scopeDefs = map[ServiceIdx]map[int]scopeDefinition{
 		PutMessageBatchInputHostScope: {operation: "PutMessageBatchInputHost"},
 	},
 
-	// Outputhost operation tag values as seen by the M3 backend
+	// Outputhost operation tag values as seen by the Metrics backend
 	Outputhost: {
 		OpenConsumerStreamScope:            {operation: "OpenConsumerStream"},
 		AckMessagesScope:                   {operation: "AckMessage"},
@@ -493,7 +493,7 @@ var scopeDefs = map[ServiceIdx]map[int]scopeDefinition{
 		UnloadConsumerGroupsScope:          {operation: "UnloadConsumerGroups"},
 	},
 
-	// Storage operation tag values as seen by the M3 backend
+	// Storage operation tag values as seen by the Metrics backend
 	Storage: {
 		OpenAppendStreamScope:        {operation: "OpenAppendStream"},
 		OpenReadStreamScope:          {operation: "OpenReadStream"},
@@ -508,7 +508,7 @@ var scopeDefs = map[ServiceIdx]map[int]scopeDefinition{
 		ReplicateExtentScope:         {operation: "ReplicateExtent"},
 	},
 
-	// Replicator operation tag valuies as seen by the M3 backend
+	// Replicator operation tag values as seen by the Metrics backend
 	Replicator: {
 		OpenReplicationRemoteReadScope:   {operation: "OpenReplicationRemoteReadStream"},
 		OpenReplicationReadScope:         {operation: "OpenReplicationReadStream"},
@@ -523,7 +523,7 @@ var scopeDefs = map[ServiceIdx]map[int]scopeDefinition{
 		ReplicatorReconcileScope:         {operation: "ReplicatorReconcile"},
 	},
 
-	// Controller operation tag values as seen by the M3 backend
+	// Controller operation tag values as seen by the Metrics backend
 	Controller: {
 		GetInputHostsScope:                       {operation: "GetInputHosts"},
 		GetOutputHostsScope:                      {operation: "GetOutputHosts"},

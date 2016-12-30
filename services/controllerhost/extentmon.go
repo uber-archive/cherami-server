@@ -329,7 +329,14 @@ func (monitor *extentStateMonitor) processExtents(dstDesc *shared.DestinationDes
 // fixOutOfSyncStoreExtents checks if all stores have the same view of
 // the extent status and if not, issues a SEAL to the out of sync
 // store to bring it up to speed
+// For a remote zone extent, store will mark a store extent as sealed
+// only after it gets the sealed marker from replication
+// So we don't need to sync the status for remote zone extent
 func (monitor *extentStateMonitor) fixOutOfSyncStoreExtents(dstID string, extent *shared.Extent) {
+	if common.IsRemoteZoneExtent(extent.GetOriginZone(), monitor.context.localZone) {
+		return
+	}
+
 	for _, storeh := range extent.GetStoreUUIDs() {
 
 		key := buildExtentCacheKey(storeh, extent.GetExtentUUID())

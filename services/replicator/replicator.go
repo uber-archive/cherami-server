@@ -208,6 +208,7 @@ func (r *Replicator) OpenReplicationReadStreamHandler(w http.ResponseWriter, req
 	outStream, err := r.createStoreHostReadStream(destUUID, extUUID, request)
 	if err != nil {
 		r.logger.WithFields(bark.Fields{
+			common.TagErr: err,
 			common.TagExt: common.FmtExt(*request.OpenReadStreamRequest.ExtentUUID),
 			common.TagDst: common.FmtDst(*request.OpenReadStreamRequest.DestinationUUID),
 		}).Error("Can't open store host read stream")
@@ -259,6 +260,7 @@ func (r *Replicator) OpenReplicationRemoteReadStreamHandler(w http.ResponseWrite
 	outStream, err := r.createRemoteReplicationReadStream(extUUID, destUUID, request)
 	if err != nil {
 		r.logger.WithFields(bark.Fields{
+			common.TagErr: err,
 			common.TagExt: common.FmtExt(*request.OpenReadStreamRequest.ExtentUUID),
 			common.TagDst: common.FmtDst(*request.OpenReadStreamRequest.DestinationUUID),
 		}).Error("Can't open remote replication read stream")

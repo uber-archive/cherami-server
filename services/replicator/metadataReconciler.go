@@ -161,7 +161,10 @@ func (r *metadataReconciler) reconcileDest(localDests []*shared.DestinationDescr
 					defer cancel()
 					err := r.replicator.DeleteDestination(ctx, deleteRequest)
 					if err != nil {
-						r.logger.WithField(common.TagDst, common.FmtDst(remoteDest.GetDestinationUUID())).Error(`Failed to delete destination in local zone for reconciliation`)
+						r.logger.WithFields(bark.Fields{
+							common.TagErr: err,
+							common.TagDst: common.FmtDst(remoteDest.GetDestinationUUID()),
+						}).Error(`Failed to delete destination in local zone for reconciliation`)
 						continue
 					}
 				} else {
@@ -201,7 +204,10 @@ func (r *metadataReconciler) reconcileDest(localDests []*shared.DestinationDescr
 				defer cancel()
 				_, err := r.replicator.UpdateDestination(ctx, updateRequest)
 				if err != nil {
-					r.logger.WithField(common.TagDst, common.FmtDst(remoteDest.GetDestinationUUID())).Error(`Failed to update destination in local zone for reconciliation`)
+					r.logger.WithFields(bark.Fields{
+						common.TagErr: err,
+						common.TagDst: common.FmtDst(remoteDest.GetDestinationUUID()),
+					}).Error(`Failed to update destination in local zone for reconciliation`)
 					continue
 				}
 			}
@@ -234,7 +240,10 @@ func (r *metadataReconciler) reconcileDest(localDests []*shared.DestinationDescr
 			defer cancel()
 			_, err := r.replicator.CreateDestinationUUID(ctx, createRequest)
 			if err != nil {
-				r.logger.WithField(common.TagDst, common.FmtDst(remoteDest.GetDestinationUUID())).Error(`Failed to create destination in local zone for reconciliation`)
+				r.logger.WithFields(bark.Fields{
+					common.TagErr: err,
+					common.TagDst: common.FmtDst(remoteDest.GetDestinationUUID()),
+				}).Error(`Failed to create destination in local zone for reconciliation`)
 				continue
 			}
 		}
@@ -254,7 +263,7 @@ func (r *metadataReconciler) getAllMultiZoneDestInLocalZone() ([]*shared.Destina
 	for {
 		res, err := r.mClient.ListDestinationsByUUID(nil, listReq)
 		if err != nil {
-			r.logger.Error(`Metadata call ListDestinationsByUUID failed`)
+			r.logger.WithField(common.TagErr, err).Error(`Metadata call ListDestinationsByUUID failed`)
 			return nil, err
 		}
 
@@ -274,7 +283,10 @@ func (r *metadataReconciler) getAllMultiZoneDestInAuthoritativeZone() ([]*shared
 	authoritativeZone := r.replicator.getAuthoritativeZone()
 	remoteReplicator, err := r.replicator.clientFactory.GetReplicatorClient(authoritativeZone)
 	if err != nil {
-		r.logger.WithField(common.TagZoneName, common.FmtZoneName(authoritativeZone)).Error(`Failed to get remote replicator client`)
+		r.logger.WithFields(bark.Fields{
+			common.TagErr:      err,
+			common.TagZoneName: common.FmtZoneName(authoritativeZone),
+		}).Error(`Failed to get remote replicator client`)
 		return nil, err
 	}
 
@@ -291,7 +303,7 @@ func (r *metadataReconciler) getAllMultiZoneDestInAuthoritativeZone() ([]*shared
 		defer cancel()
 		res, err := remoteReplicator.ListDestinationsByUUID(ctx, listReq)
 		if err != nil {
-			r.logger.Error(`Remote replicator call ListDestinationsByUUID failed`)
+			r.logger.WithField(common.TagErr, err).Error(`Remote replicator call ListDestinationsByUUID failed`)
 			return nil, err
 		}
 
@@ -342,7 +354,10 @@ func (r *metadataReconciler) getAllDestExtentInRemoteZone(zone string, destUUID 
 	var err error
 	remoteReplicator, err := r.replicator.clientFactory.GetReplicatorClient(zone)
 	if err != nil {
-		r.logger.WithField(common.TagZoneName, common.FmtZoneName(zone)).Error(`Failed to get remote replicator client`)
+		r.logger.WithFields(bark.Fields{
+			common.TagErr:      err,
+			common.TagZoneName: common.FmtZoneName(zone),
+		}).Error(`Failed to get remote replicator client`)
 		return nil, err
 	}
 
@@ -358,7 +373,7 @@ func (r *metadataReconciler) getAllDestExtentInRemoteZone(zone string, destUUID 
 		defer cancel()
 		res, err := remoteReplicator.ListExtentsStats(ctx, listReq)
 		if err != nil {
-			r.logger.Error(`Remote replicator call ListExtentsStats failed`)
+			r.logger.WithField(common.TagErr, err).Error(`Remote replicator call ListExtentsStats failed`)
 			return nil, err
 		}
 
@@ -386,7 +401,7 @@ func (r *metadataReconciler) getAllDestExtentInCurrentZone(destUUID string) (map
 	for {
 		res, err := r.mClient.ListExtentsStats(nil, listReq)
 		if err != nil {
-			r.logger.Error(`Metadata call ListExtentsStats failed`)
+			r.logger.WithField(common.TagErr, err).Error(`Metadata call ListExtentsStats failed`)
 			return nil, err
 		}
 
@@ -428,6 +443,7 @@ func (r *metadataReconciler) reconcileDestExtent(destUUID string, localExtents m
 			_, err := r.replicator.CreateExtent(ctx, createRequest)
 			if err != nil {
 				r.logger.WithFields(bark.Fields{
+					common.TagErr:      err,
 					common.TagDst:      common.FmtDst(destUUID),
 					common.TagExt:      common.FmtExt(remoteExtentUUID),
 					common.TagZoneName: common.FmtZoneName(remoteZone),
@@ -451,6 +467,7 @@ func (r *metadataReconciler) reconcileDestExtent(destUUID string, localExtents m
 				_, err := r.mClient.UpdateExtentStats(nil, updateRequest)
 				if err != nil {
 					r.logger.WithFields(bark.Fields{
+						common.TagErr: err,
 						common.TagDst: common.FmtDst(destUUID),
 						common.TagExt: common.FmtExt(remoteExtentUUID),
 					}).Error(`Failed to update extent status to sealed`)

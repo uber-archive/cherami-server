@@ -219,6 +219,7 @@ func (dfdd *dfddImpl) healthCheckRoutine() {
 				if !dfdd.context.eventPipeline.Add(event) {
 					dfdd.context.log.WithField(common.TagStor, common.FmtStor(host)).Error("Failed to enqueue StoreHostFailedEvent(stage 2)")
 				}
+				unhealthyStoreList = append(unhealthyStoreList, host)
 			}
 		}
 		dfdd.unhealthyStoresLock.RUnlock()
