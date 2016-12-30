@@ -40,6 +40,7 @@ import (
 	"github.com/uber/cherami-server/common"
 	"github.com/uber/cherami-server/common/configure"
 	dconfig "github.com/uber/cherami-server/common/dconfigclient"
+	mm "github.com/uber/cherami-server/common/metadata"
 	"github.com/uber/cherami-server/common/metrics"
 
 	"github.com/pborman/uuid"
@@ -64,10 +65,9 @@ type destinationUUID string
 
 // Frontend is the main server class for Frontends
 type Frontend struct {
+	metaClnt          m.TChanMetadataService
+	hostIDHeartbeater common.HostIDHeartbeater
 	common.SCommon
-	metaClnt                    m.TChanMetadataService
-	metadata                    common.MetadataMgr
-	hostIDHeartbeater           common.HostIDHeartbeater
 	AppConfig                   configure.CommonAppConfig
 	hyperbahnClient             *hyperbahn.Client
 	cacheDestinationPathForUUID map[destinationUUID]string // Read/Write protected by lk
@@ -132,7 +132,6 @@ func NewFrontendHost(serviceName string, sVice common.SCommon, metadataClient m.
 	bs := Frontend{
 		logger:                      (sVice.GetConfig().GetLogger()).WithFields(bark.Fields{common.TagFrnt: common.FmtFrnt(sVice.GetHostUUID()), common.TagDplName: common.FmtDplName(deploymentName)}),
 		SCommon:                     sVice,
-		metaClnt:                    metadataClient,
 		cacheDestinationPathForUUID: make(map[destinationUUID]string),
 		cClient:                     nil,
 		publishers:                  make(map[string]*publisherInstance),
@@ -141,16 +140,16 @@ func NewFrontendHost(serviceName string, sVice common.SCommon, metadataClient m.
 		AppConfig:                   config,
 	}
 
-	bs.m3Client = metrics.NewClient(sVice.GetMetricsReporter(), metrics.Frontend)
+	// Add the frontend id as a field on all subsequent log lines in this module
+	bs.logger.WithFields(bark.Fields{`serviceName`: serviceName}).Info(`New Frontend`)
 
-	bs.metadata = common.NewMetadataMgr(bs.metaClnt, bs.m3Client, bs.logger)
+	bs.m3Client = metrics.NewClient(sVice.GetMetricsReporter(), metrics.Frontend)
+	bs.metaClnt = mm.NewMetadataMetricsMgr(metadataClient, bs.m3Client, bs.logger)
 
 	// manage uconfig, regiester handerFunc and verifyFunc for uConfig values
 	bs.dClient = sVice.GetDConfigClient()
 	bs.dynamicConfigManage()
 
-	// Add the frontend id as a field on all subsequent log lines in this module
-	bs.logger.WithFields(bark.Fields{`serviceName`: serviceName, `metaClnt`: bs.metaClnt}).Info(`New Frontend`)
 	return &bs, []thrift.TChanServer{c.NewTChanBFrontendServer(&bs)}
 	//, clientgen.NewTChanBFrontendServer(&bs)}
 }
@@ -350,12 +349,13 @@ func (h *Frontend) convertConsumerGroupFromInternal(ctx thrift.Context, _cgDesc 
 
 	if len(destPath) == 0 {
 		var destDesc *shared.DestinationDescription
-
-		destDesc, err = h.metadata.ReadDestination(_cgDesc.GetDestinationUUID(), "") // TODO: -= Maybe a GetDestinationPathForUUID =-
+		readRequest := m.NewReadDestinationRequest()
+		readRequest.DestinationUUID = common.StringPtr(_cgDesc.GetDestinationUUID())
+		destDesc, err = h.metaClnt.ReadDestination(ctx, readRequest) // TODO: -= Maybe a GetDestinationPathForUUID =-
 
 		if err != nil || len(destDesc.GetPath()) == 0 {
 			h.logger.WithFields(bark.Fields{
-				common.TagDst: common.FmtDst(_cgDesc.GetDestinationUUID()),
+				common.TagDst: common.FmtDst(readRequest.GetDestinationUUID()),
 				common.TagErr: err,
 			}).Error(`Failed to get destination path`)
 			return
@@ -401,8 +401,8 @@ const (
 // that any destination that is returned by the metadata server will be returned to the client
 // TODO: Add a cache here with time-based retention
 func (h *Frontend) getUUIDForDestination(ctx thrift.Context, path string, rejectDisabled bool) (UUID string, err error) {
-
-	destDesc, err := h.metadata.ReadDestination("", path)
+	mGetRequest := m.ReadDestinationRequest{Path: common.StringPtr(path)}
+	destDesc, err := h.metaClnt.ReadDestination(ctx, &mGetRequest)
 
 	if err != nil {
 		h.logger.WithField(common.TagDstPth, common.FmtDstPth(path)).
@@ -586,15 +586,13 @@ func (h *Frontend) ReadDestination(ctx thrift.Context, readRequest *c.ReadDestin
 	}
 	var mReadRequest m.ReadDestinationRequest
 
-	var destUUID, destPath string
-
 	if common.UUIDRegex.MatchString(readRequest.GetPath()) {
-		destUUID, destPath = readRequest.GetPath(), ""
+		mReadRequest.DestinationUUID = common.StringPtr(readRequest.GetPath())
 	} else {
-		destUUID, destPath = "", readRequest.GetPath()
+		mReadRequest.Path = common.StringPtr(readRequest.GetPath())
 	}
 
-	_destDesc, err := h.metadata.ReadDestination(destUUID, destPath)
+	_destDesc, err := h.metaClnt.ReadDestination(ctx, &mReadRequest)
 
 	if _destDesc != nil {
 		destDesc = convertDestinationFromInternal(_destDesc)
@@ -649,9 +647,9 @@ func (h *Frontend) ReadPublisherOptions(ctx thrift.Context, r *c.ReadPublisherOp
 		}
 	}
 
+	readDestRequest := m.ReadDestinationRequest{Path: common.StringPtr(r.GetPath())}
 	var destDesc *shared.DestinationDescription
-	destDesc, err = h.metadata.ReadDestination("", r.GetPath())
-
+	destDesc, err = h.metaClnt.ReadDestination(ctx, &readDestRequest)
 	if err != nil {
 		return nil, err
 	}
@@ -842,7 +840,11 @@ func (h *Frontend) ReadConsumerGroup(ctx thrift.Context, readRequest *c.ReadCons
 	})
 
 	// Build a metadata version of the consumer group request
-	mCGDesc, err := h.metadata.ReadConsumerGroup("", readRequest.GetDestinationPath(), "", readRequest.GetConsumerGroupName())
+	mReadRequest := m.NewReadConsumerGroupRequest()
+	mReadRequest.DestinationPath = common.StringPtr(readRequest.GetDestinationPath())
+	mReadRequest.ConsumerGroupName = common.StringPtr(readRequest.GetConsumerGroupName())
+
+	mCGDesc, err := h.metaClnt.ReadConsumerGroup(ctx, mReadRequest)
 	if mCGDesc != nil {
 		cGDesc, err = h.convertConsumerGroupFromInternal(ctx, mCGDesc)
 		lclLg = lclLg.WithFields(bark.Fields{
@@ -873,7 +875,11 @@ func (h *Frontend) ReadConsumerGroupHosts(ctx thrift.Context, readRequest *c.Rea
 	})
 
 	// Build a metadata version of the consumer group request
-	mCGDesc, err := h.metadata.ReadConsumerGroup("", readRequest.GetDestinationPath(), "", readRequest.GetConsumerGroupName())
+	mReadRequest := m.NewReadConsumerGroupRequest()
+	mReadRequest.DestinationPath = common.StringPtr(readRequest.GetDestinationPath())
+	mReadRequest.ConsumerGroupName = common.StringPtr(readRequest.GetConsumerGroupName())
+
+	mCGDesc, err := h.metaClnt.ReadConsumerGroup(ctx, mReadRequest)
 	if err != nil {
 		return nil, err
 	}
@@ -988,7 +994,11 @@ func (h *Frontend) CreateConsumerGroup(ctx thrift.Context, createRequest *c.Crea
 			switch err.(type) {
 			case *shared.EntityAlreadyExistsError:
 				lclLg.Info("DeadLetterQueue destination already existed")
-				dlqDestDesc, err = h.metadata.ReadDestination("", dlqPath)
+				mDLQReadRequest := m.ReadDestinationRequest{
+					Path: dlqCreateRequest.Path,
+				}
+
+				dlqDestDesc, err = h.metaClnt.ReadDestination(ctx, &mDLQReadRequest)
 
 				if err != nil || dlqDestDesc == nil {
 					lclLg.WithField(common.TagErr, err).Error(`Can't read existing DeadLetterQueue destination`)
@@ -1090,7 +1100,7 @@ func (h *Frontend) ListConsumerGroups(ctx thrift.Context, listRequest *c.ListCon
 	mListRequest.PageToken = listRequest.PageToken
 	mListRequest.Limit = common.Int64Ptr(listRequest.GetLimit())
 
-	listResult, err := h.metadata.ListConsumerGroupsPage(mListRequest)
+	listResult, err := h.metaClnt.ListConsumerGroups(ctx, mListRequest)
 
 	if err != nil {
 		lclLg.WithField(common.TagErr, err).Warn(`List consumer groups failed with error`)
@@ -1136,7 +1146,7 @@ func (h *Frontend) ListDestinations(ctx thrift.Context, listRequest *c.ListDesti
 		common.FmtDstPth(listRequest.GetPrefix())) // TODO : Prefix might need it's own tag
 
 	// This is the same routine on the metadata library, from which we are forwarding destinations
-	listResult, err := h.metadata.ListDestinationsPage(mListRequest)
+	listResult, err := h.metaClnt.ListDestinations(ctx, mListRequest)
 
 	if err != nil {
 		lclLg.WithFields(bark.Fields{`Prefix`: listRequest.GetPrefix(), common.TagErr: err}).Warn(`List destinations for prefix failed with error`)
@@ -1168,6 +1178,7 @@ func (h *Frontend) PurgeDLQForConsumerGroup(ctx thrift.Context, purgeRequest *c.
 func (h *Frontend) dlqOperationForConsumerGroup(ctx thrift.Context, destinationPath, consumerGroupName string, purge bool) (err error) {
 	var lclLg bark.Logger
 	var mCGDesc *shared.ConsumerGroupDescription
+	mReadRequest := m.NewReadConsumerGroupRequest()
 
 	if purge {
 		lclLg = h.logger.WithField(`operation`, `purge`)
@@ -1182,7 +1193,9 @@ func (h *Frontend) dlqOperationForConsumerGroup(ctx thrift.Context, destinationP
 		})
 
 		// First, determine the DLQ destination UUID
-		mCGDesc, err = h.metadata.ReadConsumerGroup("", destinationPath, "", consumerGroupName)
+		mReadRequest.DestinationPath = &destinationPath
+		mReadRequest.ConsumerGroupName = &consumerGroupName
+		mCGDesc, err = h.metaClnt.ReadConsumerGroup(ctx, mReadRequest)
 
 		if err != nil || mCGDesc == nil {
 			lclLg.WithFields(bark.Fields{common.TagErr: err, `mCGDesc`: mCGDesc}).Error(`ReadConsumerGroup failed`)
@@ -1192,7 +1205,8 @@ func (h *Frontend) dlqOperationForConsumerGroup(ctx thrift.Context, destinationP
 		lclLg = lclLg.WithField(common.TagCnsm, common.FmtCnsm(consumerGroupName))
 
 		// First, determine the DLQ destination UUID
-		mCGDesc, err = h.metadata.ReadConsumerGroupByUUID(consumerGroupName)
+		mReadRequest.ConsumerGroupUUID = &consumerGroupName
+		mCGDesc, err = h.metaClnt.ReadConsumerGroupByUUID(ctx, mReadRequest)
 
 		if err != nil || mCGDesc == nil {
 			lclLg.WithFields(bark.Fields{common.TagErr: err, `mCGDesc`: mCGDesc}).Error(`ReadConsumerGroup failed`)
@@ -1201,7 +1215,9 @@ func (h *Frontend) dlqOperationForConsumerGroup(ctx thrift.Context, destinationP
 	}
 
 	// Read the destination to see if we should allow this request
-	destDesc, err := h.metadata.ReadDestination(mCGDesc.GetDeadLetterQueueDestinationUUID(), "")
+	mReadDestRequest := m.NewReadDestinationRequest()
+	mReadDestRequest.DestinationUUID = mCGDesc.DeadLetterQueueDestinationUUID
+	destDesc, err := h.metaClnt.ReadDestination(ctx, mReadDestRequest)
 
 	if err != nil || destDesc == nil {
 		lclLg.WithFields(bark.Fields{common.TagErr: err, `mCGDesc`: mCGDesc}).Error(`ReadDestination failed`)
@@ -1209,18 +1225,17 @@ func (h *Frontend) dlqOperationForConsumerGroup(ctx thrift.Context, destinationP
 	}
 
 	// Now create the merge/purge request, which is simply a cursor update on the DLQ destination
-	var now, mergeBefore, purgeBefore common.UnixNanoTime
-
-	now = common.Now()
-
+	now := int64(common.Now())
+	mCursorRequest := m.NewUpdateDestinationDLQCursorsRequest()
+	mCursorRequest.DestinationUUID = common.StringPtr(mCGDesc.GetDeadLetterQueueDestinationUUID())
 	if purge {
-		mergeBefore, purgeBefore = -1, now
+		mCursorRequest.DLQPurgeBefore = common.Int64Ptr(now)
 	} else {
-		mergeBefore, purgeBefore = now, -1
+		mCursorRequest.DLQMergeBefore = common.Int64Ptr(now)
 	}
 
-	mergeTimeExisting := common.UnixNanoTime(destDesc.GetDLQMergeBefore())
-	purgeTimeExisting := common.UnixNanoTime(destDesc.GetDLQPurgeBefore())
+	mergeTimeExisting := destDesc.GetDLQMergeBefore()
+	purgeTimeExisting := destDesc.GetDLQPurgeBefore()
 	mergeActive := mergeTimeExisting != 0
 	purgeActive := purgeTimeExisting != 0
 
@@ -1238,7 +1253,7 @@ func (h *Frontend) dlqOperationForConsumerGroup(ctx thrift.Context, destinationP
 		return e
 	}
 
-	err = h.metadata.UpdateDestinationDLQCursors(mCGDesc.GetDeadLetterQueueDestinationUUID(), mergeBefore, purgeBefore)
+	_, err = h.metaClnt.UpdateDestinationDLQCursors(ctx, mCursorRequest)
 
 	if err != nil {
 		lclLg.WithField(common.TagErr, err).Warn(`Could not merge/purge DLQ for consumer group`)
