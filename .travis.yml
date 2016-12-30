@@ -28,6 +28,7 @@ install:
   - pip install --user cqlsh==5.0.3
   - ./scripts/travis/get-rocksdb.sh
   - ccm create test -v 2.2.8 -n 1 -s
+  - sudo ln -sf /home/travis/.local/bin/cqlsh /usr/local/bin/cqlsh
   - make bins
 
 script:
