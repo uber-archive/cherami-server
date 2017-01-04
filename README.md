@@ -1,4 +1,4 @@
-cherami-server
+cherami-server [![Build Status](https://travis-ci.org/uber/cherami-server.svg?branch=master)](https://travis-ci.org/uber/cherami-server) [![Coverage Status](https://coveralls.io/repos/uber/cherami-server/badge.svg?branch=master&service=github)](https://coveralls.io/github/uber/cherami-server?branch=master)
 ==============
 [Cherami](https://eng.uber.com/cherami) is a distributed, scalable, durable, and highly available message queue system we developed at Uber Engineering to transport asynchronous tasks. 
 
