@@ -193,6 +193,9 @@ func newTestRpm() *testRpmImpl {
 
 func (rpm *testRpmImpl) Start() {}
 func (rpm *testRpmImpl) Stop()  {}
+func (rpm *testRpmImpl) GetBootstrappedChannel() chan struct{} {
+	return nil
+}
 
 func (rpm *testRpmImpl) GetHosts(service string) ([]*common.HostInfo, error) {
 	return nil, common.ErrUUIDLookupFailed

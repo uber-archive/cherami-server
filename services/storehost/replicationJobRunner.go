@@ -53,7 +53,8 @@ type (
 		mClient metadata.TChanMetadataService
 		logger  bark.Logger
 
-		closeChannel chan struct{}
+		closeChannel    chan struct{}
+		rpmBootstrapped chan struct{}
 
 		ticker  *time.Ticker
 		running int64
@@ -63,6 +64,9 @@ type (
 const (
 	// runInterval determines how often the runner will run
 	runInterval = time.Duration(10 * time.Minute)
+
+	// timeout to wait for rpm bootstrap
+	rpmBootstrapTimeout = time.Duration(2 * time.Minute)
 )
 
 // NewReplicationJobRunner returns an instance of ReplicationJobRunner
@@ -82,12 +86,25 @@ func (runner *replicationJobRunner) Start() {
 
 	runner.currentZone, _ = common.GetLocalClusterInfo(strings.ToLower(runner.storeHost.SCommon.GetConfig().GetDeploymentName()))
 	runner.closeChannel = make(chan struct{})
+
+	// replication job needs rpm to be bootstrapped first (in order to resolve other store host or replicator)
+	select {
+	case <-runner.closeChannel:
+		runner.logger.Error("ReplicationJobRunner: runner stopped before rpm is bootstrapped")
+		return
+	case <-runner.storeHost.SCommon.GetRingpopMonitor().GetBootstrappedChannel():
+	case <-time.After(rpmBootstrapTimeout):
+		// rpm still not bootstrapped after time out. Start the jobs anyway (won't hurt)
+		runner.logger.Warn("ReplicationJobRunner: rpm not bootstrapped after timeout")
+	}
+
 	go runner.run()
 	go runner.houseKeep()
 }
 
 func (runner *replicationJobRunner) Stop() {
 	close(runner.closeChannel)
+	close(runner.rpmBootstrapped)
 
 	runner.logger.Info("ReplicationJobRunner: stopped")
 }
