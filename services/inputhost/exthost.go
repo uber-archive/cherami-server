@@ -136,9 +136,6 @@ type (
 )
 
 const (
-	// perMsgAckTimeout is the time to wait for the ack from the replicas
-	perMsgAckTimeout = 1 * time.Minute
-
 	// thriftCallTimeout is the timeout for the thrift context
 	thriftCallTimeout = 1 * time.Minute
 
@@ -161,17 +158,22 @@ const (
 	extLoadReportingInterval = 2 * time.Second
 )
 
-// ErrTimeout is returned when the host is already shutdown
-var ErrTimeout = &cherami.InternalServiceError{Message: "sending message to replica timed out"}
+var (
+	// ErrTimeout is returned when the host is already shutdown
+	ErrTimeout = &cherami.InternalServiceError{Message: "sending message to replica timed out"}
 
-// nullTime is an empty time struct
-var nullTime time.Time
+	// nullTime is an empty time struct
+	nullTime time.Time
 
-// open is to indicate the extent is still open and we have not yet notified the controller
-var open uint32
+	// open is to indicate the extent is still open and we have not yet notified the controller
+	open uint32
 
-// sealed is to indicate we have already sent the seal notification
-var sealed uint32 = 1
+	// sealed is to indicate we have already sent the seal notification
+	sealed uint32 = 1
+
+	// msgAckTimeout is the time to wait for the ack from the replicas
+	msgAckTimeout = 1 * time.Minute
+)
 
 func newExtConnection(destUUID string, pathCache *inPathCache, extUUID string, numReplicas int, loadReporterFactory common.LoadReporterDaemonFactory, logger bark.Logger, tClients common.ClientFactory, shutdownWG *sync.WaitGroup, limitsEnabled bool) *extHost {
 	conn := &extHost{
@@ -572,7 +574,7 @@ func (conn *extHost) aggregateAndSendReplies(numReplicas int) {
 	defer conn.failInflightMessages(inflightMessages)
 
 	// Setup the perMsgTimer
-	perMsgTimer := common.NewTimer(perMsgAckTimeout)
+	perMsgTimer := common.NewTimer(msgAckTimeout)
 	defer perMsgTimer.Stop()
 
 	if conn.lastSuccessSeqNoCh != nil {
@@ -594,7 +596,7 @@ func (conn *extHost) aggregateAndSendReplies(numReplicas int) {
 				elapsed := time.Since(resCh.sentTime)
 
 				// Note: even if this value is negative, it is ok because we should timeout immediately
-				perMsgTimer.Reset(perMsgAckTimeout - elapsed)
+				perMsgTimer.Reset(msgAckTimeout - elapsed)
 				for i := 0; i < numReplicas; i++ {
 					select {
 					case ack, ok := <-resCh.appendMsgAck:
@@ -644,7 +646,7 @@ func (conn *extHost) aggregateAndSendReplies(numReplicas int) {
 					fmt.Sprintf("%s:%d:%8x", string(conn.extUUID), resCh.seqNo, address))
 
 				// Try to send the ack back to the client within the timeout period
-				perMsgTimer.Reset(perMsgAckTimeout)
+				perMsgTimer.Reset(msgAckTimeout)
 				select {
 				case resCh.putMsgAck <- putMsgAck:
 				case <-perMsgTimer.C:

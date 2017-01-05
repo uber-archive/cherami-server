@@ -466,6 +466,7 @@ func (h *InputHost) PutMessageBatch(ctx thrift.Context, request *cherami.PutMess
 	result := cherami.NewPutMessageBatchResult_()
 	ackChannel := make(chan *cherami.PutMessageAck, defaultBufferSize)
 	inflightRequestCnt := 0
+	inflightMsgMap := make(map[string]struct{})
 
 	for _, msg := range messages {
 		inMsg := &inPutMessage{
@@ -478,6 +479,7 @@ func (h *InputHost) PutMessageBatch(ctx thrift.Context, request *cherami.PutMess
 		case pathCache.putMsgCh <- inMsg:
 			// remember how many ack is needed
 			inflightRequestCnt++
+			inflightMsgMap[msg.GetID()] = struct{}{}
 		default:
 			// just send a THROTTLED status back if sending to message channel is blocked
 			result.FailedMessages = append(result.FailedMessages, &cherami.PutMessageAck{
@@ -489,20 +491,66 @@ func (h *InputHost) PutMessageBatch(ctx thrift.Context, request *cherami.PutMess
 	}
 
 	internalErrs, userErrs := int64(0), int64(0)
+	var respStatus cherami.Status
+	var respMsg string
+
+	// Setup the msgTimer
+	msgTimer := common.NewTimer(msgAckTimeout)
+	defer msgTimer.Stop()
+
+	// Try to get as many acks as possible.
+	// We should break out if either of the following happens:
+	// 1. pathCache is unloaded
+	// 2. we hit the message timeout
+ACKDRAIN:
 	for i := 0; i < inflightRequestCnt; i++ {
-		ack := <-ackChannel
-		if ack.GetStatus() != cherami.Status_OK {
-			if ack.GetStatus() != cherami.Status_THROTTLED {
-				internalErrs++
+		select {
+		case ack := <-ackChannel:
+			if ack.GetStatus() != cherami.Status_OK {
+				if ack.GetStatus() != cherami.Status_THROTTLED {
+					internalErrs++
+				} else {
+					userErrs++
+				}
+				result.FailedMessages = append(result.FailedMessages, ack)
 			} else {
-				userErrs++
+				result.SuccessMessages = append(result.SuccessMessages, ack)
 			}
-			result.FailedMessages = append(result.FailedMessages, ack)
-		} else {
-			result.SuccessMessages = append(result.SuccessMessages, ack)
+			delete(inflightMsgMap, ack.GetID())
+		default:
+			// Now look for either the pathCache unloading,
+			// or the msgTimer timing out.
+			// We do this in the default case to make sure
+			// we can drain all the acks in the channel above
+			// before bailing out
+			select {
+			case <-pathCache.closeCh:
+				respStatus = cherami.Status_FAILED
+				respMsg = "pathCache unloaded"
+				break ACKDRAIN
+			case <-msgTimer.C:
+				respStatus = cherami.Status_TIMEDOUT
+				respMsg = "message timedout"
+				break ACKDRAIN
+			}
 		}
 	}
 
+	// all remaining messages in the inflight map failed
+	if len(inflightMsgMap) > 0 {
+		pathCache.logger.WithFields(bark.Fields{
+			`numFailedMessages`: len(inflightMsgMap),
+			`respMsg`:           respMsg,
+		}).Info("failing putMessageBatch")
+		for id := range inflightMsgMap {
+			result.FailedMessages = append(result.FailedMessages, &cherami.PutMessageAck{
+				ID:      common.StringPtr(id),
+				Status:  common.CheramiStatusPtr(respStatus),
+				Message: common.StringPtr(respMsg),
+			})
+			internalErrs++
+		}
+	}
 	// update the last disconnect time now
 	pathCache.updateLastDisconnectTime()
 

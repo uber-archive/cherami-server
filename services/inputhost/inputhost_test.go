@@ -872,6 +872,55 @@ func (s *InputHostSuite) _TestInputHostPutMessageBatch() {
 	inputHost.Shutdown()
 }
 
+// TestInputHostPutMessageBatchTimeout publishes a batch of messages and make sure
+// we timeout appropriately
+func (s *InputHostSuite) TestInputHostPutMessageBatchTimeout() {
+	destinationPath := "foo"
+	ctx, cancel := utilGetThriftContextWithPath(destinationPath)
+	defer cancel()
+	inputHost, _ := NewInputHost("inputhost-test", s.mockService, s.mockMeta, nil)
+
+	aMsg := store.NewAppendMessageAck()
+	msg := cherami.NewPutMessage()
+
+	appendTicker := time.NewTicker(5 * time.Second)
+	defer appendTicker.Stop()
+
+	pubTicker := time.NewTicker(5 * time.Second)
+	defer pubTicker.Stop()
+
+	// make sure we don't respond immediately, so that we can timeout
+	s.mockAppend.On("Write", mock.Anything).Return(nil).WaitUntil(appendTicker.C)
+	s.mockPub.On("Write", mock.Anything).Return(nil).WaitUntil(pubTicker.C)
+
+	s.mockAppend.On("Read").Return(aMsg, io.EOF).WaitUntil(appendTicker.C)
+	s.mockPub.On("Read").Return(msg, io.EOF).WaitUntil(pubTicker.C)
+
+	s.mockStore.On("OpenAppendStream", mock.Anything).Return(s.mockAppend, nil)
+
+	// setup a putMessageRequest, which is about to be timed out
+	putMessageRequest := &cherami.PutMessageBatchRequest{DestinationPath: &destinationPath}
+	msg.ID = common.StringPtr(strconv.Itoa(1))
+	msg.Data = []byte(fmt.Sprintf("hello-%d", 1))
+
+	// set the msgAckTimeout to a very low value before
+	// publishing the message through the batch API.
+	// We should see a failed message in the ack we get back and
+	// it's status should be timeout as well
+	msgAckTimeout = 1 * time.Second
+
+	putMessageRequest.Messages = append(putMessageRequest.Messages, msg)
+	putMessageAcks, err := inputHost.PutMessageBatch(ctx, putMessageRequest)
+	s.NoError(err)
+	s.NotNil(putMessageAcks)
+	s.Len(putMessageAcks.GetSuccessMessages(), 0)
+	s.Len(putMessageAcks.GetFailedMessages(), 1)
+	// make sure the status is Status_TIMEDOUT
+	s.Equal(cherami.Status_TIMEDOUT, putMessageAcks.GetFailedMessages()[0].GetStatus())
+
+	inputHost.Shutdown()
+}
+
 func (s *InputHostSuite) TestInputHostConnLimit() {
 	destinationPath := "foo"
 	inputHost, _ := NewInputHost("inputhost-test", s.mockService, s.mockMeta, nil)
