@@ -675,7 +675,8 @@ func (t *RetentionManager) computeRetention(job *retentionJob, log bark.Logger) 
 	}).Debug("computed minAckAddr")
 
 	// -- step 5: compute retention address -- //
-	// retentionAddr = max( hardRetentionAddr, min( softRetentionAddr, minAckAddr ) ) //
+
+	//** retentionAddr = max( hardRetentionAddr, min( softRetentionAddr, minAckAddr ) ) **//
 
 	if softRetentionAddr == store.ADDR_SEAL || (minAckAddr != store.ADDR_SEAL && minAckAddr < softRetentionAddr) {
 		softRetentionAddr = minAckAddr
@@ -695,16 +696,30 @@ func (t *RetentionManager) computeRetention(job *retentionJob, log bark.Logger) 
 
 	// -- step 6: check to see if the extent status can be updated to 'consumed' -- //
 
-	// move the extent to 'consumed' because all of the following are true:
-	// 1. the extent was sealed
-	// 2. the extent as fully consumed by all of the consumer groups
-	// 3. a period of 'soft retention period' has passed (in other words, a consumer
-	//    that is consume along the soft retention time has "consumed" the extent, too)
+	// move the extent to 'consumed' if either:
+	// A. all of the following are true:
+	// 	1. the extent was sealed
+	// 	2. the extent as fully consumed by all of the consumer groups
+	// 	3. a period of 'soft retention period' has passed (in other words,
+	// 	   a consumer that is consuming along the soft retention time has
+	//	   "consumed" the extent)
+	// B. or, the hard-retention has reached the end of the sealed extent,
+	// 	in which case we will force the extent to be "consumed"
+	// NB: retentionAddr == ADDR_BEGIN indicates there was an error, so we no-op
 	if job.retentionAddr != store.ADDR_BEGIN &&
-		ext.status == shared.ExtentStatus_SEALED &&
-		minAckAddr == store.ADDR_SEAL && softRetentionConsumed {
+		((ext.status == shared.ExtentStatus_SEALED &&
+			minAckAddr == store.ADDR_SEAL &&
+			softRetentionConsumed) ||
+			hardRetentionConsumed) {
 
-		log.Info("computeRetention: marking extent consumed")
+		log.WithFields(bark.Fields{
+			`retentionAddr`:         job.retentionAddr,
+			`extent-status`:         ext.status,
+			`minAckAddr`:            minAckAddr,
+			`softRetentionConsumed`: softRetentionConsumed,
+			`hardRetentionConsumed`: hardRetentionConsumed,
+		}).Info("computeRetention: marking extent consumed")
+
 		e := t.metadata.MarkExtentConsumed(dest.id, ext.id)
 
 		if e != nil {
