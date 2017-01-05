@@ -1,4 +1,6 @@
 language: go
+directories:
+    - $HOME/.glide/cache
 go:
   - 1.7
 

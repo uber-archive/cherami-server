@@ -78,21 +78,21 @@ bins: cherami-server cherami-replicator-server cherami-cli cherami-admin cherami
 
 cover_profile: bins
 	@echo Testing packages:
+	@mkdir -p $(BUILD)
+	@echo "mode: atomic" > $(BUILD)/cover.out
 	@for dir in $(TEST_DIRS); do \
 		mkdir -p $(BUILD)/"$$dir"; \
 		go test $(EMBED) "$$dir" $(TEST_ARG) -coverprofile=$(BUILD)/"$$dir"/coverage.out || exit 1; \
+		cat $(BUILD)/"$$dir"/coverage.out | grep -v "mode: atomic" >> $(BUILD)/cover.out; \
 	done
 
 cover: cover_profile
-	@for dir in $(TEST_DIRS); do \
-		go tool cover -html=$(BUILD)/"$$dir"/coverage.out; \
-	done
+	go tool cover -html=$(BUILD)/cover.out
 
 cover_ci: cover_profile
-	@for dir in $(TEST_DIRS); do \
-		goveralls -coverprofile=$(BUILD)/"$$dir"/coverage.out -service=travis-ci || echo -e "\x1b[31mCoveralls failed\x1b[m"; \
-	done
+	goveralls -coverprofile=$(BUILD)/cover.out -service=travis-ci || echo -e "\x1b[31mCoveralls failed\x1b[m"
 
 clean:
 	rm -f cherami-server cherami-replicator-server cherami-cli cherami-admin cherami-replicator-tool cherami-cassandra-tool
 	rm -Rf vendor/*
+	rm -Rf $(BUILD)
