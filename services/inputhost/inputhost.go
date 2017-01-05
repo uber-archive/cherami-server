@@ -126,6 +126,9 @@ var ErrHostShutdown = &cherami.InternalServiceError{Message: "InputHost already 
 // ErrThrottled is returned when the host is already shutdown
 var ErrThrottled = &cherami.InternalServiceError{Message: "InputHost throttling publisher cconnection"}
 
+// ErrDstNotLoaded is returned when this input host doesn't own any extents for the destination
+var ErrDstNotLoaded = &cherami.InternalServiceError{Message: "Destination no longer served by this input host"}
+
 func (h *InputHost) isDestinationWritable(destDesc *shared.DestinationDescription) bool {
 	status := destDesc.GetStatus()
 	if status != shared.DestinationStatus_ENABLED && status != shared.DestinationStatus_SENDONLY {
@@ -377,8 +380,25 @@ func (h *InputHost) OpenPublisherStream(ctx thrift.Context, call stream.BInOpenP
 			return &ReplicaNotExistsError{}
 		}
 	}
+
 	doneCh := make(chan bool, 5)
-	pathCache.extMutex.Lock()
+
+	pathCache.Lock()
+
+	errCleanup := func() {
+		pathCache.Unlock()
+		// put back the loadShutdownRef
+		atomic.AddInt32(&h.loadShutdownRef, -1)
+		// stop the stream before returning
+		call.Done()
+	}
+
+	if !pathCache.isActive() {
+		// path cache is being unloaded, can't add new conns
+		errCleanup()
+		h.m3Client.IncCounter(metrics.OpenPublisherStreamScope, metrics.InputhostInternalFailures)
+		return ErrDstNotLoaded
+	}
 
 	// if the number of connections has breached then we can reject the connection
 	hostMaxConnPerDestination := h.GetMaxConnPerDest()
@@ -386,17 +406,11 @@ func (h *InputHost) OpenPublisherStream(ctx thrift.Context, call stream.BInOpenP
 		pathCache.logger.WithField(common.TagHostConnLimit,
 			common.FmtHostConnLimit(hostMaxConnPerDestination)).
 			Warn("Too many open connections on this path. Rejecting this open")
-
-		// put back the loadShutdownRef
-		atomic.AddInt32(&h.loadShutdownRef, -1)
-
-		pathCache.extMutex.Unlock()
-		// stop the stream before returning
-		call.Done()
+		errCleanup()
 		h.m3Client.IncCounter(metrics.OpenPublisherStreamScope, metrics.InputhostUserFailures)
 		return ErrThrottled
 	}
-	conn := newPubConnection(path, call, pathCache.putMsgCh, h.cacheTimeout, pathCache.notifyCloseCh, pathCache.currID,
+	conn := newPubConnection(path, call, pathCache.putMsgCh, h.cacheTimeout, pathCache.pubConnectionClosedCb, pathCache.currID,
 		doneCh, h.m3Client, pathCache.logger, h.IsLimitsEnabled(), pathCache)
 	pathCache.connections[pathCache.currID] = conn
 	// wait for shutdown here as well. this makes sure the pubconnection is done
@@ -405,7 +419,7 @@ func (h *InputHost) OpenPublisherStream(ctx thrift.Context, call stream.BInOpenP
 	pathCache.currID++
 	// increase the active connection count
 	pathCache.dstMetrics.Increment(load.DstMetricNumOpenConns)
-	pathCache.extMutex.Unlock()
+	pathCache.Unlock()
 
 	// increase the num open conns for the host
 	h.hostMetrics.Increment(load.HostMetricNumOpenConns)
@@ -576,7 +590,7 @@ func (h *InputHost) DestinationsUpdated(ctx thrift.Context, request *admin.Desti
 	h.m3Client.IncCounter(metrics.DestinationsUpdatedScope, metrics.InputhostRequests)
 	// If we are already shutting down, no need to do anything here
 	if atomic.AddInt32(&h.loadShutdownRef, 1) <= 0 {
-		h.logger.Error("not loading the path cache because inputHost already shutdown")
+		h.logger.WithField(common.TagReconfigureID, common.FmtReconfigureID(request.GetUpdateUUID())).Error("inputhost: DestinationsUpdated: dropping reconfiguration due to shutdown")
 		h.m3Client.IncCounter(metrics.DestinationsUpdatedScope, metrics.InputhostFailures)
 		return ErrHostShutdown
 	}
@@ -584,7 +598,7 @@ func (h *InputHost) DestinationsUpdated(ctx thrift.Context, request *admin.Desti
 	var intErr error
 	updateUUID := request.GetUpdateUUID()
 	h.logger.WithField(common.TagReconfigureID, common.FmtReconfigureID(updateUUID)).
-		Debug("inputhost: DestinationsUpdated: processing update")
+		Debug("inputhost: DestinationsUpdated: processing reconfiguration")
 	// Find all the updates we have and do the right thing
 	for _, req := range request.Updates {
 		// get the destUUID and see if it is in the inputhost cache
@@ -592,11 +606,14 @@ func (h *InputHost) DestinationsUpdated(ctx thrift.Context, request *admin.Desti
 		pathCache, ok := h.getPathCacheByDestUUID(destUUID)
 		if ok {
 			// We have a path cache loaded
-			// reconfigure the cache by letting the path cache know about this request
-			pathCache.reconfigureCh <- inReconfigInfo{req: req, updateUUID: updateUUID}
+			// check if it is active or not
+			if pathCache.isActiveNoLock() {
+				// reconfigure the cache by letting the path cache know about this request
+				pathCache.reconfigureCh <- inReconfigInfo{req: req, updateUUID: updateUUID}
+			} else {
+				intErr = errPathCacheUnloading
+			}
 		} else {
-			h.logger.WithField(common.TagDst, common.FmtDst(destUUID)).
-				Error("inputhost: DestinationsUpdated: this destination doesn't exist on this inputhost")
 			intErr = &cherami.EntityNotExistsError{}
 		}
 
@@ -604,11 +621,16 @@ func (h *InputHost) DestinationsUpdated(ctx thrift.Context, request *admin.Desti
 		if intErr != nil {
 			err = intErr
 			h.m3Client.IncCounter(metrics.DestinationsUpdatedScope, metrics.InputhostFailures)
+			h.logger.WithFields(bark.Fields{
+				common.TagDst:           common.FmtDst(destUUID),
+				common.TagReconfigureID: common.FmtReconfigureID(updateUUID),
+				common.TagErr:           intErr,
+			}).Error("inputhost: DestinationsUpdated: dropping reconfiguration")
 		}
 	}
 
 	h.logger.WithField(common.TagReconfigureID, common.FmtReconfigureID(updateUUID)).
-		Debug("inputhost: DestinationsUpdated: finished update")
+		Debug("inputhost: DestinationsUpdated: finished reconfiguration")
 
 	return
 }

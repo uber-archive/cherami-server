@@ -37,6 +37,7 @@ type MockLoadReporterDaemonFactory struct {
 // CreateReporter is the mock implementation for CreateReporter function on common.LoadReporterDaemonFactory
 func (m *MockLoadReporterDaemonFactory) CreateReporter(interval time.Duration, source LoadReporterSource, logger bark.Logger) LoadReporterDaemon {
 	// Ignore the logger parameter and create a new one as it causes data race with mock library
-	args := m.Called(interval, source, bark.NewLoggerFromLogrus(log.New()))
+	// force the LoadReporterSource to nil as it also introduces a data race with mock lib
+	args := m.Called(interval, nil, bark.NewLoggerFromLogrus(log.New()))
 	return args.Get(0).(LoadReporterDaemon)
 }
