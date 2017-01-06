@@ -541,6 +541,125 @@ func (s *OutputHostSuite) TestOutputHostReceiveMessageBatch() {
 	outputHost.Shutdown()
 }
 
+// TestOutputHostReceiveMessageBatch_NoMsg tests the no message available scenario
+func (s *OutputHostSuite) TestOutputHostReceiveMessageBatch_NoMsg() {
+	var count int32
+	count = 10
+
+	outputHost, _ := NewOutputHost("outputhost-test", s.mockService, s.mockMeta, nil, nil)
+	ctx, _ := utilGetThriftContext()
+
+	destUUID := uuid.New()
+	destDesc := shared.NewDestinationDescription()
+	destDesc.Path = common.StringPtr("/foo/bar")
+	destDesc.DestinationUUID = common.StringPtr(destUUID)
+	destDesc.Status = common.InternalDestinationStatusPtr(shared.DestinationStatus_ENABLED)
+	s.mockMeta.On("ReadDestination", mock.Anything, mock.Anything).Return(destDesc, nil)
+
+	cgDesc := shared.NewConsumerGroupDescription()
+	cgDesc.ConsumerGroupUUID = common.StringPtr(uuid.New())
+	cgDesc.DestinationUUID = common.StringPtr(destUUID)
+	s.mockMeta.On("ReadConsumerGroup", mock.Anything, mock.Anything).Return(cgDesc, nil).Twice()
+
+	cgExt := metadata.NewConsumerGroupExtent()
+	cgExt.ExtentUUID = common.StringPtr(uuid.New())
+	cgExt.StoreUUIDs = []string{"mock"}
+
+	cgRes := &metadata.ReadConsumerGroupExtentsResult_{}
+	cgRes.Extents = append(cgRes.Extents, cgExt)
+	s.mockMeta.On("ReadConsumerGroupExtents", mock.Anything, mock.Anything).Return(cgRes, nil).Once()
+	s.mockRead.On("Write", mock.Anything).Return(nil)
+
+	// read will delay for 2 seconds
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+	s.mockRead.On("Read").Return(nil, io.EOF).WaitUntil(ticker.C)
+
+	receiveMessageRequest := &cherami.ReceiveMessageBatchRequest{
+		DestinationPath:     common.StringPtr("foo"),
+		ConsumerGroupName:   common.StringPtr("testcons"),
+		MaxNumberOfMessages: common.Int32Ptr(count),
+		ReceiveTimeout:      common.Int32Ptr(1),
+	}
+
+	receivedMessages, err := outputHost.ReceiveMessageBatch(ctx, receiveMessageRequest)
+	s.Error(err)
+	assert.IsType(s.T(), &cherami.TimeoutError{}, err)
+	s.Nil(receivedMessages)
+
+	outputHost.Shutdown()
+}
+
+// TestOutputHostReceiveMessageBatch_NoMsg tests the some message available scenario
+func (s *OutputHostSuite) TestOutputHostReceiveMessageBatch_SomeMsgAvailable() {
+	var count int32
+	count = 10
+
+	outputHost, _ := NewOutputHost("outputhost-test", s.mockService, s.mockMeta, nil, nil)
+	ctx, _ := utilGetThriftContext()
+
+	destUUID := uuid.New()
+	destDesc := shared.NewDestinationDescription()
+	destDesc.Path = common.StringPtr("/foo/bar")
+	destDesc.DestinationUUID = common.StringPtr(destUUID)
+	destDesc.Status = common.InternalDestinationStatusPtr(shared.DestinationStatus_ENABLED)
+	s.mockMeta.On("ReadDestination", mock.Anything, mock.Anything).Return(destDesc, nil)
+
+	cgDesc := shared.NewConsumerGroupDescription()
+	cgDesc.ConsumerGroupUUID = common.StringPtr(uuid.New())
+	cgDesc.DestinationUUID = common.StringPtr(destUUID)
+	s.mockMeta.On("ReadConsumerGroup", mock.Anything, mock.Anything).Return(cgDesc, nil).Twice()
+
+	cgExt := metadata.NewConsumerGroupExtent()
+	cgExt.ExtentUUID = common.StringPtr(uuid.New())
+	cgExt.StoreUUIDs = []string{"mock"}
+
+	cgRes := &metadata.ReadConsumerGroupExtentsResult_{}
+	cgRes.Extents = append(cgRes.Extents, cgExt)
+	s.mockMeta.On("ReadConsumerGroupExtents", mock.Anything, mock.Anything).Return(cgRes, nil).Once()
+	s.mockRead.On("Write", mock.Anything).Return(nil)
+
+	// setup the mock so that we can read 10 messages
+	for i := 0; i < int(count); i++ {
+		aMsg := store.NewAppendMessage()
+		aMsg.SequenceNumber = common.Int64Ptr(int64(i))
+		pMsg := cherami.NewPutMessage()
+		pMsg.ID = common.StringPtr(strconv.Itoa(i))
+		pMsg.Data = []byte(fmt.Sprintf("hello-%d", i))
+
+		aMsg.Payload = pMsg
+		rMsg := store.NewReadMessage()
+		rMsg.Message = aMsg
+
+		rmc := store.NewReadMessageContent()
+		rmc.Type = store.ReadMessageContentTypePtr(store.ReadMessageContentType_MESSAGE)
+		rmc.Message = rMsg
+
+		s.mockRead.On("Read").Return(rmc, nil).Once()
+	}
+
+	// next read will delay for 2 seconds
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+	s.mockRead.On("Read").Return(nil, io.EOF).WaitUntil(ticker.C)
+
+	receiveMessageRequest := &cherami.ReceiveMessageBatchRequest{
+		DestinationPath:     common.StringPtr("foo"),
+		ConsumerGroupName:   common.StringPtr("testcons"),
+		MaxNumberOfMessages: common.Int32Ptr(count + 1),
+		ReceiveTimeout:      common.Int32Ptr(1),
+	}
+
+	receivedMessages, err := outputHost.ReceiveMessageBatch(ctx, receiveMessageRequest)
+	s.NoError(err)
+	s.Len(receivedMessages.GetMessages(), int(count))
+	for i := 0; i < int(count); i++ {
+		s.Equal(strconv.Itoa(i), receivedMessages.GetMessages()[i].GetPayload().GetID())
+	}
+
+	outputHost.Shutdown()
+}
+
 func (s *OutputHostSuite) TestOutputCgUnload() {
 	outputHost, _ := NewOutputHost("outputhost-test", s.mockService, s.mockMeta, nil, nil)
 	httpRequest := utilGetHTTPRequestWithPath("foo")

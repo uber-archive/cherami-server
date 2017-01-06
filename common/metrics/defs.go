@@ -659,6 +659,8 @@ const (
 	OutputhostFailures
 	// OutputhostLongPollingTimeOut indicates time out for long polling
 	OutputhostLongPollingTimeOut
+	// OutputhostReceiveMsgBatchWriteToMsgCacheTimeout indicates time out for ReceiveMsgBatch to write to msg cache
+	OutputhostReceiveMsgBatchWriteToMsgCacheTimeout
 	// OutputhostMessageSent records the count of messages sent
 	OutputhostMessageSent
 	// OutputhostMessageFailures records the count of messages sent failures
@@ -957,26 +959,27 @@ var metricDefs = map[ServiceIdx]map[int]metricDefinition{
 
 	// definitions for Outputhost metrics
 	Outputhost: {
-		OutputhostRequests:               {Counter, "outputhost.requests"},
-		OutputhostFailures:               {Counter, "outputhost.errors"},
-		OutputhostLongPollingTimeOut:     {Counter, "outputhost.timeout-longpoll"},
-		OutputhostMessageSent:            {Counter, "outputhost.message.sent"},
-		OutputhostMessageFailures:        {Counter, "outputhost.message.errors"},
-		OutputhostCreditsReceived:        {Counter, "outputhost.credit-received"},
-		OutputhostDLQMessageRequests:     {Counter, "outputhost.message.sent-dlq"},
-		OutputhostDLQMessageFailures:     {Counter, "outputhost.message.errors-dlq"},
-		OutputhostMessageRedelivered:     {Counter, "outputhost.message.redelivered"},
-		OutputhostMessageSentAck:         {Counter, "outputhost.message.sent-ack"},
-		OutputhostMessageSentNAck:        {Counter, "outputhost.message.sent-nack"},
-		OutputhostMessageAckFailures:     {Counter, "outputhost.message.errors-ack"},
-		OutputhostMessageNackFailures:    {Counter, "outputhost.message.errors-nack"},
-		OutputhostMessageNoAckManager:    {Counter, "outputhost.message.no-ackmgr"},
-		OutputhostMessageDiffSession:     {Counter, "outputhost.message.diff-session"},
-		OutputhostMessageAckManagerError: {Counter, "outputhost.message.errors-ackmgr"},
-		OutputhostUserFailures:           {Counter, "outputhost.user-errors"},
-		OutputhostInternalFailures:       {Counter, "outputhost.internal-errors"},
-		OutputhostConsConnection:         {Gauge, "outputhost.consconnection"},
-		OutputhostLatencyTimer:           {Timer, "outputhost.latency"},
+		OutputhostRequests:                              {Counter, "outputhost.requests"},
+		OutputhostFailures:                              {Counter, "outputhost.errors"},
+		OutputhostLongPollingTimeOut:                    {Counter, "outputhost.timeout-longpoll"},
+		OutputhostReceiveMsgBatchWriteToMsgCacheTimeout: {Counter, "outputhost.timeout-receive-msg-batch-write-to-msg-cache"},
+		OutputhostMessageSent:                           {Counter, "outputhost.message.sent"},
+		OutputhostMessageFailures:                       {Counter, "outputhost.message.errors"},
+		OutputhostCreditsReceived:                       {Counter, "outputhost.credit-received"},
+		OutputhostDLQMessageRequests:                    {Counter, "outputhost.message.sent-dlq"},
+		OutputhostDLQMessageFailures:                    {Counter, "outputhost.message.errors-dlq"},
+		OutputhostMessageRedelivered:                    {Counter, "outputhost.message.redelivered"},
+		OutputhostMessageSentAck:                        {Counter, "outputhost.message.sent-ack"},
+		OutputhostMessageSentNAck:                       {Counter, "outputhost.message.sent-nack"},
+		OutputhostMessageAckFailures:                    {Counter, "outputhost.message.errors-ack"},
+		OutputhostMessageNackFailures:                   {Counter, "outputhost.message.errors-nack"},
+		OutputhostMessageNoAckManager:                   {Counter, "outputhost.message.no-ackmgr"},
+		OutputhostMessageDiffSession:                    {Counter, "outputhost.message.diff-session"},
+		OutputhostMessageAckManagerError:                {Counter, "outputhost.message.errors-ackmgr"},
+		OutputhostUserFailures:                          {Counter, "outputhost.user-errors"},
+		OutputhostInternalFailures:                      {Counter, "outputhost.internal-errors"},
+		OutputhostConsConnection:                        {Gauge, "outputhost.consconnection"},
+		OutputhostLatencyTimer:                          {Timer, "outputhost.latency"},
 	},
 
 	// definitions for Frontend metrics

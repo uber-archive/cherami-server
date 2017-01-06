@@ -53,9 +53,11 @@ const (
 	defaultPrefetchBufferSize = 10000 // XXX: find the optimal prefetch buffer size
 	defaultUnloadChSize       = 50
 	defaultAckMgrMapChSize    = 500
-	defaultAckMgrIDStartFrom  = 0               // the default ack mgr id for this host to start from
-	defaultMaxConnLimitPerCg  = 1000            // default max connections per CG per host
-	hostLoadReportingInterval = 2 * time.Second // interval at which output host load is reported to controller
+	defaultAckMgrIDStartFrom  = 0                // the default ack mgr id for this host to start from
+	defaultMaxConnLimitPerCg  = 1000             // default max connections per CG per host
+	hostLoadReportingInterval = 2 * time.Second  // interval at which output host load is reported to controller
+	msgCacheWriteTimeout      = 10 * time.Minute // timeout to write to message cache. Intentionally set to a large number
+	// because if we don't write to cache, client won't be able to ack the message
 )
 
 var thisOutputHost *OutputHost
@@ -450,36 +452,44 @@ func (h *OutputHost) ReceiveMessageBatch(ctx thrift.Context, request *cherami.Re
 	// load the CG and all the extents for this CG
 	lclLg = lclLg.WithField(common.TagCnsm, cgDesc.GetConsumerGroupUUID())
 	cgCache, err := h.createAndLoadCGCache(ctx, *cgDesc, path, lclLg)
+	// putback the load ref which we got in the createAndLoadCGCache
+	defer atomic.AddInt32(&h.loadShutdownRef, -1)
 	if err != nil {
 		lclLg.WithField(common.TagErr, err).Error(`unable to load consumer group with error`)
-		// putback the load ref which we got in the createAndLoadCGCache
-		atomic.AddInt32(&h.loadShutdownRef, -1)
 		h.m3Client.IncCounter(metrics.ReceiveMessageBatchOutputHostScope, metrics.OutputhostFailures)
 		return nil, err
 	}
 
 	cgCache.updateLastDisconnectTime()
 	res := cherami.NewReceiveMessageBatchResult_()
+	msgCacheWriteTicker := common.NewTimer(msgCacheWriteTimeout)
+	defer msgCacheWriteTicker.Stop()
 	deliver := func(msg *cherami.ConsumerMessage, msgCacheCh chan cacheMsg) {
 		// send msg back to caller
 		res.Messages = append(res.Messages, msg)
-		// and send msg to cache waiting ack. (better handle timeout?)
-		t := time.NewTimer(timeoutTime.Sub(time.Now()))
-		defer t.Stop()
+
 		// long poll consumers don't have a connectionID and we don't have anything to throttle here
 		// using -1 as a special connection ID here,
 		// XXX: move this to a const
+
+		// Note: we use a very large time out here. Because if we won't write the message to the cache, client
+		// won't be able to ack the message. This means client might already timeout while we're still waiting for
+		// writing to message cache but this is the best we can do.
+		msgCacheWriteTicker.Reset(msgCacheWriteTimeout)
 		select {
 		case msgCacheCh <- cacheMsg{msg: msg, connID: -1}:
-			break
-		case <-t.C:
+		case <-cgCache.closeChannel:
 			lclLg.WithField(common.TagAckID, common.FmtAckID(msg.GetAckId())).
-				Error("outputhost: Unable to write the message to the cache")
+				Error("outputhost: Unable to write the message to the cache because cg cache closing")
+		case <-msgCacheWriteTicker.C:
+			lclLg.WithField(common.TagAckID, common.FmtAckID(msg.GetAckId())).
+				Error("outputhost: Unable to write the message to the cache because time out")
+			h.m3Client.IncCounter(metrics.ReceiveMessageBatchOutputHostScope, metrics.OutputhostReceiveMsgBatchWriteToMsgCacheTimeout)
 		}
 	}
 
 	// just timeout for long pull if no message available
-	firstResultTimer := time.NewTimer(timeoutTime.Sub(time.Now()))
+	firstResultTimer := common.NewTimer(timeoutTime.Sub(time.Now()))
 	defer firstResultTimer.Stop()
 	select {
 	case msg := <-cgCache.msgsRedeliveryCh:
@@ -494,23 +504,26 @@ func (h *OutputHost) ReceiveMessageBatch(ctx thrift.Context, request *cherami.Re
 	}
 
 	// once there's any message, try get back to caller with as much as possbile messages before timeout
-	timeoutTime = timeoutTime.Add(-3 * time.Second)
-	moreResultTimer := time.NewTimer(timeoutTime.Sub(time.Now()))
+	moreResultTimer := common.NewTimer(timeoutTime.Sub(time.Now()))
 	defer moreResultTimer.Stop()
 MORERESULTLOOP:
-	for remaining := count - 1; remaining > 0; remaining-- {
+	for remaining := count - 1; remaining > 0; {
 		select {
-		case msg := <-cgCache.msgsRedeliveryCh:
-			deliver(msg, cgCache.msgCacheRedeliveredCh)
-		case msg := <-cgCache.msgsCh:
-			deliver(msg, cgCache.msgCacheCh)
 		case <-moreResultTimer.C:
 			break MORERESULTLOOP
+		default:
+			select {
+			case msg := <-cgCache.msgsRedeliveryCh:
+				deliver(msg, cgCache.msgCacheRedeliveredCh)
+				remaining--
+			case msg := <-cgCache.msgsCh:
+				deliver(msg, cgCache.msgCacheCh)
+				remaining--
+			default:
+				break
+			}
 		}
 	}
-
-	// putback the load ref which we got in the createAndLoadCGCache
-	atomic.AddInt32(&h.loadShutdownRef, -1)
 
 	// Emit M3 metrics for per host and per consumer group
 
