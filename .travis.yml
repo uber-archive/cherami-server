@@ -1,3 +1,6 @@
+dist: trusty
+sudo: required
+
 language: go
 directories:
     - $HOME/.glide/cache
@@ -8,34 +11,30 @@ addons:
   apt:
     packages:
     - python
+    - libsnappy-dev
+    - zlib1g-dev
+    - libbz2-dev
+    - libgflags-dev
 
 before_install:
-  - sudo add-apt-repository ppa:ubuntu-toolchain-r/test -y
-  - sudo apt-get update -qq
-  - sudo apt-get remove gcc g++ libc6-dev -y
-  - sudo apt-get install gcc-4.9 g++-4.9 libsnappy-dev zlib1g-dev libbz2-dev -qq
-  - wget http://launchpadlibrarian.net/198723917/libc6_2.19-0ubuntu6.6_amd64.deb
-  - wget http://launchpadlibrarian.net/198723918/libc6-dev_2.19-0ubuntu6.6_amd64.deb
-  - wget http://launchpadlibrarian.net/198723921/libc-dev-bin_2.19-0ubuntu6.6_amd64.deb
-  - wget http://launchpadlibrarian.net/296841256/linux-libc-dev_3.13.0-106.153_amd64.deb
-  - sudo dpkg -i libc6_2.19-0ubuntu6.6_amd64.deb libc6-dev_2.19-0ubuntu6.6_amd64.deb libc-dev-bin_2.19-0ubuntu6.6_amd64.deb linux-libc-dev_3.13.0-106.153_amd64.deb
-  - export CXX="g++-4.9" CC="gcc-4.9"
-  - wget https://launchpad.net/ubuntu/+archive/primary/+files/libgflags2_2.0-1.1ubuntu1_amd64.deb
-  - wget https://launchpad.net/ubuntu/+archive/primary/+files/libgflags-dev_2.0-1.1ubuntu1_amd64.deb
-  - sudo dpkg -i libgflags-dev_2.0-1.1ubuntu1_amd64.deb libgflags2_2.0-1.1ubuntu1_amd64.deb
+  - sudo apt-get remove gcc -y
+  - pip install --user ccm
+  - pip install --user cqlsh==5.0.3
+  - sudo apt-get install gcc g++ -y
 
 install:
   - go get -u github.com/Masterminds/glide
   - go get github.com/axw/gocov/gocov
   - go get github.com/mattn/goveralls
   - go get golang.org/x/tools/cmd/cover
-  - pip install --user ccm
-  - pip install --user cqlsh==5.0.3
   - ccm create test -v 2.2.8 -n 1 -s
   - sudo ln -sf /home/travis/.local/bin/cqlsh /usr/local/bin/cqlsh
-  - travis_wait 20 ./scripts/travis/get-rocksdb.sh
+  - wget https://github.com/uber/cherami-server/releases/download/rocksdb-4.11.2-trusty/librocksdb.so.4.11.2
+  - ln -s librocksdb.so.4.11.2 librocksdb.so.4.11
+  - ln -s librocksdb.so.4.11.2 librocksdb.so.4
+  - ln -s librocksdb.so.4.11.2 librocksdb.so
   - export CGO_CFLAGS="$CGO_FLAGS -I`pwd`/vendor/github.com/cockroachdb/c-rocksdb/internal/include"
-  - export CGO_LDFLAGS="$CGO_LDFLAGS -L`pwd`/vendor/github.com/cockroachdb/c-rocksdb/internal -lrocksdb"
+  - export CGO_LDFLAGS="$CGO_LDFLAGS -L`pwd` -lrocksdb"
   - export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:`pwd`"
 
 script:
