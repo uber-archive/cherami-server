@@ -51,24 +51,24 @@ type (
 		// channel to the replicaconnection
 		putMessagesCh <-chan *inPutMessage
 
-		// callback to notify the path cache that this exthost is going down
+		// channel to notify the path cache that this exthost is going down
 		// once the pathCache gets this message, he will disconnect clients if all extents are down
-		closedCallback extCacheClosedCb
-		// callback to notify the path cache to completely unload the extent
-		unloadedCallback    extCacheUnloadedCb
-		extUUID             string
-		destUUID            string
-		destType            shared.DestinationType
-		loadReporter        common.LoadReporterDaemon
-		logger              bark.Logger
-		tClients            common.ClientFactory
-		closeChannel        chan struct{}
-		streamClosedChannel chan struct{}
-		numReplicas         int
-		seqNo               int64      // monotonic sequence number for the messages on this extent
-		lastSuccessSeqNo    int64      // last sequence number where we replied success
-		lastSuccessSeqNoCh  chan int64 // last sequence number where we replied success
-		lastSentWatermark   int64      // last watermark sent to the replicas
+		notifyExtCacheClosedCh chan string
+		// channel to notify the path cache to completely unload the extent
+		notifyExtCacheUnloadCh chan string
+		extUUID                string
+		destUUID               string
+		destType               shared.DestinationType
+		loadReporter           common.LoadReporterDaemon
+		logger                 bark.Logger
+		tClients               common.ClientFactory
+		closeChannel           chan struct{}
+		streamClosedChannel    chan struct{}
+		numReplicas            int
+		seqNo                  int64      // monotonic sequence number for the messages on this extent
+		lastSuccessSeqNo       int64      // last sequence number where we replied success
+		lastSuccessSeqNoCh     chan int64 // last sequence number where we replied success
+		lastSentWatermark      int64      // last watermark sent to the replicas
 
 		waitWriteWG   sync.WaitGroup
 		waitReadWG    sync.WaitGroup
@@ -187,8 +187,8 @@ func newExtConnection(destUUID string, pathCache *inPathCache, extUUID string, n
 		tClients:                tClients,
 		lastSuccessSeqNo:        int64(-1),
 		lastSuccessSeqNoCh:      nil,
-		closedCallback:          pathCache.extCacheClosedCb,
-		unloadedCallback:        pathCache.extCacheUnloadedCb,
+		notifyExtCacheClosedCh:  pathCache.notifyExtHostCloseCh,
+		notifyExtCacheUnloadCh:  pathCache.notifyExtHostUnloadCh,
 		putMessagesCh:           pathCache.putMsgCh,
 		replyClientCh:           make(chan writeResponse, defaultBufferSize),
 		closeChannel:            make(chan struct{}),
@@ -300,8 +300,6 @@ func (conn *extHost) close() {
 	if err := conn.sealExtent(); err != nil {
 		conn.logger.Warn("seal extent notify failed during closed")
 	}
-	// set the shutdownWG to be done here
-	conn.shutdownWG.Done()
 
 	conn.lk.Unlock() // no longer need the lock
 
@@ -312,7 +310,7 @@ func (conn *extHost) close() {
 
 	// notify the pathCache so that we can tear down the client
 	// connections if needed
-	conn.closedCallback(conn.extUUID)
+	conn.notifyExtCacheClosedCh <- conn.extUUID
 
 	unloadTimer := common.NewTimer(unloadTimeout)
 	defer unloadTimer.Stop()
@@ -330,9 +328,10 @@ func (conn *extHost) close() {
 	}
 
 	// now notify the pathCache to unload the extent
-	conn.unloadedCallback(conn.extUUID)
+	conn.notifyExtCacheUnloadCh <- conn.extUUID
 
 	conn.loadReporter.Stop()
+	conn.shutdownWG.Done()
 }
 
 func (conn *extHost) getEnqueueTime() int64 {

@@ -499,13 +499,18 @@ func (s *InputHostSuite) TestInputHostLoadUnloadRace() {
 		}(&wg)
 	}
 
+	// sleep a bit so that we create the path
+	time.Sleep(1 * time.Second)
+
+	// first get the pathCache now
+	pathCache, _ := inputHost.getPathCacheByDestPath("foo")
+	s.NotNil(pathCache)
+
 	// unload everything
 	inputHost.unloadAll()
 
-	// make sure there is nothing in the cache now
-	inputHost.pathMutex.RLock()
-	s.Equal(0, len(inputHost.pathCache), "there should nothing in the cache now")
-	inputHost.pathMutex.RUnlock()
+	// make sure the pathCache is inactive
+	s.Equal(false, pathCache.isActiveNoLock(), "pathCache should not be active")
 
 	// make sure everything is stopped
 	wg.Wait()
@@ -1016,21 +1021,24 @@ func (s *InputHostSuite) TestInputExtHostRateLimit() {
 	logger := common.GetDefaultLogger().WithFields(bark.Fields{"test": "ExtHostRateLimit"})
 
 	pathCache := &inPathCache{
-		destinationPath:     destinationPath,
-		destUUID:            destUUID,
-		destType:            destType,
-		extentCache:         make(map[extentUUID]*inExtentCache),
-		loadReporterFactory: mockLoadReporterDaemonFactory,
-		reconfigureCh:       make(chan inReconfigInfo, defaultBufferSize),
-		putMsgCh:            putMsgCh,
-		connections:         make(map[connectionID]*pubConnection),
-		closeCh:             make(chan struct{}),
-		logger:              logger,
-		m3Client:            metrics.NewClient(reporter, metrics.Inputhost),
-		lastDisconnectTime:  time.Now(),
-		dstMetrics:          load.NewDstMetrics(),
-		hostMetrics:         load.NewHostMetrics(),
-		inputHost:           inputHost,
+		destinationPath:       destinationPath,
+		destUUID:              destUUID,
+		destType:              destType,
+		extentCache:           make(map[extentUUID]*inExtentCache),
+		loadReporterFactory:   mockLoadReporterDaemonFactory,
+		reconfigureCh:         make(chan inReconfigInfo, defaultBufferSize),
+		putMsgCh:              putMsgCh,
+		connections:           make(map[connectionID]*pubConnection),
+		closeCh:               make(chan struct{}),
+		notifyExtHostCloseCh:  make(chan string, defaultExtCloseNotifyChSize),
+		notifyExtHostUnloadCh: make(chan string, defaultExtCloseNotifyChSize),
+		notifyConnsCloseCh:    make(chan connectionID, defaultConnsCloseChSize),
+		logger:                logger,
+		m3Client:              metrics.NewClient(reporter, metrics.Inputhost),
+		lastDisconnectTime:    time.Now(),
+		dstMetrics:            load.NewDstMetrics(),
+		hostMetrics:           load.NewHostMetrics(),
+		inputHost:             inputHost,
 	}
 
 	pathCache.loadReporter = inputHost.GetLoadReporterDaemonFactory().CreateReporter(time.Minute, pathCache, logger)
@@ -1046,7 +1054,7 @@ func (s *InputHostSuite) TestInputExtHostRateLimit() {
 			mockLoadReporterDaemonFactory,
 			inputHost.logger,
 			inputHost.GetClientFactory(),
-			&inputHost.shutdownWG,
+			&pathCache.connsWG,
 			true)
 		err := pathCache.checkAndLoadReplicaStreams(connection, extentUUID(extent.uuid), extent.replicas)
 		s.Nil(err)
@@ -1055,7 +1063,7 @@ func (s *InputHostSuite) TestInputExtHostRateLimit() {
 
 		connection.SetExtTokenBucketValue(90)
 
-		inputHost.shutdownWG.Add(1)
+		pathCache.connsWG.Add(1)
 		connection.open()
 		break
 	}

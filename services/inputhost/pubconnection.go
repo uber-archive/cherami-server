@@ -49,8 +49,8 @@ type (
 		replyCh             chan response
 		closeChannel        chan struct{} // this is the channel which is used to actually close the stream
 		waitWG              sync.WaitGroup
-		connClosedCb        pubConnectionClosedCb // this is used to notify the path cache to remove us from its list
-		doneCh              chan bool             // this is used to unblock the OpenPublisherStream()
+		notifyCloseCh       chan connectionID // this is used to notify the path cache to remove us from its list
+		doneCh              chan bool         // this is used to unblock the OpenPublisherStream()
 
 		recvMsgs      int64 // total msgs received
 		sentAcks      int64 // total acks sent out
@@ -65,6 +65,7 @@ type (
 		closed                 bool
 		limitsEnabled          bool
 		pathCache              *inPathCache
+		pathWG                 *sync.WaitGroup
 	}
 
 	response struct {
@@ -103,28 +104,27 @@ const (
 // perConnMsgsLimitPerSecond is the rate limit per connection
 const perConnMsgsLimitPerSecond = 10000
 
-func newPubConnection(destinationPath string, stream serverStream.BInOpenPublisherStreamInCall, msgCh chan *inPutMessage,
-	timeout time.Duration, connClosedCb pubConnectionClosedCb, id connectionID, doneCh chan bool,
-	m3Client metrics.Client, logger bark.Logger, limitsEnabled bool, pathCache *inPathCache) *pubConnection {
+func newPubConnection(destinationPath string, stream serverStream.BInOpenPublisherStreamInCall, pathCache *inPathCache, m3Client metrics.Client, limitsEnabled bool, timeout time.Duration, doneCh chan bool) *pubConnection {
 	conn := &pubConnection{
-		connID:          id,
+		connID:          pathCache.currID,
 		destinationPath: destinationPath,
-		logger: logger.WithFields(bark.Fields{
-			common.TagInPubConnID: common.FmtInPubConnID(int(id)),
+		logger: pathCache.logger.WithFields(bark.Fields{
+			common.TagInPubConnID: common.FmtInPubConnID(int(pathCache.currID)),
 			common.TagModule:      `pubConn`,
 		}),
 		stream:       stream,
-		putMsgCh:     msgCh,
+		putMsgCh:     pathCache.putMsgCh,
 		cacheTimeout: timeout,
 		//perConnTokenBucket:  common.NewTokenBucket(perConnMsgsLimitPerSecond, common.NewRealTimeSource()),
 		replyCh:             make(chan response, defaultBufferSize),
 		reconfigureClientCh: make(chan string, reconfigClientChSize),
 		ackChannel:          make(chan *cherami.PutMessageAck, defaultBufferSize),
 		closeChannel:        make(chan struct{}),
-		connClosedCb:        connClosedCb,
+		notifyCloseCh:       pathCache.notifyConnsCloseCh,
 		doneCh:              doneCh,
 		limitsEnabled:       limitsEnabled,
 		pathCache:           pathCache,
+		pathWG:              &pathCache.connsWG,
 	}
 	conn.SetMsgsLimitPerSecond(common.HostPerConnMsgsLimitPerSecond)
 	return conn
@@ -136,6 +136,7 @@ func (conn *pubConnection) open() {
 
 	if !conn.opened {
 		conn.waitWG.Add(2)
+		conn.pathWG.Add(1) // this makes the manage routine in the pathCache is alive
 		go conn.readRequestStream()
 		go conn.writeAcksStream()
 
@@ -168,8 +169,11 @@ func (conn *pubConnection) close() {
 
 	// notify the patch cache to remove this conn
 	// from the cache. No need to hold the lock
-	// for this callback
-	conn.connClosedCb(conn.connID)
+	// for this.
+	conn.notifyCloseCh <- conn.connID
+
+	// set the wait group for the pathCache to be done
+	conn.pathWG.Done()
 
 	conn.logger.WithFields(bark.Fields{
 		`sentAcks`:      conn.sentAcks,

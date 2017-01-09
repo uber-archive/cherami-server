@@ -410,11 +410,8 @@ func (h *InputHost) OpenPublisherStream(ctx thrift.Context, call stream.BInOpenP
 		h.m3Client.IncCounter(metrics.OpenPublisherStreamScope, metrics.InputhostUserFailures)
 		return ErrThrottled
 	}
-	conn := newPubConnection(path, call, pathCache.putMsgCh, h.cacheTimeout, pathCache.pubConnectionClosedCb, pathCache.currID,
-		doneCh, h.m3Client, pathCache.logger, h.IsLimitsEnabled(), pathCache)
+	conn := newPubConnection(path, call, pathCache, h.m3Client, h.IsLimitsEnabled(), h.cacheTimeout, doneCh)
 	pathCache.connections[pathCache.currID] = conn
-	// wait for shutdown here as well. this makes sure the pubconnection is done
-	h.shutdownWG.Add(1)
 	conn.open()
 	pathCache.currID++
 	// increase the active connection count
@@ -430,7 +427,6 @@ func (h *InputHost) OpenPublisherStream(ctx thrift.Context, call stream.BInOpenP
 	// wait till the conn is closed. we cannot return immediately.
 	// If we do so, we will get data races reading/writing from/to the stream
 	<-conn.doneCh
-	h.shutdownWG.Done()
 
 	// decrement the active connection count
 	pathCache.dstMetrics.Decrement(load.DstMetricNumOpenConns)

@@ -46,6 +46,9 @@ const (
 	// defaultExtCloseNotifyChSize is the buffer size for the notification channel when an extent is closed
 	defaultExtCloseNotifyChSize = 50
 
+	// defaultConnsCloseBufSize is the buffer size for the notification channel when a connection is closed
+	defaultConnsCloseChSize = 500
+
 	// defaultWGTimeout is the timeout for the waitgroup during shutdown
 	defaultWGTimeout = 10 * time.Minute
 
@@ -83,6 +86,9 @@ func (h *InputHost) checkAndLoadPathCache(destPath string, destUUID string, dest
 			putMsgCh:                make(chan *inPutMessage, defaultBufferSize),
 			connections:             make(map[connectionID]*pubConnection),
 			closeCh:                 make(chan struct{}),
+			notifyExtHostCloseCh:    make(chan string, defaultExtCloseNotifyChSize),
+			notifyExtHostUnloadCh:   make(chan string, defaultExtCloseNotifyChSize),
+			notifyConnsCloseCh:      make(chan connectionID, defaultConnsCloseChSize),
 			logger:                  logger,
 			m3Client:                m3Client,
 			lastDisconnectTime:      time.Now(),

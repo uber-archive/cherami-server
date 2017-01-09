@@ -45,21 +45,24 @@ type (
 	// inPathCache holds all the extents for this path
 	inPathCache struct {
 		sync.RWMutex
-		destinationPath     string
-		destUUID            string
-		destType            shared.DestinationType
-		currID              connectionID
-		state               pathCacheState // state of this pathCache
-		loadReporterFactory common.LoadReporterDaemonFactory
-		loadReporter        common.LoadReporterDaemon
-		reconfigureCh       chan inReconfigInfo
-		putMsgCh            chan *inPutMessage
-		connections         map[connectionID]*pubConnection
-		extentCache         map[extentUUID]*inExtentCache
-		inputHost           *InputHost
-		closeCh             chan struct{} // this is the channel which is used to unload path cache
-		logger              bark.Logger
-		lastDisconnectTime  time.Time
+		destinationPath       string
+		destUUID              string
+		destType              shared.DestinationType
+		currID                connectionID
+		state                 pathCacheState // state of this pathCache
+		loadReporterFactory   common.LoadReporterDaemonFactory
+		loadReporter          common.LoadReporterDaemon
+		reconfigureCh         chan inReconfigInfo
+		putMsgCh              chan *inPutMessage
+		connections           map[connectionID]*pubConnection
+		extentCache           map[extentUUID]*inExtentCache
+		inputHost             *InputHost
+		closeCh               chan struct{} // this is the channel which is used to unload path cache
+		notifyConnsCloseCh    chan connectionID
+		notifyExtHostCloseCh  chan string
+		notifyExtHostUnloadCh chan string
+		logger                bark.Logger
+		lastDisconnectTime    time.Time
 		// m3Client for mertics per host
 		m3Client metrics.Client
 		//destM3Client for metrics per destination path
@@ -76,6 +79,9 @@ type (
 		// dstMetrics were reported to the
 		// controller
 		lastDstLoadReportedTime int64
+
+		// connsWG is used to wait for all the connections (including ext) to go away before stopping the manage routine.
+		connsWG sync.WaitGroup
 	}
 
 	pathCacheState int
@@ -155,6 +161,12 @@ func (pathCache *inPathCache) eventLoop() {
 
 	for {
 		select {
+		case conn := <-pathCache.notifyConnsCloseCh:
+			pathCache.pubConnectionClosed(conn)
+		case extUUID := <-pathCache.notifyExtHostCloseCh:
+			pathCache.extCacheClosed(extUUID)
+		case extUUID := <-pathCache.notifyExtHostUnloadCh:
+			pathCache.extCacheUnloaded(extUUID)
 		case reconfigInfo := <-pathCache.reconfigureCh:
 			// we need to reload the cache, if the notification type is either
 			// HOST or ALL
@@ -225,7 +237,6 @@ func (pathCache *inPathCache) unload() {
 		return
 	}
 
-	close(pathCache.closeCh)
 	for _, conn := range pathCache.connections {
 		go conn.close()
 	}
@@ -237,6 +248,11 @@ func (pathCache *inPathCache) unload() {
 	pathCache.state = pathCacheInactive
 	pathCache.Unlock()
 
+	// wait for all the above to go away
+	pathCache.connsWG.Wait()
+
+	// now close the closeChannel which will stop the manage routine
+	close(pathCache.closeCh)
 	// since we already stopped the load reporter above and
 	// we close the connections asynchronously,
 	// make sure the number of connections is explicitly marked as 0
@@ -257,10 +273,8 @@ func (pathCache *inPathCache) prepareForUnload() {
 	pathCache.changeState(pathCacheUnloading)
 }
 
-// pubConnectionClosedCb is the callback that should
-// be invoked when a pubConnection tied to this
 // patch cache is closed
-func (pathCache *inPathCache) pubConnectionClosedCb(connID connectionID) {
+func (pathCache *inPathCache) pubConnectionClosed(connID connectionID) {
 	pathCache.Lock()
 	if _, ok := pathCache.connections[connID]; ok {
 		pathCache.logger.WithField(`conn`, connID).Info(`updating path cache to remove the connection with ID`)
@@ -272,10 +286,10 @@ func (pathCache *inPathCache) pubConnectionClosedCb(connID connectionID) {
 	pathCache.Unlock()
 }
 
-// extCacheClosedCb is the callback that should be
-// invoked when an extent tied to this path cache
-// is closed.
-func (pathCache *inPathCache) extCacheClosedCb(extUUID string) {
+// extCacheClosed is the routine that cleans up
+// the state associated with this extent on this
+// pathCache after it is closed.
+func (pathCache *inPathCache) extCacheClosed(extUUID string) {
 
 	active := true
 
@@ -304,10 +318,9 @@ func (pathCache *inPathCache) extCacheClosedCb(extUUID string) {
 	pathCache.Unlock()
 }
 
-// extCacheClosedCb is the callback that should be
-// invoked when an extent tied to this path cache
-// is unloaded.
-func (pathCache *inPathCache) extCacheUnloadedCb(extUUID string) {
+// extCacheUnloaded is the routine that is called to completely
+// remove the extent from this pathCache
+func (pathCache *inPathCache) extCacheUnloaded(extUUID string) {
 	pathCache.Lock()
 	if _, ok := pathCache.extentCache[extentUUID(extUUID)]; ok {
 		pathCache.logger.
@@ -419,7 +432,7 @@ func (pathCache *inPathCache) checkAndLoadExtent(destUUID string, extUUID extent
 				pathCache.loadReporterFactory,
 				pathCache.logger.WithField(common.TagExt, common.FmtExt(string(extUUID))),
 				pathCache.inputHost.GetClientFactory(),
-				&pathCache.inputHost.shutdownWG,
+				&pathCache.connsWG,
 				pathCache.inputHost.IsLimitsEnabled()),
 		}
 
@@ -432,7 +445,7 @@ func (pathCache *inPathCache) checkAndLoadExtent(destUUID string, extUUID extent
 
 		pathCache.extentCache[extUUID] = extCache
 		// all open connections should be closed before shutdown
-		pathCache.inputHost.shutdownWG.Add(1)
+		pathCache.connsWG.Add(1)
 		extCache.connection.open()
 
 		// make sure the number of loaded extents is incremented
