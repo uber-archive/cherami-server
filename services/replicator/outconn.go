@@ -137,6 +137,8 @@ func (conn *outConnection) readMsgStream() {
 	// We initialize this to -1 to skip the first message check
 	var lastSeqNum int64 = -1
 
+	var sealMsgRead bool
+
 	var numMsgsRead int32
 	for {
 		select {
@@ -163,6 +165,14 @@ func (conn *outConnection) readMsgStream() {
 			switch rmc.GetType() {
 			case store.ReadMessageContentType_MESSAGE:
 				msg := rmc.GetMessage()
+
+				if sealMsgRead {
+					conn.logger.WithFields(bark.Fields{
+						"seqNum": msg.Message.GetSequenceNumber(),
+					}).Error("regular message read after seal message")
+					go conn.close()
+					return
+				}
 
 				// Sequence number check to make sure we get monotonically increasing sequence number.
 				if lastSeqNum+1 != msg.Message.GetSequenceNumber() && lastSeqNum != -1 {
@@ -194,6 +204,7 @@ func (conn *outConnection) readMsgStream() {
 			case store.ReadMessageContentType_SEALED:
 				seal := rmc.GetSealed()
 				conn.logger.WithField(`SequenceNumber`, seal.GetSequenceNumber()).Info(`extent sealed`)
+				sealMsgRead = true
 
 				// now push msg to the msg channel (which will in turn be pushed to client)
 				// Note this is a blocking call here
@@ -205,7 +216,6 @@ func (conn *outConnection) readMsgStream() {
 					return
 				}
 
-				go conn.close()
 				return
 			case store.ReadMessageContentType_ERROR:
 				msgErr := rmc.GetError()

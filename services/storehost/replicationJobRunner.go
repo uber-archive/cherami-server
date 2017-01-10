@@ -186,8 +186,8 @@ func (runner *replicationJobRunner) run() {
 			}
 		} else {
 			idFound := false
-			for i := 1; i < len(storeIds); i++ {
-				if storeIds[i] == runner.storeID {
+			for _, storeID := range storeIds {
+				if storeID == runner.storeID {
 					idFound = true
 					break
 				}
