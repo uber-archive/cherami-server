@@ -26,8 +26,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/uber/cherami-server/common"
 	"github.com/uber-common/bark"
+	"github.com/uber/cherami-server/common"
 )
 
 const (
@@ -152,13 +152,22 @@ func (lockMgr *lockMgrImpl) TryLock(key string, timeout time.Duration) bool {
 
 	bucket.Lock()
 	entry.nWaiting--
-	// with the lock acquired, make sure
-	// the lock is still locked. If not,
-	// we timedout just at the same time,
-	// when the lock was unlocked
+	// with the bucket lock acquired, inspect
+	// the lock state. If its locked, we timed
+	// out. If not, we got woken up through
+	// sigCh or we timed out at the same
+	// instant an UnLock happened.
 	if entry.state == lockStateUnlocked {
 		entry.state = lockStateLocked
 		status = true
+		// Since we may have timed out
+		// at the exact same instant a
+		// sigCh entry was added, its
+		// necessary to drain the sigCh.
+		select {
+		case <-entry.sigCh:
+		default:
+		}
 	}
 	bucket.Unlock()
 
@@ -183,16 +192,16 @@ func (lockMgr *lockMgrImpl) Unlock(key string) {
 	}
 
 	entry.state = lockStateUnlocked
-	// This notification should be non-blocking.
-	// If not, we will end up in a deadlock because the
-	// waiter could have timed out already and will be
-	// deadlocked on the bucket.Lock() with the TryLock()
-	// routine above.
+
 	select {
 	// try to wake up one waiter
 	case entry.sigCh <- struct{}{}:
 	default:
-		lockMgr.logger.WithField("nWaiting", entry.nWaiting).Info("Dropping signal to the waiter")
+		// sigCh is a buffered channel of size=1 and we verified
+		// nWaiting > 0 above, so there should atleast be one
+		// waiter waiting  (regardless of whether it timed out or not)
+		// Given that, we should be *never* blocked on this channel
+		lockMgr.logger.WithField("nWaiting", entry.nWaiting).Fatal("Blocked on sigCh")
 	}
 }
 
@@ -229,7 +238,7 @@ func (lockMgr *lockMgrImpl) sleepOnWaitQ(entry *lockEntry, timeout time.Duration
 func (lockMgr *lockMgrImpl) addToWaitQ(entry *lockEntry) {
 	entry.nWaiting++
 	if entry.sigCh == nil {
-		entry.sigCh = make(chan struct{})
+		entry.sigCh = make(chan struct{}, 1)
 	}
 }
 

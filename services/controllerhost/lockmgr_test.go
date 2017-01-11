@@ -25,10 +25,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/uber/cherami-server/common"
 	"github.com/pborman/uuid"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
+	"github.com/uber/cherami-server/common"
 )
 
 type (
@@ -142,4 +142,26 @@ func (s *LockMgrSuite) TestWaitQueue() {
 	succ := common.AwaitWaitGroup(&doneWG, 5*time.Minute)
 	s.True(succ, "WaitQueue test failed")
 	s.Equal(int64(0), lockMgr.Size(), "Wrong size at the end of test")
+}
+
+func (s *LockMgrSuite) TestTimeoutRace() {
+
+	lockMgr, err := NewLockMgr(16, common.UUIDHashCode, common.GetDefaultLogger())
+	s.Nil(err, "Failed to create LockMgr")
+
+	key := uuid.New()
+	ok := lockMgr.TryLock(key, time.Second)
+	s.True(ok, "tryLock() failed unexpectedly")
+
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+
+	go func() {
+		lockMgr.TryLock(key, time.Second+40*time.Microsecond)
+		wg.Done()
+	}()
+
+	<-time.After(time.Second)
+	lockMgr.Unlock(key)
+	wg.Wait()
 }
