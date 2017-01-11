@@ -62,6 +62,8 @@ func (s *DfddTestSuite) SetupTest() {
 }
 
 func (s *DfddTestSuite) TestFailureDetection() {
+	s.dfdd.OverrideHostDownPeriodForStage2(time.Duration(1 * time.Second))
+	s.dfdd.OverrideHealthCheckInterval(time.Duration(1 * time.Second))
 	s.dfdd.Start()
 	inHostIDs := []string{uuid.New(), uuid.New(), uuid.New()}
 	storeIDs := []string{uuid.New(), uuid.New(), uuid.New()}
@@ -77,7 +79,8 @@ func (s *DfddTestSuite) TestFailureDetection() {
 
 	cond := func() bool {
 		return (s.eventPipeline.inHostFailureCount() == len(inHostIDs) &&
-			s.eventPipeline.storeHostFailureCount() == len(storeIDs))
+			s.eventPipeline.storeHostFailureStage1Count() == len(storeIDs) &&
+			s.eventPipeline.storeHostFailureStage2Count() == len(storeIDs))
 	}
 
 	succ := common.SpinWaitOnCondition(cond, 10*time.Second)
@@ -89,20 +92,25 @@ func (s *DfddTestSuite) TestFailureDetection() {
 
 	for _, h := range storeIDs {
 		s.True(s.eventPipeline.isHostFailed(h), "Dfdd failed to detect store host failure")
+		s.True(s.eventPipeline.isStoreFailedStage2(h), "Dfdd failed to detect store host stage 2 failure")
 	}
+
 	s.dfdd.Stop()
 }
 
 type testEventPipelineImpl struct {
-	inHostFailures    int
-	storeHostFailures int
-	failedHosts       map[string]bool
-	mutex             sync.Mutex
+	inHostFailures          int
+	storeHostStage1Failures int
+	storeHostStage2Failures int
+	failedHosts             map[string]bool
+	failedStage2Stores      map[string]bool
+	mutex                   sync.Mutex
 }
 
 func newTestEventPipeline() *testEventPipelineImpl {
 	return &testEventPipelineImpl{
-		failedHosts: make(map[string]bool),
+		failedHosts:        make(map[string]bool),
+		failedStage2Stores: make(map[string]bool),
 	}
 }
 
@@ -116,9 +124,14 @@ func (ep *testEventPipelineImpl) Add(event Event) bool {
 		e, _ := event.(*InputHostFailedEvent)
 		ep.failedHosts[e.hostUUID] = true
 	case *StoreHostFailedEvent:
-		ep.storeHostFailures++
 		e, _ := event.(*StoreHostFailedEvent)
-		ep.failedHosts[e.hostUUID] = true
+		if e.stage == hostDownStage1 {
+			ep.storeHostStage1Failures++
+			ep.failedHosts[e.hostUUID] = true
+		} else if e.stage == hostDownStage2 {
+			ep.storeHostStage2Failures++
+			ep.failedStage2Stores[e.hostUUID] = true
+		}
 	}
 	ep.mutex.Unlock()
 	return true
@@ -136,10 +149,26 @@ func (ep *testEventPipelineImpl) isHostFailed(uuid string) bool {
 	return ok
 }
 
-func (ep *testEventPipelineImpl) storeHostFailureCount() int {
+func (ep *testEventPipelineImpl) isStoreFailedStage2(uuid string) bool {
+	ok := false
+	ep.mutex.Lock()
+	_, ok = ep.failedStage2Stores[uuid]
+	ep.mutex.Unlock()
+	return ok
+}
+
+func (ep *testEventPipelineImpl) storeHostFailureStage1Count() int {
 	count := 0
 	ep.mutex.Lock()
-	count = ep.storeHostFailures
+	count = ep.storeHostStage1Failures
+	ep.mutex.Unlock()
+	return count
+}
+
+func (ep *testEventPipelineImpl) storeHostFailureStage2Count() int {
+	count := 0
+	ep.mutex.Lock()
+	count = ep.storeHostStage2Failures
 	ep.mutex.Unlock()
 	return count
 }
@@ -164,6 +193,9 @@ func newTestRpm() *testRpmImpl {
 
 func (rpm *testRpmImpl) Start() {}
 func (rpm *testRpmImpl) Stop()  {}
+func (rpm *testRpmImpl) GetBootstrappedChannel() chan struct{} {
+	return nil
+}
 
 func (rpm *testRpmImpl) GetHosts(service string) ([]*common.HostInfo, error) {
 	return nil, common.ErrUUIDLookupFailed

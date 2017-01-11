@@ -31,17 +31,18 @@ import (
 	"time"
 
 	ccommon "github.com/uber/cherami-client-go/common"
+	"github.com/uber/cherami-server/common"
+	mm "github.com/uber/cherami-server/common/metadata"
+	"github.com/uber/cherami-server/common/metrics"
+	"github.com/uber/cherami-server/storage"
 	"github.com/uber/cherami-thrift/.generated/go/cherami"
 	"github.com/uber/cherami-thrift/.generated/go/metadata"
 	"github.com/uber/cherami-thrift/.generated/go/store"
-	"github.com/uber/cherami-server/common"
-	"github.com/uber/cherami-server/common/metrics"
-	"github.com/uber/cherami-server/storage"
 	// "code.uber.internal/odp/cherami/storage/rockstor"
-	"github.com/uber/cherami-thrift/.generated/go/controller"
 	"github.com/uber/cherami-server/services/storehost/load"
 	"github.com/uber/cherami-server/storage/manyrocks"
 	storeStream "github.com/uber/cherami-server/stream"
+	"github.com/uber/cherami-thrift/.generated/go/controller"
 
 	"github.com/pborman/uuid"
 	"github.com/uber-common/bark"
@@ -233,12 +234,18 @@ func NewStoreHost(serviceName string, sCommon common.SCommon, mClient metadata.T
 	t := &StoreHost{
 		SCommon:       sCommon,
 		opts:          opts,
-		mClient:       mClient,
 		hostMetrics:   load.NewHostMetrics(),
 		shutdownC:     make(chan struct{}),
 		disableWriteC: make(chan struct{}),
 		m3Client:      metrics.NewClient(sCommon.GetMetricsReporter(), metrics.Storage),
 	}
+
+	t.logger = common.GetDefaultLogger().WithFields(bark.Fields{
+		common.TagStor:    common.FmtStor(sCommon.GetHostUUID()),
+		common.TagDplName: common.FmtDplName(sCommon.GetConfig().GetDeploymentName()),
+	})
+
+	t.mClient = mm.NewMetadataMetricsMgr(mClient, t.m3Client, t.logger)
 
 	return t, []thrift.TChanServer{store.NewTChanBStoreServer(t)}
 }
@@ -250,12 +257,7 @@ func (t *StoreHost) Start(thriftService []thrift.TChanServer) {
 
 	hostID := t.GetHostUUID()
 
-	// Get the deployment name for logger field
-	deploymentName := t.SCommon.GetConfig().GetDeploymentName()
-
-	t.logger = common.GetDefaultLogger().WithFields(bark.Fields{common.TagStor: common.FmtFrnt(hostID), common.TagDplName: common.FmtDplName(deploymentName)})
-
-	t.hostIDHeartbeater = common.NewHostIDHeartbeater(t.mClient, t.GetHostUUID(), t.GetHostPort(), t.GetHostName(), t.logger)
+	t.hostIDHeartbeater = common.NewHostIDHeartbeater(t.mClient, hostID, t.GetHostPort(), t.GetHostName(), t.logger)
 	t.hostIDHeartbeater.Start()
 
 	// setup the store manager
@@ -291,7 +293,7 @@ func (t *StoreHost) Start(thriftService []thrift.TChanServer) {
 	t.replMgr = NewReplicationManager(t.xMgr, t.m3Client, t.mClient, t.logger, hostID, t.GetWSConnector())
 
 	t.replicationJobRunner = NewReplicationJobRunner(t.mClient, t, t.logger)
-	t.replicationJobRunner.Start()
+	go t.replicationJobRunner.Start()
 
 	loadReporterDaemonfactory := t.GetLoadReporterDaemonFactory()
 	t.xMgr.loadReporterFactory = loadReporterDaemonfactory

@@ -76,6 +76,8 @@ func (s *RetentionMgrSuite) TestRetentionManager() {
 	// DEST2,EXT1: minAckAddr < hardRetentionAddr -> retentionAddr = hardRetentionAddr
 	// DEST2,EXT2: softRetentionAddr < minAckAddr -> retentionAddr = softRetentionAddr
 	// DEST2,EXT3: hardRetentionAddr < minAckAddr < softRetentionAddr -> retentionAddr = minAckAddr
+	// DEST2,EXT31: hardRetentionAddr < minAckAddr < softRetentionAddr but is multi_zone(extent in source zone) -> retentionAddr = hardRetentionAddr
+	// DEST2,EXT32: hardRetentionAddr < minAckAddr < softRetentionAddr but is multi_zone(extent in remote zone) -> retentionAddr = minAckAddr
 	// DEST2,EXT4: minAckAddr < softRetentionAddr; softRetentionAddr == seal -> retentionAddr = minAckAddr
 	// DEST2,EXT5: minAckAddr == seal; softRetentionAddr == seal -> retentionAddr = seal (and delete)
 	// DEST2,EXT6: minAckAddr == seal; softRetentionAddr != seal -> retentionAddr = softRetentionAddr
@@ -96,7 +98,7 @@ func (s *RetentionMgrSuite) TestRetentionManager() {
 	addrSoft, addrHard := tSoft, tHard
 	addrPreSoft, addrPostSoft := addrSoft-2*seconds, addrSoft+2*seconds
 	addrPreHard, addrPostHard := addrHard-2*seconds, addrHard+2*seconds
-	addrSeal := int64(store.ADDR_SEAL)
+	addrBegin, addrSeal := int64(store.ADDR_BEGIN), int64(store.ADDR_SEAL)
 
 	// fmt.Printf("tNow=%v tSoft=%v tHard=%v\n", tNow, tSoft, tHard)
 	// fmt.Printf("addrPreSoft=%v addrePostSoft=%v\n", addrPreSoft, addrPostSoft)
@@ -104,45 +106,50 @@ func (s *RetentionMgrSuite) TestRetentionManager() {
 	// fmt.Printf("addrSeal=%v", addrSeal)
 
 	destinations := []*destinationInfo{
-		{id: "DEST2", status: shared.DestinationStatus_ENABLED, softRetention: softRetSecs, hardRetention: hardRetSecs},
+		{id: "DEST2", status: shared.DestinationStatus_ENABLED, softRetention: softRetSecs, hardRetention: hardRetSecs, isMultiZone: true},
 	}
 
 	extStoreMap := map[extentID][]storehostID{
-		"EXT1": {"STOR1", "STOR2", "STOR3"},
-		"EXT2": {"STOR4", "STOR5", "STOR6"},
-		"EXT3": {"STOR1", "STOR3", "STOR5"},
-		"EXT4": {"STOR2", "STOR4", "STOR6"},
-		"EXT5": {"STOR2", "STOR3", "STOR4"},
-		"EXT6": {"STOR3", "STOR5", "STOR4"},
-		"EXT7": {"STOR7", "STOR6", "STOR5"},
-		"EXT8": {"STOR3", "STOR4", "STOR6"},
-		"EXT9": {"STOR1", "STOR2", "STOR5"},
-		"EXTA": {"STOR2", "STOR3", "STOR4"},
-		"EXTB": {"STOR2", "STOR3", "STOR4"},
-		"EXTC": {"STOR2", "STOR4", "STOR6"},
-		"EXTD": {"STOR2", "STOR4", "STOR6"},
-		"EXTE": {"STOR3", "STOR5", "STOR4"},
-		"EXTm": {"STOR3"}, // Single CG Visible
-		"EXTn": {"STOR7"}, // Single CG Visible
+		"EXT1":  {"STOR1", "STOR2", "STOR3"},
+		"EXT2":  {"STOR4", "STOR5", "STOR6"},
+		"EXT3":  {"STOR1", "STOR3", "STOR5"},
+		"EXT31": {"STOR1", "STOR3", "STOR5"},
+		"EXT32": {"STOR1", "STOR3", "STOR5"},
+		"EXT4":  {"STOR2", "STOR4", "STOR6"},
+		"EXT5":  {"STOR2", "STOR3", "STOR4"},
+		"EXT6":  {"STOR3", "STOR5", "STOR4"},
+		"EXT61": {"STOR3", "STOR5", "STOR4"},
+		"EXT7":  {"STOR7", "STOR6", "STOR5"},
+		"EXT8":  {"STOR3", "STOR4", "STOR6"},
+		"EXT9":  {"STOR1", "STOR2", "STOR5"},
+		"EXTA":  {"STOR2", "STOR3", "STOR4"},
+		"EXTB":  {"STOR2", "STOR3", "STOR4"},
+		"EXTC":  {"STOR2", "STOR4", "STOR6"},
+		"EXTD1": {"STOR2", "STOR4", "STOR6"},
+		"EXTm":  {"STOR3"}, // Single CG Visible
+		"EXTn":  {"STOR7"}, // Single CG Visible
 	}
 
 	extStatusMap := map[extentID]shared.ExtentStatus{
-		"EXT1": shared.ExtentStatus_OPEN,
-		"EXT2": shared.ExtentStatus_OPEN,
-		"EXT3": shared.ExtentStatus_OPEN,
-		"EXT4": shared.ExtentStatus_OPEN,
-		"EXT5": shared.ExtentStatus_SEALED,
-		"EXT6": shared.ExtentStatus_CONSUMED,
-		"EXT7": shared.ExtentStatus_DELETED,
-		"EXT8": shared.ExtentStatus_OPEN,
-		"EXT9": shared.ExtentStatus_SEALED,
-		"EXTA": shared.ExtentStatus_SEALED,
-		"EXTB": shared.ExtentStatus_SEALED,
-		"EXTC": shared.ExtentStatus_OPEN,
-		"EXTD": shared.ExtentStatus_SEALED,
-		"EXTE": shared.ExtentStatus_CONSUMED,
-		"EXTm": shared.ExtentStatus_SEALED, // Merged DLQ extents should always be sealed
-		"EXTn": shared.ExtentStatus_SEALED, //
+		"EXT1":  shared.ExtentStatus_OPEN,
+		"EXT2":  shared.ExtentStatus_OPEN,
+		"EXT3":  shared.ExtentStatus_OPEN,
+		"EXT31": shared.ExtentStatus_OPEN,
+		"EXT32": shared.ExtentStatus_OPEN,
+		"EXT4":  shared.ExtentStatus_OPEN,
+		"EXT5":  shared.ExtentStatus_SEALED,
+		"EXT6":  shared.ExtentStatus_CONSUMED,
+		"EXT61": shared.ExtentStatus_CONSUMED,
+		"EXT7":  shared.ExtentStatus_DELETED,
+		"EXT8":  shared.ExtentStatus_OPEN,
+		"EXT9":  shared.ExtentStatus_SEALED,
+		"EXTA":  shared.ExtentStatus_SEALED,
+		"EXTB":  shared.ExtentStatus_SEALED,
+		"EXTC":  shared.ExtentStatus_OPEN,
+		"EXTD":  shared.ExtentStatus_SEALED,
+		"EXTD1": shared.ExtentStatus_SEALED,
+		"EXTm":  shared.ExtentStatus_SEALED, // Merged DLQ extents should always be sealed
+		"EXTn":  shared.ExtentStatus_SEALED, //
 	}
 
 	extSingleCGVisibilityMap := map[extentID]consumerGroupID{
@@ -156,9 +163,9 @@ func (s *RetentionMgrSuite) TestRetentionManager() {
 
 		statusUpdatedTime := time.Unix(0, tNow).Add(-55 * time.Minute)
 
-		// 'EXTE' is like EXT6, except the statusUpdatedTime is beyond the ExtentDeleteDeferPeriod,
+		// 'EXT61' is like EXT6, except the statusUpdatedTime is beyond the ExtentDeleteDeferPeriod,
 		// causing it to be deleted.
-		if ext == "EXTE" {
+		if ext == "EXT61" {
 			statusUpdatedTime = time.Unix(0, tNow).Add(-2 * time.Hour)
 		}
 
@@ -171,24 +178,30 @@ func (s *RetentionMgrSuite) TestRetentionManager() {
 		})
 	}
 
-	consumerGroups := []*consumerGroupInfo{
-		{id: "CG1", status: shared.ConsumerGroupStatus_ENABLED},
-		{id: "CG2", status: shared.ConsumerGroupStatus_DELETED},
-		{id: "CG3", status: shared.ConsumerGroupStatus_DISABLED},
-		{id: "CGm", status: shared.ConsumerGroupStatus_ENABLED}, // Single CG Visible consumer group
-	}
-
 	s.metadata.On("GetDestinations").Return(destinations).Once()
 	s.metadata.On("GetExtents", destinationID("DEST2")).Return(extents).Once()
 
 	for ext, storehosts := range extStoreMap {
+		originZone := `zone2`
+		if ext == "EXT31" {
+			originZone = ``
+		}
+
 		extInfo := &extentInfo{
 			id:                 extentID(ext),
 			status:             extStatusMap[ext],
 			storehosts:         storehosts,
 			singleCGVisibility: extSingleCGVisibilityMap[ext],
+			originZone:         originZone,
 		}
 		s.metadata.On("GetExtentInfo", destinationID("DEST2"), extentID(ext)).Return(extInfo, nil).Once()
+	}
+
+	consumerGroups := []*consumerGroupInfo{
+		{id: "CG1", status: shared.ConsumerGroupStatus_ENABLED},
+		{id: "CG2", status: shared.ConsumerGroupStatus_DELETED},
+		{id: "CG3", status: shared.ConsumerGroupStatus_DISABLED},
+		{id: "CGm", status: shared.ConsumerGroupStatus_ENABLED}, // Single CG Visible consumer group
 	}
 
 	s.metadata.On("GetConsumerGroups", destinationID("DEST2")).Return(consumerGroups)
@@ -200,59 +213,70 @@ func (s *RetentionMgrSuite) TestRetentionManager() {
 
 	// hard retention addr
 	gaftHard := map[extentID]map[storehostID]gaftRet{
-		"EXT1": {"STOR1": {addrHard, false}, "STOR2": {addrHard - 5, false}, "STOR3": {addrHard - 10, false}},
-		"EXT2": {"STOR4": {addrHard - 10, false}, "STOR5": {addrHard - 8, false}, "STOR6": {addrHard, false}},
-		"EXT3": {"STOR1": {addrHard - 30, false}, "STOR3": {addrHard, false}, "STOR5": {addrHard - 7, false}},
-		"EXT4": {"STOR2": {addrHard, false}, "STOR4": {addrHard - 1, false}, "STOR6": {addrHard, false}},
-		"EXT5": {"STOR2": {addrHard - 10, false}, "STOR3": {addrHard, false}, "STOR4": {addrHard - 20, false}},
+		"EXT1":  {"STOR1": {addrHard, false}, "STOR2": {addrHard - 5, false}, "STOR3": {addrHard - 10, false}},
+		"EXT2":  {"STOR4": {addrHard - 10, false}, "STOR5": {addrHard - 8, false}, "STOR6": {addrHard, false}},
+		"EXT3":  {"STOR1": {addrHard - 30, false}, "STOR3": {addrHard, false}, "STOR5": {addrHard - 7, false}},
+		"EXT31": {"STOR1": {addrHard - 30, false}, "STOR3": {addrHard, false}, "STOR5": {addrHard - 7, false}},
+		"EXT32": {"STOR1": {addrHard - 30, false}, "STOR3": {addrHard, false}, "STOR5": {addrHard - 7, false}},
+		"EXT4":  {"STOR2": {addrHard, false}, "STOR4": {addrHard - 1, false}, "STOR6": {addrHard, false}},
+		"EXT5":  {"STOR2": {addrHard - 10, false}, "STOR3": {addrHard, false}, "STOR4": {addrHard - 20, false}},
 		// "EXT6": {}, // should not get called
+		// "EXT61": {}, // should not get called
 		// "EXT7": {}, // should not get called
-		"EXT8": {"STOR3": {addrHard, false}, "STOR4": {addrHard - 5, false}, "STOR6": {addrHard - 20, false}},
-		"EXT9": {"STOR1": {addrHard, false}, "STOR2": {addrHard - 5, false}, "STOR5": {addrHard - 20, false}},
-		"EXTA": {"STOR2": {addrHard - 10, false}, "STOR3": {addrHard, false}, "STOR4": {addrHard - 20, false}},
-		"EXTB": {"STOR2": {addrHard - 10, false}, "STOR3": {addrHard, false}, "STOR4": {addrHard - 20, false}},
-		"EXTC": {"STOR2": {addrHard, false}, "STOR4": {addrHard, false}, "STOR6": {addrHard, false}},
-		"EXTD": {"STOR2": {addrHard, false}, "STOR4": {addrHard, false}, "STOR6": {addrHard, false}},
-		"EXTm": {"STOR3": {addrHard - 100, true}},
-		"EXTn": {"STOR7": {addrHard - 100, true}},
+		"EXT8":  {"STOR3": {addrHard, false}, "STOR4": {addrHard - 5, false}, "STOR6": {addrHard - 20, false}},
+		"EXT9":  {"STOR1": {addrHard, false}, "STOR2": {addrHard - 5, false}, "STOR5": {addrHard - 20, false}},
+		"EXTA":  {"STOR2": {addrHard - 10, false}, "STOR3": {addrHard, false}, "STOR4": {addrHard - 20, false}},
+		"EXTB":  {"STOR2": {addrHard - 10, false}, "STOR3": {addrHard, false}, "STOR4": {addrHard - 20, false}},
+		"EXTC":  {"STOR2": {addrHard, false}, "STOR4": {addrHard, false}, "STOR6": {addrHard, false}},
+		"EXTD":  {"STOR2": {addrHard, false}, "STOR4": {addrHard, false}, "STOR6": {addrHard, false}},
+		"EXTD1": {"STOR2": {addrHard, true}, "STOR4": {addrHard, false}, "STOR6": {addrHard, false}},
+		"EXTm":  {"STOR3": {addrHard - 100, true}},
+		"EXTn":  {"STOR7": {addrHard - 100, true}},
 	}
 
 	// soft retention addr
 	gaftSoft := map[extentID]map[storehostID]gaftRet{
-		"EXT1": {"STOR1": {addrSoft - 3, false}, "STOR2": {addrSoft - 1, false}, "STOR3": {addrSoft, false}},
-		"EXT2": {"STOR4": {addrSoft, false}, "STOR5": {addrSoft - 5, false}, "STOR6": {addrSoft - 42, false}},
-		"EXT3": {"STOR1": {addrSoft - 9, false}, "STOR3": {addrSoft, false}, "STOR5": {addrSoft - 12, false}},
-		"EXT4": {"STOR2": {addrSoft, false}, "STOR4": {addrSoft + 51, true}, "STOR6": {addrSoft + 50, false}},
-		"EXT5": {"STOR2": {addrSoft + 10, false}, "STOR3": {addrSoft - 100, false}, "STOR4": {addrSoft + 11, true}},
+		"EXT1":  {"STOR1": {addrSoft - 3, false}, "STOR2": {addrSoft - 1, false}, "STOR3": {addrSoft, false}},
+		"EXT2":  {"STOR4": {addrSoft, false}, "STOR5": {addrSoft - 5, false}, "STOR6": {addrSoft - 42, false}},
+		"EXT3":  {"STOR1": {addrSoft - 9, false}, "STOR3": {addrSoft, false}, "STOR5": {addrSoft - 12, false}},
+		"EXT31": {"STOR1": {addrSoft - 9, false}, "STOR3": {addrSoft, false}, "STOR5": {addrSoft - 12, false}},
+		"EXT32": {"STOR1": {addrSoft - 9, false}, "STOR3": {addrSoft, false}, "STOR5": {addrSoft - 12, false}},
+		"EXT4":  {"STOR2": {addrSoft, false}, "STOR4": {addrSoft + 51, true}, "STOR6": {addrSoft + 50, false}},
+		"EXT5":  {"STOR2": {addrSoft + 10, false}, "STOR3": {addrSoft - 100, false}, "STOR4": {addrSoft + 11, true}},
 		// "EXT6": {}, // should not get called
+		// "EXT61": {}, // should not get called
 		// "EXT7": {}, // should not get called
-		"EXT8": {"STOR3": {addrSoft + 51, true}, "STOR4": {addrSoft + 50, false}, "STOR6": {addrSoft - 20, false}},
-		"EXT9": {"STOR1": {addrSoft + 51, true}, "STOR2": {addrSoft + 50, false}, "STOR5": {addrSoft - 20, false}},
-		"EXTA": {"STOR2": {addrSoft + 10, false}, "STOR3": {addrSoft - 100, false}, "STOR4": {addrSoft + 11, true}},
-		"EXTB": {"STOR2": {addrSoft + 10, false}, "STOR3": {addrSoft - 100, false}, "STOR4": {addrSoft + 11, true}},
-		"EXTC": {"STOR2": {addrSoft, true}, "STOR4": {addrSoft, true}, "STOR6": {addrSoft, true}},
-		"EXTD": {"STOR2": {addrSoft, true}, "STOR4": {addrSoft, true}, "STOR6": {addrSoft, true}},
-		"EXTm": {"STOR3": {addrSoft, true}},
-		"EXTn": {"STOR7": {addrSoft, true}},
+		"EXT8":  {"STOR3": {addrSoft + 51, true}, "STOR4": {addrSoft + 50, false}, "STOR6": {addrSoft - 20, false}},
+		"EXT9":  {"STOR1": {addrSoft + 51, true}, "STOR2": {addrSoft + 50, false}, "STOR5": {addrSoft - 20, false}},
+		"EXTA":  {"STOR2": {addrSoft + 10, false}, "STOR3": {addrSoft - 100, false}, "STOR4": {addrSoft + 11, true}},
+		"EXTB":  {"STOR2": {addrSoft + 10, false}, "STOR3": {addrSoft - 100, false}, "STOR4": {addrSoft + 11, true}},
+		"EXTC":  {"STOR2": {addrSoft, true}, "STOR4": {addrSoft, true}, "STOR6": {addrSoft, true}},
+		"EXTD":  {"STOR2": {addrSoft, true}, "STOR4": {addrSoft, true}, "STOR6": {addrSoft, true}},
+		"EXTD1": {"STOR2": {addrBegin, false}, "STOR4": {addrBegin, false}, "STOR6": {addrBegin, false}},
+		"EXTm":  {"STOR3": {addrSoft, true}},
+		"EXTn":  {"STOR7": {addrSoft, true}},
 	}
 
 	// get ack level
 	gal := map[extentID]map[consumerGroupID]int64{
-		"EXT1": {"CGm": addrSeal, "CG1": addrPreHard, "CG2": addrPostHard, "CG3": addrSoft},
-		"EXT2": {"CGm": addrSeal, "CG1": addrPostSoft - 10, "CG2": addrSoft + 100, "CG3": addrPostSoft - 20},
-		"EXT3": {"CGm": addrSeal, "CG1": addrPreSoft, "CG2": addrPreSoft - 20, "CG3": addrPreSoft + 50},
-		"EXT4": {"CGm": addrSeal, "CG1": addrPreSoft, "CG2": addrSoft, "CG3": addrPostSoft},
-		"EXT5": {"CGm": addrSeal, "CG1": addrSeal, "CG2": addrSeal, "CG3": addrSeal},
+		"EXT1":  {"CGm": addrSeal, "CG1": addrPreHard, "CG2": addrPostHard, "CG3": addrSoft},
+		"EXT2":  {"CGm": addrSeal, "CG1": addrPostSoft - 10, "CG2": addrSoft + 100, "CG3": addrPostSoft - 20},
+		"EXT3":  {"CGm": addrSeal, "CG1": addrPreSoft, "CG2": addrPreSoft - 20, "CG3": addrPreSoft + 50},
+		"EXT31": {"CGm": addrSeal, "CG1": addrPreSoft, "CG2": addrPreSoft - 20, "CG3": addrPreSoft + 50},
+		"EXT32": {"CGm": addrSeal, "CG1": addrPreSoft, "CG2": addrPreSoft - 20, "CG3": addrPreSoft + 50},
+		"EXT4":  {"CGm": addrSeal, "CG1": addrPreSoft, "CG2": addrSoft, "CG3": addrPostSoft},
+		"EXT5":  {"CGm": addrSeal, "CG1": addrSeal, "CG2": addrSeal, "CG3": addrSeal},
 		// "EXT6": {}, // should not get called
 		// "EXT7": {}, // should not get called
-		"EXT8": {"CGm": addrSeal, "CG1": addrSeal, "CG2": addrSeal, "CG3": addrSeal},
-		"EXT9": {"CGm": addrSeal, "CG1": addrSeal, "CG2": addrSeal, "CG3": addrSeal},
-		"EXTA": {"CGm": addrSeal, "CG1": addrSeal, "CG2": addrSeal, "CG3": addrSeal},
-		"EXTB": {"CGm": addrSeal, "CG1": addrSeal, "CG2": addrSeal, "CG3": addrSeal},
-		"EXTC": {"CGm": addrSeal, "CG1": addrSeal, "CG2": addrSeal, "CG3": addrSeal},
-		"EXTD": {"CGm": addrSeal, "CG1": addrSeal, "CG2": addrSeal, "CG3": addrSeal},
-		"EXTm": {"CGm": addrPostSoft},
-		"EXTn": {"CGm": addrPreSoft},
+		"EXT8":  {"CGm": addrSeal, "CG1": addrSeal, "CG2": addrSeal, "CG3": addrSeal},
+		"EXT9":  {"CGm": addrSeal, "CG1": addrSeal, "CG2": addrSeal, "CG3": addrSeal},
+		"EXTA":  {"CGm": addrSeal, "CG1": addrSeal, "CG2": addrSeal, "CG3": addrSeal},
+		"EXTB":  {"CGm": addrSeal, "CG1": addrSeal, "CG2": addrSeal, "CG3": addrSeal},
+		"EXTC":  {"CGm": addrSeal, "CG1": addrSeal, "CG2": addrSeal, "CG3": addrSeal},
+		"EXTD":  {"CGm": addrSeal, "CG1": addrSeal, "CG2": addrSeal, "CG3": addrSeal},
+		"EXTD1": {"CGm": addrBegin, "CG1": addrBegin, "CG2": addrBegin, "CG3": addrBegin},
+		"EXTm":  {"CGm": addrPostSoft},
+		"EXTn":  {"CGm": addrPreSoft},
 	}
 
 	for ext, retMap := range gaftHard {
@@ -278,25 +302,31 @@ func (s *RetentionMgrSuite) TestRetentionManager() {
 	s.metadata.On("MarkExtentConsumed", destinationID("DEST2"), extentID("EXTA")).Return(nil).Once()
 	s.metadata.On("MarkExtentConsumed", destinationID("DEST2"), extentID("EXTB")).Return(nil).Once()
 	s.metadata.On("MarkExtentConsumed", destinationID("DEST2"), extentID("EXTD")).Return(nil).Once()
+	s.metadata.On("MarkExtentConsumed", destinationID("DEST2"), extentID("EXTD1")).Return(nil).Once()
+	s.metadata.On("MarkExtentConsumed", destinationID("DEST2"), extentID("EXTm")).Return(nil).Once()
+	s.metadata.On("MarkExtentConsumed", destinationID("DEST2"), extentID("EXTn")).Return(nil).Once()
 
 	// expected retention addresses
 	purgeAddrMap := map[extentID]int64{
-		"EXT1": addrHard,
-		"EXT2": addrSoft,
-		"EXT3": addrPreSoft,
-		"EXT4": addrPreSoft,
-		"EXT5": addrSoft + 11,
+		"EXT1":  addrHard,
+		"EXT2":  addrSoft,
+		"EXT3":  addrPreSoft,
+		"EXT31": addrHard,
+		"EXT32": addrPreSoft,
+		"EXT4":  addrPreSoft,
+		"EXT5":  addrSoft + 11,
 		// "EXT6": addrSeal,
+		"EXT61": addrSeal,
 		// "EXT7": ,
-		"EXT8": addrSoft + 51,
-		"EXT9": addrSoft + 51,
-		"EXTA": addrSoft + 11,
-		"EXTB": addrSoft + 11,
-		"EXTC": addrSoft,
-		"EXTD": addrSoft,
-		"EXTE": addrSeal,
-		"EXTm": addrSoft,
-		"EXTn": addrPreSoft,
+		"EXT8":  addrSoft + 51,
+		"EXT9":  addrSoft + 51,
+		"EXTA":  addrSoft + 11,
+		"EXTB":  addrSoft + 11,
+		"EXTC":  addrSoft,
+		"EXTD":  addrSoft,
+		"EXTD1": addrHard,
+		"EXTm":  addrSoft,
+		"EXTn":  addrPreSoft,
 	}
 
 	for ext, addr := range purgeAddrMap {
@@ -307,21 +337,21 @@ func (s *RetentionMgrSuite) TestRetentionManager() {
 
 	for _, cg := range consumerGroups {
 		s.metadata.On("DeleteConsumerGroupExtent", consumerGroupID(cg.id), extentID("EXT5")).Return(nil).Once()
+		s.metadata.On("DeleteConsumerGroupExtent", consumerGroupID(cg.id), extentID("EXT61")).Return(nil).Once()
 		s.metadata.On("DeleteConsumerGroupExtent", consumerGroupID(cg.id), extentID("EXT9")).Return(shared.NewEntityNotExistsError()).Once()
 		s.metadata.On("DeleteConsumerGroupExtent", consumerGroupID(cg.id), extentID("EXTA")).Return(shared.NewEntityNotExistsError()).Once()
 		s.metadata.On("DeleteConsumerGroupExtent", consumerGroupID(cg.id), extentID("EXTB")).Return(shared.NewBadRequestError()).Once()
 		s.metadata.On("DeleteConsumerGroupExtent", consumerGroupID(cg.id), extentID("EXTD")).Return(nil).Once()
-		s.metadata.On("DeleteConsumerGroupExtent", consumerGroupID(cg.id), extentID("EXTE")).Return(nil).Once()
 	}
 
 	// // DeleteConsumerGroupExtent on EXTA got an EntityNotExistsError, but it should still be deleted; while EXTB shouldn't
 	// s.metadata.On("DeleteExtent", destinationID("DEST2"), extentID("EXTA")).Return(nil).Once()
 
-	s.metadata.On("DeleteExtent", destinationID("DEST2"), extentID("EXTE")).Return(nil).Once()
+	s.metadata.On("DeleteExtent", destinationID("DEST2"), extentID("EXT61")).Return(nil).Once()
 
 	var retMgr *RetentionManager
 
-	opts := &Options{NumWorkers: 3, RetentionInterval: 5 * time.Second, ExtentDeleteDeferPeriod: time.Hour}
+	opts := &Options{NumWorkers: 3, RetentionInterval: 5 * time.Second, ExtentDeleteDeferPeriod: 1 * time.Hour, LocalZone: `zone1`}
 
 	metricsClient := metrics.NewClient(common.NewMetricReporterWithHostname(configure.NewCommonServiceConfig()), metrics.Controller)
 	retMgr = tNew(opts, s.metadata, s.storehost, metricsClient, common.GetDefaultLogger())
@@ -397,7 +427,7 @@ func (s *RetentionMgrSuite) TestRetentionManagerOnDeletedDestinations() {
 
 	var retMgr *RetentionManager
 
-	opts := &Options{NumWorkers: 3, RetentionInterval: 5 * time.Second}
+	opts := &Options{NumWorkers: 3, RetentionInterval: 5 * time.Second, LocalZone: `zone1`}
 
 	metricsClient := metrics.NewClient(common.NewMetricReporterWithHostname(configure.NewCommonServiceConfig()), metrics.Controller)
 	retMgr = tNew(opts, s.metadata, s.storehost, metricsClient, common.GetDefaultLogger())

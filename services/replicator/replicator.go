@@ -40,6 +40,7 @@ import (
 	"github.com/uber/cherami-server/common"
 	"github.com/uber/cherami-server/common/configure"
 	dconfig "github.com/uber/cherami-server/common/dconfigclient"
+	mm "github.com/uber/cherami-server/common/metadata"
 	"github.com/uber/cherami-server/common/metrics"
 	storeStream "github.com/uber/cherami-server/stream"
 )
@@ -121,10 +122,11 @@ func NewReplicator(serviceName string, sVice common.SCommon, metadataClient meta
 		defaultAuthoritativeZone: config.GetReplicatorConfig().GetDefaultAuthoritativeZone(),
 		tenancy:                  tenancy,
 		clientFactory:            clientFactory,
-		metaClient:               metadataClient,
 		remoteReplicatorConn:     make(map[string]*outConnection),
 		storehostConn:            make(map[string]*outConnection),
 	}
+
+	r.metaClient = mm.NewMetadataMetricsMgr(metadataClient, r.m3Client, r.logger)
 
 	r.uconfigClient = sVice.GetDConfigClient()
 	r.dynamicConfigManage()
@@ -206,6 +208,7 @@ func (r *Replicator) OpenReplicationReadStreamHandler(w http.ResponseWriter, req
 	outStream, err := r.createStoreHostReadStream(destUUID, extUUID, request)
 	if err != nil {
 		r.logger.WithFields(bark.Fields{
+			common.TagErr: err,
 			common.TagExt: common.FmtExt(*request.OpenReadStreamRequest.ExtentUUID),
 			common.TagDst: common.FmtDst(*request.OpenReadStreamRequest.DestinationUUID),
 		}).Error("Can't open store host read stream")
@@ -257,6 +260,7 @@ func (r *Replicator) OpenReplicationRemoteReadStreamHandler(w http.ResponseWrite
 	outStream, err := r.createRemoteReplicationReadStream(extUUID, destUUID, request)
 	if err != nil {
 		r.logger.WithFields(bark.Fields{
+			common.TagErr: err,
 			common.TagExt: common.FmtExt(*request.OpenReadStreamRequest.ExtentUUID),
 			common.TagDst: common.FmtDst(*request.OpenReadStreamRequest.DestinationUUID),
 		}).Error("Can't open remote replication read stream")
@@ -282,8 +286,8 @@ func (r *Replicator) CreateDestinationUUID(ctx thrift.Context, createRequest *sh
 	destDesc, err := r.metaClient.CreateDestinationUUID(ctx, createRequest)
 	if err != nil {
 		r.logger.WithFields(bark.Fields{
-			common.TagDst:    common.FmtDst(destDesc.GetDestinationUUID()),
-			common.TagDstPth: common.FmtDstPth(destDesc.GetPath()),
+			common.TagDst:    common.FmtDst(createRequest.GetDestinationUUID()),
+			common.TagDstPth: common.FmtDstPth(createRequest.GetRequest().GetPath()),
 			common.TagErr:    err,
 		}).Error(`Error creating destination`)
 		r.m3Client.IncCounter(metrics.ReplicatorCreateDestUUIDScope, metrics.ReplicatorFailures)

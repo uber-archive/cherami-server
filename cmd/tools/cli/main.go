@@ -53,7 +53,7 @@ func main() {
 	})
 	app.Name = "cherami"
 	app.Usage = "A command-line tool for cherami users"
-	app.Version = "1.1.4"
+	app.Version = "1.1.5"
 	app.Flags = []cli.Flag{
 		cli.BoolTFlag{
 			Name:  "hyperbahn",
@@ -66,8 +66,8 @@ func main() {
 		},
 		cli.StringFlag{
 			Name:  "env",
-			Value: "",
-			Usage: "Deployment to connect. By default connects to production. Use \"staging\" to connect to staging",
+			Value: "staging",
+			Usage: "Deployment to connect to. By default connects to staging. Use \"prod\" to connect to production",
 		},
 		cli.StringFlag{
 			Name:   "hyperbahn_bootstrap_file, hbfile",

@@ -87,6 +87,9 @@ func (s *RpmSuite) TestRingpopMon() {
 	detectedInHosts := make(map[string]bool)
 	detectedOutHosts := make(map[string]bool)
 
+	bootstrapped := rpm.GetBootstrappedChannel()
+	bootstrapNotified := false
+
 	timeoutCh := time.After(time.Minute)
 
 	for {
@@ -97,6 +100,8 @@ func (s *RpmSuite) TestRingpopMon() {
 		case e := <-outListenCh:
 			s.Equal(HostAddedEvent, e.Type, "Wrong event type")
 			detectedOutHosts[e.Key] = true
+		case <-bootstrapped:
+			bootstrapNotified = true
 		case <-timeoutCh:
 			s.Fail("Timed out waiting for hosts to be discovered")
 		}
@@ -118,6 +123,8 @@ func (s *RpmSuite) TestRingpopMon() {
 		s.Equal(true, rpm.IsHostHealthy("out", uuid), "Ringpop monitor failed to detect out-service member")
 		s.Equal(false, rpm.IsHostHealthy("in", uuid), "Ringpop monitor state is corrupted")
 	}
+
+	s.Equal(true, bootstrapNotified, `bootstrap not notified`)
 
 	inAddrs := make(map[string]bool)
 	outAddrs := make(map[string]bool)

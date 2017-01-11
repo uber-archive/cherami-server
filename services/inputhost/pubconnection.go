@@ -28,10 +28,8 @@ import (
 	"github.com/uber-common/bark"
 
 	"github.com/uber/cherami-thrift/.generated/go/cherami"
-	"github.com/uber/cherami-thrift/.generated/go/shared"
 	"github.com/uber/cherami-server/common"
 	"github.com/uber/cherami-server/common/metrics"
-	"github.com/uber/cherami-server/services/inputhost/load"
 	serverStream "github.com/uber/cherami-server/stream"
 )
 
@@ -39,44 +37,6 @@ import (
 const timeLatencyToLog = 70 * time.Second
 
 type (
-	// inPathCache holds all the extents for this path
-	inPathCache struct {
-		destinationPath       string
-		extMutex              sync.RWMutex
-		destUUID              string
-		destType              shared.DestinationType
-		currID                connectionID
-		unloadInProgress      bool // flag to indicate if an unload is already in progress
-		loadReporterFactory   common.LoadReporterDaemonFactory
-		loadReporter          common.LoadReporterDaemon
-		reconfigureCh         chan inReconfigInfo
-		putMsgCh              chan *inPutMessage
-		notifyExtHostCloseCh  chan string
-		notifyExtHostUnloadCh chan string
-		notifyCloseCh         chan connectionID
-		connections           map[connectionID]*pubConnection
-		extentCache           map[extentUUID]*inExtentCache
-		closeCh               chan struct{} // this is the channel which is used to unload path cache
-		logger                bark.Logger
-		lastDisconnectTime    time.Time
-		// m3Client for mertics per host
-		m3Client metrics.Client
-		//destM3Client for metrics per destination path
-		destM3Client metrics.Client
-
-		// destination level load metrics reported
-		// to the controller periodically. int32
-		// should suffice for counts, because these
-		// metrics get zero'd out every few seconds
-		dstMetrics  *load.DstMetrics
-		hostMetrics *load.HostMetrics
-
-		// unix nanos when the last time
-		// dstMetrics were reported to the
-		// controller
-		lastDstLoadReportedTime int64
-	}
-
 	pubConnection struct {
 		connID              connectionID
 		destinationPath     string
@@ -89,7 +49,7 @@ type (
 		replyCh             chan response
 		closeChannel        chan struct{} // this is the channel which is used to actually close the stream
 		waitWG              sync.WaitGroup
-		notifyCloseCh       chan connectionID // this channel is used to notify the path cache to remove us from its list
+		notifyCloseCh       chan connectionID // this is used to notify the path cache to remove us from its list
 		doneCh              chan bool         // this is used to unblock the OpenPublisherStream()
 
 		recvMsgs      int64 // total msgs received
@@ -105,6 +65,7 @@ type (
 		closed                 bool
 		limitsEnabled          bool
 		pathCache              *inPathCache
+		pathWG                 *sync.WaitGroup
 	}
 
 	response struct {
@@ -122,6 +83,8 @@ type (
 		putMsgAckCh    chan *cherami.PutMessageAck
 		putMsgRecvTime time.Time
 	}
+
+	pubConnectionClosedCb func(connectionID)
 )
 
 // failTimeout is the timeout to wait for acks from the store when a
@@ -141,28 +104,27 @@ const (
 // perConnMsgsLimitPerSecond is the rate limit per connection
 const perConnMsgsLimitPerSecond = 10000
 
-func newPubConnection(destinationPath string, stream serverStream.BInOpenPublisherStreamInCall, msgCh chan *inPutMessage,
-	timeout time.Duration, notifyCloseCh chan connectionID, id connectionID, doneCh chan bool,
-	m3Client metrics.Client, logger bark.Logger, limitsEnabled bool, pathCache *inPathCache) *pubConnection {
+func newPubConnection(destinationPath string, stream serverStream.BInOpenPublisherStreamInCall, pathCache *inPathCache, m3Client metrics.Client, limitsEnabled bool, timeout time.Duration, doneCh chan bool) *pubConnection {
 	conn := &pubConnection{
-		connID:          id,
+		connID:          pathCache.currID,
 		destinationPath: destinationPath,
-		logger: logger.WithFields(bark.Fields{
-			common.TagInPubConnID: common.FmtInPubConnID(int(id)),
+		logger: pathCache.logger.WithFields(bark.Fields{
+			common.TagInPubConnID: common.FmtInPubConnID(int(pathCache.currID)),
 			common.TagModule:      `pubConn`,
 		}),
 		stream:       stream,
-		putMsgCh:     msgCh,
+		putMsgCh:     pathCache.putMsgCh,
 		cacheTimeout: timeout,
 		//perConnTokenBucket:  common.NewTokenBucket(perConnMsgsLimitPerSecond, common.NewRealTimeSource()),
 		replyCh:             make(chan response, defaultBufferSize),
 		reconfigureClientCh: make(chan string, reconfigClientChSize),
 		ackChannel:          make(chan *cherami.PutMessageAck, defaultBufferSize),
 		closeChannel:        make(chan struct{}),
-		notifyCloseCh:       notifyCloseCh,
+		notifyCloseCh:       pathCache.notifyConnsCloseCh,
 		doneCh:              doneCh,
 		limitsEnabled:       limitsEnabled,
 		pathCache:           pathCache,
+		pathWG:              &pathCache.connsWG,
 	}
 	conn.SetMsgsLimitPerSecond(common.HostPerConnMsgsLimitPerSecond)
 	return conn
@@ -174,6 +136,7 @@ func (conn *pubConnection) open() {
 
 	if !conn.opened {
 		conn.waitWG.Add(2)
+		conn.pathWG.Add(1) // this makes the manage routine in the pathCache is alive
 		go conn.readRequestStream()
 		go conn.writeAcksStream()
 
@@ -184,25 +147,34 @@ func (conn *pubConnection) open() {
 }
 
 func (conn *pubConnection) close() {
-	conn.lk.Lock()
-	if !conn.closed {
-		close(conn.closeChannel)
-		conn.closed = true
-		conn.waitWG.Wait()
-		// we have successfully closed the connection
-		// make sure we update the ones who are waiting for us
-		select {
-		case conn.doneCh <- true:
-		default:
-		}
 
-		// now notify the pathCache to update its connections map
-		select {
-		case conn.notifyCloseCh <- conn.connID:
-		default:
-		}
+	conn.lk.Lock()
+	if conn.closed {
+		conn.lk.Unlock()
+		return
 	}
+
+	close(conn.closeChannel)
+	conn.closed = true
+	conn.waitWG.Wait()
+
+	// we have successfully closed the connection
+	// make sure we update the ones who are waiting for us
+	select {
+	case conn.doneCh <- true:
+	default:
+	}
+
 	conn.lk.Unlock()
+
+	// notify the patch cache to remove this conn
+	// from the cache. No need to hold the lock
+	// for this.
+	conn.notifyCloseCh <- conn.connID
+
+	// set the wait group for the pathCache to be done
+	conn.pathWG.Done()
+
 	conn.logger.WithFields(bark.Fields{
 		`sentAcks`:      conn.sentAcks,
 		`sentNacks`:     conn.sentNacks,

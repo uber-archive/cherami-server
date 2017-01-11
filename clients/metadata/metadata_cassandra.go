@@ -102,6 +102,7 @@ const (
 	columnHostName                       = "hostname"
 	columnInputHostUUID                  = "input_host_uuid"
 	columnOriginZone                     = "origin_zone"
+	columnRemoteExtentPrimaryStore       = "remote_extent_primary_store"
 	columnLastAddress                    = "last_address"
 	columnLastEnqueueTime                = "last_enqueue_time"
 	columnLastSequence                   = "last_sequence"
@@ -1926,6 +1927,7 @@ const (
 		columnStoreUUIDS + `: ?, ` +
 		columnInputHostUUID + `: ?, ` +
 		columnOriginZone + `: ?, ` +
+		columnRemoteExtentPrimaryStore + `: ?, ` +
 		columnStatus + `: ?}`
 
 	sqlInsertDstExent = `INSERT INTO ` + tableDestinationExtents + ` (` +
@@ -1970,6 +1972,7 @@ const (
 		columnStoreUUIDS + `: ?, ` +
 		columnInputHostUUID + `: ?, ` +
 		columnOriginZone + `: ?, ` +
+		columnRemoteExtentPrimaryStore + `: ?, ` +
 		columnStatus + `: ?, ` +
 		columnArchivalLocation + `: ?` +
 		`}`
@@ -2084,6 +2087,7 @@ func (s *CassandraMetadataService) createExtentImpl(extent *shared.Extent, exten
 		extent.GetStoreUUIDs(),
 		extent.GetInputHostUUID(),
 		extent.GetOriginZone(),
+		extent.GetRemoteExtentPrimaryStore(),
 		extentStatus,
 		replicaStatsList,
 		consumerGroupVisibility,
@@ -2101,6 +2105,7 @@ func (s *CassandraMetadataService) createExtentImpl(extent *shared.Extent, exten
 		extent.GetStoreUUIDs(),
 		extent.GetInputHostUUID(),
 		extent.GetOriginZone(),
+		extent.GetRemoteExtentPrimaryStore(),
 		extentStatus,
 		replicaStatsList,
 	)
@@ -2122,6 +2127,7 @@ func (s *CassandraMetadataService) createExtentImpl(extent *shared.Extent, exten
 			extent.GetStoreUUIDs(),
 			extent.GetInputHostUUID(),
 			extent.GetOriginZone(),
+			extent.GetRemoteExtentPrimaryStore(),
 			extentStatus,
 			replicaStats,
 		)
@@ -2190,6 +2196,7 @@ func (s *CassandraMetadataService) deleteExtentImpl(extent *shared.Extent, exten
 		extent.GetStoreUUIDs(),
 		extent.GetInputHostUUID(),
 		extent.GetOriginZone(),
+		extent.GetRemoteExtentPrimaryStore(),
 		shared.ExtentStatus_DELETED,
 		extentStatsMap,
 		extentStats.ConsumerGroupVisibility,
@@ -2208,6 +2215,7 @@ func (s *CassandraMetadataService) deleteExtentImpl(extent *shared.Extent, exten
 		extent.GetStoreUUIDs(),
 		extent.GetInputHostUUID(),
 		extent.GetOriginZone(),
+		extent.GetRemoteExtentPrimaryStore(),
 		shared.ExtentStatus_DELETED,
 		extentStatsMap,
 		defaultDeleteTTLSeconds,
@@ -2227,6 +2235,7 @@ func (s *CassandraMetadataService) deleteExtentImpl(extent *shared.Extent, exten
 				extent.GetStoreUUIDs(),
 				extent.GetInputHostUUID(),
 				extent.GetOriginZone(),
+				extent.GetRemoteExtentPrimaryStore(),
 				shared.ExtentStatus_DELETED,
 				replicaStats,
 				defaultDeleteTTLSeconds,
@@ -2252,6 +2261,7 @@ func (s *CassandraMetadataService) updateExtent(extentStats *shared.ExtentStats,
 		extent.GetStoreUUIDs(),
 		extent.GetInputHostUUID(),
 		extent.GetOriginZone(),
+		extent.GetRemoteExtentPrimaryStore(),
 		newStatus,
 		newArchivalLocation,
 		extent.GetDestinationUUID(),
@@ -2266,6 +2276,7 @@ func (s *CassandraMetadataService) updateExtent(extentStats *shared.ExtentStats,
 		extent.GetStoreUUIDs(),
 		extent.GetInputHostUUID(),
 		extent.GetOriginZone(),
+		extent.GetRemoteExtentPrimaryStore(),
 		newStatus,
 		newArchivalLocation,
 		extent.GetDestinationUUID(),
@@ -2282,6 +2293,7 @@ func (s *CassandraMetadataService) updateExtent(extentStats *shared.ExtentStats,
 			extent.GetStoreUUIDs(),
 			extent.GetInputHostUUID(),
 			extent.GetOriginZone(),
+			extent.GetRemoteExtentPrimaryStore(),
 			newStatus,
 			newArchivalLocation,
 			storeID,
@@ -2316,6 +2328,10 @@ func (s *CassandraMetadataService) UpdateExtentStats(ctx thrift.Context, request
 	}
 
 	extent := extentStatsResult.ExtentStats.Extent
+	if request.IsSetRemoteExtentPrimaryStore() {
+		extent.RemoteExtentPrimaryStore = common.StringPtr(request.GetRemoteExtentPrimaryStore())
+	}
+
 	if len(request.GetArchivalLocation()) == 0 {
 		request.ArchivalLocation = common.StringPtr(extentStatsResult.ExtentStats.GetArchivalLocation())
 	}
@@ -2442,11 +2458,12 @@ func uuidSliceToStringSlice(i interface{}) []string {
 func convertExtentStats(extentMap map[string]interface{}, extentStatsMap map[string]map[string]interface{}) *shared.ExtentStats {
 	result := &shared.ExtentStats{
 		Extent: &shared.Extent{
-			ExtentUUID:      common.StringPtr(toUUIDString(extentMap[columnUUID])),
-			DestinationUUID: common.StringPtr(toUUIDString(extentMap[columnDestinationUUID])),
-			StoreUUIDs:      uuidSliceToStringSlice(extentMap[columnStoreUUIDS]),
-			InputHostUUID:   common.StringPtr(toUUIDString(extentMap[columnInputHostUUID])),
-			OriginZone:      common.StringPtr(toString(extentMap[columnOriginZone])),
+			ExtentUUID:               common.StringPtr(toUUIDString(extentMap[columnUUID])),
+			DestinationUUID:          common.StringPtr(toUUIDString(extentMap[columnDestinationUUID])),
+			StoreUUIDs:               uuidSliceToStringSlice(extentMap[columnStoreUUIDS]),
+			InputHostUUID:            common.StringPtr(toUUIDString(extentMap[columnInputHostUUID])),
+			OriginZone:               common.StringPtr(toString(extentMap[columnOriginZone])),
+			RemoteExtentPrimaryStore: common.StringPtr(toString(extentMap[columnRemoteExtentPrimaryStore])),
 		},
 		Status:           common.MetadataExtentStatusPtr(shared.ExtentStatus(toInt(extentMap[columnStatus]))),
 		ArchivalLocation: common.StringPtr(toString(extentMap[columnArchivalLocation])),

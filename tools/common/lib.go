@@ -102,10 +102,14 @@ func ExitIfError(err error) {
 func newGlobalOptionsFromCLIContext(c *cli.Context) *GlobalOptions {
 	host, port, err := common.SplitHostPort(c.GlobalString("hostport"))
 	ExitIfError(err)
+	environment := c.GlobalString("env")
+	if strings.HasPrefix(environment, `prod`) {
+		environment = ``
+	}
 	return &GlobalOptions{
 		hyperbahn:              c.GlobalBool("hyperbahn"),
 		hyperbahnBootstrapFile: c.GlobalString("hyperbahn_bootstrap_file"),
-		env:          c.GlobalString("env"),
+		env:          environment,
 		frontendHost: host,
 		frontendPort: port,
 		timeoutSecs:  c.GlobalInt("timeout"),
@@ -697,7 +701,7 @@ type destJSONOutputFields struct {
 	TotalExts                   int                      `json:"total_ext"`
 	OpenExts                    int                      `json:"open"`
 	SealedExts                  int                      `json:"sealed"`
-	ConsumedExts                int                      `json:"consumerd"`
+	ConsumedExts                int                      `json:"consumed"`
 	DeletedExts                 int                      `json:"Deleted"`
 	ConsumedMessagesRetention   int32                    `json:"consumed_messages_retention"`
 	UnconsumedMessagesRetention int32                    `json:"unconsumed_messages_retention"`

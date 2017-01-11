@@ -201,13 +201,13 @@ func (s *ExtentStateMonitorSuite) TestExtentMonitor() {
 		extentIDs := []string{uuid.New(), uuid.New(), uuid.New()}
 
 		// healthy extent
-		_, err = s.mcp.context.mm.CreateExtent(dstID, extentIDs[0], inHostIDs[0], storeIDs[0:3], ``)
+		_, err = s.mcp.context.mm.CreateExtent(dstID, extentIDs[0], inHostIDs[0], storeIDs[0:3])
 		s.Nil(err, "Failed to create extent")
 		// bad input host
-		_, err = s.mcp.context.mm.CreateExtent(dstID, extentIDs[1], inHostIDs[1], storeIDs[0:3], ``)
+		_, err = s.mcp.context.mm.CreateExtent(dstID, extentIDs[1], inHostIDs[1], storeIDs[0:3])
 		s.Nil(err, "Failed to create extent")
 		// bad store host
-		_, err = s.mcp.context.mm.CreateExtent(dstID, extentIDs[2], inHostIDs[0], storeIDs[1:4], ``)
+		_, err = s.mcp.context.mm.CreateExtent(dstID, extentIDs[2], inHostIDs[0], storeIDs[1:4])
 		s.Nil(err, "Failed to create extent")
 
 		name := dst.GetPath() + "/consumer"

@@ -30,6 +30,7 @@ import (
 	"github.com/uber/cherami-thrift/.generated/go/shared"
 	"github.com/uber/cherami-thrift/.generated/go/store"
 	"github.com/uber/cherami-server/common"
+	metadataMetrics "github.com/uber/cherami-server/common/metadata"
 	"github.com/uber/cherami-server/common/metrics"
 	"github.com/uber-common/bark"
 )
@@ -51,6 +52,7 @@ type (
 		SingleCGVisibleExtentGracePeriod time.Duration
 		ExtentDeleteDeferPeriod          time.Duration
 		NumWorkers                       int
+		LocalZone                        string
 	}
 
 	// RetentionManager context
@@ -113,6 +115,7 @@ type (
 		softRetention int32 // in seconds
 		hardRetention int32 // in seconds
 		path          string
+		isMultiZone   bool
 	}
 
 	extentInfo struct {
@@ -121,6 +124,7 @@ type (
 		statusUpdatedTime  time.Time
 		storehosts         []storehostID
 		singleCGVisibility consumerGroupID
+		originZone         string
 		// destID  destinationID
 		// dest    *destinationInfo
 	}
@@ -156,12 +160,13 @@ func New(opts *Options, metadata metadata.TChanMetadataService, clientFactory co
 	}
 
 	logger = logger.WithField(common.TagModule, `retMgr`)
+	metadata = metadataMetrics.NewMetadataMetricsMgr(metadata, m3Client, logger)
 
 	return &RetentionManager{
 		Options:             opts,
 		logger:              logger,
 		m3Client:            m3Client,
-		metadata:            newMetadataDep(metadata, m3Client, logger),
+		metadata:            newMetadataDep(metadata, logger),
 		storehost:           newStorehostDep(clientFactory, logger),
 		lastDLQRetentionRun: time.Now().AddDate(0, 0, -1),
 	}
@@ -596,6 +601,14 @@ func (t *RetentionManager) computeRetention(job *retentionJob, log bark.Logger) 
 		}
 	}
 
+	// If this is a multi_zone destination and local extent, disable soft retention
+	// The reason is if soft retention is very short, we may delete messages before remote zone has a chance to replicate the messages
+	// Long term solution should create a fake consumer for the remote zone
+	if dest.isMultiZone && !common.IsRemoteZoneExtent(ext.originZone, t.Options.LocalZone) {
+		log.Info(`overridden: soft retention overridden for multi_zone extent`)
+		softRetentionAddr = int64(store.ADDR_BEGIN)
+	}
+
 	log.WithFields(bark.Fields{
 		`softRetentionAddr`:      softRetentionAddr,
 		`softRetentionAddr_time`: time.Unix(0, softRetentionAddr),
@@ -662,7 +675,8 @@ func (t *RetentionManager) computeRetention(job *retentionJob, log bark.Logger) 
 	}).Debug("computed minAckAddr")
 
 	// -- step 5: compute retention address -- //
-	// retentionAddr = max( hardRetentionAddr, min( softRetentionAddr, minAckAddr ) ) //
+
+	//** retentionAddr = max( hardRetentionAddr, min( softRetentionAddr, minAckAddr ) ) **//
 
 	if softRetentionAddr == store.ADDR_SEAL || (minAckAddr != store.ADDR_SEAL && minAckAddr < softRetentionAddr) {
 		softRetentionAddr = minAckAddr
@@ -682,16 +696,30 @@ func (t *RetentionManager) computeRetention(job *retentionJob, log bark.Logger) 
 
 	// -- step 6: check to see if the extent status can be updated to 'consumed' -- //
 
-	// move the extent to 'consumed' because all of the following are true:
-	// 1. the extent was sealed
-	// 2. the extent as fully consumed by all of the consumer groups
-	// 3. a period of 'soft retention period' has passed (in other words, a consumer
-	//    that is consume along the soft retention time has "consumed" the extent, too)
+	// move the extent to 'consumed' if either:
+	// A. all of the following are true:
+	// 	1. the extent was sealed
+	// 	2. the extent as fully consumed by all of the consumer groups
+	// 	3. a period of 'soft retention period' has passed (in other words,
+	// 	   a consumer that is consuming along the soft retention time has
+	//	   "consumed" the extent)
+	// B. or, the hard-retention has reached the end of the sealed extent,
+	// 	in which case we will force the extent to be "consumed"
+	// NB: retentionAddr == ADDR_BEGIN indicates there was an error, so we no-op
 	if job.retentionAddr != store.ADDR_BEGIN &&
-		ext.status == shared.ExtentStatus_SEALED &&
-		minAckAddr == store.ADDR_SEAL && softRetentionConsumed {
+		((ext.status == shared.ExtentStatus_SEALED &&
+			minAckAddr == store.ADDR_SEAL &&
+			softRetentionConsumed) ||
+			hardRetentionConsumed) {
 
-		log.Info("computeRetention: marking extent consumed")
+		log.WithFields(bark.Fields{
+			`retentionAddr`:         job.retentionAddr,
+			`extent-status`:         ext.status,
+			`minAckAddr`:            minAckAddr,
+			`softRetentionConsumed`: softRetentionConsumed,
+			`hardRetentionConsumed`: hardRetentionConsumed,
+		}).Info("computeRetention: marking extent consumed")
+
 		e := t.metadata.MarkExtentConsumed(dest.id, ext.id)
 
 		if e != nil {

@@ -39,6 +39,7 @@ import (
 	"github.com/uber/cherami-thrift/.generated/go/shared"
 	"github.com/uber/cherami-server/common"
 	dconfig "github.com/uber/cherami-server/common/dconfigclient"
+	mm "github.com/uber/cherami-server/common/metadata"
 	"github.com/uber/cherami-server/common/metrics"
 	"github.com/uber/cherami-server/services/inputhost/load"
 	"github.com/uber/cherami-server/stream"
@@ -90,7 +91,6 @@ type (
 		maxConnLimit           int32
 		extMsgsLimitPerSecond  int32
 		connMsgsLimitPerSecond int32
-		useWebsocket           int32 // flag of whether to use websocket to connect to store, under uConfig control
 		hostMetrics            *load.HostMetrics
 		lastLoadReportedTime   int64 // unix nanos when the last load report was sent
 		common.SCommon
@@ -125,6 +125,9 @@ var ErrHostShutdown = &cherami.InternalServiceError{Message: "InputHost already 
 
 // ErrThrottled is returned when the host is already shutdown
 var ErrThrottled = &cherami.InternalServiceError{Message: "InputHost throttling publisher cconnection"}
+
+// ErrDstNotLoaded is returned when this input host doesn't own any extents for the destination
+var ErrDstNotLoaded = &cherami.InternalServiceError{Message: "Destination no longer served by this input host"}
 
 func (h *InputHost) isDestinationWritable(destDesc *shared.DestinationDescription) bool {
 	status := destDesc.GetStatus()
@@ -377,8 +380,25 @@ func (h *InputHost) OpenPublisherStream(ctx thrift.Context, call stream.BInOpenP
 			return &ReplicaNotExistsError{}
 		}
 	}
+
 	doneCh := make(chan bool, 5)
-	pathCache.extMutex.Lock()
+
+	pathCache.Lock()
+
+	errCleanup := func() {
+		pathCache.Unlock()
+		// put back the loadShutdownRef
+		atomic.AddInt32(&h.loadShutdownRef, -1)
+		// stop the stream before returning
+		call.Done()
+	}
+
+	if !pathCache.isActive() {
+		// path cache is being unloaded, can't add new conns
+		errCleanup()
+		h.m3Client.IncCounter(metrics.OpenPublisherStreamScope, metrics.InputhostInternalFailures)
+		return ErrDstNotLoaded
+	}
 
 	// if the number of connections has breached then we can reject the connection
 	hostMaxConnPerDestination := h.GetMaxConnPerDest()
@@ -386,26 +406,17 @@ func (h *InputHost) OpenPublisherStream(ctx thrift.Context, call stream.BInOpenP
 		pathCache.logger.WithField(common.TagHostConnLimit,
 			common.FmtHostConnLimit(hostMaxConnPerDestination)).
 			Warn("Too many open connections on this path. Rejecting this open")
-
-		// put back the loadShutdownRef
-		atomic.AddInt32(&h.loadShutdownRef, -1)
-
-		pathCache.extMutex.Unlock()
-		// stop the stream before returning
-		call.Done()
+		errCleanup()
 		h.m3Client.IncCounter(metrics.OpenPublisherStreamScope, metrics.InputhostUserFailures)
 		return ErrThrottled
 	}
-	conn := newPubConnection(path, call, pathCache.putMsgCh, h.cacheTimeout, pathCache.notifyCloseCh, pathCache.currID,
-		doneCh, h.m3Client, pathCache.logger, h.IsLimitsEnabled(), pathCache)
+	conn := newPubConnection(path, call, pathCache, h.m3Client, h.IsLimitsEnabled(), h.cacheTimeout, doneCh)
 	pathCache.connections[pathCache.currID] = conn
-	// wait for shutdown here as well. this makes sure the pubconnection is done
-	h.shutdownWG.Add(1)
 	conn.open()
 	pathCache.currID++
 	// increase the active connection count
 	pathCache.dstMetrics.Increment(load.DstMetricNumOpenConns)
-	pathCache.extMutex.Unlock()
+	pathCache.Unlock()
 
 	// increase the num open conns for the host
 	h.hostMetrics.Increment(load.HostMetricNumOpenConns)
@@ -416,7 +427,6 @@ func (h *InputHost) OpenPublisherStream(ctx thrift.Context, call stream.BInOpenP
 	// wait till the conn is closed. we cannot return immediately.
 	// If we do so, we will get data races reading/writing from/to the stream
 	<-conn.doneCh
-	h.shutdownWG.Done()
 
 	// decrement the active connection count
 	pathCache.dstMetrics.Decrement(load.DstMetricNumOpenConns)
@@ -466,6 +476,7 @@ func (h *InputHost) PutMessageBatch(ctx thrift.Context, request *cherami.PutMess
 	result := cherami.NewPutMessageBatchResult_()
 	ackChannel := make(chan *cherami.PutMessageAck, defaultBufferSize)
 	inflightRequestCnt := 0
+	inflightMsgMap := make(map[string]struct{})
 
 	for _, msg := range messages {
 		inMsg := &inPutMessage{
@@ -478,6 +489,7 @@ func (h *InputHost) PutMessageBatch(ctx thrift.Context, request *cherami.PutMess
 		case pathCache.putMsgCh <- inMsg:
 			// remember how many ack is needed
 			inflightRequestCnt++
+			inflightMsgMap[msg.GetID()] = struct{}{}
 		default:
 			// just send a THROTTLED status back if sending to message channel is blocked
 			result.FailedMessages = append(result.FailedMessages, &cherami.PutMessageAck{
@@ -489,20 +501,66 @@ func (h *InputHost) PutMessageBatch(ctx thrift.Context, request *cherami.PutMess
 	}
 
 	internalErrs, userErrs := int64(0), int64(0)
+	var respStatus cherami.Status
+	var respMsg string
+
+	// Setup the msgTimer
+	msgTimer := common.NewTimer(msgAckTimeout)
+	defer msgTimer.Stop()
+
+	// Try to get as many acks as possible.
+	// We should break out if either of the following happens:
+	// 1. pathCache is unloaded
+	// 2. we hit the message timeout
+ACKDRAIN:
 	for i := 0; i < inflightRequestCnt; i++ {
-		ack := <-ackChannel
-		if ack.GetStatus() != cherami.Status_OK {
-			if ack.GetStatus() != cherami.Status_THROTTLED {
-				internalErrs++
+		select {
+		case ack := <-ackChannel:
+			if ack.GetStatus() != cherami.Status_OK {
+				if ack.GetStatus() != cherami.Status_THROTTLED {
+					internalErrs++
+				} else {
+					userErrs++
+				}
+				result.FailedMessages = append(result.FailedMessages, ack)
 			} else {
-				userErrs++
+				result.SuccessMessages = append(result.SuccessMessages, ack)
 			}
-			result.FailedMessages = append(result.FailedMessages, ack)
-		} else {
-			result.SuccessMessages = append(result.SuccessMessages, ack)
+			delete(inflightMsgMap, ack.GetID())
+		default:
+			// Now look for either the pathCache unloading,
+			// or the msgTimer timing out.
+			// We do this in the default case to make sure
+			// we can drain all the acks in the channel above
+			// before bailing out
+			select {
+			case <-pathCache.closeCh:
+				respStatus = cherami.Status_FAILED
+				respMsg = "pathCache unloaded"
+				break ACKDRAIN
+			case <-msgTimer.C:
+				respStatus = cherami.Status_TIMEDOUT
+				respMsg = "message timedout"
+				break ACKDRAIN
+			}
 		}
 	}
 
+	// all remaining messages in the inflight map failed
+	if len(inflightMsgMap) > 0 {
+		pathCache.logger.WithFields(bark.Fields{
+			`numFailedMessages`: len(inflightMsgMap),
+			`respMsg`:           respMsg,
+		}).Info("failing putMessageBatch")
+		for id := range inflightMsgMap {
+			result.FailedMessages = append(result.FailedMessages, &cherami.PutMessageAck{
+				ID:      common.StringPtr(id),
+				Status:  common.CheramiStatusPtr(respStatus),
+				Message: common.StringPtr(respMsg),
+			})
+			internalErrs++
+		}
+	}
 	// update the last disconnect time now
 	pathCache.updateLastDisconnectTime()
 
@@ -528,7 +586,7 @@ func (h *InputHost) DestinationsUpdated(ctx thrift.Context, request *admin.Desti
 	h.m3Client.IncCounter(metrics.DestinationsUpdatedScope, metrics.InputhostRequests)
 	// If we are already shutting down, no need to do anything here
 	if atomic.AddInt32(&h.loadShutdownRef, 1) <= 0 {
-		h.logger.Error("not loading the path cache because inputHost already shutdown")
+		h.logger.WithField(common.TagReconfigureID, common.FmtReconfigureID(request.GetUpdateUUID())).Error("inputhost: DestinationsUpdated: dropping reconfiguration due to shutdown")
 		h.m3Client.IncCounter(metrics.DestinationsUpdatedScope, metrics.InputhostFailures)
 		return ErrHostShutdown
 	}
@@ -536,7 +594,7 @@ func (h *InputHost) DestinationsUpdated(ctx thrift.Context, request *admin.Desti
 	var intErr error
 	updateUUID := request.GetUpdateUUID()
 	h.logger.WithField(common.TagReconfigureID, common.FmtReconfigureID(updateUUID)).
-		Debug("inputhost: DestinationsUpdated: processing update")
+		Debug("inputhost: DestinationsUpdated: processing reconfiguration")
 	// Find all the updates we have and do the right thing
 	for _, req := range request.Updates {
 		// get the destUUID and see if it is in the inputhost cache
@@ -544,11 +602,14 @@ func (h *InputHost) DestinationsUpdated(ctx thrift.Context, request *admin.Desti
 		pathCache, ok := h.getPathCacheByDestUUID(destUUID)
 		if ok {
 			// We have a path cache loaded
-			// reconfigure the cache by letting the path cache know about this request
-			pathCache.reconfigureCh <- inReconfigInfo{req: req, updateUUID: updateUUID}
+			// check if it is active or not
+			if pathCache.isActiveNoLock() {
+				// reconfigure the cache by letting the path cache know about this request
+				pathCache.reconfigureCh <- inReconfigInfo{req: req, updateUUID: updateUUID}
+			} else {
+				intErr = errPathCacheUnloading
+			}
 		} else {
-			h.logger.WithField(common.TagDst, common.FmtDst(destUUID)).
-				Error("inputhost: DestinationsUpdated: this destination doesn't exist on this inputhost")
 			intErr = &cherami.EntityNotExistsError{}
 		}
 
@@ -556,11 +617,16 @@ func (h *InputHost) DestinationsUpdated(ctx thrift.Context, request *admin.Desti
 		if intErr != nil {
 			err = intErr
 			h.m3Client.IncCounter(metrics.DestinationsUpdatedScope, metrics.InputhostFailures)
+			h.logger.WithFields(bark.Fields{
+				common.TagDst:           common.FmtDst(destUUID),
+				common.TagReconfigureID: common.FmtReconfigureID(updateUUID),
+				common.TagErr:           intErr,
+			}).Error("inputhost: DestinationsUpdated: dropping reconfiguration")
 		}
 	}
 
 	h.logger.WithField(common.TagReconfigureID, common.FmtReconfigureID(updateUUID)).
-		Debug("inputhost: DestinationsUpdated: finished update")
+		Debug("inputhost: DestinationsUpdated: finished reconfiguration")
 
 	return
 }
@@ -659,16 +725,6 @@ func (h *InputHost) GetNumConnections() int {
 	return int(h.hostMetrics.Get(load.HostMetricNumOpenConns))
 }
 
-// SetUseWebsocket gets the flag of whether to use websocket to connect to store
-func (h *InputHost) SetUseWebsocket(useWebsocket int32) {
-	atomic.StoreInt32(&h.useWebsocket, useWebsocket)
-}
-
-// GetUseWebsocket gets the flag of whether to use websocket to connect to store
-func (h *InputHost) GetUseWebsocket() int {
-	return int(atomic.LoadInt32(&h.useWebsocket))
-}
-
 // Shutdown shutsdown all the InputHost cleanly
 func (h *InputHost) Shutdown() {
 	// make sure we have atleast loaded everything
@@ -716,7 +772,6 @@ func NewInputHost(serviceName string, sVice common.SCommon, mClient metadata.TCh
 	bs := InputHost{
 		logger:               (sVice.GetConfig().GetLogger()).WithFields(bark.Fields{common.TagIn: common.FmtIn(sVice.GetHostUUID()), common.TagDplName: common.FmtDplName(deploymentName)}),
 		SCommon:              sVice,
-		mClient:              mClient,
 		pathCache:            make(map[string]*inPathCache),
 		pathCacheByDestPath:  make(map[string]string), // simple map which just resolves the path to uuid
 		cacheTimeout:         defaultIdleTimeout,
@@ -739,6 +794,8 @@ func NewInputHost(serviceName string, sVice common.SCommon, mClient metadata.TCh
 	if opts != nil {
 		bs.cacheTimeout = opts.CacheIdleTimeout
 	}
+
+	bs.mClient = mm.NewMetadataMetricsMgr(mClient, bs.m3Client, bs.logger)
 
 	// manage uconfig, regiester handerFunc and verifyFunc for uConfig values
 	bs.dConfigClient = sVice.GetDConfigClient()

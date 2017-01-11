@@ -441,7 +441,7 @@ func (s *McpSuite) TestGetOutputHostsMaxOpenExtentsLimit() {
 
 		for i := 0; i < maxExtents+1; i++ {
 			extentUUID := uuid.New()
-			_, err = s.mcp.context.mm.CreateExtent(dstUUID, extentUUID, inhost.UUID, storeids, ``)
+			_, err = s.mcp.context.mm.CreateExtent(dstUUID, extentUUID, inhost.UUID, storeids)
 			s.Nil(err, "Failed to create new extent")
 			extents[extentUUID] = true
 		}
@@ -581,7 +581,7 @@ func (s *McpSuite) TestGetOutputHosts() {
 	}
 	inhost, _ := s.mcp.context.placement.PickInputHost(storehosts)
 	extentUUID = uuid.New()
-	_, err = s.mcp.context.mm.CreateExtent(dstUUID, extentUUID, inhost.UUID, storeids, ``)
+	_, err = s.mcp.context.mm.CreateExtent(dstUUID, extentUUID, inhost.UUID, storeids)
 	s.Nil(err, "Failed to create new extent")
 
 	extents[extentUUID] = true
@@ -874,4 +874,17 @@ func (s *McpSuite) TestCreateRemoteZoneExtent() {
 	s.Equal(extentUUID, extentStats.GetExtentStats().GetExtent().GetExtentUUID())
 	s.Equal(destUUID, extentStats.GetExtentStats().GetExtent().GetDestinationUUID())
 	s.Equal(originZone, extentStats.GetExtentStats().GetExtent().GetOriginZone())
+
+	primary := extentStats.GetExtentStats().GetExtent().GetRemoteExtentPrimaryStore()
+	s.True(len(primary) > 0)
+
+	primaryValid := false
+	stores := extentStats.GetExtentStats().GetExtent().GetStoreUUIDs()
+	for _, store := range stores {
+		if store == primary {
+			primaryValid = true
+			break
+		}
+	}
+	s.True(primaryValid)
 }

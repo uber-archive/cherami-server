@@ -53,22 +53,22 @@ type (
 
 		// channel to notify the path cache that this exthost is going down
 		// once the pathCache gets this message, he will disconnect clients if all extents are down
-		notifyCloseCh chan<- string
-		// notifyUnload is to notify the path to completely unload the extent
-		notifyUnloadCh      chan<- string
-		extUUID             string
-		destUUID            string
-		destType            shared.DestinationType
-		loadReporter        common.LoadReporterDaemon
-		logger              bark.Logger
-		tClients            common.ClientFactory
-		closeChannel        chan struct{}
-		streamClosedChannel chan struct{}
-		numReplicas         int
-		seqNo               int64      // monotonic sequence number for the messages on this extent
-		lastSuccessSeqNo    int64      // last sequence number where we replied success
-		lastSuccessSeqNoCh  chan int64 // last sequence number where we replied success
-		lastSentWatermark   int64      // last watermark sent to the replicas
+		notifyExtCacheClosedCh chan string
+		// channel to notify the path cache to completely unload the extent
+		notifyExtCacheUnloadCh chan string
+		extUUID                string
+		destUUID               string
+		destType               shared.DestinationType
+		loadReporter           common.LoadReporterDaemon
+		logger                 bark.Logger
+		tClients               common.ClientFactory
+		closeChannel           chan struct{}
+		streamClosedChannel    chan struct{}
+		numReplicas            int
+		seqNo                  int64      // monotonic sequence number for the messages on this extent
+		lastSuccessSeqNo       int64      // last sequence number where we replied success
+		lastSuccessSeqNoCh     chan int64 // last sequence number where we replied success
+		lastSentWatermark      int64      // last watermark sent to the replicas
 
 		waitWriteWG   sync.WaitGroup
 		waitReadWG    sync.WaitGroup
@@ -112,7 +112,6 @@ type (
 	// Holds a particular extent for use by multiple publisher connections.
 	// This is the cache member, not the cache. See extentCache in inputhost_util
 	inExtentCache struct {
-		cacheMutex sync.RWMutex
 		extUUID    extentUUID
 		connection *extHost
 	}
@@ -133,12 +132,12 @@ type (
 		conn      *replicaConnection
 		sendTimer *common.Timer
 	}
+
+	extCacheClosedCb   func(string)
+	extCacheUnloadedCb func(string)
 )
 
 const (
-	// perMsgAckTimeout is the time to wait for the ack from the replicas
-	perMsgAckTimeout = 1 * time.Minute
-
 	// thriftCallTimeout is the timeout for the thrift context
 	thriftCallTimeout = 1 * time.Minute
 
@@ -152,7 +151,7 @@ const (
 	logTimeout = 1 * time.Minute
 
 	// unloadTimeout is the timeout until which we keep the extent loaded
-	unloadTimeout = 10 * time.Minute
+	unloadTimeout = 2 * time.Minute
 
 	// maxTBSleepDuration is the max sleep duration for the rate limiter
 	maxTBSleepDuration = 1 * time.Second
@@ -161,17 +160,22 @@ const (
 	extLoadReportingInterval = 2 * time.Second
 )
 
-// ErrTimeout is returned when the host is already shutdown
-var ErrTimeout = &cherami.InternalServiceError{Message: "sending message to replica timed out"}
+var (
+	// ErrTimeout is returned when the host is already shutdown
+	ErrTimeout = &cherami.InternalServiceError{Message: "sending message to replica timed out"}
 
-// nullTime is an empty time struct
-var nullTime time.Time
+	// nullTime is an empty time struct
+	nullTime time.Time
 
-// open is to indicate the extent is still open and we have not yet notified the controller
-var open uint32
+	// open is to indicate the extent is still open and we have not yet notified the controller
+	open uint32
 
-// sealed is to indicate we have already sent the seal notification
-var sealed uint32 = 1
+	// sealed is to indicate we have already sent the seal notification
+	sealed uint32 = 1
+
+	// msgAckTimeout is the time to wait for the ack from the replicas
+	msgAckTimeout = 1 * time.Minute
+)
 
 func newExtConnection(destUUID string, pathCache *inPathCache, extUUID string, numReplicas int, loadReporterFactory common.LoadReporterDaemonFactory, logger bark.Logger, tClients common.ClientFactory, shutdownWG *sync.WaitGroup, limitsEnabled bool) *extHost {
 	conn := &extHost{
@@ -183,8 +187,8 @@ func newExtConnection(destUUID string, pathCache *inPathCache, extUUID string, n
 		tClients:                tClients,
 		lastSuccessSeqNo:        int64(-1),
 		lastSuccessSeqNoCh:      nil,
-		notifyCloseCh:           pathCache.notifyExtHostCloseCh,
-		notifyUnloadCh:          pathCache.notifyExtHostUnloadCh,
+		notifyExtCacheClosedCh:  pathCache.notifyExtHostCloseCh,
+		notifyExtCacheUnloadCh:  pathCache.notifyExtHostUnloadCh,
 		putMessagesCh:           pathCache.putMsgCh,
 		replyClientCh:           make(chan writeResponse, defaultBufferSize),
 		closeChannel:            make(chan struct{}),
@@ -250,78 +254,84 @@ func (conn *extHost) shutdown() {
 }
 
 func (conn *extHost) close() {
+
 	conn.lk.Lock()
-	if !conn.closed {
-		conn.closed = true
-		// Shutdown order:
-		// 1. stop the write pump to replicas and wait for the pump to close
-		// 2. close the replica streams
-		// 3. stop the read pump from replicas
-		close(conn.closeChannel)
-		if ok := common.AwaitWaitGroup(&conn.waitWriteWG, defaultWGTimeout); !ok {
-			conn.logger.Fatal("waitWriteGroup timed out")
-		}
-		for _, stream := range conn.streams {
-			stream.conn.close()
-			// stop the timer as well so that it gets gc'ed
-			stream.sendTimer.Stop()
-			// release the client, which will inturn close the channel
-			conn.tClients.ReleaseThriftStoreClient(conn.destUUID)
-		}
-		close(conn.streamClosedChannel)
-		close(conn.replyClientCh)
-		if conn.lastSuccessSeqNoCh != nil {
-		CLOSED:
-			for {
-				select {
-				case _, ok := <-conn.lastSuccessSeqNoCh:
-					if !ok {
-						break CLOSED
-					}
+	if conn.closed {
+		conn.lk.Unlock()
+		return
+	}
+
+	conn.closed = true
+
+	// Shutdown order:
+	// 1. stop the write pump to replicas and wait for the pump to close
+	// 2. close the replica streams
+	// 3. stop the read pump from replicas
+	close(conn.closeChannel)
+	if ok := common.AwaitWaitGroup(&conn.waitWriteWG, defaultWGTimeout); !ok {
+		conn.logger.Fatal("waitWriteGroup timed out")
+	}
+	for _, stream := range conn.streams {
+		stream.conn.close()
+		// stop the timer as well so that it gets gc'ed
+		stream.sendTimer.Stop()
+		// release the client, which will inturn close the channel
+		conn.tClients.ReleaseThriftStoreClient(conn.destUUID)
+	}
+	close(conn.streamClosedChannel)
+	close(conn.replyClientCh)
+	if conn.lastSuccessSeqNoCh != nil {
+	CLOSED:
+		for {
+			select {
+			case _, ok := <-conn.lastSuccessSeqNoCh:
+				if !ok {
+					break CLOSED
 				}
 			}
 		}
-		if ok := common.AwaitWaitGroup(&conn.waitReadWG, defaultWGTimeout); !ok {
-			conn.logger.Fatal("waitReadGroup timed out")
-		}
-		// we are not going to resuse the extents at this point
-		// seal the extent
-		if err := conn.sealExtent(); err != nil {
-			conn.logger.Warn("seal extent notify failed during closed")
-		}
-		// set the shutdownWG to be done here
-		conn.shutdownWG.Done()
-
-		// notify the pathCache so that we can tear down the client
-		// connections if needed
-		select {
-		case conn.notifyCloseCh <- conn.extUUID:
-		default:
-		}
-
-		conn.logger.WithFields(bark.Fields{
-			`sentSeqNo`: conn.seqNo,
-			`ackSeqNo`:  conn.lastSuccessSeqNo,
-		}).Info("extHost closed")
-
-		unloadTimer := common.NewTimer(unloadTimeout)
-		defer unloadTimer.Stop()
-		// now wait for unload timeout to keep the extent loaded in the pathCache
-		// or wait for the force shutdown which will happen when we are completely unloading
-		// the pathCache
-		select {
-		case <-unloadTimer.C:
-		case <-conn.forceUnloadCh:
-		}
-
-		// now notify the pathCache to unload the extent
-		select {
-		case conn.notifyUnloadCh <- conn.extUUID:
-		default:
-		}
-		conn.loadReporter.Stop()
 	}
-	conn.lk.Unlock()
+
+	if ok := common.AwaitWaitGroup(&conn.waitReadWG, defaultWGTimeout); !ok {
+		conn.logger.Fatal("waitReadGroup timed out")
+	}
+	// we are not going to resuse the extents at this point
+	// seal the extent
+	if err := conn.sealExtent(); err != nil {
+		conn.logger.Warn("seal extent notify failed during closed")
+	}
+
+	conn.lk.Unlock() // no longer need the lock
+
+	conn.logger.WithFields(bark.Fields{
+		`sentSeqNo`: conn.seqNo,
+		`ackSeqNo`:  conn.lastSuccessSeqNo,
+	}).Info("extHost closed")
+
+	// notify the pathCache so that we can tear down the client
+	// connections if needed
+	conn.notifyExtCacheClosedCh <- conn.extUUID
+
+	unloadTimer := common.NewTimer(unloadTimeout)
+	defer unloadTimer.Stop()
+	// now wait for unload timeout to keep the extent loaded in the pathCache
+	// this is needed to deal with the eventually consistent nature of cassandra.
+	// After an extent is marked as SEALED, a subsequent listDestinationExtents
+	// might still continue to show the extent as OPENED. To avoid agressive
+	// unload/reload (store would reject the call to openStream), sleep for
+	// a while before totally unloading
+	// or wait for the force shutdown which will happen when we are completely unloading
+	// the pathCache
+	select {
+	case <-unloadTimer.C:
+	case <-conn.forceUnloadCh:
+	}
+
+	// now notify the pathCache to unload the extent
+	conn.notifyExtCacheUnloadCh <- conn.extUUID
+
+	conn.loadReporter.Stop()
+	conn.shutdownWG.Done()
 }
 
 func (conn *extHost) getEnqueueTime() int64 {
@@ -572,7 +582,7 @@ func (conn *extHost) aggregateAndSendReplies(numReplicas int) {
 	defer conn.failInflightMessages(inflightMessages)
 
 	// Setup the perMsgTimer
-	perMsgTimer := common.NewTimer(perMsgAckTimeout)
+	perMsgTimer := common.NewTimer(msgAckTimeout)
 	defer perMsgTimer.Stop()
 
 	if conn.lastSuccessSeqNoCh != nil {
@@ -594,7 +604,7 @@ func (conn *extHost) aggregateAndSendReplies(numReplicas int) {
 				elapsed := time.Since(resCh.sentTime)
 
 				// Note: even if this value is negative, it is ok because we should timeout immediately
-				perMsgTimer.Reset(perMsgAckTimeout - elapsed)
+				perMsgTimer.Reset(msgAckTimeout - elapsed)
 				for i := 0; i < numReplicas; i++ {
 					select {
 					case ack, ok := <-resCh.appendMsgAck:
@@ -644,7 +654,7 @@ func (conn *extHost) aggregateAndSendReplies(numReplicas int) {
 					fmt.Sprintf("%s:%d:%8x", string(conn.extUUID), resCh.seqNo, address))
 
 				// Try to send the ack back to the client within the timeout period
-				perMsgTimer.Reset(perMsgAckTimeout)
+				perMsgTimer.Reset(msgAckTimeout)
 				select {
 				case resCh.putMsgAck <- putMsgAck:
 				case <-perMsgTimer.C:

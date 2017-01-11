@@ -21,6 +21,7 @@
 package controllerhost
 
 import (
+	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -110,13 +111,15 @@ type (
 		desiredStatus shared.ExtentStatus
 	}
 
-	// RemoteZoneExtentCreatedEvent is triggered
-	// when a remote zone extent is created
-	RemoteZoneExtentCreatedEvent struct {
+	// StartReplicationForRemoteZoneExtent is triggered
+	// when a remote zone extent is created or the primary store
+	// is switched
+	StartReplicationForRemoteZoneExtent struct {
 		eventBase
-		dstID    string
-		extentID string
-		storeIDs []string
+		dstID                    string
+		extentID                 string
+		storeIDs                 []string
+		remoteExtentPrimaryStore string
 	}
 
 	// InputHostFailedEvent is triggered
@@ -130,6 +133,7 @@ type (
 	StoreHostFailedEvent struct {
 		eventBase
 		hostUUID string
+		stage    hostDownStage
 	}
 )
 
@@ -221,12 +225,13 @@ func NewStoreExtentStatusOutOfSyncEvent(dstID string, extentID string, storeID s
 	}
 }
 
-// NewRemoteZoneExtentCreatedEvent creates and returns a RemoteZoneExtentCreatedEvent
-func NewRemoteZoneExtentCreatedEvent(dstID string, extentID string, storeIDs []string) Event {
-	return &RemoteZoneExtentCreatedEvent{
-		dstID:    dstID,
-		extentID: extentID,
-		storeIDs: storeIDs,
+// NewStartReplicationForRemoteZoneExtent creates and returns a StartReplicationForRemoteZoneExtent
+func NewStartReplicationForRemoteZoneExtent(dstID string, extentID string, storeIDs []string, remoteExtentPrimaryStore string) Event {
+	return &StartReplicationForRemoteZoneExtent{
+		dstID:                    dstID,
+		extentID:                 extentID,
+		storeIDs:                 storeIDs,
+		remoteExtentPrimaryStore: remoteExtentPrimaryStore,
 	}
 }
 
@@ -245,8 +250,11 @@ func NewInputHostFailedEvent(hostUUID string) Event {
 }
 
 // NewStoreHostFailedEvent creates and returns a StoreHostFailedEvent
-func NewStoreHostFailedEvent(hostUUID string) Event {
-	return &StoreHostFailedEvent{hostUUID: hostUUID}
+func NewStoreHostFailedEvent(hostUUID string, stage hostDownStage) Event {
+	return &StoreHostFailedEvent{
+		hostUUID: hostUUID,
+		stage:    stage,
+	}
 }
 
 // Handle handles the creation of a new extent.
@@ -534,19 +542,112 @@ func (event *StoreHostFailedEvent) Handle(context *Context) error {
 	sw := context.m3Client.StartTimer(metrics.StoreFailedEventScope, metrics.ControllerLatencyTimer)
 	defer sw.Stop()
 	context.m3Client.IncCounter(metrics.StoreFailedEventScope, metrics.ControllerRequests)
-	stats, err := context.mm.ListExtentsByStoreIDStatus(event.hostUUID, common.MetadataExtentStatusPtr(shared.ExtentStatus_OPEN))
-	if err != nil {
-		// metadata intermittent failure, we will wait for the background
-		// reconciler task to catch up and seal this extent
-		context.m3Client.IncCounter(metrics.StoreFailedEventScope, metrics.ControllerFailures)
-		context.m3Client.IncCounter(metrics.InputFailedEventScope, metrics.ControllerErrMetadataReadCounter)
-		context.log.WithFields(bark.Fields{
-			common.TagErr:  err,
-			common.TagStor: event.hostUUID,
-		}).Error(`StoreHostFailedEvent: Cannot list extents`)
+
+	if event.stage == hostDownStage1 {
+		stats, err := context.mm.ListExtentsByStoreIDStatus(event.hostUUID, common.MetadataExtentStatusPtr(shared.ExtentStatus_OPEN))
+		if err != nil {
+			// metadata intermittent failure, we will wait for the background
+			// reconciler task to catch up and seal this extent
+			context.m3Client.IncCounter(metrics.StoreFailedEventScope, metrics.ControllerFailures)
+			context.m3Client.IncCounter(metrics.StoreFailedEventScope, metrics.ControllerErrMetadataReadCounter)
+			context.log.WithFields(bark.Fields{
+				common.TagErr:  err,
+				common.TagStor: event.hostUUID,
+			}).Error(`StoreHostFailedEvent: Cannot list extents`)
+			return nil
+		}
+		createExtentDownEvents(context, stats)
 		return nil
+	} else if event.stage == hostDownStage2 {
+		return event.handleHostDownForRemoteExtent(context)
 	}
-	createExtentDownEvents(context, stats)
+
+	return nil
+}
+
+func (event *StoreHostFailedEvent) handleHostDownForRemoteExtent(context *Context) error {
+
+	// We need to get extents in both 'pending' and 'done' state, and assign a new store host for these extents
+	// Currently there's no way to get the list in a single cassandra query
+	// Since this event is very rare, we'll just issue two cassandra queries
+	extents, err := context.mm.ListExtentsByReplicationStatus(event.hostUUID, common.InternalExtentReplicaReplicationStatusTypePtr(shared.ExtentReplicaReplicationStatus_PENDING))
+	if err != nil {
+		context.m3Client.IncCounter(metrics.StoreFailedEventScope, metrics.ControllerFailures)
+		context.m3Client.IncCounter(metrics.StoreFailedEventScope, metrics.ControllerErrMetadataReadCounter)
+		context.log.WithFields(bark.Fields{common.TagErr: err, `host`: event.hostUUID}).Error(`HandleRemoteExtent: Cannot list pending extents`)
+		return errRetryable
+	}
+	doneExtents, err := context.mm.ListExtentsByReplicationStatus(event.hostUUID, common.InternalExtentReplicaReplicationStatusTypePtr(shared.ExtentReplicaReplicationStatus_DONE))
+	if err != nil {
+		context.m3Client.IncCounter(metrics.StoreFailedEventScope, metrics.ControllerFailures)
+		context.m3Client.IncCounter(metrics.StoreFailedEventScope, metrics.ControllerErrMetadataReadCounter)
+		context.log.WithFields(bark.Fields{common.TagErr: err, `host`: event.hostUUID}).Error(`HandleRemoteExtent: Cannot list done extents`)
+		return errRetryable
+	}
+	extents = append(extents, doneExtents...)
+
+	// same extent might exist in both lists due to state transition, so dedup here
+	extentsDedup := make(map[string]struct{})
+
+	for _, extent := range extents {
+		if _, ok := extentsDedup[extent.GetExtent().GetExtentUUID()]; ok {
+			continue
+		} else {
+			extentsDedup[extent.GetExtent().GetExtentUUID()] = struct{}{}
+		}
+
+		var oldRemoteExtentPrimaryStore string
+		if extent.GetExtent().IsSetRemoteExtentPrimaryStore() {
+			oldRemoteExtentPrimaryStore = extent.GetExtent().GetRemoteExtentPrimaryStore()
+		} else {
+			// For old extent that doesn't have the primary store field set, the assumption is first store after sorting is treated as primary
+			sort.Strings(extent.GetExtent().GetStoreUUIDs())
+			oldRemoteExtentPrimaryStore = extent.GetExtent().GetStoreUUIDs()[0]
+		}
+
+		// the unhealthy store is the primary store, so we'll try to promote an old store as primary since it likely already has some data
+		// if we couldn't find such store, we'll just log here
+		// TODO: ideally we should allocate a new healthy store if the system is not in a disasterous state, or the replication factor is set to 1
+		// Note load on primary store might become unbalanced if a lot of stores are down then come back, because we don't rebalance the stores
+		// in these cases.
+		var newRemoteExtentPrimaryStore string
+		if oldRemoteExtentPrimaryStore == event.hostUUID {
+			foundReplacement := false
+			for _, store := range extent.GetExtent().GetStoreUUIDs() {
+				if store != oldRemoteExtentPrimaryStore && context.rpm.IsHostHealthy(common.StoreServiceName, store) {
+					newRemoteExtentPrimaryStore = store
+					foundReplacement = true
+					break
+				}
+			}
+
+			lclog := context.log.WithFields(bark.Fields{
+				common.TagExt: common.FmtExt(extent.GetExtent().GetExtentUUID()),
+				common.TagDst: common.FmtDst(extent.GetExtent().GetDestinationUUID()),
+				`old primary`: oldRemoteExtentPrimaryStore,
+				`new primary`: newRemoteExtentPrimaryStore,
+			})
+
+			if foundReplacement {
+				_, err = context.mm.UpdateRemoteExtentPrimaryStore(extent.GetExtent().GetDestinationUUID(), extent.GetExtent().GetExtentUUID(), newRemoteExtentPrimaryStore)
+				if err != nil {
+					lclog.WithField(common.TagErr, err).Warn(`failed to update primary store in metadata`)
+					return errRetryable
+				}
+
+				remoteExtentReplicationEvent := NewStartReplicationForRemoteZoneExtent(extent.GetExtent().GetDestinationUUID(), extent.GetExtent().GetExtentUUID(), extent.GetExtent().GetStoreUUIDs(), newRemoteExtentPrimaryStore)
+				succ := context.eventPipeline.Add(remoteExtentReplicationEvent)
+				if !succ {
+					lclog.WithField(common.TagErr, err).Warn(`failed to add replication event`)
+					return errRetryable
+				}
+
+				lclog.Info(`successfully replaced primary`)
+			} else {
+				lclog.WithField(common.TagErr, err).Error(`failed to find replacement for old primary store`)
+			}
+		}
+	}
 	return nil
 }
 
@@ -588,28 +689,29 @@ func (event *StoreExtentStatusOutOfSyncEvent) Handle(context *Context) error {
 	return nil
 }
 
-// Handle handles an RemoteExtentCreatedEvent.
+// Handle handles a StartReplicationForRemoteZoneExtent.
 // This handler calls store to start replication.
-// The first store will be issued with a remote replication request
+// The primary store will be issued with a remote replication request
 // The rest of stores will be issued with a re-replication request
-func (event *RemoteZoneExtentCreatedEvent) Handle(context *Context) error {
-	sw := context.m3Client.StartTimer(metrics.RemoteZoneExtentCreatedEventScope, metrics.ControllerLatencyTimer)
+// This is the fast path to notify store to start or resume a replication. If the notificaiton is lost, the slow path (a periodic
+// job in store) will kick in to start replication
+func (event *StartReplicationForRemoteZoneExtent) Handle(context *Context) error {
+	sw := context.m3Client.StartTimer(metrics.StartReplicationForRemoteZoneExtentScope, metrics.ControllerLatencyTimer)
 	defer sw.Stop()
 
-	context.m3Client.IncCounter(metrics.RemoteZoneExtentCreatedEventScope, metrics.ControllerRequests)
+	context.m3Client.IncCounter(metrics.StartReplicationForRemoteZoneExtentScope, metrics.ControllerRequests)
 
 	var err error
-	primaryStoreID := event.storeIDs[0]
-	primaryStoreAddr, err := context.rpm.ResolveUUID(common.StoreServiceName, primaryStoreID)
+	primaryStoreAddr, err := context.rpm.ResolveUUID(common.StoreServiceName, event.remoteExtentPrimaryStore)
 	if err != nil {
 		return errRetryable
 	}
 
-	primaryStoreClient, err := context.clientFactory.GetThriftStoreClient(primaryStoreAddr, primaryStoreID)
+	primaryStoreClient, err := context.clientFactory.GetThriftStoreClient(primaryStoreAddr, event.remoteExtentPrimaryStore)
 	if err != nil {
 		context.log.WithFields(bark.Fields{
 			common.TagExt:  common.FmtExt(event.extentID),
-			common.TagStor: common.FmtStor(primaryStoreID),
+			common.TagStor: common.FmtStor(event.remoteExtentPrimaryStore),
 			common.TagErr:  err,
 		}).Error(`Client factory failed to get store client`)
 		return err
@@ -625,14 +727,17 @@ func (event *RemoteZoneExtentCreatedEvent) Handle(context *Context) error {
 	if err != nil {
 		context.log.WithFields(bark.Fields{
 			common.TagExt:  common.FmtExt(event.extentID),
-			common.TagStor: common.FmtStor(primaryStoreID),
+			common.TagStor: common.FmtStor(event.remoteExtentPrimaryStore),
 			common.TagErr:  err,
 		}).Error("Attempt to call RemoteReplicateExtent on storehost failed")
 		return err
 	}
 
-	for i := 1; i < len(event.storeIDs); i++ {
-		secondaryStoreID := event.storeIDs[i]
+	for _, storeID := range event.storeIDs {
+		if event.remoteExtentPrimaryStore == storeID {
+			continue
+		}
+		secondaryStoreID := storeID
 		secondaryStoreAddr, err := context.rpm.ResolveUUID(common.StoreServiceName, secondaryStoreID)
 		if err != nil {
 			return errRetryable
@@ -651,13 +756,14 @@ func (event *RemoteZoneExtentCreatedEvent) Handle(context *Context) error {
 		req := store.NewReplicateExtentRequest()
 		req.DestinationUUID = common.StringPtr(event.dstID)
 		req.ExtentUUID = common.StringPtr(event.extentID)
-		req.StoreUUID = common.StringPtr(primaryStoreID)
+		req.StoreUUID = common.StringPtr(event.remoteExtentPrimaryStore)
 		err = secondaryStoreClient.ReplicateExtent(ctx, req)
 		if err != nil {
 			context.log.WithFields(bark.Fields{
-				common.TagExt:  common.FmtExt(event.extentID),
-				common.TagStor: common.FmtStor(secondaryStoreID),
-				`error`:        err,
+				common.TagExt:   common.FmtExt(event.extentID),
+				common.TagStor:  common.FmtStor(secondaryStoreID),
+				`primary_store`: common.FmtStor(event.remoteExtentPrimaryStore),
+				`error`:         err,
 			}).Error("Attempt to call ReplicateExtent on storehost failed")
 			return err
 		}

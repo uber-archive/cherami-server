@@ -20,20 +20,14 @@
 
 package outputhost
 
-import (
-	dconfig "github.com/uber/cherami-server/common/dconfigclient"
-	log "github.com/Sirupsen/logrus"
-)
-
-const (
-	// UkeyUseWebsocket is the uconfig key for UseWebsocket
-	UkeyUseWebsocket = "outputhost.UseWebsocket"
-)
+import dconfig "github.com/uber/cherami-server/common/dconfigclient"
 
 func (h *OutputHost) registerInt() {
 	// Add handler function for the dynamic config value
 	handlerMap := make(map[string]dconfig.Handler)
-	handlerMap[UkeyUseWebsocket] = dconfig.GenerateIntHandler(UkeyUseWebsocket, h.SetUseWebsocket, h.GetUseWebsocket)
+
+	// nothing to be dynamically configured right now
+
 	h.dClient.AddHandlers(handlerMap)
 	// Add verify function for the dynamic config value
 	verifierMap := make(map[string]dconfig.Verifier)
@@ -42,15 +36,7 @@ func (h *OutputHost) registerInt() {
 
 // LoadUconfig load the dynamic config values for key
 func (h *OutputHost) LoadUconfig() {
-	// UseWebsocket
-	valueUcfg, ok := h.dClient.GetOrDefault(UkeyUseWebsocket, 0).(int)
-	if ok {
-		h.SetUseWebsocket(int32(valueUcfg))
-		log.WithField(UkeyUseWebsocket, valueUcfg).
-			Info("Update the uconfig value")
-	} else {
-		log.Errorf("Cannot get %s from uconfig, Using right format", UkeyUseWebsocket)
-	}
+	// nothing to be loaded dynamically right now
 }
 
 // uconfigManage do the work for uconfig

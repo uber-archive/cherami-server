@@ -70,7 +70,7 @@ func (s *McpSuite) TestCGExtentSelectorWithNoConsumableExtents() {
 	for i := 0; i < 15; i++ {
 		extID := uuid.New()
 		storeIDs := []string{uuid.New(), uuid.New(), uuid.New()}
-		context.mm.CreateExtent(dstID, extID, inhosts[0].UUID, storeIDs, "zone1")
+		context.mm.CreateExtent(dstID, extID, inhosts[0].UUID, storeIDs)
 		if i%3 == 0 {
 			context.mm.SealExtent(dstID, extID)
 		}
@@ -83,7 +83,7 @@ func (s *McpSuite) TestCGExtentSelectorWithNoConsumableExtents() {
 	for i := 0; i < 2; i++ {
 		extID := uuid.New()
 		storeIDs := []string{stores[0], stores[1], stores[2]}
-		context.mm.CreateExtent(dstID, extID, inhosts[0].UUID, storeIDs, "zone1")
+		context.mm.CreateExtent(dstID, extID, inhosts[0].UUID, storeIDs)
 		cgExtents.consumed[extID] = struct{}{}
 	}
 
@@ -113,7 +113,7 @@ func (s *McpSuite) TestCGExtentSelectorHonorsCreatedTime() {
 
 	for i := 0; i < 10; i++ {
 		extID := uuid.New()
-		context.mm.CreateExtent(dstID, extID, inhosts[0].UUID, stores, "zone1")
+		context.mm.CreateExtent(dstID, extID, inhosts[0].UUID, stores)
 		if i%3 == 0 {
 			context.mm.SealExtent(dstID, extID)
 		}
@@ -157,7 +157,7 @@ func (s *McpSuite) TestCGExtentSelectorHonorsDlqQuota() {
 
 	for i := 0; i <= maxExtentsToConsumeForDstPlain; i++ {
 		extID := uuid.New()
-		context.mm.CreateExtent(dstID, extID, inhosts[0].UUID, stores, "zone1")
+		context.mm.CreateExtent(dstID, extID, inhosts[0].UUID, stores)
 		if i == maxExtentsToConsumeForDstPlain {
 			// make the last extent a DLQExtent
 			// don't add it to the list of open CGExtents
@@ -189,7 +189,7 @@ func (s *McpSuite) TestCGExtentSelectorHonorsDlqQuota() {
 	dlqExtents := make(map[string]struct{})
 	for i := 0; i < 15; i++ {
 		extID := uuid.New()
-		context.mm.CreateExtent(dstID, extID, inhosts[0].UUID, stores, "zone1")
+		context.mm.CreateExtent(dstID, extID, inhosts[0].UUID, stores)
 		if i < 5 {
 			dlqExtents[extID] = struct{}{}
 			context.mm.SealExtent(dstID, extID)
@@ -256,7 +256,7 @@ func (s *McpSuite) TestCGExtentSelectorHonorsRemoteExtent() {
 		if i%2 == 0 {
 			zone = `zone1`
 		}
-		context.mm.CreateExtent(dstID, extID, inhosts[0].UUID, stores, zone)
+		context.mm.CreateRemoteZoneExtent(dstID, extID, inhosts[0].UUID, stores, zone, stores[0])
 		extents = append(extents, extID)
 		nExtents++
 	}
@@ -313,7 +313,7 @@ func (s *McpSuite) TestCGExtentSelectorWithBacklog() {
 		extID := uuid.New()
 		// create 96 DLQ dstExtents and 4 regular dstExtents
 		// with dlq extents preceding in creation time
-		context.mm.CreateExtent(dstID, extID, inhosts[0].UUID, stores, "zone1")
+		context.mm.CreateExtent(dstID, extID, inhosts[0].UUID, stores)
 		if i < 96 {
 			context.mm.SealExtent(dstID, extID)
 			context.mm.MoveExtent(dstID, dstID, extID, cgDesc.GetConsumerGroupUUID())

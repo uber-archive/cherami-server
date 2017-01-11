@@ -276,7 +276,7 @@ func createExtent(context *Context, dstUUID string, isMultiZoneDest bool, m3Scop
 	}
 
 	extentUUID = uuid.New()
-	_, err = context.mm.CreateExtent(dstUUID, extentUUID, inhost.UUID, storeids, ``)
+	_, err = context.mm.CreateExtent(dstUUID, extentUUID, inhost.UUID, storeids)
 	if err != nil {
 		context.m3Client.IncCounter(m3Scope, metrics.ControllerErrMetadataUpdateCounter)
 		return

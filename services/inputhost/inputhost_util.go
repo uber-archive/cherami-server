@@ -21,25 +21,16 @@
 package inputhost
 
 import (
-	"net"
-	"net/http"
-	"os"
 	"time"
-
-	"golang.org/x/net/context"
-
-	"github.com/uber-common/bark"
-	"github.com/uber/tchannel-go/thrift"
 
 	"github.com/uber/cherami-thrift/.generated/go/admin"
 	"github.com/uber/cherami-thrift/.generated/go/cherami"
-	"github.com/uber/cherami-thrift/.generated/go/controller"
 	"github.com/uber/cherami-thrift/.generated/go/shared"
-	"github.com/uber/cherami-thrift/.generated/go/store"
 	"github.com/uber/cherami-server/common"
 	"github.com/uber/cherami-server/common/metrics"
 	"github.com/uber/cherami-server/services/inputhost/load"
-	serverStream "github.com/uber/cherami-server/stream"
+	"github.com/uber-common/bark"
+	"github.com/uber/tchannel-go/thrift"
 )
 
 type extentUUID string
@@ -55,21 +46,17 @@ const (
 	// defaultExtCloseNotifyChSize is the buffer size for the notification channel when an extent is closed
 	defaultExtCloseNotifyChSize = 50
 
+	// defaultConnsCloseBufSize is the buffer size for the notification channel when a connection is closed
+	defaultConnsCloseChSize = 500
+
 	// defaultWGTimeout is the timeout for the waitgroup during shutdown
 	defaultWGTimeout = 10 * time.Minute
-
-	// metaPollTimeout is the interval to poll metadata
-	metaPollTimeout = 1 * time.Minute
-
-	// unloadTicker is the interval to unload the pathCache
-	unloadTickerTimeout = 10 * time.Minute
-
-	// idleTimeout is the idle time after the last client got disconnected
-	idleTimeout = 15 * time.Minute
 
 	// dstLoadReportingInterval is the interval destination load is reported to controller
 	dstLoadReportingInterval = 2 * time.Second
 )
+
+var errPathCacheUnloading = &cherami.InternalServiceError{Message: "InputHost pathCache is being unloaded"}
 
 func (h *InputHost) getDestinationTags(destPath string) map[string]string {
 	destTagValue, tagErr := common.GetTagsFromPath(destPath)
@@ -97,17 +84,18 @@ func (h *InputHost) checkAndLoadPathCache(destPath string, destUUID string, dest
 			loadReporterFactory:     h.GetLoadReporterDaemonFactory(),
 			reconfigureCh:           make(chan inReconfigInfo, defaultBufferSize),
 			putMsgCh:                make(chan *inPutMessage, defaultBufferSize),
-			notifyCloseCh:           make(chan connectionID),
-			notifyExtHostCloseCh:    make(chan string, defaultExtCloseNotifyChSize),
-			notifyExtHostUnloadCh:   make(chan string, defaultExtCloseNotifyChSize),
 			connections:             make(map[connectionID]*pubConnection),
 			closeCh:                 make(chan struct{}),
+			notifyExtHostCloseCh:    make(chan string, defaultExtCloseNotifyChSize),
+			notifyExtHostUnloadCh:   make(chan string, defaultExtCloseNotifyChSize),
+			notifyConnsCloseCh:      make(chan connectionID, defaultConnsCloseChSize),
 			logger:                  logger,
 			m3Client:                m3Client,
 			lastDisconnectTime:      time.Now(),
 			dstMetrics:              load.NewDstMetrics(),
 			hostMetrics:             hostMetrics,
 			lastDstLoadReportedTime: time.Now().UnixNano(),
+			inputHost:               h,
 		}
 		h.pathCache[destUUID] = pathCache
 		h.pathCacheByDestPath[destPath] = destUUID
@@ -117,103 +105,9 @@ func (h *InputHost) checkAndLoadPathCache(destPath string, destUUID string, dest
 		//  the destM3Client is the destination specific client to report destination specific metrics
 		//  the m3Client above is the overall host client to report host-level metrics.
 		pathCache.destM3Client = metrics.NewClientWithTags(pathCache.m3Client, metrics.Inputhost, h.getDestinationTags(destPath))
-		go h.managePath(pathCache)
+		pathCache.startEventLoop()
 	}
 	h.pathMutex.Unlock()
-	return
-}
-
-func (h *InputHost) checkAndLoadExtentCache(pathCache *inPathCache, destUUID string, extUUID extentUUID, replicas []string) (err error) {
-	pathCache.extMutex.Lock()
-	defer pathCache.extMutex.Unlock()
-	if extCache, exists := pathCache.extentCache[extUUID]; !exists {
-		extCache = &inExtentCache{
-			extUUID: extUUID,
-			connection: newExtConnection(
-				destUUID,
-				pathCache,
-				string(extUUID),
-				len(replicas),
-				pathCache.loadReporterFactory,
-				pathCache.logger.WithField(common.TagExt, common.FmtExt(string(extUUID))),
-				h.GetClientFactory(),
-				&h.shutdownWG,
-				h.IsLimitsEnabled()),
-		}
-
-		err = h.checkAndLoadReplicaStreams(extCache.connection, extUUID, replicas)
-		if err != nil {
-			// error loading replica stream
-			extCache.connection.logger.Error("error loading replica streams for extent")
-			return err
-		}
-
-		pathCache.extentCache[extUUID] = extCache
-		// all open connections should be closed before shutdown
-		h.shutdownWG.Add(1)
-		extCache.connection.open()
-
-		// make sure the number of loaded extents is incremented
-		pathCache.dstMetrics.Increment(load.DstMetricNumOpenExtents)
-		pathCache.hostMetrics.Increment(load.HostMetricNumOpenExtents)
-	}
-	return
-}
-
-func (h *InputHost) checkAndLoadReplicaStreams(conn *extHost, extUUID extentUUID, replicas []string /*storehostPort*/) (err error) {
-	conn.lk.Lock()
-	defer conn.lk.Unlock()
-	var call serverStream.BStoreOpenAppendStreamOutCall
-	var cancel context.CancelFunc
-	var ok bool
-	for i := 0; i < len(replicas); i++ {
-		if _, ok = conn.streams[storeHostPort(replicas[i])]; !ok {
-
-			cDestType, _ := common.CheramiDestinationType(conn.destType)
-
-			req := &store.OpenAppendStreamRequest{
-				DestinationUUID: common.StringPtr(string(conn.destUUID)),
-				DestinationType: cherami.DestinationTypePtr(cDestType),
-				ExtentUUID:      common.StringPtr(string(extUUID)),
-			}
-			reqHeaders := common.GetOpenAppendStreamRequestHeaders(req)
-
-			host, _, _ := net.SplitHostPort(replicas[i])
-			port := os.Getenv("CHERAMI_STOREHOST_WS_PORT")
-			if len(port) == 0 {
-				port = "6191"
-			} else if port == "test" {
-				// XXX: this is a hack to get the wsPort specific to this hostport.
-				// this is needed specifically for benchmark tests and other tests which
-				// try to start multiple replicas on the same local machine.
-				// this is a temporary workaround until we have ringpop labels
-				// if we have the label feature we can set the websocket port corresponding
-				// to a replica as a metadata rather than the env variables
-				envVar := common.GetEnvVariableFromHostPort(replicas[i])
-				port = os.Getenv(envVar)
-			}
-
-			httpHeaders := http.Header{}
-			for k, v := range reqHeaders {
-				httpHeaders.Add(k, v)
-			}
-
-			hostPort := net.JoinHostPort(host, port)
-			conn.logger.WithField(`replica`, hostPort).Info(`inputhost: Using websocket to connect to store replica`)
-			call, err = h.GetWSConnector().OpenAppendStream(hostPort, httpHeaders)
-			if err != nil {
-				conn.logger.WithFields(bark.Fields{`replicas[i]`: hostPort, common.TagErr: err}).Error(`inputhost: Websocket dial store replica: failed`)
-				return
-			}
-			cancel = nil
-
-			repl := newReplicaConnection(call, cancel,
-				conn.logger.
-					WithField(common.TagInReplicaHost, common.FmtInReplicaHost(replicas[i])))
-			conn.setReplicaInfo(storeHostPort(replicas[i]), repl)
-			repl.open()
-		}
-	}
 	return
 }
 
@@ -228,7 +122,7 @@ func (h *InputHost) loadPath(extents []*extentInfo, destPath string, destUUID st
 
 	// Now we have the pathCache. check and load all extents
 	for _, extent := range extents {
-		err := h.checkAndLoadExtentCache(pathCache, destUUID, extentUUID(extent.uuid), extent.replicas)
+		err := pathCache.checkAndLoadExtent(destUUID, extentUUID(extent.uuid), extent.replicas)
 		// if we are able to successfully load *atleast* one extent, then we are good
 		if err == nil {
 			foundOne = true
@@ -238,35 +132,14 @@ func (h *InputHost) loadPath(extents []*extentInfo, destPath string, destUUID st
 	// if we didn't load any extent and we just loaded the pathCache, unload it
 	if !foundOne && !exists && pathCache != nil {
 		pathCache.logger.Error("unable to load any extent for the given destination")
-		h.pathMutex.Lock()
-		h.unloadPathCache(pathCache)
-		h.pathMutex.Unlock()
+		pathCache.Lock()
+		pathCache.prepareForUnload()
+		pathCache.Unlock()
+		go pathCache.unload()
 		pathCache = nil
 	}
 
 	return pathCache
-}
-
-func (h *InputHost) reconfigureClients(pathCache *inPathCache, updateUUID string) {
-
-	var notified, dropped int
-
-	pathCache.extMutex.Lock()
-	for _, conn := range pathCache.connections {
-		select {
-		case conn.reconfigureClientCh <- updateUUID:
-			notified++
-		default:
-			dropped++
-		}
-	}
-	pathCache.extMutex.Unlock()
-
-	pathCache.logger.WithFields(bark.Fields{
-		common.TagUpdateUUID: updateUUID,
-		`notified`:           notified,
-		`dropped`:            dropped,
-	}).Info(`reconfigureClients: notified clients`)
 }
 
 func (h *InputHost) updatePathCache(destinationsUpdated *admin.DestinationUpdatedNotification, destPath string) {
@@ -285,121 +158,6 @@ func (h *InputHost) updatePathCache(destinationsUpdated *admin.DestinationUpdate
 		}
 	} else {
 		h.loadPath([]*extentInfo{info}, "", destUUID, shared.DestinationType_UNKNOWN, h.m3Client)
-	}
-}
-
-func (h *InputHost) managePath(pathCache *inPathCache) {
-	defer h.shutdownWG.Done()
-
-	refreshTicker := time.NewTicker(metaPollTimeout) // start ticker to refresh metadata
-	defer refreshTicker.Stop()
-
-	unloadTicker := time.NewTicker(unloadTickerTimeout) // start ticker to unload pathCache
-	defer unloadTicker.Stop()
-
-	for {
-		select {
-		case conn := <-pathCache.notifyCloseCh:
-			h.pathMutex.Lock()
-			pathCache.extMutex.Lock()
-			if _, ok := pathCache.connections[conn]; ok {
-				pathCache.logger.WithField(`conn`, conn).Info(`updating path cache to remove the connection with ID`)
-				delete(pathCache.connections, conn)
-			}
-			if len(pathCache.connections) <= 0 {
-				pathCache.lastDisconnectTime = time.Now()
-			}
-			pathCache.extMutex.Unlock()
-			h.pathMutex.Unlock()
-		case extUUID := <-pathCache.notifyExtHostCloseCh:
-			// if all the extents for this path went down, no point in keeping the connection open
-			h.pathMutex.Lock()
-			pathCache.extMutex.Lock()
-			if _, ok := pathCache.extentCache[extentUUID(extUUID)]; ok {
-				pathCache.logger.
-					WithField(common.TagExt, common.FmtExt(string(extUUID))).
-					Info("updating path cache to decrement the active extents, since extent is closed")
-				// decrement the number of open extents and if we don't even have 1 open extent disconnect clients
-				pathCache.hostMetrics.Decrement(load.HostMetricNumOpenExtents)
-				if pathCache.dstMetrics.Decrement(load.DstMetricNumOpenExtents) <= 0 {
-					// Note: Make sure we don't race with a load here.
-					// It is safe to unload the pathCache completely here,
-					// since there are no open extents.
-					// Incase the client reconfigures, it will load a fresh
-					// path cache and will continue as usual.
-					// Remove it from the map first so that a load doesn't interfere
-					// with the unload.
-					delete(h.pathCache, pathCache.destUUID)
-					pathCache.logger.Info("unloading empty pathCache")
-					go h.unloadSpecificPath(pathCache)
-				}
-			}
-			pathCache.extMutex.Unlock()
-			h.pathMutex.Unlock()
-		case extUUID := <-pathCache.notifyExtHostUnloadCh:
-			// now we can safely unload the extent completely
-			h.pathMutex.Lock()
-			pathCache.extMutex.Lock()
-			if _, ok := pathCache.extentCache[extentUUID(extUUID)]; ok {
-				pathCache.logger.
-					WithField(common.TagExt, common.FmtExt(string(extUUID))).
-					Info("updating path cache to unload extent")
-				delete(pathCache.extentCache, extentUUID(extUUID))
-			}
-			pathCache.extMutex.Unlock()
-			h.pathMutex.Unlock()
-		case reconfigInfo := <-pathCache.reconfigureCh:
-			// we need to reload the cache, if the notification type is either
-			// HOST or ALL
-			reconfigType := reconfigInfo.req.GetType()
-			h.pathMutex.RLock()
-			pathCache.extMutex.RLock()
-			extentCacheSize := len(pathCache.extentCache)
-			pathCache.extMutex.RUnlock()
-			h.pathMutex.RUnlock()
-			pathCache.logger.WithFields(bark.Fields{
-				common.TagReconfigureID:   common.FmtReconfigureID(reconfigInfo.updateUUID),
-				common.TagReconfigureType: common.FmtReconfigureType(reconfigType),
-				common.TagExtentCacheSize: extentCacheSize,
-			}).Debugf("reconfiguring inputhost")
-			switch reconfigType {
-			case admin.NotificationType_CLIENT:
-				h.reconfigureClients(pathCache, reconfigInfo.updateUUID)
-			case admin.NotificationType_HOST:
-				h.updatePathCache(reconfigInfo.req, pathCache.destinationPath)
-			case admin.NotificationType_ALL:
-				h.updatePathCache(reconfigInfo.req, pathCache.destinationPath)
-				h.reconfigureClients(pathCache, reconfigInfo.updateUUID)
-			default:
-				pathCache.logger.
-					WithField(common.TagReconfigureID, common.FmtReconfigureID(reconfigInfo.updateUUID)).
-					WithField(common.TagReconfigureType, common.FmtReconfigureType(reconfigType)).
-					Error("Invalid reconfigure type")
-			}
-			pathCache.logger.
-				WithField(common.TagReconfigureID, common.FmtReconfigureID(reconfigInfo.updateUUID)).
-				WithField(common.TagReconfigureType, common.FmtReconfigureType(reconfigType)).
-				Debug("finished reconfiguration of inputhost")
-		case <-refreshTicker.C:
-			pathCache.logger.Debug("refreshing all extents")
-			h.getExtentsAndLoadPathCache(nil, "", pathCache.destUUID, shared.DestinationType_UNKNOWN)
-
-		case <-unloadTicker.C:
-			h.pathMutex.Lock()
-			pathCache.extMutex.Lock()
-			if len(pathCache.connections) <= 0 && time.Since(pathCache.lastDisconnectTime) > idleTimeout {
-				pathCache.logger.Info("unloading idle pathCache")
-				// Note: remove from the map so that a load doesn't race with unload
-				h.removeFromCaches(pathCache)
-				go h.unloadSpecificPath(pathCache)
-			}
-			pathCache.extMutex.Unlock()
-			h.pathMutex.Unlock()
-		case <-pathCache.closeCh:
-			return
-		case <-h.shutdown:
-			return
-		}
 	}
 }
 
@@ -425,47 +183,15 @@ func (h *InputHost) getPathCacheByDestUUID(destUUID string) (retPathCache *inPat
 	return retPathCache, ok
 }
 
-// unloadPathCache is the routine to unload this destUUID from the
-// inputhost's pathCache.
-// It should be called with the pathMutex held and it will stop
-// all connections and extents from this pathCache
-func (h *InputHost) unloadPathCache(pathCache *inPathCache) {
-	pathCache.unloadInProgress = true
-	close(pathCache.closeCh)
-	// close all connections
-	pathCache.extMutex.Lock()
-	for _, conn := range pathCache.connections {
-		go conn.close()
-	}
-	for _, extCache := range pathCache.extentCache {
-		extCache.cacheMutex.Lock()
-		// call shutdown of the extCache to unload without the timeout
-		go extCache.connection.shutdown()
-		extCache.cacheMutex.Unlock()
-	}
-	pathCache.loadReporter.Stop()
-	pathCache.extMutex.Unlock()
-
-	// since we already stopped the load reporter above and
-	// we close the connections asynchronously,
-	// make sure the number of connections is explicitly marked as 0
-	pathCache.destM3Client.UpdateGauge(metrics.PubConnectionScope, metrics.InputhostDestPubConnection, 0)
-	h.removeFromCaches(pathCache)
-	pathCache.logger.Info("pathCache successfully unloaded")
-}
-
-// removeFromCache removes this pathCache from both the caches
+// removeFromCache removes this pathCache from both the
+// pathCache map.
+// This method only removes the entry, if the existing entry
+// is the same as the passed reference
 func (h *InputHost) removeFromCaches(pathCache *inPathCache) {
-	delete(h.pathCache, pathCache.destUUID)
-	delete(h.pathCacheByDestPath, pathCache.destinationPath)
-}
-
-// unloadSpecificPath unloads the specific path cache
-func (h *InputHost) unloadSpecificPath(pathCache *inPathCache) {
 	h.pathMutex.Lock()
-	// unload only if we are not already in the process of unloading
-	if !pathCache.unloadInProgress {
-		h.unloadPathCache(pathCache)
+	if curr, ok := h.pathCache[pathCache.destUUID]; ok && curr == pathCache {
+		delete(h.pathCache, pathCache.destUUID)
+		delete(h.pathCacheByDestPath, pathCache.destinationPath)
 	}
 	h.pathMutex.Unlock()
 }
@@ -475,9 +201,10 @@ func (h *InputHost) unloadAll() {
 	h.pathMutex.Lock()
 	for _, pathCache := range h.pathCache {
 		pathCache.logger.Info("inputhost: closing streams on path")
-		if !pathCache.unloadInProgress {
-			h.unloadPathCache(pathCache)
-		}
+		pathCache.Lock()
+		pathCache.prepareForUnload()
+		pathCache.Unlock()
+		go pathCache.unload()
 	}
 	h.pathMutex.Unlock()
 }
@@ -486,15 +213,13 @@ func (h *InputHost) unloadAll() {
 func (h *InputHost) updateExtTokenBucket(connLimit int32) {
 	h.pathMutex.RLock()
 	for _, inPath := range h.pathCache {
-		// TODO: pathMutex or extMutex which one is better here?
-		inPath.extMutex.RLock()
+		inPath.RLock()
 		for _, extCache := range inPath.extentCache {
 			extCache.connection.SetMsgsLimitPerSecond(connLimit)
 		}
-		inPath.extMutex.RUnlock()
+		inPath.RUnlock()
 	}
 	h.pathMutex.RUnlock()
-	h.logger.Infof("The size of pathCache in extent is %v", len(h.pathCache))
 	h.logger.WithField("UpdateExtTokenBucket", connLimit).
 		Info("update extent TB for new connLimit")
 }
@@ -503,46 +228,13 @@ func (h *InputHost) updateExtTokenBucket(connLimit int32) {
 func (h *InputHost) updateConnTokenBucket(connLimit int32) {
 	h.pathMutex.RLock()
 	for _, inPath := range h.pathCache {
+		inPath.RLock()
 		for _, conn := range inPath.connections {
 			conn.SetMsgsLimitPerSecond(connLimit)
 		}
+		inPath.RUnlock()
 	}
 	h.pathMutex.RUnlock()
-	h.logger.Infof("The size of pathCache in conn is %v", len(h.pathCache))
 	h.logger.WithField("UpdateConnTokenBucket", connLimit).
 		Info("update connection TB for new connLimit")
-}
-
-// Report is used for reporting Destination specific load to controller
-func (p *inPathCache) Report(reporter common.LoadReporter) {
-
-	now := time.Now().UnixNano()
-	diffSecs := (now - p.lastDstLoadReportedTime) / int64(time.Second)
-	if diffSecs < 1 {
-		return
-	}
-
-	numConnections := p.dstMetrics.Get(load.DstMetricNumOpenConns)
-	numExtents := p.dstMetrics.Get(load.DstMetricNumOpenExtents)
-	numMsgsInPerSec := p.dstMetrics.GetAndReset(load.DstMetricMsgsIn) / diffSecs
-
-	metric := controller.DestinationMetrics{
-		NumberOfConnections:     common.Int64Ptr(numConnections),
-		NumberOfActiveExtents:   common.Int64Ptr(numExtents),
-		IncomingMessagesCounter: common.Int64Ptr(numMsgsInPerSec),
-	}
-
-	p.lastDstLoadReportedTime = now
-	reporter.ReportDestinationMetric(p.destUUID, metric)
-	// Also update the metrics reporter to make sure the connection gauge is updated
-	p.destM3Client.UpdateGauge(metrics.PubConnectionScope, metrics.InputhostDestPubConnection, numConnections)
-}
-
-// updateLastDisconnectTime is used to update the last disconnect time for
-// this path
-func (p *inPathCache) updateLastDisconnectTime() {
-	p.extMutex.Lock()
-	defer p.extMutex.Unlock()
-
-	p.lastDisconnectTime = time.Now()
 }

@@ -563,10 +563,11 @@ func (s *CassandraSuite) TestExtentCRU() {
 		extentUUID := uuid.New()
 		storeIds := []string{uuid.New(), uuid.New(), uuid.New()}
 		extent := &shared.Extent{
-			ExtentUUID:      common.StringPtr(extentUUID),
-			DestinationUUID: common.StringPtr(dest.GetDestinationUUID()),
-			StoreUUIDs:      storeIds,
-			InputHostUUID:   common.StringPtr(uuid.New()),
+			ExtentUUID:               common.StringPtr(extentUUID),
+			DestinationUUID:          common.StringPtr(dest.GetDestinationUUID()),
+			StoreUUIDs:               storeIds,
+			InputHostUUID:            common.StringPtr(uuid.New()),
+			RemoteExtentPrimaryStore: common.StringPtr(uuid.New()),
 		}
 		createExtent := &shared.CreateExtentRequest{Extent: extent}
 		t0 := time.Now().UnixNano() / int64(time.Millisecond)
@@ -622,10 +623,11 @@ func (s *CassandraSuite) TestExtentCRU() {
 		s.Equal(extentStatsOrig.GetStatusUpdatedTimeMillis(), extentStats.GetExtentStats().GetStatusUpdatedTimeMillis())
 
 		updateExtent := &m.UpdateExtentStatsRequest{
-			DestinationUUID:  common.StringPtr(extent.GetDestinationUUID()),
-			ExtentUUID:       common.StringPtr(extent.GetExtentUUID()),
-			Status:           common.MetadataExtentStatusPtr(shared.ExtentStatus_ARCHIVED),
-			ArchivalLocation: common.StringPtr("S3:foo/bar"),
+			DestinationUUID:          common.StringPtr(extent.GetDestinationUUID()),
+			ExtentUUID:               common.StringPtr(extent.GetExtentUUID()),
+			Status:                   common.MetadataExtentStatusPtr(shared.ExtentStatus_ARCHIVED),
+			ArchivalLocation:         common.StringPtr("S3:foo/bar"),
+			RemoteExtentPrimaryStore: common.StringPtr(uuid.New()),
 		}
 
 		t0 := time.Now().UnixNano() / int64(time.Millisecond)
@@ -634,14 +636,17 @@ func (s *CassandraSuite) TestExtentCRU() {
 
 		s.Nil(err)
 		s.Equal(updateExtent.Status, updateResult.ExtentStats.Status)
-		s.Equal(updateExtent.ArchivalLocation, updateResult.ExtentStats.ArchivalLocation)
+		s.Equal(updateExtent.GetArchivalLocation(), updateResult.GetExtentStats().GetArchivalLocation())
+		s.Equal(updateExtent.GetRemoteExtentPrimaryStore(), updateResult.GetExtentStats().GetExtent().GetRemoteExtentPrimaryStore())
 
 		readExtentStats = &m.ReadExtentStatsRequest{DestinationUUID: extent.DestinationUUID, ExtentUUID: extent.ExtentUUID}
 		time.Sleep(1 * time.Second)
 		extentStats, err = s.client.ReadExtentStats(nil, readExtentStats)
 		s.Nil(err)
 		s.NotNil(extentStats)
-		s.Equal(shared.ExtentStatus_ARCHIVED, extentStats.ExtentStats.GetStatus())
+		s.Equal(shared.ExtentStatus_ARCHIVED, extentStats.GetExtentStats().GetStatus())
+		s.Equal(updateExtent.GetArchivalLocation(), extentStats.GetExtentStats().GetArchivalLocation())
+		s.Equal(updateExtent.GetRemoteExtentPrimaryStore(), extentStats.GetExtentStats().GetExtent().GetRemoteExtentPrimaryStore())
 		s.True(extentStats.GetExtentStats().GetStatusUpdatedTimeMillis() >= t0)
 		s.True(extentStats.GetExtentStats().GetStatusUpdatedTimeMillis() <= tX)
 	}

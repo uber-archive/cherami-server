@@ -33,7 +33,7 @@ package controllerhost
 import (
 	"encoding/json"
 	"fmt"
-	"sort"
+	"math/rand"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -219,6 +219,7 @@ func (mcp *Mcp) Start(thriftService []thrift.TChanServer) {
 		clientFactory:  context.clientFactory,
 		log:            context.log,
 		m3Client:       context.m3Client,
+		localZone:      context.localZone,
 	})
 	context.retMgr.Start()
 
@@ -1127,13 +1128,14 @@ func (mcp *Mcp) CreateRemoteZoneExtent(ctx thrift.Context, createRequest *shared
 	for i := 0; i < nReplicasPerExtent; i++ {
 		storeids[i] = storehosts[i].UUID
 	}
-	sort.Strings(storeids)
+	remoteExtentPrimaryStore := storeids[rand.Intn(len(storeids))]
 
 	// Since this is an extent from another zone, we don't need to assign input host. i.e. the extent is read-only
 	// We use a special input host uuid (instead of an empty one) for this because there're lots of places where an valid uuid is required
 	inputHost := common.InputHostForRemoteExtent
-	res, err := context.mm.CreateExtent(createRequest.GetExtent().GetDestinationUUID(),
-		createRequest.GetExtent().GetExtentUUID(), inputHost, storeids, createRequest.GetExtent().GetOriginZone())
+
+	res, err := context.mm.CreateRemoteZoneExtent(createRequest.GetExtent().GetDestinationUUID(),
+		createRequest.GetExtent().GetExtentUUID(), inputHost, storeids, createRequest.GetExtent().GetOriginZone(), remoteExtentPrimaryStore)
 	if err != nil {
 		lclLg.Error(err.Error())
 		context.m3Client.IncCounter(metrics.ControllerCreateRemoteZoneExtentScope, metrics.ControllerErrMetadataUpdateCounter)
@@ -1141,7 +1143,7 @@ func (mcp *Mcp) CreateRemoteZoneExtent(ctx thrift.Context, createRequest *shared
 	}
 
 	// trigger store to start replication
-	event := NewRemoteZoneExtentCreatedEvent(createRequest.GetExtent().GetDestinationUUID(), createRequest.GetExtent().GetExtentUUID(), storeids)
+	event := NewStartReplicationForRemoteZoneExtent(createRequest.GetExtent().GetDestinationUUID(), createRequest.GetExtent().GetExtentUUID(), storeids, remoteExtentPrimaryStore)
 	mcp.context.eventPipeline.Add(event)
 
 	lclLg.Info("Remote Zone Extent Created")

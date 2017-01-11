@@ -56,6 +56,8 @@ type (
 		Start()
 		// Stop stops the RingpopMonitor
 		Stop()
+		// GetBootstrappedChannel returns a channel, which will be closed once ringpop is bootstrapped
+		GetBootstrappedChannel() chan struct{}
 		// GetHosts retrieves all the members for the given service
 		GetHosts(service string) ([]*HostInfo, error)
 		// FindHostForAddr finds and returns the host for the given service:addr
@@ -109,6 +111,8 @@ type (
 		logger           bark.Logger
 		oldChecksum      uint32
 		serverCount      int
+		bootstrapped     bool
+		bootstrappedC    chan struct{}
 	}
 
 	serviceInfo struct {
@@ -155,6 +159,7 @@ func NewRingpopMonitor(rp *ringpop.Ringpop, services []string, resolver UUIDReso
 		serviceToInfo: make(map[string]*serviceInfo),
 		logger:        log,
 		rp:            rp,
+		bootstrappedC: make(chan struct{}),
 	}
 
 	membershipMap := make(map[string]*membershipInfo)
@@ -197,6 +202,10 @@ func (rpm *ringpopMonitorImpl) Stop() {
 	if !AwaitWaitGroup(&rpm.shutdownWG, time.Second) {
 		rpm.logger.Warn("Stop() - timed out waiting for worker to finish")
 	}
+}
+
+func (rpm *ringpopMonitorImpl) GetBootstrappedChannel() chan struct{} {
+	return rpm.bootstrappedC
 }
 
 // GetHosts retrieves all the members for the given service
@@ -336,6 +345,12 @@ func (rpm *ringpopMonitorImpl) workerLoop() {
 		case <-refreshTimeout:
 			rpm.refreshAll()
 			refreshTimeout = time.After(refreshInterval)
+
+			// broadcast bootstrap is done by closing the channel
+			if !rpm.bootstrapped {
+				close(rpm.bootstrappedC)
+				rpm.bootstrapped = true
+			}
 		case <-rpm.shutdownC:
 			quit = true
 		}
@@ -414,7 +429,7 @@ func (rpm *ringpopMonitorImpl) refresh(service string, currInfo *membershipInfo)
 	for _, addr := range addrs {
 		uuid, err := rpm.uuidResolver.ReverseLookup(addr)
 		if err != nil {
-			rpm.logger.WithFields(bark.Fields{`ringpopAddress`: addr}).Debug("ReverseLookup failed")
+			rpm.logger.WithFields(bark.Fields{`ringpopAddress`: addr}).Info("ReverseLookup failed")
 			continue
 		}
 

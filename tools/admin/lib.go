@@ -606,7 +606,7 @@ type destAllJSONOutputFields struct {
 	TotalExts                   int                      `json:"total_ext"`
 	OpenExts                    int                      `json:"open"`
 	SealedExts                  int                      `json:"sealed"`
-	ConsumedExts                int                      `json:"consumerd"`
+	ConsumedExts                int                      `json:"consumed"`
 	DeletedExts                 int                      `json:"Deleted"`
 	ConsumedMessagesRetention   int32                    `json:"consumed_messages_retention"`
 	UnconsumedMessagesRetention int32                    `json:"unconsumed_messages_retention"`

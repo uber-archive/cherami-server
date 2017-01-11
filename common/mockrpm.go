@@ -69,6 +69,11 @@ func (rpm *MockRingpopMonitor) Start() {}
 // Stop attempts to stop the RingpopMonitor routines
 func (rpm *MockRingpopMonitor) Stop() {}
 
+// GetBootstrappedChannel returns a channel, which will be closed once ringpop is bootstrapped
+func (rpm *MockRingpopMonitor) GetBootstrappedChannel() chan struct{} {
+	return nil
+}
+
 // GetHosts retrieves all the members for the given service
 func (rpm *MockRingpopMonitor) GetHosts(service string) ([]*HostInfo, error) {
 	rpm.RLock()

@@ -20,21 +20,14 @@
 
 package frontendhost
 
-import (
-	log "github.com/Sirupsen/logrus"
-
-	dconfig "github.com/uber/cherami-server/common/dconfigclient"
-)
-
-const (
-	// UkeyUseWebsocket is the  key for UseWebsocket
-	UkeyUseWebsocket = "frontendhost.UseWebsocket"
-)
+import dconfig "github.com/uber/cherami-server/common/dconfigclient"
 
 func (h *Frontend) registerInt() {
 	// Add handler function for the dynamic config value
 	handlerMap := make(map[string]dconfig.Handler)
-	handlerMap[UkeyUseWebsocket] = dconfig.GenerateIntHandler(UkeyUseWebsocket, h.SetUseWebsocket, h.GetUseWebsocket)
+
+	// nothing to be dynamically configured right now
+
 	h.dClient.AddHandlers(handlerMap)
 	// Add verify function for the dynamic config value
 	verifierMap := make(map[string]dconfig.Verifier)
@@ -43,15 +36,7 @@ func (h *Frontend) registerInt() {
 
 // LoadUconfig load the dynamic config values for key
 func (h *Frontend) LoadUconfig() {
-	// UseWebsocket
-	valueUcfg, ok := h.dClient.GetOrDefault(UkeyUseWebsocket, 0).(int)
-	if ok {
-		h.SetUseWebsocket(int32(valueUcfg))
-		log.WithField(UkeyUseWebsocket, valueUcfg).
-			Info("Update the  value")
-	} else {
-		log.WithField("dconfigKey", UkeyUseWebsocket).Error("Cannot get key from dynamic config; try using the right format")
-	}
+	// nothing to be loaded dynamically right now
 }
 
 // Manage do the work for uconfig

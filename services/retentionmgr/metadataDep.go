@@ -27,57 +27,77 @@ import (
 	"github.com/uber/cherami-thrift/.generated/go/shared"
 	"github.com/uber/cherami-thrift/.generated/go/store"
 	"github.com/uber/cherami-server/common"
-	"github.com/uber/cherami-server/common/metrics"
 
 	"github.com/uber-common/bark"
+	"github.com/uber/tchannel-go/thrift"
 )
 
 const defaultPageSize = 1000
 
 type metadataDepImpl struct {
-	metadata common.MetadataMgr
+	metadata metadata.TChanMetadataService
 	logger   bark.Logger
 }
 
-func newMetadataDep(metadata metadata.TChanMetadataService, m3Client metrics.Client, logger bark.Logger) *metadataDepImpl {
+func newMetadataDep(metadata metadata.TChanMetadataService, log bark.Logger) *metadataDepImpl {
 	return &metadataDepImpl{
-		metadata: common.NewMetadataMgr(metadata, m3Client, logger),
-		logger:   logger,
+		metadata: metadata,
+		logger:   log,
 	}
 }
 
 // -- the following are various helper routines, that talk to metadata, storehosts, etc -- //
 func (t *metadataDepImpl) GetDestinations() (destinations []*destinationInfo) {
 
+	req := shared.NewListDestinationsByUUIDRequest()
+	req.Limit = common.Int64Ptr(defaultPageSize)
+
+	ctx, cancel := thrift.NewContext(5 * time.Second)
+	defer cancel()
+
 	log := t.logger
 
-	log.Debug("GetDestinations: calling ListDestinations")
+	i := 0
+	for {
 
-	list, err := t.metadata.ListDestinations()
-	if err != nil {
-		log.WithField(common.TagErr, err).Error(`GetDestinations: ListDestinations failed`)
-		return
-	}
+		log.Debug("GetDestinations: ListDestinationsByUUID on metadata")
 
-	for _, destDesc := range list {
-
-		dest := &destinationInfo{
-			id:            destinationID(destDesc.GetDestinationUUID()),
-			status:        destDesc.GetStatus(),
-			softRetention: destDesc.GetConsumedMessagesRetention(),
-			hardRetention: destDesc.GetUnconsumedMessagesRetention(),
-			// type: mDestDesc.GetType(),
-			path: destDesc.GetPath(),
+		resp, err := t.metadata.ListDestinationsByUUID(ctx, req)
+		if err != nil {
+			log.WithField(common.TagErr, err).Error(`GetDestinations: ListDestinationsByUUID failed`)
+			return
 		}
 
-		destinations = append(destinations, dest)
+		for _, destDesc := range resp.GetDestinations() {
 
-		log.WithFields(bark.Fields{
-			common.TagDst:   dest.id,
-			`status`:        dest.status,
-			`hardRetention`: dest.hardRetention,
-			`softRetention`: dest.softRetention,
-		}).Debug("GetDestinations: ListDestinations output")
+			dest := &destinationInfo{
+				id:            destinationID(destDesc.GetDestinationUUID()),
+				status:        destDesc.GetStatus(),
+				softRetention: destDesc.GetConsumedMessagesRetention(),
+				hardRetention: destDesc.GetUnconsumedMessagesRetention(),
+				// type: mDestDesc.GetType(),
+				path:        destDesc.GetPath(),
+				isMultiZone: destDesc.GetIsMultiZone(),
+			}
+
+			destinations = append(destinations, dest)
+			i++
+
+			log.WithFields(bark.Fields{
+				common.TagDst:   dest.id,
+				`status`:        dest.status,
+				`hardRetention`: dest.hardRetention,
+				`softRetention`: dest.softRetention,
+			}).Debug("GetDestinations: ListDestinationsByUUID output")
+		}
+
+		if len(resp.GetNextPageToken()) == 0 {
+			break
+		}
+
+		req.PageToken = resp.GetNextPageToken()
+
+		log.Debug("GetDestinations: fetching next page of ListDestinationsByUUID")
 	}
 
 	log.WithField(`numDestinations`, len(destinations)).Debug("GetDestinations done")
@@ -86,43 +106,62 @@ func (t *metadataDepImpl) GetDestinations() (destinations []*destinationInfo) {
 
 func (t *metadataDepImpl) GetExtents(destID destinationID) (extents []*extentInfo) {
 
+	req := shared.NewListExtentsStatsRequest()
+	req.DestinationUUID = common.StringPtr(string(destID))
+	req.Limit = common.Int64Ptr(defaultPageSize)
+
+	ctx, cancel := thrift.NewContext(5 * time.Second)
+	defer cancel()
+
 	log := t.logger.WithField(common.TagDst, string(destID))
 
 	extents = make([]*extentInfo, 0, 8)
+	i := 0
 
-	log.Debug("GetExtents: calling ListExtentsByDstIDStatus")
+	for {
+		log.Debug("GetExtents: ListExtentStats on metadata")
 
-	list, err := t.metadata.ListExtentsByDstIDStatus(string(destID), nil)
-	if err != nil {
-		log.WithField(common.TagErr, err).Error(`GetExtents: ListExtentsByDstIDStatus failed`)
-		return
-	}
-
-	for _, extStats := range list {
-
-		extent := extStats.GetExtent()
-		storeUUIDs := extent.GetStoreUUIDs()
-
-		extInfo := &extentInfo{
-			id:                 extentID(extent.GetExtentUUID()),
-			status:             extStats.GetStatus(),
-			statusUpdatedTime:  time.Unix(0, extStats.GetStatusUpdatedTimeMillis()*int64(time.Millisecond)),
-			storehosts:         make([]storehostID, 0, len(storeUUIDs)),
-			singleCGVisibility: consumerGroupID(extStats.GetConsumerGroupVisibility()),
+		resp, err := t.metadata.ListExtentsStats(ctx, req)
+		if err != nil {
+			log.WithField(common.TagErr, err).Error(`GetExtents: ListExtentsStats failed`)
+			return
 		}
 
-		for j := range storeUUIDs {
-			extInfo.storehosts = append(extInfo.storehosts, storehostID(storeUUIDs[j]))
+		for _, extStats := range resp.GetExtentStatsList() {
+
+			extent := extStats.GetExtent()
+			storeUUIDs := extent.GetStoreUUIDs()
+
+			extInfo := &extentInfo{
+				id:                 extentID(extent.GetExtentUUID()),
+				status:             extStats.GetStatus(),
+				statusUpdatedTime:  time.Unix(0, extStats.GetStatusUpdatedTimeMillis()*int64(time.Millisecond)),
+				storehosts:         make([]storehostID, 0, len(storeUUIDs)),
+				singleCGVisibility: consumerGroupID(extStats.GetConsumerGroupVisibility()),
+				originZone:         extStats.GetExtent().GetOriginZone(),
+			}
+
+			for j := range storeUUIDs {
+				extInfo.storehosts = append(extInfo.storehosts, storehostID(storeUUIDs[j]))
+			}
+
+			extents = append(extents, extInfo)
+			i++
+
+			log.WithFields(bark.Fields{
+				common.TagExt: string(extInfo.id),
+				`status`:      extInfo.status,
+				`replicas`:    extInfo.storehosts,
+			}).Debug(`GetExtents: ListExtentStats output`)
 		}
 
-		extents = append(extents, extInfo)
+		if len(resp.GetNextPageToken()) == 0 {
+			break
+		}
 
-		log.WithFields(bark.Fields{
-			common.TagExt: string(extInfo.id),
-			`status`:      extInfo.status,
-			`replicas`:    extInfo.storehosts,
-		}).Debug(`GetExtents: ListExtentsByDstIDStatus output`)
+		req.PageToken = resp.GetNextPageToken()
 
+		log.Debug("GetExtents: fetching next page of ListExtentStats")
 	}
 
 	log.WithField(`numExtents`, len(extents)).Debug("GetExtents done")
@@ -131,6 +170,13 @@ func (t *metadataDepImpl) GetExtents(destID destinationID) (extents []*extentInf
 
 func (t *metadataDepImpl) GetExtentInfo(destID destinationID, extID extentID) (extInfo *extentInfo, err error) {
 
+	req := metadata.NewReadExtentStatsRequest()
+	req.DestinationUUID = common.StringPtr(string(destID))
+	req.ExtentUUID = common.StringPtr(string(extID))
+
+	ctx, cancel := thrift.NewContext(5 * time.Second)
+	defer cancel()
+
 	log := t.logger.WithFields(bark.Fields{
 		common.TagDst: string(destID),
 		common.TagExt: string(extID),
@@ -138,11 +184,13 @@ func (t *metadataDepImpl) GetExtentInfo(destID destinationID, extID extentID) (e
 
 	log.Debug("GetExtentInfo: ReadExtentStats on metadata")
 
-	extStats, err := t.metadata.ReadExtentStats(string(destID), string(destID))
+	resp, err := t.metadata.ReadExtentStats(ctx, req)
 	if err != nil {
 		log.WithField(common.TagErr, err).Error("GetExtentInfo: ReadExtentStats failed")
 		return
 	}
+
+	extStats := resp.GetExtentStats()
 
 	extInfo = &extentInfo{
 		id:                extID,
@@ -166,30 +214,48 @@ func (t *metadataDepImpl) GetExtentInfo(destID destinationID, extID extentID) (e
 
 func (t *metadataDepImpl) GetConsumerGroups(destID destinationID) (consumerGroups []*consumerGroupInfo) {
 
+	req := metadata.NewListConsumerGroupRequest()
+	req.DestinationUUID = common.StringPtr(string(destID))
+	req.Limit = common.Int64Ptr(defaultPageSize)
+	ctx, _ := thrift.NewContext(time.Second)
+
+	ctx, cancel := thrift.NewContext(5 * time.Second)
+	defer cancel()
+
 	log := t.logger.WithField(common.TagDst, string(destID))
 
-	log.Debug("GetConsumerGroups: ListConsumerGroupsByDstID on metadata")
+	for {
+		log.Debug("GetConsumerGroups: ListConsumerGroups on metadata")
 
-	list, err := t.metadata.ListConsumerGroupsByDstID(string(destID))
-	if err != nil {
-		log.WithField(common.TagErr, err).Error("GetConsumerGroups: ListConsumerGroupsByDstID failed")
-		return
-	}
-
-	for _, cgDesc := range list {
-		// assert(destId == cgDesc.GetDestinationUUID()) //
-
-		cg := &consumerGroupInfo{
-			id:     consumerGroupID(cgDesc.GetConsumerGroupUUID()),
-			status: cgDesc.GetStatus(),
+		res, err := t.metadata.ListConsumerGroups(ctx, req)
+		if err != nil {
+			log.WithField(common.TagErr, err).Error("GetConsumerGroups: ListConsumerGroups failed")
+			break
 		}
 
-		consumerGroups = append(consumerGroups, cg)
+		for _, cgDesc := range res.GetConsumerGroups() {
+			// assert(destId == cgDesc.GetDestinationUUID()) //
 
-		log.WithFields(bark.Fields{
-			common.TagCnsm: string(cg.id),
-			`status`:       cg.status,
-		}).Debug(`GetConsumerGroups: ListConsumerGroupsByDstID output`)
+			cg := &consumerGroupInfo{
+				id:     consumerGroupID(cgDesc.GetConsumerGroupUUID()),
+				status: cgDesc.GetStatus(),
+			}
+
+			consumerGroups = append(consumerGroups, cg)
+
+			log.WithFields(bark.Fields{
+				common.TagCnsm: string(cg.id),
+				`status`:       cg.status,
+			}).Debug(`GetConsumerGroups: ListConsumerGroups output`)
+		}
+
+		if len(res.GetNextPageToken()) == 0 {
+			break
+		}
+
+		req.PageToken = res.GetNextPageToken()
+
+		log.Debug("GetConsumerGroups: fetching next page of ListConsumerGroups")
 	}
 
 	log.WithField(`numConsumerGroups`, len(consumerGroups)).Debug("GetConsumerGroups done")
@@ -198,6 +264,14 @@ func (t *metadataDepImpl) GetConsumerGroups(destID destinationID) (consumerGroup
 
 func (t *metadataDepImpl) DeleteExtent(destID destinationID, extID extentID) (err error) {
 
+	req := metadata.NewUpdateExtentStatsRequest()
+	req.DestinationUUID = common.StringPtr(string(destID))
+	req.ExtentUUID = common.StringPtr(string(extID))
+	req.Status = shared.ExtentStatusPtr(shared.ExtentStatus_DELETED)
+
+	ctx, cancel := thrift.NewContext(2 * time.Second)
+	defer cancel()
+
 	log := t.logger.WithFields(bark.Fields{
 		common.TagDst: string(destID),
 		common.TagExt: string(extID),
@@ -205,17 +279,25 @@ func (t *metadataDepImpl) DeleteExtent(destID destinationID, extID extentID) (er
 
 	log.Debug("DeleteExtent: UpdateExtentStats on metadata")
 
-	err = t.metadata.UpdateExtentStatus(string(destID), string(destID), shared.ExtentStatus_DELETED)
+	resp, err := t.metadata.UpdateExtentStats(ctx, req)
 	if err != nil {
 		log.WithField(common.TagErr, err).Error(`DeleteExtent: UpdateExtentStats failed`)
 		return
 	}
 
-	log.Debug(`DeleteExtent done`)
+	log.WithField(`resp.status`, resp.GetExtentStats().GetStatus()).Debug(`DeleteExtent done`)
 	return
 }
 
 func (t *metadataDepImpl) MarkExtentConsumed(destID destinationID, extID extentID) (err error) {
+
+	req := metadata.NewUpdateExtentStatsRequest()
+	req.DestinationUUID = common.StringPtr(string(destID))
+	req.ExtentUUID = common.StringPtr(string(extID))
+	req.Status = shared.ExtentStatusPtr(shared.ExtentStatus_CONSUMED)
+
+	ctx, cancel := thrift.NewContext(2 * time.Second)
+	defer cancel()
 
 	log := t.logger.WithFields(bark.Fields{
 		common.TagDst: string(destID),
@@ -224,17 +306,25 @@ func (t *metadataDepImpl) MarkExtentConsumed(destID destinationID, extID extentI
 
 	log.Debug("MarkExtentConsumed: UpdateExtentStats on metadata")
 
-	err = t.metadata.UpdateExtentStatus(string(destID), string(destID), shared.ExtentStatus_CONSUMED)
+	resp, err := t.metadata.UpdateExtentStats(ctx, req)
 	if err != nil {
 		log.WithField(common.TagErr, err).Error(`MarkExtentConsumed: UpdateExtentStats failed`)
 		return
 	}
 
-	log.Debug(`MarkExtentConsumed done`)
+	log.WithField(`resp.status`, resp.GetExtentStats().GetStatus()).Debug(`MarkExtentConsumed done`)
 	return
 }
 
-func (t *metadataDepImpl) DeleteConsumerGroupExtent(cgID consumerGroupID, extID extentID) (err error) {
+func (t *metadataDepImpl) DeleteConsumerGroupExtent(cgID consumerGroupID, extID extentID) error {
+
+	req := metadata.NewUpdateConsumerGroupExtentStatusRequest()
+	req.ExtentUUID = common.StringPtr(string(extID))
+	req.ConsumerGroupUUID = common.StringPtr(string(cgID))
+	req.Status = common.MetadataConsumerGroupExtentStatusPtr(metadata.ConsumerGroupExtentStatus_DELETED)
+
+	ctx, cancel := thrift.NewContext(2 * time.Second)
+	defer cancel()
 
 	log := t.logger.WithFields(bark.Fields{
 		common.TagCnsmID: string(cgID),
@@ -243,7 +333,7 @@ func (t *metadataDepImpl) DeleteConsumerGroupExtent(cgID consumerGroupID, extID 
 
 	log.Debug("DeleteConsumerGroupExtent: UpdateConsumerGroupExtentStatus on metadata")
 
-	err = t.metadata.UpdateConsumerGroupExtentStatus(string(cgID), string(extID), metadata.ConsumerGroupExtentStatus_DELETED)
+	err := t.metadata.UpdateConsumerGroupExtentStatus(ctx, req)
 
 	if err != nil {
 		log.WithField(common.TagErr, err).Error("DeleteConsumerGroupExtent: UpdateConsumerGroupExtentStatus failed")
@@ -254,16 +344,22 @@ func (t *metadataDepImpl) DeleteConsumerGroupExtent(cgID consumerGroupID, extID 
 	return nil
 }
 
-func (t *metadataDepImpl) DeleteDestination(destID destinationID) (err error) {
+func (t *metadataDepImpl) DeleteDestination(destID destinationID) error {
+
+	req := metadata.NewDeleteDestinationUUIDRequest()
+	req.UUID = common.StringPtr(string(destID))
+
+	ctx, cancel := thrift.NewContext(2 * time.Second)
+	defer cancel()
 
 	log := t.logger.WithField(common.TagDst, string(destID))
 
-	log.Debug("DeleteDestination: DeleteDestination on metadata")
+	log.Debug("DeleteDestination: DeleteDestinationUUID on metadata")
 
-	err = t.metadata.DeleteDestination(string(destID))
+	err := t.metadata.DeleteDestinationUUID(ctx, req)
 
 	if err != nil {
-		log.WithField(common.TagErr, err).Error("DeleteDestination: DeleteDestination failed")
+		log.WithField(common.TagErr, err).Error("DeleteDestination: DeleteDestinationUUID failed")
 		return err
 	}
 
@@ -273,6 +369,14 @@ func (t *metadataDepImpl) DeleteDestination(destID destinationID) (err error) {
 
 func (t *metadataDepImpl) GetAckLevel(destID destinationID, extID extentID, cgID consumerGroupID) (ackLevel int64, err error) {
 
+	req := metadata.NewReadConsumerGroupExtentRequest()
+	req.DestinationUUID = common.StringPtr(string(destID))
+	req.ExtentUUID = common.StringPtr(string(extID))
+	req.ConsumerGroupUUID = common.StringPtr(string(cgID))
+
+	ctx, cancel := thrift.NewContext(2 * time.Second)
+	defer cancel()
+
 	log := t.logger.WithFields(bark.Fields{
 		common.TagDst:    string(destID),
 		common.TagExt:    string(extID),
@@ -281,20 +385,20 @@ func (t *metadataDepImpl) GetAckLevel(destID destinationID, extID extentID, cgID
 
 	log.Debug("GetAckLevel: ReadConsumerGroupExtent on metadata")
 
-	resp, err := t.metadata.ReadConsumerGroupExtent(string(destID), string(destID), string(destID))
+	resp, err := t.metadata.ReadConsumerGroupExtent(ctx, req)
 	if err != nil {
 		log.WithField(common.TagErr, err).Error("GetAckLevel: ReadConsumerGroupExtent failed")
 		return store.ADDR_BEGIN, err
 	}
 
-	// assert(resp.GetExtentUUID() == extID)
-	// assert(resp.GetConsumerGroupUUID() == cgID)
+	// assert(resp.GetExtent().GetExtentUUID() == extID)
+	// assert(resp.GetExtent().GetConsumerGroupUUID() == cgID)
 
 	// check if the consumer-group has read to "sealed" point
-	if resp.GetStatus() != metadata.ConsumerGroupExtentStatus_OPEN {
+	if resp.GetExtent().GetStatus() != metadata.ConsumerGroupExtentStatus_OPEN {
 		ackLevel = store.ADDR_SEAL
 	} else {
-		ackLevel = resp.GetAckLevelOffset()
+		ackLevel = resp.GetExtent().GetAckLevelOffset()
 		// assert(ackLevel != cherami.ADDR_END
 	}
 

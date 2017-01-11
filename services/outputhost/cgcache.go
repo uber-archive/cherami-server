@@ -146,9 +146,6 @@ type (
 		// lastDisconnectTime is the time the last consumer got disconnected
 		lastDisconnectTime time.Time
 
-		// useWebsocket is the flag of whether to use websocket to connect to store
-		useWebsocket bool
-
 		// sessionID is the 16 bit session identifier for this host
 		sessionID uint16
 
@@ -232,7 +229,6 @@ func newConsumerGroupCache(destPath string, cgDesc shared.ConsumerGroupDescripti
 		creditNotifyCh:           make(chan int32, 50),
 		creditRequestCh:          make(chan string, 50),
 		lastDisconnectTime:       time.Now(),
-		useWebsocket:             (h.GetUseWebsocket() > 0),
 		sessionID:                h.sessionID,
 		ackIDGen:                 h.ackMgrIDGen,
 		ackMgrLoadCh:             h.ackMgrLoadCh,
@@ -299,7 +295,6 @@ func (cgCache *consumerGroupCache) loadExtentCache(tClients common.ClientFactory
 			creditNotifyCh:       cgCache.creditNotifyCh,
 			creditRequestCh:      cgCache.creditRequestCh,
 			initialCredits:       defaultNumOutstandingMsgs,
-			useWebsocket:         cgCache.useWebsocket,
 			loadMetrics:          load.NewExtentMetrics(),
 		}
 

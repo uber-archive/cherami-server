@@ -37,6 +37,7 @@ import (
 	"github.com/uber/cherami-server/common"
 	"github.com/uber/cherami-server/common/configure"
 	dconfig "github.com/uber/cherami-server/common/dconfigclient"
+	"github.com/uber/cherami-server/common/metrics"
 	"github.com/uber/cherami-server/services/inputhost/load"
 	mockcommon "github.com/uber/cherami-server/test/mocks/common"
 	mockin "github.com/uber/cherami-server/test/mocks/inputhost"
@@ -419,11 +420,11 @@ func (s *InputHostSuite) TestInputHostMultipleClients() {
 	s.Equal(numExtents, len(inputHost.pathCache))
 	// Make sure we just have one stream to replica even though we have numClients clients
 	for _, pathCache := range inputHost.pathCache {
-		pathCache.extMutex.RLock()
+		pathCache.RLock()
 		for _, extInfo := range pathCache.extentCache {
 			s.Equal(numStoreStreams, len(extInfo.connection.streams))
 		}
-		pathCache.extMutex.RUnlock()
+		pathCache.RUnlock()
 	}
 	inputHost.pathMutex.RUnlock()
 
@@ -459,11 +460,13 @@ func (s *InputHostSuite) TestInputHostCacheTime() {
 	inputHost.pathMutex.RLock()
 	s.Equal(numExtents, len(inputHost.pathCache))
 	for _, pathCache := range inputHost.pathCache {
+		pathCache.RLock()
 		for _, conn := range pathCache.connections {
 			conn.lk.Lock()
 			s.Equal(false, conn.closed, "connection must be closed")
 			conn.lk.Unlock()
 		}
+		pathCache.RUnlock()
 	}
 	inputHost.pathMutex.RUnlock()
 
@@ -473,7 +476,7 @@ func (s *InputHostSuite) TestInputHostCacheTime() {
 	inputHost.Shutdown()
 }
 
-func (s *InputHostSuite) _TestInputHostLoadUnloadRace() {
+func (s *InputHostSuite) TestInputHostLoadUnloadRace() {
 	numAttempts := 10
 
 	inputHost, _ := NewInputHost("inputhost-test", s.mockService, s.mockMeta, nil)
@@ -491,27 +494,26 @@ func (s *InputHostSuite) _TestInputHostLoadUnloadRace() {
 	for i := 0; i < numAttempts; i++ {
 		wg.Add(1)
 		go func(waitG *sync.WaitGroup) {
-			err := inputHost.OpenPublisherStream(ctx, s.mockPub)
-			s.NoError(err)
+			inputHost.OpenPublisherStream(ctx, s.mockPub)
 			waitG.Done()
 		}(&wg)
-		// sleep for a bit to further have the load/unload race
-		time.Sleep(10 * time.Millisecond)
 	}
 
-	time.Sleep(5 * time.Second)
+	// sleep a bit so that we create the path
+	time.Sleep(1 * time.Second)
+
+	// first get the pathCache now
+	pathCache, _ := inputHost.getPathCacheByDestPath("foo")
+	s.NotNil(pathCache)
+
+	// unload everything
+	inputHost.unloadAll()
+
+	// make sure the pathCache is inactive
+	s.Equal(false, pathCache.isActiveNoLock(), "pathCache should not be active")
+
+	// make sure everything is stopped
 	wg.Wait()
-	// all connections must be torn down by now
-	inputHost.pathMutex.RLock()
-	for _, pathCache := range inputHost.pathCache {
-		for _, conn := range pathCache.connections {
-			conn.lk.Lock()
-			s.Equal(false, conn.closed, "connection must be closed")
-			conn.lk.Unlock()
-		}
-	}
-	inputHost.pathMutex.RUnlock()
-
 	inputHost.Shutdown()
 }
 
@@ -614,9 +616,9 @@ func (s *InputHostSuite) TestInputHostReconfigure() {
 	// 3. Make sure we just have one extent
 	pathCache, ok := inputHost.getPathCacheByDestPath("foo")
 	s.True(ok)
-	pathCache.extMutex.Lock()
+	pathCache.Lock()
 	s.Equal(1, len(pathCache.extentCache))
-	pathCache.extMutex.Unlock()
+	pathCache.Unlock()
 
 	// 4. Now add another extent
 	mExt1 := shared.NewExtent()
@@ -656,9 +658,9 @@ func (s *InputHostSuite) TestInputHostReconfigure() {
 	// 6. Now make sure we have 2 extents
 	pathCache, ok = inputHost.getPathCacheByDestPath("foo")
 	if ok {
-		pathCache.extMutex.Lock()
+		pathCache.Lock()
 		s.Equal(2, len(pathCache.extentCache))
-		pathCache.extMutex.Unlock()
+		pathCache.Unlock()
 	}
 
 	inputHost.Shutdown()
@@ -860,14 +862,66 @@ func (s *InputHostSuite) _TestInputHostPutMessageBatch() {
 	s.Equal(true, ok, "destination should be in the resolver cache now")
 	s.NotNil(pathCache)
 	inputHost.pathMutex.Lock()
-	inputHost.unloadPathCache(pathCache)
+	pathCache.Lock()
+	pathCache.prepareForUnload()
+	pathCache.Unlock()
 	inputHost.pathMutex.Unlock()
+	pathCache.unload()
 
 	// Now check the both the caches
 	_, ok = inputHost.getPathCacheByDestUUID(destDesc.GetDestinationUUID())
 	s.Equal(false, ok, "destination should now be gone from the resolver cache now")
 	_, ok = inputHost.getPathCacheByDestPath(destinationPath)
 	s.Equal(false, ok, "destination should now be gone from the resolver cache now")
+
+	inputHost.Shutdown()
+}
+
+// TestInputHostPutMessageBatchTimeout publishes a batch of messages and make sure
+// we timeout appropriately
+func (s *InputHostSuite) TestInputHostPutMessageBatchTimeout() {
+	destinationPath := "foo"
+	ctx, cancel := utilGetThriftContextWithPath(destinationPath)
+	defer cancel()
+	inputHost, _ := NewInputHost("inputhost-test", s.mockService, s.mockMeta, nil)
+
+	aMsg := store.NewAppendMessageAck()
+	msg := cherami.NewPutMessage()
+
+	appendTicker := time.NewTicker(5 * time.Second)
+	defer appendTicker.Stop()
+
+	pubTicker := time.NewTicker(5 * time.Second)
+	defer pubTicker.Stop()
+
+	// make sure we don't respond immediately, so that we can timeout
+	s.mockAppend.On("Write", mock.Anything).Return(nil).WaitUntil(appendTicker.C)
+	s.mockPub.On("Write", mock.Anything).Return(nil).WaitUntil(pubTicker.C)
+
+	s.mockAppend.On("Read").Return(aMsg, io.EOF).WaitUntil(appendTicker.C)
+	s.mockPub.On("Read").Return(msg, io.EOF).WaitUntil(pubTicker.C)
+
+	s.mockStore.On("OpenAppendStream", mock.Anything).Return(s.mockAppend, nil)
+
+	// setup a putMessageRequest, which is about to be timed out
+	putMessageRequest := &cherami.PutMessageBatchRequest{DestinationPath: &destinationPath}
+	msg.ID = common.StringPtr(strconv.Itoa(1))
+	msg.Data = []byte(fmt.Sprintf("hello-%d", 1))
+
+	// set the msgAckTimeout to a very low value before
+	// publishing the message through the batch API.
+	// We should see a failed message in the ack we get back and
+	// it's status should be timeout as well
+	msgAckTimeout = 1 * time.Second
+
+	putMessageRequest.Messages = append(putMessageRequest.Messages, msg)
+	putMessageAcks, err := inputHost.PutMessageBatch(ctx, putMessageRequest)
+	s.NoError(err)
+	s.NotNil(putMessageAcks)
+	s.Len(putMessageAcks.GetSuccessMessages(), 0)
+	s.Len(putMessageAcks.GetFailedMessages(), 1)
+	// make sure the status is Status_TIMEDOUT
+	s.Equal(cherami.Status_TIMEDOUT, putMessageAcks.GetFailedMessages()[0].GetStatus())
 
 	inputHost.Shutdown()
 }
@@ -955,15 +1009,16 @@ func (s *InputHostSuite) TestInputExtHostRateLimit() {
 
 	destUUID, destType, _, _ := inputHost.checkDestination(ctx, destinationPath)
 
-	extents, err := inputHost.getExtentsInfoForDestination(ctx, destUUID)
-	s.Nil(err)
+	extents, e := inputHost.getExtentsInfoForDestination(ctx, destUUID)
+	s.Nil(e)
 
 	putMsgCh := make(chan *inPutMessage, 90)
-	notifyExtHostCloseCh := make(chan string, defaultExtCloseNotifyChSize)
-	notifyExtHostUnloadCh := make(chan string, defaultExtCloseNotifyChSize)
 	ackChannel := make(chan *cherami.PutMessageAck, 90)
 
 	mockLoadReporterDaemonFactory := setupMockLoadReporterDaemonFactory()
+
+	reporter := metrics.NewSimpleReporter(nil)
+	logger := common.GetDefaultLogger().WithFields(bark.Fields{"test": "ExtHostRateLimit"})
 
 	pathCache := &inPathCache{
 		destinationPath:       destinationPath,
@@ -973,17 +1028,21 @@ func (s *InputHostSuite) TestInputExtHostRateLimit() {
 		loadReporterFactory:   mockLoadReporterDaemonFactory,
 		reconfigureCh:         make(chan inReconfigInfo, defaultBufferSize),
 		putMsgCh:              putMsgCh,
-		notifyCloseCh:         make(chan connectionID),
-		notifyExtHostCloseCh:  notifyExtHostCloseCh,
-		notifyExtHostUnloadCh: notifyExtHostUnloadCh,
 		connections:           make(map[connectionID]*pubConnection),
 		closeCh:               make(chan struct{}),
-		logger:                common.GetDefaultLogger().WithFields(bark.Fields{"test": "ExtHostRateLimit"}),
-		m3Client:              nil,
+		notifyExtHostCloseCh:  make(chan string, defaultExtCloseNotifyChSize),
+		notifyExtHostUnloadCh: make(chan string, defaultExtCloseNotifyChSize),
+		notifyConnsCloseCh:    make(chan connectionID, defaultConnsCloseChSize),
+		logger:                logger,
+		m3Client:              metrics.NewClient(reporter, metrics.Inputhost),
 		lastDisconnectTime:    time.Now(),
 		dstMetrics:            load.NewDstMetrics(),
 		hostMetrics:           load.NewHostMetrics(),
+		inputHost:             inputHost,
 	}
+
+	pathCache.loadReporter = inputHost.GetLoadReporterDaemonFactory().CreateReporter(time.Minute, pathCache, logger)
+	pathCache.destM3Client = metrics.NewClientWithTags(pathCache.m3Client, metrics.Inputhost, inputHost.getDestinationTags(destinationPath))
 
 	var connection *extHost
 	for _, extent := range extents {
@@ -995,16 +1054,16 @@ func (s *InputHostSuite) TestInputExtHostRateLimit() {
 			mockLoadReporterDaemonFactory,
 			inputHost.logger,
 			inputHost.GetClientFactory(),
-			&inputHost.shutdownWG,
+			&pathCache.connsWG,
 			true)
-		err = inputHost.checkAndLoadReplicaStreams(connection, extentUUID(extent.uuid), extent.replicas)
+		err := pathCache.checkAndLoadReplicaStreams(connection, extentUUID(extent.uuid), extent.replicas)
 		s.Nil(err)
 
 		// overwrite the token bucket
 
 		connection.SetExtTokenBucketValue(90)
 
-		inputHost.shutdownWG.Add(1)
+		pathCache.connsWG.Add(1)
 		connection.open()
 		break
 	}
@@ -1059,7 +1118,6 @@ func (s *InputHostSuite) TestInputExtHostRateLimit() {
 	close(wCh)
 	close(connection.forceUnloadCh)
 	connection.close()
-
 	inputHost.Shutdown()
 }
 

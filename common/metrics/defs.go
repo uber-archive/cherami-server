@@ -51,7 +51,7 @@ const (
 	Gauge
 )
 
-// Service names for all services that emit M3
+// Service names for all services that emit Metrics
 const (
 	Common ServiceIdx = iota
 	Frontend
@@ -111,54 +111,100 @@ var GoRuntimeMetrics = map[MetricName]MetricType{
 const (
 	// -- Operation scopes for Metadata (common) --
 
-	// MetadataListDestinationsScope represents method within metadatamgr
-	MetadataListDestinationsScope = iota
-	// MetadataListDestinationsPageScope represents method within metadatamgr
-	MetadataListDestinationsPageScope
-	// MetadataReadDstScope represents method within metadatamgr
-	MetadataReadDstScope
-	// MetadataReadExtentStatsScope represents method within metadatamgr
-	MetadataReadExtentStatsScope
-	// MetadataReadStoreExtentStatsScope represents method within metadatamgr
-	MetadataReadStoreExtentStatsScope
-	// MetadataReadConsumerGroupExtentScope represents method within metadatamgr
-	MetadataReadConsumerGroupExtentScope
-	// MetadataListExtentsByDstScope represents method within metadatamgr
-	MetadataListExtentsByDstScope
-	// MetadataListExtentsByInputScope represents method within metadatamgr
-	MetadataListExtentsByInputScope
-	// MetadataListExtentsByStoreScope represents method within metadatamgr
-	MetadataListExtentsByStoreScope
-	// MetadataListExtentsByConsGroupScope represents method within metadatamgr
-	MetadataListExtentsByConsGroupScope
-	// MetadataListConsGroupsByDstScope represents method within metadatamgr
-	MetadataListConsGroupsByDstScope
-	// MetadataListConsumerGroupsPageScope represents method within metadatamgr
-	MetadataListConsumerGroupsPageScope
-	// MetadataAddExtentToConsGroupScope represents method within metadatamgr
-	MetadataAddExtentToConsGroupScope
-	// MetadataCreateExtentScope represents method within metadatamgr
-	MetadataCreateExtentScope
-	// MetadataUpdateOutputScope represents method within metadatamgr
-	MetadataUpdateOutputScope
-	// MetadataSealExtentScope represents method within metadatamgr
-	MetadataSealExtentScope
-	// MetadataDeleteConsumerGroupScope represents method within metadatamgr
-	MetadataDeleteConsumerGroupScope
-	// MetadataUpdateDLQCursorScope represents a method within metadatamgr
-	MetadataUpdateDLQCursorScope
-	// MetadataMoveExtentScope lorem ipsum
-	MetadataMoveExtentScope
-	// MetadataReadConsumerGroupScope lorem ipsum
+	// MetadataListEntityOpsScope defines scope for an operation on metadata
+	MetadataListEntityOpsScope = iota
+	// MetadataHostAddrToUUIDScope defines scope for an operation on metadata
+	MetadataHostAddrToUUIDScope
+	// MetadataListAllConsumerGroupsScope defines scope for an operation on metadata
+	MetadataListAllConsumerGroupsScope
+	// MetadataListConsumerGroupsScope defines scope for an operation on metadata
+	MetadataListConsumerGroupsScope
+	// MetadataListDestinationsScope defines scope for an operation on metadata
+	MetadataListDestinationsScope
+	// MetadataListDestinationsByUUIDScope defines scope for an operation on metadata
+	MetadataListDestinationsByUUIDScope
+	// MetadataListExtentsStatsScope defines scope for an operation on metadata
+	MetadataListExtentsStatsScope
+	// MetadataListHostsScope defines scope for an operation on metadata
+	MetadataListHostsScope
+	// MetadataListInputHostExtentsStatsScope defines scope for an operation on metadata
+	MetadataListInputHostExtentsStatsScope
+	// MetadataListStoreExtentsStatsScope defines scope for an operation on metadata
+	MetadataListStoreExtentsStatsScope
+	// MetadataReadConsumerGroupScope defines scope for an operation on metadata
 	MetadataReadConsumerGroupScope
-	// MetadataReadConsumerGroupByUUIDScope lorem ipsum
+	// MetadataReadConsumerGroupByUUIDScope defines scope for an operation on metadata
 	MetadataReadConsumerGroupByUUIDScope
-	// MetadataUpdateExtentStatsScope lorem ipsum
-	MetadataUpdateExtentStatsScope
-	// MetadataUpdateConsumerGroupExtentStatusScope lorem ipsum
-	MetadataUpdateConsumerGroupExtentStatusScope
-	// MetadataDeleteDestinationUUIDScope lorem ipsum
+	// MetadataReadConsumerGroupExtentScope defines scope for an operation on metadata
+	MetadataReadConsumerGroupExtentScope
+	// MetadataReadConsumerGroupExtentsScope defines scope for an operation on metadata
+	MetadataReadConsumerGroupExtentsScope
+	// MetadataReadConsumerGroupExtentsByExtUUIDScope defines scope for an operation on metadata
+	MetadataReadConsumerGroupExtentsByExtUUIDScope
+	// MetadataReadDestinationScope defines scope for an operation on metadata
+	MetadataReadDestinationScope
+	// MetadataReadExtentStatsScope defines scope for an operation on metadata
+	MetadataReadExtentStatsScope
+	// MetadataUUIDToHostAddrScope defines scope for an operation on metadata
+	MetadataUUIDToHostAddrScope
+	// MetadataUpdateServiceConfigScope defines scope for an operation on metadata
+	MetadataUpdateServiceConfigScope
+	// MetadataCreateConsumerGroupScope defines scope for an operation on metadata
+	MetadataCreateConsumerGroupScope
+	// MetadataCreateConsumerGroupExtentScope defines scope for an operation on metadata
+	MetadataCreateConsumerGroupExtentScope
+	// MetadataCreateDestinationScope defines scope for an operation on metadata
+	MetadataCreateDestinationScope
+	// MetadataCreateDestinationUUIDScope defines scope for an operation on metadata
+	MetadataCreateDestinationUUIDScope
+	// MetadataCreateExtentScope defines scope for an operation on metadata
+	MetadataCreateExtentScope
+	// MetadataCreateHostInfoScope defines scope for an operation on metadata
+	MetadataCreateHostInfoScope
+	// MetadataCreateServiceConfigScope defines scope for an operation on metadata
+	MetadataCreateServiceConfigScope
+	// MetadataDeleteConsumerGroupScope defines scope for an operation on metadata
+	MetadataDeleteConsumerGroupScope
+	// MetadataDeleteDestinationScope defines scope for an operation on metadata
+	MetadataDeleteDestinationScope
+	// MetadataDeleteDestinationUUIDScope defines scope for an operation on metadata
 	MetadataDeleteDestinationUUIDScope
+	// MetadataDeleteHostInfoScope defines scope for an operation on metadata
+	MetadataDeleteHostInfoScope
+	// MetadataDeleteServiceConfigScope defines scope for an operation on metadata
+	MetadataDeleteServiceConfigScope
+	// MetadataMoveExtentScope defines scope for an operation on metadata
+	MetadataMoveExtentScope
+	// MetadataReadHostInfoScope defines scope for an operation on metadata
+	MetadataReadHostInfoScope
+	// MetadataReadServiceConfigScope defines scope for an operation on metadata
+	MetadataReadServiceConfigScope
+	// MetadataReadStoreExtentReplicaStatsScope defines scope for an operation on metadata
+	MetadataReadStoreExtentReplicaStatsScope
+	// MetadataRegisterHostUUIDScope defines scope for an operation on metadata
+	MetadataRegisterHostUUIDScope
+	// MetadataSealExtentScope defines scope for an operation on metadata
+	MetadataSealExtentScope
+	// MetadataSetAckOffsetScope defines scope for an operation on metadata
+	MetadataSetAckOffsetScope
+	// MetadataSetOutputHostScope defines scope for an operation on metadata
+	MetadataSetOutputHostScope
+	// MetadataUpdateConsumerGroupScope defines scope for an operation on metadata
+	MetadataUpdateConsumerGroupScope
+	// MetadataUpdateConsumerGroupExtentStatusScope defines scope for an operation on metadata
+	MetadataUpdateConsumerGroupExtentStatusScope
+	// MetadataUpdateDestinationScope defines scope for an operation on metadata
+	MetadataUpdateDestinationScope
+	// MetadataUpdateDestinationDLQCursorsScope defines scope for an operation on metadata
+	MetadataUpdateDestinationDLQCursorsScope
+	// MetadataUpdateExtentReplicaStatsScope defines scope for an operation on metadata
+	MetadataUpdateExtentReplicaStatsScope
+	// MetadataUpdateExtentStatsScope defines scope for an operation on metadata
+	MetadataUpdateExtentStatsScope
+	// MetadataUpdateHostInfoScope defines scope for an operation on metadata
+	MetadataUpdateHostInfoScope
+	// MetadataUpdateStoreExtentReplicaStatsScope defines scope for an operation on metadata
+	MetadataUpdateStoreExtentReplicaStatsScope
 
 	// -- Operation scopes for InputHost --
 
@@ -238,8 +284,8 @@ const (
 	StoreFailedEventScope
 	// StoreExtentStatusOutOfSyncEventScope represents an event handler
 	StoreExtentStatusOutOfSyncEventScope
-	// RemoteZoneExtentCreatedEventScope represents event handler
-	RemoteZoneExtentCreatedEventScope
+	// StartReplicationForRemoteZoneExtentScope represents event handler
+	StartReplicationForRemoteZoneExtentScope
 	// ExtentMonitorScope represents the extent monitor daemon
 	ExtentMonitorScope
 	// RetentionMgrScope represents the retention manager
@@ -358,34 +404,57 @@ var scopeDefs = map[ServiceIdx]map[int]scopeDefinition{
 
 	// Common operation tag values (shared by all services)
 	Common: {
-		// Metadata operation tag values as seen by the M3 backend
-		MetadataListDestinationsScope:                {operation: "MetadataListDestinations"},
-		MetadataListDestinationsPageScope:            {operation: "MetadataListDestinationsPage"},
-		MetadataReadDstScope:                         {operation: "MetadataReadDst"},
-		MetadataReadExtentStatsScope:                 {operation: "MetadataReadExtentStats"},
-		MetadataReadStoreExtentStatsScope:            {operation: "MetadataReadStoreExtentStats"},
-		MetadataReadConsumerGroupExtentScope:         {operation: "MetadataReadConsumerGroupExtent"},
-		MetadataListExtentsByDstScope:                {operation: "MetadataListExtentsByDst"},
-		MetadataListExtentsByInputScope:              {operation: "MetadataListExtentsByInput"},
-		MetadataListExtentsByStoreScope:              {operation: "MetadataListExtentsByStore"},
-		MetadataListExtentsByConsGroupScope:          {operation: "MetadataListExtentsByConsGroup"},
-		MetadataListConsGroupsByDstScope:             {operation: "MetadataListConsGroupsByDst"},
-		MetadataListConsumerGroupsPageScope:          {operation: "MetadataListConsumerGroupsPage"},
-		MetadataAddExtentToConsGroupScope:            {operation: "MetadataAddExtentToConsGroup"},
-		MetadataCreateExtentScope:                    {operation: "MetadataCreateExtent"},
-		MetadataUpdateOutputScope:                    {operation: "MetadataUpdateOutput"},
-		MetadataSealExtentScope:                      {operation: "MetadataSealExtent"},
-		MetadataDeleteConsumerGroupScope:             {operation: "MetadataDeleteConsumerGroup"},
-		MetadataUpdateDLQCursorScope:                 {operation: "MetadataUpdateDLQCursor"},
-		MetadataMoveExtentScope:                      {operation: "MetadataMoveExtent"},
-		MetadataReadConsumerGroupScope:               {operation: "MetadataReadConsumerGroup"},
-		MetadataReadConsumerGroupByUUIDScope:         {operation: "MetadataReadConsumerGroupByUUID"},
-		MetadataUpdateExtentStatsScope:               {operation: "MetadataUpdateExtentStats"},
-		MetadataUpdateConsumerGroupExtentStatusScope: {operation: "MetadataUpdateConsumerGroupExtentStatus"},
-		MetadataDeleteDestinationUUIDScope:           {operation: "MetadataDeleteDestinationUUID"},
+		// Metadata operation tag values as seen by the Metrics backend
+		MetadataListEntityOpsScope:                     {operation: "MetadataListEntityOps"},
+		MetadataHostAddrToUUIDScope:                    {operation: "MetadataHostAddrToUUID"},
+		MetadataListAllConsumerGroupsScope:             {operation: "MetadataListAllConsumerGroups"},
+		MetadataListConsumerGroupsScope:                {operation: "MetadataListConsumerGroups"},
+		MetadataListDestinationsScope:                  {operation: "MetadataListDestinations"},
+		MetadataListDestinationsByUUIDScope:            {operation: "MetadataListDestinationsByUUID"},
+		MetadataListExtentsStatsScope:                  {operation: "MetadataListExtentsStats"},
+		MetadataListHostsScope:                         {operation: "MetadataListHosts"},
+		MetadataListInputHostExtentsStatsScope:         {operation: "MetadataListInputHostExtentsStats"},
+		MetadataListStoreExtentsStatsScope:             {operation: "MetadataListStoreExtentsStats"},
+		MetadataReadConsumerGroupScope:                 {operation: "MetadataReadConsumerGroup"},
+		MetadataReadConsumerGroupByUUIDScope:           {operation: "MetadataReadConsumerGroupByUUID"},
+		MetadataReadConsumerGroupExtentScope:           {operation: "MetadataReadConsumerGroupExtent"},
+		MetadataReadConsumerGroupExtentsScope:          {operation: "MetadataReadConsumerGroupExtents"},
+		MetadataReadConsumerGroupExtentsByExtUUIDScope: {operation: "MetadataReadConsumerGroupExtentsByExtUUID"},
+		MetadataReadDestinationScope:                   {operation: "MetadataReadDestination"},
+		MetadataReadExtentStatsScope:                   {operation: "MetadataReadExtentStats"},
+		MetadataUUIDToHostAddrScope:                    {operation: "MetadataUUIDToHostAddr"},
+		MetadataUpdateServiceConfigScope:               {operation: "MetadataUpdateServiceConfig"},
+		MetadataCreateConsumerGroupScope:               {operation: "MetadataCreateConsumerGroup"},
+		MetadataCreateConsumerGroupExtentScope:         {operation: "MetadataCreateConsumerGroupExtent"},
+		MetadataCreateDestinationScope:                 {operation: "MetadataCreateDestination"},
+		MetadataCreateDestinationUUIDScope:             {operation: "MetadataCreateDestinationUUID"},
+		MetadataCreateExtentScope:                      {operation: "MetadataCreateExtent"},
+		MetadataCreateHostInfoScope:                    {operation: "MetadataCreateHostInfo"},
+		MetadataCreateServiceConfigScope:               {operation: "MetadataCreateServiceConfig"},
+		MetadataDeleteConsumerGroupScope:               {operation: "MetadataDeleteConsumerGroup"},
+		MetadataDeleteDestinationScope:                 {operation: "MetadataDeleteDestination"},
+		MetadataDeleteDestinationUUIDScope:             {operation: "MetadataDeleteDestinationUUID"},
+		MetadataDeleteHostInfoScope:                    {operation: "MetadataDeleteHostInfo"},
+		MetadataDeleteServiceConfigScope:               {operation: "MetadataDeleteServiceConfig"},
+		MetadataMoveExtentScope:                        {operation: "MetadataMoveExtent"},
+		MetadataReadHostInfoScope:                      {operation: "MetadataReadHostInfo"},
+		MetadataReadServiceConfigScope:                 {operation: "MetadataReadServiceConfig"},
+		MetadataReadStoreExtentReplicaStatsScope:       {operation: "MetadataReadStoreExtentReplicaStats"},
+		MetadataRegisterHostUUIDScope:                  {operation: "MetadataRegisterHostUUID"},
+		MetadataSealExtentScope:                        {operation: "MetadataSealExtent"},
+		MetadataSetAckOffsetScope:                      {operation: "MetadataSetAckOffset"},
+		MetadataSetOutputHostScope:                     {operation: "MetadataSetOutputHost"},
+		MetadataUpdateConsumerGroupScope:               {operation: "MetadataUpdateConsumerGroup"},
+		MetadataUpdateConsumerGroupExtentStatusScope:   {operation: "MetadataUpdateConsumerGroupExtentStatus"},
+		MetadataUpdateDestinationScope:                 {operation: "MetadataUpdateDestination"},
+		MetadataUpdateDestinationDLQCursorsScope:       {operation: "MetadataUpdateDestinationDLQCursors"},
+		MetadataUpdateExtentReplicaStatsScope:          {operation: "MetadataUpdateExtentReplicaStats"},
+		MetadataUpdateExtentStatsScope:                 {operation: "MetadataUpdateExtentStats"},
+		MetadataUpdateHostInfoScope:                    {operation: "MetadataUpdateHostInfo"},
+		MetadataUpdateStoreExtentReplicaStatsScope:     {operation: "MetadataUpdateStoreExtentReplicaStats"},
 	},
 
-	// Frontend operation tag values as seen by the M3 backend
+	// Frontend operation tag values as seen by the Metrics backend
 	Frontend: {
 		CreateDestinationScope:        {operation: "CreateDestination"},
 		ReadDestinationScope:          {operation: "ReadDestination"},
@@ -406,7 +475,7 @@ var scopeDefs = map[ServiceIdx]map[int]scopeDefinition{
 		MergeDLQForConsumerGroupScope: {operation: "MergeDLQForConsumerGroup"},
 	},
 
-	// Inputhost operation tag values as seen by the M3 backend
+	// Inputhost operation tag values as seen by the Metrics backend
 	Inputhost: {
 		OpenPublisherStreamScope:      {operation: "OpenPublisherStream"},
 		DestinationsUpdatedScope:      {operation: "DestinationsUpdated"},
@@ -414,7 +483,7 @@ var scopeDefs = map[ServiceIdx]map[int]scopeDefinition{
 		PutMessageBatchInputHostScope: {operation: "PutMessageBatchInputHost"},
 	},
 
-	// Outputhost operation tag values as seen by the M3 backend
+	// Outputhost operation tag values as seen by the Metrics backend
 	Outputhost: {
 		OpenConsumerStreamScope:            {operation: "OpenConsumerStream"},
 		AckMessagesScope:                   {operation: "AckMessage"},
@@ -424,7 +493,7 @@ var scopeDefs = map[ServiceIdx]map[int]scopeDefinition{
 		UnloadConsumerGroupsScope:          {operation: "UnloadConsumerGroups"},
 	},
 
-	// Storage operation tag values as seen by the M3 backend
+	// Storage operation tag values as seen by the Metrics backend
 	Storage: {
 		OpenAppendStreamScope:        {operation: "OpenAppendStream"},
 		OpenReadStreamScope:          {operation: "OpenReadStream"},
@@ -439,7 +508,7 @@ var scopeDefs = map[ServiceIdx]map[int]scopeDefinition{
 		ReplicateExtentScope:         {operation: "ReplicateExtent"},
 	},
 
-	// Replicator operation tag valuies as seen by the M3 backend
+	// Replicator operation tag values as seen by the Metrics backend
 	Replicator: {
 		OpenReplicationRemoteReadScope:   {operation: "OpenReplicationRemoteReadStream"},
 		OpenReplicationReadScope:         {operation: "OpenReplicationReadStream"},
@@ -454,40 +523,40 @@ var scopeDefs = map[ServiceIdx]map[int]scopeDefinition{
 		ReplicatorReconcileScope:         {operation: "ReplicatorReconcile"},
 	},
 
-	// Controller operation tag values as seen by the M3 backend
+	// Controller operation tag values as seen by the Metrics backend
 	Controller: {
-		GetInputHostsScope:                    {operation: "GetInputHosts"},
-		GetOutputHostsScope:                   {operation: "GetOutputHosts"},
-		ReportNodeMetricScope:                 {operation: "ReportNodeMetric"},
-		ReportDestinationMetricScope:          {operation: "ReportDestinationMetric"},
-		ReportDestinationExtentMetricScope:    {operation: "ReportDestinatoinExtentMetric"},
-		ReportConsumerGroupMetricScope:        {operation: "ReportConsumerGroupMetric"},
-		ReportConsumerGroupExtentMetricScope:  {operation: "ReportConsumerGroupExtentMetric"},
-		ReportStoreExtentMetricScope:          {operation: "ReportStoreExtentMetric"},
-		RefreshInputHostsForDstScope:          {operation: "RefreshInputHostsForDst"},
-		RefreshOutputHostsForConsGroupScope:   {operation: "RefreshOutputHostsForConsGroup"},
-		EventPipelineScope:                    {operation: "EventPipeline"},
-		ExtentsUnreachableScope:               {operation: "ExtentsUnreachable"},
-		ExtentCreatedEventScope:               {operation: "ExtentCreatedEvent"},
-		ConsGroupUpdatedEventScope:            {operation: "ConsGroupUpdatedEvent"},
-		ExtentDownEventScope:                  {operation: "ExtentDownEvent"},
-		InputNotifyEventScope:                 {operation: "InputNotifyEvent"},
-		OutputNotifyEventScope:                {operation: "OutputNotifyEvent"},
-		InputFailedEventScope:                 {operation: "InputFailedEvent"},
-		StoreFailedEventScope:                 {operation: "StoreFailedEvent"},
-		StoreExtentStatusOutOfSyncEventScope:  {operation: "StoreExtentStatusOutOfSyncEvent"},
-		RemoteZoneExtentCreatedEventScope:     {operation: "RemoteZoneExtentCreatedEvent"},
-		QueueDepthBacklogCGScope:              {operation: "QueueDepthBacklog"},
-		ExtentMonitorScope:                    {operation: "ExtentMonitor"},
-		RetentionMgrScope:                     {operation: "RetentionMgr"},
-		DLQOperationScope:                     {operation: "DLQOperation"},
-		ControllerCreateDestinationScope:      {operation: "CreateDestination"},
-		ControllerUpdateDestinationScope:      {operation: "UpdateDestination"},
-		ControllerDeleteDestinationScope:      {operation: "DeleteDestination"},
-		ControllerCreateConsumerGroupScope:    {operation: "CreateConsumerGroup"},
-		ControllerUpdateConsumerGroupScope:    {operation: "UpdateConsumerGroup"},
-		ControllerDeleteConsumerGroupScope:    {operation: "DeleteConsumerGroup"},
-		ControllerCreateRemoteZoneExtentScope: {operation: "CreateRemoteZoneExtent"},
+		GetInputHostsScope:                       {operation: "GetInputHosts"},
+		GetOutputHostsScope:                      {operation: "GetOutputHosts"},
+		ReportNodeMetricScope:                    {operation: "ReportNodeMetric"},
+		ReportDestinationMetricScope:             {operation: "ReportDestinationMetric"},
+		ReportDestinationExtentMetricScope:       {operation: "ReportDestinatoinExtentMetric"},
+		ReportConsumerGroupMetricScope:           {operation: "ReportConsumerGroupMetric"},
+		ReportConsumerGroupExtentMetricScope:     {operation: "ReportConsumerGroupExtentMetric"},
+		ReportStoreExtentMetricScope:             {operation: "ReportStoreExtentMetric"},
+		RefreshInputHostsForDstScope:             {operation: "RefreshInputHostsForDst"},
+		RefreshOutputHostsForConsGroupScope:      {operation: "RefreshOutputHostsForConsGroup"},
+		EventPipelineScope:                       {operation: "EventPipeline"},
+		ExtentsUnreachableScope:                  {operation: "ExtentsUnreachable"},
+		ExtentCreatedEventScope:                  {operation: "ExtentCreatedEvent"},
+		ConsGroupUpdatedEventScope:               {operation: "ConsGroupUpdatedEvent"},
+		ExtentDownEventScope:                     {operation: "ExtentDownEvent"},
+		InputNotifyEventScope:                    {operation: "InputNotifyEvent"},
+		OutputNotifyEventScope:                   {operation: "OutputNotifyEvent"},
+		InputFailedEventScope:                    {operation: "InputFailedEvent"},
+		StoreFailedEventScope:                    {operation: "StoreFailedEvent"},
+		StoreExtentStatusOutOfSyncEventScope:     {operation: "StoreExtentStatusOutOfSyncEvent"},
+		StartReplicationForRemoteZoneExtentScope: {operation: "StartReplicationForRemoteZoneExtent"},
+		QueueDepthBacklogCGScope:                 {operation: "QueueDepthBacklog"},
+		ExtentMonitorScope:                       {operation: "ExtentMonitor"},
+		RetentionMgrScope:                        {operation: "RetentionMgr"},
+		DLQOperationScope:                        {operation: "DLQOperation"},
+		ControllerCreateDestinationScope:         {operation: "CreateDestination"},
+		ControllerUpdateDestinationScope:         {operation: "UpdateDestination"},
+		ControllerDeleteDestinationScope:         {operation: "DeleteDestination"},
+		ControllerCreateConsumerGroupScope:       {operation: "CreateConsumerGroup"},
+		ControllerUpdateConsumerGroupScope:       {operation: "UpdateConsumerGroup"},
+		ControllerDeleteConsumerGroupScope:       {operation: "DeleteConsumerGroup"},
+		ControllerCreateRemoteZoneExtentScope:    {operation: "CreateRemoteZoneExtent"},
 	},
 }
 
@@ -590,6 +659,8 @@ const (
 	OutputhostFailures
 	// OutputhostLongPollingTimeOut indicates time out for long polling
 	OutputhostLongPollingTimeOut
+	// OutputhostReceiveMsgBatchWriteToMsgCacheTimeout indicates time out for ReceiveMsgBatch to write to msg cache
+	OutputhostReceiveMsgBatchWriteToMsgCacheTimeout
 	// OutputhostMessageSent records the count of messages sent
 	OutputhostMessageSent
 	// OutputhostMessageFailures records the count of messages sent failures
@@ -888,26 +959,27 @@ var metricDefs = map[ServiceIdx]map[int]metricDefinition{
 
 	// definitions for Outputhost metrics
 	Outputhost: {
-		OutputhostRequests:               {Counter, "outputhost.requests"},
-		OutputhostFailures:               {Counter, "outputhost.errors"},
-		OutputhostLongPollingTimeOut:     {Counter, "outputhost.timeout-longpoll"},
-		OutputhostMessageSent:            {Counter, "outputhost.message.sent"},
-		OutputhostMessageFailures:        {Counter, "outputhost.message.errors"},
-		OutputhostCreditsReceived:        {Counter, "outputhost.credit-received"},
-		OutputhostDLQMessageRequests:     {Counter, "outputhost.message.sent-dlq"},
-		OutputhostDLQMessageFailures:     {Counter, "outputhost.message.errors-dlq"},
-		OutputhostMessageRedelivered:     {Counter, "outputhost.message.redelivered"},
-		OutputhostMessageSentAck:         {Counter, "outputhost.message.sent-ack"},
-		OutputhostMessageSentNAck:        {Counter, "outputhost.message.sent-nack"},
-		OutputhostMessageAckFailures:     {Counter, "outputhost.message.errors-ack"},
-		OutputhostMessageNackFailures:    {Counter, "outputhost.message.errors-nack"},
-		OutputhostMessageNoAckManager:    {Counter, "outputhost.message.no-ackmgr"},
-		OutputhostMessageDiffSession:     {Counter, "outputhost.message.diff-session"},
-		OutputhostMessageAckManagerError: {Counter, "outputhost.message.errors-ackmgr"},
-		OutputhostUserFailures:           {Counter, "outputhost.user-errors"},
-		OutputhostInternalFailures:       {Counter, "outputhost.internal-errors"},
-		OutputhostConsConnection:         {Gauge, "outputhost.consconnection"},
-		OutputhostLatencyTimer:           {Timer, "outputhost.latency"},
+		OutputhostRequests:                              {Counter, "outputhost.requests"},
+		OutputhostFailures:                              {Counter, "outputhost.errors"},
+		OutputhostLongPollingTimeOut:                    {Counter, "outputhost.timeout-longpoll"},
+		OutputhostReceiveMsgBatchWriteToMsgCacheTimeout: {Counter, "outputhost.timeout-receive-msg-batch-write-to-msg-cache"},
+		OutputhostMessageSent:                           {Counter, "outputhost.message.sent"},
+		OutputhostMessageFailures:                       {Counter, "outputhost.message.errors"},
+		OutputhostCreditsReceived:                       {Counter, "outputhost.credit-received"},
+		OutputhostDLQMessageRequests:                    {Counter, "outputhost.message.sent-dlq"},
+		OutputhostDLQMessageFailures:                    {Counter, "outputhost.message.errors-dlq"},
+		OutputhostMessageRedelivered:                    {Counter, "outputhost.message.redelivered"},
+		OutputhostMessageSentAck:                        {Counter, "outputhost.message.sent-ack"},
+		OutputhostMessageSentNAck:                       {Counter, "outputhost.message.sent-nack"},
+		OutputhostMessageAckFailures:                    {Counter, "outputhost.message.errors-ack"},
+		OutputhostMessageNackFailures:                   {Counter, "outputhost.message.errors-nack"},
+		OutputhostMessageNoAckManager:                   {Counter, "outputhost.message.no-ackmgr"},
+		OutputhostMessageDiffSession:                    {Counter, "outputhost.message.diff-session"},
+		OutputhostMessageAckManagerError:                {Counter, "outputhost.message.errors-ackmgr"},
+		OutputhostUserFailures:                          {Counter, "outputhost.user-errors"},
+		OutputhostInternalFailures:                      {Counter, "outputhost.internal-errors"},
+		OutputhostConsConnection:                        {Gauge, "outputhost.consconnection"},
+		OutputhostLatencyTimer:                          {Timer, "outputhost.latency"},
 	},
 
 	// definitions for Frontend metrics
