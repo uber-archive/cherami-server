@@ -504,6 +504,19 @@ func (h *InputHost) PutMessageBatch(ctx thrift.Context, request *cherami.PutMess
 	var respStatus cherami.Status
 	var respMsg string
 
+	ackReceived := func(ack *cherami.PutMessageAck) {
+		if ack.GetStatus() != cherami.Status_OK {
+			if ack.GetStatus() != cherami.Status_THROTTLED {
+				internalErrs++
+			} else {
+				userErrs++
+			}
+			result.FailedMessages = append(result.FailedMessages, ack)
+		} else {
+			result.SuccessMessages = append(result.SuccessMessages, ack)
+		}
+		delete(inflightMsgMap, ack.GetID())
+	}
 	// Setup the msgTimer
 	msgTimer := common.NewTimer(msgAckTimeout)
 	defer msgTimer.Stop()
@@ -516,24 +529,17 @@ ACKDRAIN:
 	for i := 0; i < inflightRequestCnt; i++ {
 		select {
 		case ack := <-ackChannel:
-			if ack.GetStatus() != cherami.Status_OK {
-				if ack.GetStatus() != cherami.Status_THROTTLED {
-					internalErrs++
-				} else {
-					userErrs++
-				}
-				result.FailedMessages = append(result.FailedMessages, ack)
-			} else {
-				result.SuccessMessages = append(result.SuccessMessages, ack)
-			}
-			delete(inflightMsgMap, ack.GetID())
+			ackReceived(ack)
 		default:
 			// Now look for either the pathCache unloading,
-			// or the msgTimer timing out.
+			// or the msgTimer timing out along with the
+			// ackChannel as well.
 			// We do this in the default case to make sure
 			// we can drain all the acks in the channel above
 			// before bailing out
 			select {
+			case ack := <-ackChannel:
+				ackReceived(ack)
 			case <-pathCache.closeCh:
 				respStatus = cherami.Status_FAILED
 				respMsg = "pathCache unloaded"
