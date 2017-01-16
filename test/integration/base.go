@@ -173,7 +173,7 @@ func (tb *testBase) setupSuiteImpl(t *testing.T) {
 	err = metadata.CreateKeyspace(tb.mClient.GetSession(), tb.keyspace, 1, true)
 	tb.NoError(err)
 
-	err = metadata.LoadSchema("/usr/local/bin/cqlsh", "../../clients/metadata/schema/metadata_test.cql", tb.keyspace)
+	err = metadata.LoadSchema("/usr/local/bin/cqlsh", "../../clients/metadata/schema/metadata.cql", tb.keyspace)
 	tb.NoError(err)
 
 	// Adjust the controller and storehost scan intervals

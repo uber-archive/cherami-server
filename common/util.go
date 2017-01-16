@@ -57,7 +57,6 @@ var ringpopBootstrapFile string
 const hyperbahnPort int16 = 21300
 const rpAppNamePrefix string = "cherami"
 const maxRpJoinTimeout = 30 * time.Second
-const defaultNumReplicas = 3
 const maxRateExtrapolationTime = 120.0
 
 // MaxDuration is maximum time duration

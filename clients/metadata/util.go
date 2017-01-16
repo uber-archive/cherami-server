@@ -144,7 +144,7 @@ func (s *TestCluster) SetupTestCluster() {
 	ip := `127.0.0.1`
 	s.createCluster(ip, gocql.Consistency(1), generateRandomKeyspace(10))
 	s.createKeyspace(1)
-	s.loadSchema("schema/metadata_test.cql")
+	s.loadSchema("schema/metadata.cql")
 
 	var err error
 	s.client, err = NewCassandraMetadataService(&configure.MetadataConfig{

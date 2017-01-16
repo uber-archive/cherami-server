@@ -11,5 +11,5 @@ keyspace="cherami"
 CHERAMI_CQLSH_DIR="/usr/local/bin"
 CHERAMI_SCHEMA_DIR="clients/metadata/schema"
 
-$CHERAMI_CQLSH_DIR/cqlsh -f $CHERAMI_SCHEMA_DIR/metadata_keyspace_test.cql
-$CHERAMI_CQLSH_DIR/cqlsh -k $keyspace -f $CHERAMI_SCHEMA_DIR/metadata_test.cql
+$CHERAMI_CQLSH_DIR/cqlsh -f $CHERAMI_SCHEMA_DIR/metadata_keyspace.cql
+$CHERAMI_CQLSH_DIR/cqlsh -k $keyspace -f $CHERAMI_SCHEMA_DIR/metadata.cql

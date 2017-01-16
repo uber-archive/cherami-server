@@ -17,13 +17,14 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
+
+# DefaultServiceConfig stores the default service config for each service
 DefaultServiceConfig:
-  HostUUID: ""
   HyperbahnBootstrapFile: ""
   RingHosts: ""
-  EnableLimits: true # by default we have limits enabled
-  ListenAddress: ""
+  EnableLimits: true
 
+# ServiceConfig overrides default config with service-specific config such as ports
 ServiceConfig:
   cherami-inputhost:
     Port: 4240
@@ -72,21 +73,30 @@ ServiceConfig:
       logLevel: warn
       disableLogging: true
 
+# MetadataConfig specifies location of the Cassandra and ketspace
 MetadataConfig:
   CassandraHosts: ""
   Keyspace: "cherami"
   Consistency: "one"
   ClusterName: "base"
 
+# ReplicatorConfig specifies 
 ReplicatorConfig:
   DefaultAuthoritativeZone: "zone1"
   ReplicatorHosts:
     zone1: 192.168.0.1
     zone2: 192.168.0.2
 
+# Logging configuration
 logging:
   level: error
   stdout: false
 
+# DefaultDestinationConfig right now configures how many replicas you want
 DefaultDestinationConfig:
   Replicas: 3
+
+# StorageConfig specfies location of the message storage, and the UUID of the storage host. The UUID should be different in each host.
+# StorageConfig:
+#   BaseDir: ""
+#   HostUUID: ""
