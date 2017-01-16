@@ -536,8 +536,7 @@ func setupTestTChannelUtil(sName string, thriftService thrift.TChanServer) (*tch
 	server := thrift.NewServer(ch)
 	server.Register(thriftService)
 
-	ip, _ := tchannel.ListenIP()
-	if err = ch.ListenAndServe(fmt.Sprintf("%s:0", ip.String())); err != nil {
+	if err = ch.ListenAndServe("127.0.0.1:0"); err != nil {
 		log.Fatalf("Unable to start tchannel server: %v", err)
 	}
 

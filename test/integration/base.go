@@ -23,7 +23,6 @@ package integration
 import (
 	"fmt"
 	"io/ioutil"
-	"net"
 	"os"
 	"strconv"
 	"sync"
@@ -39,12 +38,12 @@ import (
 	"github.com/uber/cherami-server/services/inputhost"
 	"github.com/uber/cherami-server/services/outputhost"
 	"github.com/uber/cherami-server/services/storehost"
+	"github.com/uber/cherami-server/test"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/pborman/uuid"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
-	"github.com/uber/tchannel-go"
 )
 
 type (
@@ -63,31 +62,9 @@ type (
 	}
 )
 
-func findEphemeralPort(ip, serviceName string) int {
-	addr := ip + ":0"
-	conn, err := net.Listen("tcp", addr)
-	if err != nil {
-		log.Errorf(err.Error())
-		return 0
-	}
-	log.Debugf("serviceName: %#q addr:%v", serviceName, conn.Addr().String())
-	_, port, err := common.SplitHostPort(conn.Addr().String())
-	if err != nil {
-		conn.Close()
-		log.Errorf(err.Error())
-		return 0
-	}
-	conn.Close()
-	return port
-}
-
 func (tb *testBase) buildConfig(clusterSz map[string]int, numReplicas int) map[string][]*configure.AppConfig {
 
 	services := []string{common.StoreServiceName, common.InputServiceName, common.OutputServiceName, common.FrontendServiceName, common.ControllerServiceName}
-
-	ip, err := tchannel.ListenIP()
-	tb.Nil(err)
-	listenIP := ip.String()
 
 	appCfgMap := make(map[string][]*configure.AppConfig)
 
@@ -104,9 +81,13 @@ func (tb *testBase) buildConfig(clusterSz map[string]int, numReplicas int) map[s
 
 		for i := 0; i < nPorts; i++ {
 
-			port := findEphemeralPort(listenIP, common.StoreServiceName)
-			wsPort := findEphemeralPort(listenIP, common.StoreServiceName)
+			hostPort, listenIP, port, err := test.FindEphemeralPort()
+			tb.Nil(err)
+			_, _, wsPort, err := test.FindEphemeralPort()
+			tb.Nil(err)
 
+			log.Debugf("serviceName: %#q addr:%v", common.StoreServiceName, hostPort)
+			
 			if ringHosts == "" {
 				ringHosts = fmt.Sprintf("%v:%d", listenIP, port)
 			}
@@ -119,6 +100,7 @@ func (tb *testBase) buildConfig(clusterSz map[string]int, numReplicas int) map[s
 				Port:          port,
 				WebsocketPort: wsPort,
 				RingHosts:     ringHosts,
+				ListenAddress: listenIP,
 			}
 
 			appCfg := cfg.(*configure.AppConfig)
@@ -192,9 +174,6 @@ func (tb *testBase) SetUp(clusterSz map[string]int, numReplicas int) {
 	tb.storageBaseDir, err = ioutil.TempDir("", "cherami_integration_test_")
 	tb.NoError(err)
 
-	ip, err := tchannel.ListenIP()
-	tb.Nil(err)
-	listenIP := ip.String()
 	tb.UUIDResolver = common.NewUUIDResolver(tb.mClient)
 	hwInfoReader := common.NewHostHardwareInfoReader(tb.mClient)
 
@@ -223,7 +202,7 @@ func (tb *testBase) SetUp(clusterSz map[string]int, numReplicas int) {
 		sh.Start(tc)
 
 		// start websocket server
-		common.WSStart(listenIP, cfg.GetWebsocketPort(), sh)
+		common.WSStart(cfg.GetListenAddress().String(), cfg.GetWebsocketPort(), sh)
 
 		// set the websocket port of the store
 		// XXX: We use the environment variable of the format
@@ -246,7 +225,7 @@ func (tb *testBase) SetUp(clusterSz map[string]int, numReplicas int) {
 		ih, tc := inputhost.NewInputHost(common.InputServiceName, sCommon, tb.mClient, nil)
 		ih.Start(tc)
 		// start websocket server
-		common.WSStart(listenIP, cfg.GetWebsocketPort(), ih)
+		common.WSStart(cfg.GetListenAddress().String(), cfg.GetWebsocketPort(), ih)
 		tb.InputHosts[hostID] = ih
 	}
 
@@ -275,7 +254,7 @@ func (tb *testBase) SetUp(clusterSz map[string]int, numReplicas int) {
 		oh, tc := outputhost.NewOutputHost(common.OutputServiceName, sCommon, tb.mClient, frontendForOut, nil)
 		oh.Start(tc)
 		// start websocket server
-		common.WSStart(listenIP, cfg.GetWebsocketPort(), oh)
+		common.WSStart(cfg.GetListenAddress().String(), cfg.GetWebsocketPort(), oh)
 
 		tb.OutputHosts[hostID] = oh
 	}

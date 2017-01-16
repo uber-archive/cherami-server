@@ -18,57 +18,27 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-package storehost
+package test
 
 import (
-	"sync"
-	"github.com/uber/cherami-server/common"
+	"net"
+	"strconv"
 )
 
-type mockHostInfoReader struct{}
-
-func newMockHostInfoReader() *mockHostInfoReader {
-	return &mockHostInfoReader{}
-}
-
-func (mock *mockHostInfoReader) Read(hostname string) (*common.HostHardwareInfo, error) {
-	return &common.HostHardwareInfo{
-		Sku:  "sku1",
-		Rack: "rack1",
-		Zone: "zone1",
-	}, nil
-}
-
-type mockUUIDResolver struct {
-	lk      sync.RWMutex
-	data    map[string]string
-	reverse map[string]string
-}
-
-func newMockUUIDResolver() *mockUUIDResolver {
-	return &mockUUIDResolver{
-		data:    make(map[string]string),
-		reverse: make(map[string]string),
+// FindEphemeralPort returns host:port, ip and port from available on localhost
+func FindEphemeralPort() (string, string, int, error) {
+	ip := "127.0.0.1"
+	conn, err := net.Listen("tcp", ip+":0")
+	defer conn.Close()
+	if err != nil {
+		return "", "", 0, err
 	}
-}
 
-func (m *mockUUIDResolver) Set(uuid string, hostport string) {
-	m.lk.Lock()
-	defer m.lk.Unlock()
-	m.data[uuid] = hostport
-	m.reverse[hostport] = uuid
-}
+	_, port, err := net.SplitHostPort(conn.Addr().String())
+	if err != nil {
+		return "", "", 0, err
+	}
 
-func (m *mockUUIDResolver) Lookup(uuid string) (string, error) {
-	m.lk.RLock()
-	defer m.lk.RUnlock()
-	return m.data[uuid], nil
+	portNum, _ := strconv.Atoi(port)
+	return conn.Addr().String(), ip, portNum, nil
 }
-
-func (m *mockUUIDResolver) ReverseLookup(addr string) (string, error) {
-	m.lk.RLock()
-	defer m.lk.RUnlock()
-	return m.reverse[addr], nil
-}
-
-func (m *mockUUIDResolver) ClearCache() {}
