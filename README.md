@@ -6,7 +6,6 @@ This repo contains the source code of Cherami server, cross-zone replicator serv
 
 Getting started
 ---------------
-
 To get cherami-server:
 
 ```
@@ -15,16 +14,22 @@ git clone git@github.com:uber/cherami-server.git $GOPATH/src/github.com/uber/che
 
 Build
 -----
-We use [`glide`](https://glide.sh) to manage Go dependencies. Additionally, we need a Cassandra running locally in order to run the integration tests. Please make sure `glide` and `cqlsh` are in your PATH, and `cqlsh` can connect to the local Cassandra server.
+We use [`glide`](https://glide.sh) to manage Go dependencies. Please make sure `glide` is in your PATH before you attempt to build.
 
-* Build the `cherami-server` and other binaries:
+* Build the `cherami-server` and other binaries (will not run test):
 ```
 make bins
 ```
 
+Local Test
+----------
+We need a Cassandra running locally in order to run the integration tests. Please make sure `cqlsh` is in `/usr/local/bin`, and it can connect to the local Cassandra server.
+```
+make test
+```
+
 Run Cherami locally
 -------------------
-
 * Setup the cherami keyspace for metadata:
 ```
 ./scripts/cherami-setup-schema
@@ -32,12 +37,14 @@ Run Cherami locally
 
 * The service can be started as follows:
 ```
-CHERAMI_ENVIRONMENT=laptop CHERAMI_CONFIG_DIR=`pwd`/config CHERAMI_STORE=/tmp/store ./cherami-server start all
+CHERAMI_ENVIRONMENT=local ./cherami-server start all
 ```
+
+Note: `cherami-server` is configured via `config/base.yaml` with some parameters overriden by `config/local.yaml`.
 
 One can use the CLI to verify if Cherami is running properly:
 ```
-./cherami-cli --hostport=<localIP>:4922 create destination /test/cherami
+./cherami-cli --env=prod --hostport=<localIP>:4922 create destination /test/cherami
 ```
 
 Deploy Cherami as a cluster
