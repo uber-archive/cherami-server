@@ -524,7 +524,7 @@ func refreshOutputHostsForConsGroup(context *Context,
 		return nil, err
 	}
 
-	if err := validateDstStatus(dstDesc); err != nil {
+	if err = validateDstStatus(dstDesc); err != nil {
 		return nil, err
 	}
 

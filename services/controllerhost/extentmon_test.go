@@ -185,8 +185,8 @@ func (s *ExtentStateMonitorSuite) TestExtentMonitor() {
 
 	for i := 0; i < 2; i++ {
 		path := s.generateName("/test/extent.mon/dest-" + strconv.Itoa(i))
-		desc, err := s.createDestination(path)
-		s.Nil(err, "Failed to create destination")
+		desc, errCD := s.createDestination(path)
+		s.Nil(errCD, "Failed to create destination")
 		destinations = append(destinations, desc)
 	}
 

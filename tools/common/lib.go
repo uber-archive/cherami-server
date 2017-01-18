@@ -958,6 +958,7 @@ func Publish(c *cli.Context, cClient ccli.Client) {
 
 	var readErr error
 	var line []byte
+	var id string
 	bio := bufio.NewReader(os.Stdin)
 
 	for readErr == nil {
@@ -967,7 +968,7 @@ func Publish(c *cli.Context, cClient ccli.Client) {
 			break
 		}
 
-		id, err := publisher.PublishAsync(&ccli.PublisherMessage{
+		id, err = publisher.PublishAsync(&ccli.PublisherMessage{
 			Data: line,
 		}, receiptCh)
 
@@ -989,6 +990,7 @@ func Publish(c *cli.Context, cClient ccli.Client) {
 
 // Consume start to consume from the destination
 func Consume(c *cli.Context, cClient ccli.Client) {
+	var err error
 	if len(c.Args()) < 2 {
 		ExitIfError(errors.New(strNotEnoughArgs))
 	}
@@ -1009,13 +1011,12 @@ func Consume(c *cli.Context, cClient ccli.Client) {
 
 	autoAck := c.BoolT("autoack")
 	ch := make(chan ccli.Delivery, common.MaxInt(c.Int("prefetch_count")*2, 1))
-	ch, err := consumer.Open(ch)
+	ch, err = consumer.Open(ch)
 	ExitIfError(err)
 
 	if !autoAck {
 		// read ack tokens from Stdin
 		go func() {
-			var err error
 			var line []byte
 			bio := bufio.NewReader(os.Stdin)
 			for err == nil {

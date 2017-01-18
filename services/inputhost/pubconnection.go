@@ -371,7 +371,7 @@ func (conn *pubConnection) writeAcksStream() {
 
 						unflushedWrites++
 						if unflushedWrites > pubConnFlushThreshold {
-							if err := conn.flushCmdToClient(unflushedWrites); err != nil {
+							if err = conn.flushCmdToClient(unflushedWrites); err != nil {
 								// since flush failed, trigger a close of the connection which will fail inflight messages
 								go conn.close()
 								return

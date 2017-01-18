@@ -898,11 +898,11 @@ func (h *Frontend) ReadConsumerGroupHosts(ctx thrift.Context, readRequest *c.Rea
 	getOutputHostReq := &controller.GetOutputHostsRequest{DestinationUUID: common.StringPtr(mCGDesc.GetDestinationUUID()), ConsumerGroupUUID: common.StringPtr(mCGDesc.GetConsumerGroupUUID())}
 	getOutputHostResp, err := cClient.GetOutputHosts(ctx, getOutputHostReq)
 	if err != nil || len(getOutputHostResp.GetOutputHostIds()) < 1 {
-		lclLg.WithFields(bark.Fields{
-			common.TagDstPth: readRequest.GetDestinationPath(),
-			common.TagCnsPth: readRequest.GetConsumerGroupName(),
-			common.TagErr:    err.Error(),
-		}).Error("No hosts returned from controller")
+		if err != nil {
+			lclLg = lclLg.WithField(common.TagErr, err)
+		}
+
+		lclLg.Error("No hosts returned from controller")
 		return nil, err
 	}
 
@@ -967,7 +967,8 @@ func (h *Frontend) CreateConsumerGroup(ctx thrift.Context, createRequest *c.Crea
 	})
 
 	// request to controller
-	cClient, err := h.getControllerClient()
+	var cClient controller.TChanController
+	cClient, err = h.getControllerClient()
 	if err != nil {
 		lclLg.WithField(common.TagErr, err).Error(`Can't talk to Controller service, no hosts found`)
 		return nil, err
@@ -988,7 +989,8 @@ func (h *Frontend) CreateConsumerGroup(ctx thrift.Context, createRequest *c.Crea
 		dlqPath, _ := common.GetDLQPathNameFromCGName(createRequest.GetConsumerGroupName())
 		dlqCreateRequest.Path = common.StringPtr(dlqPath)
 
-		dlqDestDesc, err := cClient.CreateDestination(ctx, dlqCreateRequest)
+		var dlqDestDesc *shared.DestinationDescription
+		dlqDestDesc, err = cClient.CreateDestination(ctx, dlqCreateRequest)
 
 		if err != nil || dlqDestDesc == nil {
 			switch err.(type) {
@@ -1019,7 +1021,8 @@ func (h *Frontend) CreateConsumerGroup(ctx thrift.Context, createRequest *c.Crea
 	}
 
 	// Consumer group creation
-	_cgDesc, err := cClient.CreateConsumerGroup(ctx, _createRequest)
+	var _cgDesc *shared.ConsumerGroupDescription
+	_cgDesc, err = cClient.CreateConsumerGroup(ctx, _createRequest)
 	if _cgDesc != nil {
 		cgDesc, err = h.convertConsumerGroupFromInternal(ctx, _cgDesc)
 		lclLg = lclLg.WithFields(bark.Fields{
@@ -1051,7 +1054,8 @@ func (h *Frontend) UpdateConsumerGroup(ctx thrift.Context, updateRequest *c.Upda
 	})
 
 	// Request to controller
-	cClient, err := h.getControllerClient()
+	var cClient controller.TChanController
+	cClient, err = h.getControllerClient()
 	if err != nil {
 		lclLg.WithField(common.TagErr, err).Error(`Can't talk to Controller service, no hosts found`)
 		return nil, err
@@ -1076,15 +1080,15 @@ func (h *Frontend) UpdateConsumerGroup(ctx thrift.Context, updateRequest *c.Upda
 }
 
 // ListConsumerGroups list all the consumer groups
-func (h *Frontend) ListConsumerGroups(ctx thrift.Context, listRequest *c.ListConsumerGroupRequest) (result *c.ListConsumerGroupResult_, resultError error) {
+func (h *Frontend) ListConsumerGroups(ctx thrift.Context, listRequest *c.ListConsumerGroupRequest) (result *c.ListConsumerGroupResult_, err error) {
 	sw := h.m3Client.StartTimer(metrics.ListConsumerGroupsScope, metrics.FrontendLatencyTimer)
-	defer func() { sw.Stop(); h.epilog(metrics.ListConsumerGroupsScope, result, &resultError) }()
-	if _, resultError = h.prolog(ctx, listRequest); resultError != nil {
+	defer func() { sw.Stop(); h.epilog(metrics.ListConsumerGroupsScope, result, &err) }()
+	if _, err = h.prolog(ctx, listRequest); err != nil {
 		return
 	}
 
 	if len(listRequest.GetConsumerGroupName()) == 0 && listRequest.GetLimit() <= 0 {
-		err := &c.BadRequestError{Message: fmt.Sprintf("Invalid limit %d when no consumer group name specified", listRequest.GetLimit())}
+		err = &c.BadRequestError{Message: fmt.Sprintf("Invalid limit %d when no consumer group name specified", listRequest.GetLimit())}
 		h.logger.Error(err.Error())
 		return nil, err
 	}
@@ -1100,7 +1104,8 @@ func (h *Frontend) ListConsumerGroups(ctx thrift.Context, listRequest *c.ListCon
 	mListRequest.PageToken = listRequest.PageToken
 	mListRequest.Limit = common.Int64Ptr(listRequest.GetLimit())
 
-	listResult, err := h.metaClnt.ListConsumerGroups(ctx, mListRequest)
+	var listResult *m.ListConsumerGroupResult_
+	listResult, err = h.metaClnt.ListConsumerGroups(ctx, mListRequest)
 
 	if err != nil {
 		lclLg.WithField(common.TagErr, err).Warn(`List consumer groups failed with error`)
@@ -1112,9 +1117,10 @@ func (h *Frontend) ListConsumerGroups(ctx thrift.Context, listRequest *c.ListCon
 		NextPageToken:  listResult.NextPageToken,
 	}
 	for _, mCGDesc := range listResult.GetConsumerGroups() {
-		cg, e := h.convertConsumerGroupFromInternal(ctx, mCGDesc)
-		if e != nil {
-			lclLg.WithField(common.TagErr, e).Error(`Error converting consumer group list`)
+		var cg *c.ConsumerGroupDescription
+		cg, err = h.convertConsumerGroupFromInternal(ctx, mCGDesc)
+		if err != nil {
+			lclLg.WithField(common.TagErr, err).Error(`Error converting consumer group list`)
 			continue
 		}
 		result.ConsumerGroups = append(result.ConsumerGroups, cg)
@@ -1123,15 +1129,15 @@ func (h *Frontend) ListConsumerGroups(ctx thrift.Context, listRequest *c.ListCon
 }
 
 // ListDestinations returns a list of destinations that begin with a given prefix, start with offset and maximum number per limit
-func (h *Frontend) ListDestinations(ctx thrift.Context, listRequest *c.ListDestinationsRequest) (result *c.ListDestinationsResult_, resultError error) {
+func (h *Frontend) ListDestinations(ctx thrift.Context, listRequest *c.ListDestinationsRequest) (result *c.ListDestinationsResult_, err error) {
 	sw := h.m3Client.StartTimer(metrics.ListDestinationsScope, metrics.FrontendLatencyTimer)
-	defer func() { sw.Stop(); h.epilog(metrics.ListDestinationsScope, result, &resultError) }()
-	if _, resultError = h.prolog(ctx, listRequest); resultError != nil {
+	defer func() { sw.Stop(); h.epilog(metrics.ListDestinationsScope, result, &err) }()
+	if _, err = h.prolog(ctx, listRequest); err != nil {
 		return
 	}
 
 	if listRequest.GetLimit() <= 0 {
-		err := &c.BadRequestError{Message: fmt.Sprintf("Invalid limit %d", listRequest.GetLimit())}
+		err = &c.BadRequestError{Message: fmt.Sprintf("Invalid limit %d", listRequest.GetLimit())}
 		h.logger.Error(err.Error())
 		return nil, err
 	}
@@ -1146,7 +1152,8 @@ func (h *Frontend) ListDestinations(ctx thrift.Context, listRequest *c.ListDesti
 		common.FmtDstPth(listRequest.GetPrefix())) // TODO : Prefix might need it's own tag
 
 	// This is the same routine on the metadata library, from which we are forwarding destinations
-	listResult, err := h.metaClnt.ListDestinations(ctx, mListRequest)
+	var listResult *shared.ListDestinationsResult_
+	listResult, err = h.metaClnt.ListDestinations(ctx, mListRequest)
 
 	if err != nil {
 		lclLg.WithFields(bark.Fields{`Prefix`: listRequest.GetPrefix(), common.TagErr: err}).Warn(`List destinations for prefix failed with error`)
@@ -1178,6 +1185,7 @@ func (h *Frontend) PurgeDLQForConsumerGroup(ctx thrift.Context, purgeRequest *c.
 func (h *Frontend) dlqOperationForConsumerGroup(ctx thrift.Context, destinationPath, consumerGroupName string, purge bool) (err error) {
 	var lclLg bark.Logger
 	var mCGDesc *shared.ConsumerGroupDescription
+	var destDesc *shared.DestinationDescription
 	mReadRequest := m.NewReadConsumerGroupRequest()
 
 	if purge {
@@ -1217,7 +1225,7 @@ func (h *Frontend) dlqOperationForConsumerGroup(ctx thrift.Context, destinationP
 	// Read the destination to see if we should allow this request
 	mReadDestRequest := m.NewReadDestinationRequest()
 	mReadDestRequest.DestinationUUID = mCGDesc.DeadLetterQueueDestinationUUID
-	destDesc, err := h.metaClnt.ReadDestination(ctx, mReadDestRequest)
+	destDesc, err = h.metaClnt.ReadDestination(ctx, mReadDestRequest)
 
 	if err != nil || destDesc == nil {
 		lclLg.WithFields(bark.Fields{common.TagErr: err, `mCGDesc`: mCGDesc}).Error(`ReadDestination failed`)
@@ -1277,31 +1285,33 @@ func (h *Frontend) MergeDLQForConsumerGroup(ctx thrift.Context, mergeRequest *c.
 }
 
 // GetQueueDepthInfo return queue depth info based on the key provided
-func (h *Frontend) GetQueueDepthInfo(ctx thrift.Context, queueRequest *c.GetQueueDepthInfoRequest) (result *c.GetQueueDepthInfoResult_, resultError error) {
-	defer func() { h.epilog(-1, result, &resultError) }()
-	if _, resultError = h.prolog(ctx, queueRequest); resultError != nil {
+func (h *Frontend) GetQueueDepthInfo(ctx thrift.Context, queueRequest *c.GetQueueDepthInfoRequest) (result *c.GetQueueDepthInfoResult_, err error) {
+	defer func() { h.epilog(-1, result, &err) }()
+	if _, err = h.prolog(ctx, queueRequest); err != nil {
 		return
 	}
 
 	cgUUID := queueRequest.GetKey()
 
 	if !common.UUIDRegex.MatchString(cgUUID) { // Special handling to ensure only a UUID is allowed
-		resultError = &c.BadRequestError{Message: fmt.Sprintf("Consumer group must be given as UUID, not \"%v\"", cgUUID)}
+		err = &c.BadRequestError{Message: fmt.Sprintf("Consumer group must be given as UUID, not \"%v\"", cgUUID)}
 		return
 	}
 
 	// Request to the extent controller
-	cClient, err := h.getControllerClient()
+	var cClient controller.TChanController
+	cClient, err = h.getControllerClient()
 	if err != nil {
 		h.logger.WithField(common.TagErr, err).Error(`Can't talk to Controller service, no hosts found`)
 		return nil, err
 	}
 	getQueueInfoReq := &controller.GetQueueDepthInfoRequest{Key: common.StringPtr(cgUUID)}
-	output, err := cClient.GetQueueDepthInfo(ctx, getQueueInfoReq)
-
+	var output *controller.GetQueueDepthInfoResult_
+	output, err = cClient.GetQueueDepthInfo(ctx, getQueueInfoReq)
 	if err != nil {
 		return nil, &c.QueueCacheMissError{Message: fmt.Sprintf("%v", err)}
 	}
+
 	value := output.GetValue()
 	queueDepthResult := &c.GetQueueDepthInfoResult_{Value: &value}
 	return queueDepthResult, nil

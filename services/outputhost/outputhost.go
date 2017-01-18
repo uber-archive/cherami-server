@@ -381,7 +381,7 @@ func (h *OutputHost) processAcks(ackIds []string, isNack bool) (invalidIDs []str
 		}
 
 		// let the ackMgr know; from the perspective of the ackManager, ack == nack
-		if err := ackMgr.acknowledgeMessage(ackID, seqNum, ackIDObj.Address, isNack); err == nil {
+		if err = ackMgr.acknowledgeMessage(ackID, seqNum, ackIDObj.Address, isNack); err == nil {
 			continue
 		} else {
 			h.logger.WithFields(bark.Fields{
