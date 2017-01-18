@@ -509,8 +509,12 @@ func (h *OutputHost) ReceiveMessageBatch(ctx thrift.Context, request *cherami.Re
 MORERESULTLOOP:
 	for remaining := count - 1; remaining > 0; {
 		select {
-		case <-moreResultTimer.C:
-			break MORERESULTLOOP
+		case msg := <-cgCache.msgsRedeliveryCh:
+			deliver(msg, cgCache.msgCacheRedeliveredCh)
+			remaining--
+		case msg := <-cgCache.msgsCh:
+			deliver(msg, cgCache.msgCacheCh)
+			remaining--
 		default:
 			select {
 			case msg := <-cgCache.msgsRedeliveryCh:
@@ -519,8 +523,8 @@ MORERESULTLOOP:
 			case msg := <-cgCache.msgsCh:
 				deliver(msg, cgCache.msgCacheCh)
 				remaining--
-			default:
-				break
+			case <-moreResultTimer.C:
+				break MORERESULTLOOP
 			}
 		}
 	}
