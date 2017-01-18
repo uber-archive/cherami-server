@@ -31,21 +31,21 @@ import (
 	"testing"
 	"time"
 
-	"github.com/uber/cherami-thrift/.generated/go/admin"
-	m "github.com/uber/cherami-thrift/.generated/go/metadata"
-	"github.com/uber/cherami-thrift/.generated/go/shared"
-	"github.com/uber/cherami-thrift/.generated/go/store"
+	log "github.com/Sirupsen/logrus"
+	"github.com/pborman/uuid"
+	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/suite"
+	"github.com/uber-common/bark"
 	mc "github.com/uber/cherami-server/clients/metadata"
 	"github.com/uber/cherami-server/common"
 	"github.com/uber/cherami-server/common/configure"
 	dconfig "github.com/uber/cherami-server/common/dconfigclient"
 	localMetrics "github.com/uber/cherami-server/common/metrics"
 	storeStream "github.com/uber/cherami-server/stream"
-	log "github.com/Sirupsen/logrus"
-	"github.com/pborman/uuid"
-	"github.com/stretchr/testify/require"
-	"github.com/stretchr/testify/suite"
-	"github.com/uber-common/bark"
+	"github.com/uber/cherami-thrift/.generated/go/admin"
+	m "github.com/uber/cherami-thrift/.generated/go/metadata"
+	"github.com/uber/cherami-thrift/.generated/go/shared"
+	"github.com/uber/cherami-thrift/.generated/go/store"
 	"github.com/uber/tchannel-go"
 	"github.com/uber/tchannel-go/thrift"
 )
@@ -167,10 +167,11 @@ func (s *EventPipelineSuite) TestExtentCreatedEvent() {
 
 		s.mcp.context.resultCache.write(cgIDs[i],
 			resultCacheParams{
-				dstType:  dstTypePlain,
-				nExtents: 10,
-				hostIDs:  cacheAddrs,
-				expiry:   now + int64(time.Hour),
+				dstType:    dstTypePlain,
+				nExtents:   10,
+				maxExtents: 10,
+				hostIDs:    cacheAddrs,
+				expiry:     now + int64(time.Hour),
 			})
 	}
 

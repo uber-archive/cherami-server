@@ -21,14 +21,16 @@
 package controllerhost
 
 import (
+	"strconv"
+	"strings"
 	"time"
 
-	m "github.com/uber/cherami-thrift/.generated/go/metadata"
-	"github.com/uber/cherami-thrift/.generated/go/shared"
-	"github.com/uber/cherami-server/common"
-	"github.com/uber/cherami-server/common/metrics"
 	"github.com/pborman/uuid"
 	"github.com/uber-common/bark"
+	"github.com/uber/cherami-server/common"
+	"github.com/uber/cherami-server/common/metrics"
+	m "github.com/uber/cherami-thrift/.generated/go/metadata"
+	"github.com/uber/cherami-thrift/.generated/go/shared"
 	"github.com/uber/tchannel-go/thrift"
 )
 
@@ -41,12 +43,12 @@ const (
 )
 
 const (
-	minOpenExtentsForDstPlain                    = 4
-	maxExtentsToConsumeForDstPlain               = 8
-	extentsToConsumePerRemoteZone                = 4
 	minOpenExtentsForDstDLQ                      = 1
 	maxExtentsToConsumeForDstDLQ                 = 2
 	minOpenExtentsForDstTimer                    = 2
+	defaultMinOpenExtents                        = 2 // Only used if the extent configuration can't be retrieved
+	defaultRemoteExtents                         = 2
+	defaultMinConsumeExtents                     = defaultMinOpenExtents * 2
 	maxExtentsToConsumeForDstTimer               = 64 // timer dst need to consume from all open extents
 	minExtentsToConsumeForSingleCGVisibleExtents = 1
 	replicatorCallTimeout                        = 20 * time.Second
@@ -55,7 +57,7 @@ const (
 // limit on how many new extents we make available
 // for consumption to a consumer group in a single
 // call to GetOutputHosts
-const maxNewExtentsForCGPerCall = 4
+const maxNewExtentsForCGPerCallFactorPerMille = 500
 
 var (
 	// ErrTooManyUnHealthy is returned when there are too many open but unhealthy extents for a destination
@@ -226,17 +228,91 @@ func getDstType(desc *shared.DestinationDescription) dstType {
 	return dstTypePlain
 }
 
-func minOpenExtentsForDstType(dstType dstType) int {
+func minOpenExtentsForDst(context *Context, dstPath string, dstType dstType) int {
 	switch dstType {
-	case dstTypePlain:
-		return minOpenExtentsForDstPlain
-	case dstTypeTimer:
+	case dstTypeTimer: // TODO: remove when timers are deprecated
 		return minOpenExtentsForDstTimer
 	case dstTypeDLQ:
 		return minOpenExtentsForDstDLQ
-	default:
-		return minOpenExtentsForDstPlain
 	}
+
+	logFn := func() bark.Logger {
+		return context.log.WithField(common.TagDst, dstPath).WithField(common.TagModule, `extentAssign`)
+	}
+
+	cfgIface, err := context.cfgMgr.Get(common.ControllerServiceName, `*`, `*`, `*`)
+	if err != nil {
+		logFn().WithField(common.TagErr, err).Error(`Couldn't get extent target configuration`)
+		return defaultMinOpenExtents
+	}
+
+	cfg, ok := cfgIface.(ExtentAssignmentConfig)
+	if !ok {
+		logFn().Error(`Couldn't cast cfg to ExtentAssignmentConfig`)
+		return defaultMinOpenExtents
+	}
+
+	return int(overrideValueByPath(logFn, dstPath, cfg.PublishExtentTargets, defaultMinOpenExtents, `PublishExtentTargets`))
+}
+
+var overrideValueByPathLogMap = make(map[string]struct{})
+
+func overrideValueByPath(logFn func() bark.Logger, path string, overrides []string, defaultVal int64, valName string) int64 {
+	// Terminate the path with a slash, so that we can do something like this:
+	//
+	// This rule : /foo/bar/=X
+	// Gives:
+	// /foo/bar     = X
+	// /foo/bar_baz = default
+	// /foo/quz     = default
+	//
+	// This rule : /foo/bar=X
+	// Gives:
+	// /foo/bar     = X
+	// /foo/bar_baz = X
+	// /foo/quz     = default
+	//
+	path += `/`
+
+	var longestMatchValue int64
+	var longestMatchKey string
+	var err error
+
+moreOverrides:
+	for _, ovrd := range overrides {
+		split := strings.Split(ovrd, `=`)
+		if len(split) != 2 {
+			logFn().WithFields(bark.Fields{`rule`: ovrd, `valName`: valName}).Error(`Invalid override rule, couldn't split`)
+			continue moreOverrides
+		}
+		if strings.HasPrefix(path, split[0]) {
+			if len(split[0]) > len(longestMatchKey) {
+				var lmv int
+				lmv, err = strconv.Atoi(split[1])
+				if err != nil {
+					logFn().WithFields(bark.Fields{`rule`: ovrd, `valName`: valName, common.TagErr: err}).Error(`Invalid override rule, couldn't covert value`)
+					continue moreOverrides
+				}
+				longestMatchKey = split[0]
+				longestMatchValue = int64(lmv)
+			}
+		}
+	}
+
+	if longestMatchKey != `` {
+		// Log just once for this particular rule; if the value or rule changes, log again
+		logMapKey := valName + path + longestMatchKey + strconv.Itoa(int(longestMatchValue))
+		if _, ok := overrideValueByPathLogMap[logMapKey]; !ok {
+			overrideValueByPathLogMap[logMapKey] = struct{}{}
+			logFn().WithFields(bark.Fields{
+				`valName`:  valName,
+				`rule`:     longestMatchKey,
+				`override`: longestMatchValue}).Info(`Overrided value`)
+		}
+
+		return longestMatchValue
+	}
+	return defaultVal
 }
 
 func getInputAddrIfExtentIsWritable(context *Context, extent *shared.Extent, m3Scope int) (string, error) {
@@ -345,7 +421,7 @@ func refreshInputHostsForDst(context *Context, dstUUID string, now int64) ([]str
 	}
 
 	var dstType = getDstType(dstDesc)
-	var minOpenExtents = minOpenExtentsForDstType(dstType)
+	var minOpenExtents = minOpenExtentsForDst(context, dstDesc.GetPath(), dstType)
 	var isMultiZoneDest = dstDesc.GetIsMultiZone()
 
 	openExtentStats, err := findOpenExtents(context, dstUUID, m3Scope)
@@ -409,10 +485,11 @@ done:
 	expiry := now + ttl
 	uuids, addrs := hostInfoMapToSlice(inputHosts)
 	context.resultCache.write(dstUUID, resultCacheParams{
-		dstType:  dstType,
-		nExtents: nHealthy,
-		hostIDs:  uuids,
-		expiry:   expiry,
+		dstType:    dstType,
+		nExtents:   nHealthy,
+		maxExtents: minOpenExtents,
+		hostIDs:    uuids,
+		expiry:     expiry,
 	})
 
 	return addrs, nil

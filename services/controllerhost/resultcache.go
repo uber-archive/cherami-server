@@ -38,8 +38,9 @@ type (
 	}
 
 	resultCacheEntry struct {
-		expiry   int64
-		nExtents int
+		expiry     int64
+		nExtents   int
+		maxExtents int
 		dstType
 		hostIDs []string
 	}
@@ -52,10 +53,11 @@ type (
 	}
 
 	resultCacheParams struct {
-		dstType  dstType
-		nExtents int
-		hostIDs  []string
-		expiry   int64
+		dstType    dstType
+		nExtents   int
+		maxExtents int
+		hostIDs    []string
+		expiry     int64
 	}
 )
 
@@ -91,13 +93,13 @@ func newResultCache(context *Context) *resultCache {
 // readInputHosts returns the input hosts corresponding to
 // the destination, if it exists.
 func (cache *resultCache) readInputHosts(dstUUID string, now int64) *resultCacheReadResult {
-	return readResultCache(cache, dstUUID, common.InputServiceName, now, minOpenExtentsForDstType)
+	return readResultCache(cache, dstUUID, common.InputServiceName, now)
 }
 
 // readInputHosts returns the output hosts corresponding to
 // the consumer group, if it exists.
 func (cache *resultCache) readOutputHosts(cgUUID string, now int64) *resultCacheReadResult {
-	return readResultCache(cache, cgUUID, common.OutputServiceName, now, minOpenExtentsForDstType)
+	return readResultCache(cache, cgUUID, common.OutputServiceName, now)
 }
 
 // write puts an entry into the result cache
@@ -107,10 +109,11 @@ func (cache *resultCache) write(key string, write resultCacheParams) {
 	cacheEntry.expiry = write.expiry
 	cacheEntry.hostIDs = write.hostIDs
 	cacheEntry.nExtents = write.nExtents
+	cacheEntry.maxExtents = write.maxExtents
 	cache.Put(key, cacheEntry)
 }
 
-func readResultCache(cache *resultCache, key string, svc string, now int64, maxExtentsFn func(dstType) int) *resultCacheReadResult {
+func readResultCache(cache *resultCache, key string, svc string, now int64) *resultCacheReadResult {
 	var refreshCache bool
 	var cachedResult = make([]string, 0, 4)
 	cacheEntry, cacheHit := cache.Get(key).(*resultCacheEntry)
@@ -126,7 +129,7 @@ func readResultCache(cache *resultCache, key string, svc string, now int64, maxE
 		}
 		if hostFailed ||
 			now >= cacheEntry.expiry ||
-			cacheEntry.nExtents < maxExtentsFn(cacheEntry.dstType) {
+			cacheEntry.nExtents < cacheEntry.maxExtents {
 			refreshCache = true
 		}
 

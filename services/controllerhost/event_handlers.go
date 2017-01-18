@@ -26,15 +26,15 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/pborman/uuid"
+	"github.com/uber-common/bark"
 	"github.com/uber/cherami-client-go/common/backoff"
+	"github.com/uber/cherami-server/common"
+	"github.com/uber/cherami-server/common/metrics"
 	"github.com/uber/cherami-thrift/.generated/go/admin"
 	m "github.com/uber/cherami-thrift/.generated/go/metadata"
 	"github.com/uber/cherami-thrift/.generated/go/shared"
 	"github.com/uber/cherami-thrift/.generated/go/store"
-	"github.com/uber/cherami-server/common"
-	"github.com/uber/cherami-server/common/metrics"
-	"github.com/pborman/uuid"
-	"github.com/uber-common/bark"
 	"github.com/uber/tchannel-go/thrift"
 )
 
@@ -976,10 +976,11 @@ func triggerCacheRefreshForCG(context *Context, cgID string) {
 	// overwrite the next refresh time to now
 	context.resultCache.write(cgID,
 		resultCacheParams{
-			dstType:  cacheEntry.dstType,
-			nExtents: cacheEntry.nExtents,
-			hostIDs:  cacheEntry.hostIDs,
-			expiry:   now,
+			dstType:    cacheEntry.dstType,
+			nExtents:   cacheEntry.nExtents,
+			maxExtents: cacheEntry.maxExtents,
+			hostIDs:    cacheEntry.hostIDs,
+			expiry:     now,
 		})
 }
 
