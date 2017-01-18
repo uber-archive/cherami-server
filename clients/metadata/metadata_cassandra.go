@@ -443,7 +443,7 @@ func (s *CassandraMetadataService) CreateDestinationUUID(ctx thrift.Context, uui
 		if !applied {
 			// Record already exists
 			deleteOrphanRecord := `DELETE FROM ` + tableDestinations + ` WHERE ` + columnUUID + `=?`
-			if err := s.session.Query(deleteOrphanRecord, destinationUUID).Exec(); err != nil {
+			if err = s.session.Query(deleteOrphanRecord, destinationUUID).Exec(); err != nil {
 				// Just warn as orphaned records are not breaking correctness
 				log.WithFields(log.Fields{common.TagDst: common.FmtDst(destinationUUID), common.TagErr: err}).Warn(`CreateDestination failure deleting orphan record from destinations`)
 			}
@@ -723,7 +723,7 @@ func (s *CassandraMetadataService) UpdateDestination(ctx thrift.Context, updateR
 		existing.GetPath(),
 		directoryUUID)
 
-	if err := s.session.ExecuteBatch(batch); err != nil {
+	if err = s.session.ExecuteBatch(batch); err != nil {
 		return nil, &shared.InternalServiceError{
 			Message: "UpdateDestination: " + err.Error(),
 		}
@@ -777,7 +777,7 @@ func (s *CassandraMetadataService) DeleteDestination(ctx thrift.Context, deleteR
 		marshalDstZoneConfigs(existing.GetZoneConfigs()),
 		existing.GetDestinationUUID())
 	batch.Query(sqlDeleteDst, directoryUUID, existing.GetPath())
-	if err := s.session.ExecuteBatch(batch); err != nil {
+	if err = s.session.ExecuteBatch(batch); err != nil {
 		return &shared.InternalServiceError{
 			Message: "DeleteDestination: " + err.Error(),
 		}
@@ -839,7 +839,7 @@ func (s *CassandraMetadataService) DeleteDestinationUUID(ctx thrift.Context, del
 		existing.DLQMergeBefore,       // May be nil
 		defaultDeleteTTLSeconds).Consistency(s.midConsLevel)
 
-	if err := query.Exec(); err != nil {
+	if err = query.Exec(); err != nil {
 		return &shared.InternalServiceError{
 			Message: fmt.Sprintf("DeleteDestinationUUID:%v (%v)", *existing.DLQConsumerGroupUUID, err),
 		}
@@ -1256,7 +1256,7 @@ func (s *CassandraMetadataService) CreateConsumerGroup(ctx thrift.Context, reque
 
 	applied, err := query.MapScanCAS(previous)
 	if !applied {
-		if err := s.session.Query(sqlDeleteCGByUUID, cgUUID).Exec(); err != nil {
+		if err = s.session.Query(sqlDeleteCGByUUID, cgUUID).Exec(); err != nil {
 			log.WithFields(log.Fields{common.TagCnsm: common.FmtCnsm(cgUUID), common.TagErr: err}).Warn(`CreateConsumerGroup - failed to delete orphan record after a failed CAS attempt, ,`)
 		}
 		return nil, &shared.EntityAlreadyExistsError{
@@ -1508,7 +1508,7 @@ func (s *CassandraMetadataService) UpdateConsumerGroup(ctx thrift.Context, reque
 		newCG.GetDestinationUUID(),
 		newCG.GetConsumerGroupName())
 
-	if err := s.session.ExecuteBatch(batch); err != nil {
+	if err = s.session.ExecuteBatch(batch); err != nil {
 		return nil, &shared.InternalServiceError{
 			Message: fmt.Sprintf("UpdateConsumerGroup - Batch operation failed, dst=%v cg=%v err=%v",
 				request.GetDestinationPath(), request.GetConsumerGroupName(), err),
@@ -2665,7 +2665,7 @@ func (s *CassandraMetadataService) ListExtentsStats(ctx thrift.Context, request 
 	result.NextPageToken = make([]byte, len(nextPageToken))
 	copy(result.NextPageToken, nextPageToken)
 
-	if err := iter.Close(); err != nil {
+	if err = iter.Close(); err != nil {
 		return nil, &shared.InternalServiceError{
 			Message: err.Error(),
 		}
@@ -3328,7 +3328,7 @@ func (s *CassandraMetadataService) deleteConsumerGroupExtent(cgUUID string, exte
 
 	query.Consistency(s.midConsLevel)
 
-	if err := query.Exec(); err != nil {
+	if err = query.Exec(); err != nil {
 		return &shared.InternalServiceError{
 			Message: fmt.Sprintf("deleteConsumerGroupExtent - query failed, cg=%v ext=%v, err=%v", cgUUID, extentUUID, err),
 		}
@@ -3657,7 +3657,7 @@ func (s *CassandraMetadataService) ReadConsumerGroupExtents(ctx thrift.Context, 
 	nextPageToken := iter.PageState()
 	result.NextPageToken = make([]byte, len(nextPageToken))
 	copy(result.NextPageToken, nextPageToken)
-	if err := iter.Close(); err != nil {
+	if err = iter.Close(); err != nil {
 		return nil, &shared.InternalServiceError{
 			Message: err.Error(),
 		}

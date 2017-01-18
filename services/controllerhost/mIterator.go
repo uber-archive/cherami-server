@@ -146,9 +146,9 @@ func (e mIteratorEventType) String() string {
 }
 
 func (i *mIterator) newMIteratorEvent(t mIteratorEventType) *mIteratorEvent {
-	mIteratorEvent := i.current
-	mIteratorEvent.t = t
-	return &mIteratorEvent
+	mIteratorEventVal := i.current
+	mIteratorEventVal.t = t
+	return &mIteratorEventVal
 }
 
 func newMIterator(c *Context) *mIterator {

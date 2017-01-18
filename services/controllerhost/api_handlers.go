@@ -340,7 +340,7 @@ func refreshInputHostsForDst(context *Context, dstUUID string, now int64) ([]str
 		return nil, err
 	}
 
-	if err := validateDstStatus(dstDesc); err != nil {
+	if err = validateDstStatus(dstDesc); err != nil {
 		return nil, err
 	}
 

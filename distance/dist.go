@@ -124,8 +124,8 @@ func (m Map) computeDistance(sourceEntity, targetEntity *entity, distance uint16
 		if _, ok := visitedResources[o.Target]; !ok {
 			// Memoize visited resources.
 			visitedResources[o.Target] = struct{}{}
-			if e, ok := m[o.Target]; ok {
-				if _, ok := e.descendants[targetEntity.Resource]; ok {
+			if e, okB := m[o.Target]; okB {
+				if _, ok = e.descendants[targetEntity.Resource]; ok {
 					return o.Distance
 				}
 			}
@@ -141,7 +141,7 @@ func (m Map) computeDistance(sourceEntity, targetEntity *entity, distance uint16
 		if _, ok := visitedResources[e.Resource]; !ok {
 			// Memoize visited resources.
 			visitedResources[e.Resource] = struct{}{}
-			if _, ok := e.descendants[targetEntity.Resource]; ok {
+			if _, ok = e.descendants[targetEntity.Resource]; ok {
 				return sourceEntity.parent.Distance
 			}
 			delete(visitedResources, e.Resource)
@@ -156,7 +156,7 @@ func (m Map) computeDistance(sourceEntity, targetEntity *entity, distance uint16
 // Helper to lookup the forward and reverse distances.
 func (m Map) lookupDistance(sourceEntity, targetEntity *entity) (forwardDistance, reverseDistance uint16) {
 	if _, ok := sourceEntity.descendants[targetEntity.Resource]; !ok {
-		if _, ok := targetEntity.descendants[sourceEntity.Resource]; !ok {
+		if _, okB := targetEntity.descendants[sourceEntity.Resource]; !okB {
 			forwardDistance = m.computeDistance(sourceEntity, targetEntity, ZeroDistance, map[string]struct{}{sourceEntity.Resource: {}})
 			reverseDistance = m.computeDistance(targetEntity, sourceEntity, ZeroDistance, map[string]struct{}{targetEntity.Resource: {}})
 			return
@@ -170,7 +170,7 @@ func (m Map) lookupDistance(sourceEntity, targetEntity *entity) (forwardDistance
 func (m Map) FindDistance(sourceResource, targetResource string) (forwardDistance, reverseDistance uint16, err error) {
 	if s, ok := m[sourceResource]; !ok {
 		return InfiniteDistance, InfiniteDistance, errSource
-	} else if t, ok := m[targetResource]; !ok {
+	} else if t, okB := m[targetResource]; !okB {
 		return InfiniteDistance, InfiniteDistance, errTarget
 	} else {
 		forwardDistance, reverseDistance = m.lookupDistance(s, t)
@@ -218,7 +218,7 @@ func (m Map) locateResource(sourceEntities []*entity, targetType string, minDist
 	for _, o := range currentEntity.Overrides {
 		if o.Distance < maxDistance {
 			if _, ok := visitedResources[o.Target]; !ok {
-				if e, ok := m[o.Target]; ok {
+				if e, okB := m[o.Target]; okB {
 					if t, err := m.locateResource(sourceEntities, targetType, minDistance, maxDistance, e, visitedResources, whitelistedResources); err == nil {
 						return t, nil
 					}
