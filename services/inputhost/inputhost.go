@@ -32,17 +32,17 @@ import (
 	"github.com/uber/tchannel-go/thrift"
 
 	ccommon "github.com/uber/cherami-client-go/common"
-	"github.com/uber/cherami-thrift/.generated/go/admin"
-	"github.com/uber/cherami-thrift/.generated/go/cherami"
-	"github.com/uber/cherami-thrift/.generated/go/controller"
-	"github.com/uber/cherami-thrift/.generated/go/metadata"
-	"github.com/uber/cherami-thrift/.generated/go/shared"
 	"github.com/uber/cherami-server/common"
 	dconfig "github.com/uber/cherami-server/common/dconfigclient"
 	mm "github.com/uber/cherami-server/common/metadata"
 	"github.com/uber/cherami-server/common/metrics"
 	"github.com/uber/cherami-server/services/inputhost/load"
 	"github.com/uber/cherami-server/stream"
+	"github.com/uber/cherami-thrift/.generated/go/admin"
+	"github.com/uber/cherami-thrift/.generated/go/cherami"
+	"github.com/uber/cherami-thrift/.generated/go/controller"
+	"github.com/uber/cherami-thrift/.generated/go/metadata"
+	"github.com/uber/cherami-thrift/.generated/go/shared"
 )
 
 const (
@@ -67,6 +67,10 @@ const (
 	// range (currently, betweetn 10 million and 20 million) and will seal at this
 	// sequence number proactively so that we don't have a very large extent.
 	extentRolloverSeqnumMin, extentRolloverSeqnumMax = 10000000, 20000000
+)
+
+var (
+	batchMsgAckTimeout = 1 * time.Minute // msg ack timeout for batch messages
 )
 
 type (
@@ -518,7 +522,7 @@ func (h *InputHost) PutMessageBatch(ctx thrift.Context, request *cherami.PutMess
 		delete(inflightMsgMap, ack.GetID())
 	}
 	// Setup the msgTimer
-	msgTimer := common.NewTimer(msgAckTimeout)
+	msgTimer := common.NewTimer(batchMsgAckTimeout)
 	defer msgTimer.Stop()
 
 	// Try to get as many acks as possible.
