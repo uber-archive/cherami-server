@@ -29,10 +29,10 @@ import (
 
 	"github.com/uber-common/bark"
 
+	"github.com/uber/cherami-server/common"
 	"github.com/uber/cherami-thrift/.generated/go/metadata"
 	"github.com/uber/cherami-thrift/.generated/go/shared"
 	"github.com/uber/cherami-thrift/.generated/go/store"
-	"github.com/uber/cherami-server/common"
 )
 
 type (
@@ -53,8 +53,7 @@ type (
 		mClient metadata.TChanMetadataService
 		logger  bark.Logger
 
-		closeChannel    chan struct{}
-		rpmBootstrapped chan struct{}
+		closeChannel chan struct{}
 
 		ticker  *time.Ticker
 		running int64
@@ -104,7 +103,6 @@ func (runner *replicationJobRunner) Start() {
 
 func (runner *replicationJobRunner) Stop() {
 	close(runner.closeChannel)
-	close(runner.rpmBootstrapped)
 
 	runner.logger.Info("ReplicationJobRunner: stopped")
 }
