@@ -23,11 +23,16 @@ package controllerhost
 import (
 	"time"
 
-	m "github.com/uber/cherami-thrift/.generated/go/metadata"
-	"github.com/uber/cherami-thrift/.generated/go/shared"
+	"github.com/pborman/uuid"
 	"github.com/uber/cherami-server/common"
 	"github.com/uber/cherami-server/common/metrics"
-	"github.com/pborman/uuid"
+	m "github.com/uber/cherami-thrift/.generated/go/metadata"
+	"github.com/uber/cherami-thrift/.generated/go/shared"
+)
+
+const (
+	maxExtentsToConsumeForDstPlain = 8
+	extentsToConsumePerRemoteZone  = 4
 )
 
 func (s *McpSuite) TestCGExtentSelectorWithNoExtents() {

@@ -21,8 +21,6 @@
 package controllerhost
 
 import (
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/pborman/uuid"
@@ -66,7 +64,7 @@ var (
 
 var (
 	// TTL after which the cache entry is due for refresh
-	// The entry won't be evicted immediately afte the TTL
+	// The entry won't be evicted immediately after the TTL
 	// We can keep serving stale entries for up to an hour,
 	// when we cannot refresh the cache (say, due to cassandra failure)
 	inputCacheTTL = int64(time.Second)
@@ -252,67 +250,7 @@ func minOpenExtentsForDst(context *Context, dstPath string, dstType dstType) int
 		return defaultMinOpenExtents
 	}
 
-	return int(overrideValueByPath(logFn, dstPath, cfg.PublishExtentTargets, defaultMinOpenExtents, `PublishExtentTargets`))
-}
-
-var overrideValueByPathLogMap = make(map[string]struct{})
-
-func overrideValueByPath(logFn func() bark.Logger, path string, overrides []string, defaultVal int64, valName string) int64 {
-	// Terminate the path with a slash, so that we can do something like this:
-	//
-	// This rule : /foo/bar/=X
-	// Gives:
-	// /foo/bar     = X
-	// /foo/bar_baz = default
-	// /foo/quz     = default
-	//
-	// This rule : /foo/bar=X
-	// Gives:
-	// /foo/bar     = X
-	// /foo/bar_baz = X
-	// /foo/quz     = default
-	//
-	path += `/`
-
-	var longestMatchValue int64
-	var longestMatchKey string
-	var err error
-
-moreOverrides:
-	for _, ovrd := range overrides {
-		split := strings.Split(ovrd, `=`)
-		if len(split) != 2 {
-			logFn().WithFields(bark.Fields{`rule`: ovrd, `valName`: valName}).Error(`Invalid override rule, couldn't split`)
-			continue moreOverrides
-		}
-		if strings.HasPrefix(path, split[0]) {
-			if len(split[0]) > len(longestMatchKey) {
-				var lmv int
-				lmv, err = strconv.Atoi(split[1])
-				if err != nil {
-					logFn().WithFields(bark.Fields{`rule`: ovrd, `valName`: valName, common.TagErr: err}).Error(`Invalid override rule, couldn't covert value`)
-					continue moreOverrides
-				}
-				longestMatchKey = split[0]
-				longestMatchValue = int64(lmv)
-			}
-		}
-	}
-
-	if longestMatchKey != `` {
-		// Log just once for this particular rule; if the value or rule changes, log again
-		logMapKey := valName + path + longestMatchKey + strconv.Itoa(int(longestMatchValue))
-		if _, ok := overrideValueByPathLogMap[logMapKey]; !ok {
-			overrideValueByPathLogMap[logMapKey] = struct{}{}
-			logFn().WithFields(bark.Fields{
-				`valName`:  valName,
-				`rule`:     longestMatchKey,
-				`override`: longestMatchValue}).Info(`Overrided value`)
-		}
-
-		return longestMatchValue
-	}
-	return defaultVal
+	return int(common.OverrideValueByPrefix(logFn, dstPath, cfg.PublishExtentTargets, defaultMinOpenExtents, `PublishExtentTargets`))
 }
 
 func getInputAddrIfExtentIsWritable(context *Context, extent *shared.Extent, m3Scope int) (string, error) {

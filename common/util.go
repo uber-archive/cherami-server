@@ -37,16 +37,16 @@ import (
 	"sync"
 	"time"
 
-	"github.com/uber/cherami-thrift/.generated/go/cherami"
-	"github.com/uber/cherami-thrift/.generated/go/admin"
-	"github.com/uber/cherami-server/common/configure"
-	"github.com/uber/cherami-server/common/metrics"
 	log "github.com/Sirupsen/logrus"
 	"github.com/uber-common/bark"
+	"github.com/uber/cherami-server/common/configure"
+	"github.com/uber/cherami-server/common/metrics"
 	"github.com/uber/ringpop-go"
+	"github.com/uber/tchannel-go"
+	"github.com/uber/cherami-thrift/.generated/go/admin"
+	"github.com/uber/cherami-thrift/.generated/go/cherami"
 	"github.com/uber/ringpop-go/discovery/statichosts"
 	"github.com/uber/ringpop-go/swim"
-	"github.com/uber/tchannel-go"
 	"github.com/uber/tchannel-go/hyperbahn"
 	"github.com/uber/tchannel-go/thrift"
 )
@@ -604,4 +604,73 @@ func NewCliHelper() CliHelper {
 		defaultOwnerEmail: "cherami@cli",
 		cZones:            make(map[string]string),
 	}
+}
+
+var overrideValueByPrefixLogMap = make(map[string]struct{})
+
+// OverrideValueByPrefix takes a list of override rules in the form 'prefix=val' and a given string, and determines the most specific rule
+// that applies to the given string. It then replaces the given default value with the override value. logFn is a logging closure that
+// allows lazy instatiation of a logger interface to log error conditions and override status. valName is used for logging purposes, to
+// differentiate multiple instantiations in the same context
+func OverrideValueByPrefix(logFn func() bark.Logger, path string, overrides []string, defaultVal int64, valName string) int64 {
+	// Terminate the path with a dollarsign, so that we can do something like this:
+	//
+	// This rule : /foo/bar$=X
+	// Gives:
+	// /foo/bar     = X
+	// /foo/bar_baz = default
+	// /foo/quz     = default
+	//
+	// This rule : /foo/bar=X
+	// Gives:
+	// /foo/bar     = X
+	// /foo/bar_baz = X
+	// /foo/quz     = default
+	//
+	path += `$`
+
+	var longestMatchValue int64
+	var longestMatchKey string
+	var hasMatch bool
+	var err error
+
+moreOverrides:
+	for _, ovrd := range overrides {
+		split := strings.Split(ovrd, `=`)
+		if len(split) != 2 {
+			logFn().WithFields(bark.Fields{`rule`: ovrd, `valName`: valName}).Error(`Invalid override rule, couldn't split`)
+			continue moreOverrides
+		}
+		if strings.HasPrefix(path, split[0]) {
+			if len(split[0]) > len(longestMatchKey) || (split[0] == `` && !hasMatch) { // Match for a longer key, or just the empty default
+				var lmv int
+				lmv, err = strconv.Atoi(split[1])
+				if err != nil {
+					logFn().WithFields(bark.Fields{`rule`: ovrd, `valName`: valName, TagErr: err}).Error(`Invalid override rule, couldn't covert value`)
+					continue moreOverrides
+				}
+				longestMatchKey = split[0]
+				longestMatchValue = int64(lmv)
+				hasMatch = true
+			}
+		}
+	}
+
+	if hasMatch { 
+		if len(longestMatchKey) > 1 { // Don't log for very short prefixes, e.g. '/', '' 
+			// Log just once for this particular rule; if the value or rule changes, log again
+			logMapKey := valName + path + longestMatchKey + strconv.Itoa(int(longestMatchValue))
+			if _, ok := overrideValueByPrefixLogMap[logMapKey]; !ok {
+				overrideValueByPrefixLogMap[logMapKey] = struct{}{}
+				logFn().WithFields(bark.Fields{
+					`valName`:  valName,
+					`rule`:     longestMatchKey,
+					`path`:     path,
+					`override`: longestMatchValue}).Info(`Overrided value`)
+			}
+		}
+		return longestMatchValue
+	}
+
+	return defaultVal
 }

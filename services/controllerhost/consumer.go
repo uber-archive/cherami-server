@@ -108,10 +108,10 @@ func maxExtentsToConsumeForDst(context *Context, dstPath, cgName string, dstType
 	}
 
 	if remoteZones > 0 {
-		remoteExtentTarget = int(overrideValueByPath(logFn, ruleKey, cfg.ConsumeExtentRemoteTargets, defaultRemoteExtents, `ConsumeExtentRemoteTargets`))
+		remoteExtentTarget = int(common.OverrideValueByPrefix(logFn, ruleKey, cfg.ConsumeExtentRemoteTargets, defaultRemoteExtents, `ConsumeExtentRemoteTargets`))
 	}
 
-	consumeExtentTarget = int(overrideValueByPath(logFn, ruleKey, cfg.ConsumeExtentTargets, defaultMinConsumeExtents, `ConsumeExtentTargets`))
+	consumeExtentTarget = int(common.OverrideValueByPrefix(logFn, ruleKey, cfg.ConsumeExtentTargets, defaultMinConsumeExtents, `ConsumeExtentTargets`))
 	return consumeExtentTarget + remoteExtentTarget*remoteZones
 }
 

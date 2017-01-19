@@ -51,9 +51,9 @@ type (
 	}
 
 	ExtentAssignmentConfig struct {
-		PublishExtentTargets       []string `name:"publishExtentTargets" default:"/=2,/test=1"`
-		ConsumeExtentTargets       []string `name:"consumeExtentTargets" default:"/=4,/test=1"`
-		ConsumeExtentRemoteTargets []string `name:"consumeExtentRemoteTargets" default:"/=4,/test=1"`
+		PublishExtentTargets       []string `name:"publishExtentTargets" default:"/=4"`
+		ConsumeExtentTargets       []string `name:"consumeExtentTargets" default:"/=8"`
+		ConsumeExtentRemoteTargets []string `name:"consumeExtentRemoteTargets" default:"/=4"`
 	}
 )
 
