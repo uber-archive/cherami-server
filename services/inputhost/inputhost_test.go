@@ -29,11 +29,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/uber/cherami-thrift/.generated/go/admin"
-	"github.com/uber/cherami-thrift/.generated/go/cherami"
-	"github.com/uber/cherami-thrift/.generated/go/metadata"
-	"github.com/uber/cherami-thrift/.generated/go/shared"
-	"github.com/uber/cherami-thrift/.generated/go/store"
 	"github.com/uber/cherami-server/common"
 	"github.com/uber/cherami-server/common/configure"
 	dconfig "github.com/uber/cherami-server/common/dconfigclient"
@@ -43,6 +38,11 @@ import (
 	mockin "github.com/uber/cherami-server/test/mocks/inputhost"
 	mockmeta "github.com/uber/cherami-server/test/mocks/metadata"
 	mockstore "github.com/uber/cherami-server/test/mocks/storehost"
+	"github.com/uber/cherami-thrift/.generated/go/admin"
+	"github.com/uber/cherami-thrift/.generated/go/cherami"
+	"github.com/uber/cherami-thrift/.generated/go/metadata"
+	"github.com/uber/cherami-thrift/.generated/go/shared"
+	"github.com/uber/cherami-thrift/.generated/go/store"
 
 	"github.com/pborman/uuid"
 	"github.com/stretchr/testify/assert"
@@ -883,8 +883,14 @@ func (s *InputHostSuite) TestInputHostPutMessageBatchTimeout() {
 	destinationPath := "foo"
 	ctx, cancel := utilGetThriftContextWithPath(destinationPath)
 	defer cancel()
-	inputHost, _ := NewInputHost("inputhost-test", s.mockService, s.mockMeta, nil)
 
+	// set the batchMsgAckTimeout to a very low value before
+	// publishing the message through the batch API.
+	// We should see a failed message in the ack we get back and
+	// it's status should be timeout as well
+	batchMsgAckTimeout = 1 * time.Millisecond
+
+	inputHost, _ := NewInputHost("inputhost-test", s.mockService, s.mockMeta, nil)
 	aMsg := store.NewAppendMessageAck()
 	msg := cherami.NewPutMessage()
 
@@ -907,12 +913,6 @@ func (s *InputHostSuite) TestInputHostPutMessageBatchTimeout() {
 	putMessageRequest := &cherami.PutMessageBatchRequest{DestinationPath: &destinationPath}
 	msg.ID = common.StringPtr(strconv.Itoa(1))
 	msg.Data = []byte(fmt.Sprintf("hello-%d", 1))
-
-	// set the msgAckTimeout to a very low value before
-	// publishing the message through the batch API.
-	// We should see a failed message in the ack we get back and
-	// it's status should be timeout as well
-	msgAckTimeout = 1 * time.Second
 
 	putMessageRequest.Messages = append(putMessageRequest.Messages, msg)
 	putMessageAcks, err := inputHost.PutMessageBatch(ctx, putMessageRequest)
