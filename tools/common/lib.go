@@ -35,18 +35,18 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/uber/cherami-thrift/.generated/go/cherami"
+	"github.com/apache/thrift/lib/go/thrift"
+	"github.com/codegangsta/cli"
 	ccli "github.com/uber/cherami-client-go/client/cherami"
-	"github.com/uber/cherami-thrift/.generated/go/admin"
-	"github.com/uber/cherami-thrift/.generated/go/metadata"
-	"github.com/uber/cherami-thrift/.generated/go/shared"
-	"github.com/uber/cherami-thrift/.generated/go/store"
 	mcli "github.com/uber/cherami-server/clients/metadata"
 	"github.com/uber/cherami-server/clients/outputhost"
 	"github.com/uber/cherami-server/clients/storehost"
 	"github.com/uber/cherami-server/common"
-	"github.com/apache/thrift/lib/go/thrift"
-	"github.com/codegangsta/cli"
+	"github.com/uber/cherami-thrift/.generated/go/admin"
+	"github.com/uber/cherami-thrift/.generated/go/cherami"
+	"github.com/uber/cherami-thrift/.generated/go/metadata"
+	"github.com/uber/cherami-thrift/.generated/go/shared"
+	"github.com/uber/cherami-thrift/.generated/go/store"
 )
 
 // GlobalOptions are options shared by most command line
@@ -374,29 +374,6 @@ func UpdateConsumerGroup(c *cli.Context, cClient ccli.Client) {
 	desc, err := cClient.UpdateConsumerGroup(uReq)
 	ExitIfError(err)
 	fmt.Printf("%v\n", Jsonify(desc))
-}
-
-// UpdateStoreHost updates the storehost based on cli.Context
-func UpdateStoreHost(c *cli.Context, mClient mcli.Client) {
-	if len(c.Args()) < 2 {
-		ExitIfError(errors.New(strNotEnoughArgs))
-	}
-
-	host := c.Args()[0]
-	sku := c.Args()[1]
-	status := c.String("status")
-
-	cItem := metadata.ServiceConfigItem{
-		ServiceName: common.StringPtr(common.StoreServiceName),
-		Hostname:    common.StringPtr(strings.ToLower(host)),
-		Sku:         common.StringPtr(sku),
-		ConfigKey:   common.StringPtr("adminStatus"), // TODO: Move this to common util; right now this needs some tag changes as well on controllerhost so leaving it for now
-		ConfigValue: common.StringPtr(strings.ToLower(status)),
-	}
-	ur := &metadata.UpdateServiceConfigRequest{ConfigItem: &cItem}
-	err := mClient.UpdateServiceConfig(ur)
-
-	ExitIfError(err)
 }
 
 // UnloadConsumerGroup unloads the CG based on cli.Context
