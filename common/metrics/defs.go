@@ -788,6 +788,8 @@ const (
 	StorageLatencyTimer
 	// StorageWriteStoreLatency is the latency to write message to store
 	StorageWriteStoreLatency
+	// StorageWriteMessageLatency is the latency to write message to store and ack, but excludes time writing to socket
+	StorageWriteMessageExcludeSocketLatency
 	// StorageWriteMessageLatency is the latency to write message to store and ack
 	StorageWriteMessageLatency
 	// StorageReadStoreLatency is the latency to read message from store
@@ -1010,6 +1012,7 @@ var metricDefs = map[ServiceIdx]map[int]metricDefinition{
 		StorageDiskAvailableSpacePcnt:  {Gauge, "storage.disk.availablespace.pcnt"},
 		StorageLatencyTimer:            {Timer, "storage.latency"},
 		StorageWriteStoreLatency:       {Timer, "storage.write.store-latency"},
+		StorageWriteMessageExcludeSocketLatency: {Timer, "storage.write.message-latency-exclude-socket"},
 		StorageWriteMessageLatency:     {Timer, "storage.write.message-latency"},
 		StorageReadStoreLatency:        {Timer, "storage.read.store-latency"},
 		StorageReadMessageLatency:      {Timer, "storage.read.message-latency"},

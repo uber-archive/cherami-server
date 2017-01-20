@@ -319,12 +319,12 @@ func (t *inConn) writeMessagesPumpAppendOnly(msgC <-chan *inMessage, ackC chan<-
 				return newInternalServiceError(fmt.Sprintf("%v msg seqnum=%x out of order (expected=%x)", t.extentID, msg.GetSequenceNumber(), expectedSeqNum))
 			}
 
-			// tWrite := time.Now() // #perfdisable
+			tWrite := time.Now()
 
 			// write message to storage
 			addr, err = x.storePut(key, val)
 
-			// msg.m3Client.RecordTimer(metrics.InConnScope, metrics.StorageWriteStoreLatency, time.Since(tWrite)) // #perfdisable
+			msg.m3Client.RecordTimer(metrics.InConnScope, metrics.StorageWriteStoreLatency, time.Since(tWrite))
 
 			if err != nil {
 
@@ -675,6 +675,8 @@ pump:
 				}
 				break pump
 			}
+
+			t.m3Client.RecordTimer(metrics.InConnScope, metrics.StorageWriteMessageExcludeSocketLatency, time.Since(ack.t0))
 
 			// write out (blocking) to stream
 			if err := stream.Write(ack.AppendMessageAck); err != nil {

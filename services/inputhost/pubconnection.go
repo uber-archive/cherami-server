@@ -71,7 +71,8 @@ type (
 	response struct {
 		ackID       string            // this is unique identifier of message
 		userContext map[string]string // this is user specified context to pass through
-		sw          metrics.Stopwatch
+
+		putMsgRecvTime          time.Time // this is the msg receive time, used for latency metrics
 	}
 
 	// inPutMessage is the wrapper struct which holds the actual message and
@@ -222,9 +223,6 @@ func (conn *pubConnection) readRequestStream() {
 				putMsgRecvTime: time.Now(),
 			}
 
-			// record the latency metric
-			sw := conn.pathCache.m3Client.StartTimer(metrics.PubConnectionStreamScope, metrics.InputhostReceiveMessageLatency)
-
 			throttled := false
 			if conn.limitsEnabled {
 				consumed, _ := conn.GetConnTokenBucketValue().TryConsume(1)
@@ -250,7 +248,7 @@ func (conn *pubConnection) readRequestStream() {
 					select {
 					case conn.putMsgCh <- inMsg:
 						// populate the inflight map
-						conn.replyCh <- response{msg.GetID(), msg.GetUserContext(), sw}
+						conn.replyCh <- response{msg.GetID(), msg.GetUserContext(), inMsg.putMsgRecvTime}
 					default:
 						conn.pathCache.m3Client.IncCounter(metrics.PubConnectionStreamScope, metrics.InputhostMessageChannelFullThrottled)
 						conn.pathCache.destM3Client.IncCounter(metrics.PubConnectionScope, metrics.InputhostDestMessageChannelFullThrottled)
@@ -267,7 +265,7 @@ func (conn *pubConnection) readRequestStream() {
 				} else {
 					select {
 					case conn.putMsgCh <- inMsg:
-						conn.replyCh <- response{msg.GetID(), msg.GetUserContext(), sw}
+						conn.replyCh <- response{msg.GetID(), msg.GetUserContext(), inMsg.putMsgRecvTime}
 					case <-conn.closeChannel:
 						// we are shutting down here. just return
 						return
@@ -455,7 +453,10 @@ func (conn *pubConnection) failInflightMessages(inflightMessages map[string]resp
 				Message:     common.StringPtr("inputhost: timing out unacked message"),
 			}
 			conn.stream.Write(createAckCmd(putMsgAck))
-			d := resp.sw.Stop()
+
+			d := time.Since(resp.putMsgRecvTime)
+			conn.pathCache.m3Client.RecordTimer(metrics.PubConnectionStreamScope, metrics.InputhostReceiveMessageLatency, d)
+			conn.pathCache.destM3Client.RecordTimer(metrics.PubConnectionScope, metrics.InputhostDestReceiveMessageLatency, d)
 			if d > timeLatencyToLog {
 				conn.logger.WithFields(bark.Fields{
 					common.TagDstPth:     common.FmtDstPth(conn.destinationPath),
@@ -524,9 +525,11 @@ func (conn *pubConnection) writeAckToClient(inflightMessages map[string]response
 
 func (conn *pubConnection) updateInflightMap(inflightMessages map[string]response, ackID string) bool {
 	if resp, ok := inflightMessages[ackID]; ok {
-		// record the latency by stopping the timer
-		d := resp.sw.Stop()
+		// record the latency
+		d := time.Since(resp.putMsgRecvTime)
+		conn.pathCache.m3Client.RecordTimer(metrics.PubConnectionStreamScope, metrics.InputhostReceiveMessageLatency, d)
 		conn.pathCache.destM3Client.RecordTimer(metrics.PubConnectionScope, metrics.InputhostDestReceiveMessageLatency, d)
+
 		if d > timeLatencyToLog {
 			conn.logger.
 				WithField(common.TagDstPth, common.FmtDstPth(conn.destinationPath)).
@@ -543,7 +546,7 @@ func (conn *pubConnection) updateInflightMap(inflightMessages map[string]respons
 
 func (conn *pubConnection) updateEarlyReplyAcks(resCh response, earlyReplyAcks map[string]time.Time) {
 	// make sure we account for the time when we sent the ack as well
-	d := resCh.sw.Stop()
+	d := time.Since(resCh.putMsgRecvTime)
 	ackSentTime, _ := earlyReplyAcks[resCh.ackID]
 	actualDuration := d - time.Since(ackSentTime)
 	if d > timeLatencyToLog {
@@ -552,6 +555,7 @@ func (conn *pubConnection) updateEarlyReplyAcks(resCh response, earlyReplyAcks m
 			WithField(common.TagInPutAckID, common.FmtInPutAckID(resCh.ackID)).
 			WithFields(bark.Fields{`d`: d, `actualDuration`: actualDuration}).Info(`publish message latency at updateEarlyReplyAcks and actualDuration`)
 	}
+	conn.pathCache.m3Client.RecordTimer(metrics.PubConnectionStreamScope, metrics.InputhostReceiveMessageLatency, actualDuration)
 	conn.pathCache.destM3Client.RecordTimer(metrics.PubConnectionScope, metrics.InputhostDestReceiveMessageLatency, actualDuration)
 	delete(earlyReplyAcks, resCh.ackID)
 	// XXX: Disabled due to log noise

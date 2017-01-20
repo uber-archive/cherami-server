@@ -430,6 +430,7 @@ func (conn *extHost) sendMessageToReplicas(pr *inPutMessage, extSendTimer *commo
 		extSendTimer.Reset(replicaSendTimeout)
 		// this is for the extHost's inflight messages for a successful message
 		select {
+		// stop watch here
 		case conn.replyClientCh <- writeResponse{pr.putMsg.GetID(), sequenceNumber, appendMsgAckCh, pr.putMsgAckCh, pr.putMsgRecvTime, pr.putMsg.GetUserContext()}:
 		case <-extSendTimer.C:
 			conn.logger.WithField(`lenReplyClientCh`, len(conn.replyClientCh)).Error(`inputhost: exthost: sending msg to the replyClientCh on exthost timed out`)
@@ -657,6 +658,7 @@ func (conn *extHost) aggregateAndSendReplies(numReplicas int) {
 				perMsgTimer.Reset(msgAckTimeout)
 				select {
 				case resCh.putMsgAck <- putMsgAck:
+					// add latency here
 				case <-perMsgTimer.C:
 					conn.logger.WithField(common.TagAckID, resCh.ackID).Error(`sending ack back to the client timed out`)
 				}
