@@ -1,5 +1,5 @@
-hash: d8faa3da0bc5a170bf96a93b78a7531adb802a618dd7f429256d6d83dc61ceae
-updated: 2017-01-11T08:37:29.102849926-08:00
+hash: 34648d4186bdacac7e0b2ab203e5059dc32406e97ad4cc9ce4671e6f81bd77d3
+updated: 2017-01-20T12:55:28.462585745-08:00
 imports:
 - name: github.com/apache/thrift
   version: 366e89ead7df34b4132c2accb59dc14fce564883
@@ -41,8 +41,6 @@ imports:
   version: d8eabe07bc70ff9ba6a56836cde99d1ea3d005f7
   subpackages:
   - statsd
-- name: github.com/cockroachdb/c-jemalloc
-  version: d726b40f0bc9c90ced1e00c044cf172ae094c083
 - name: github.com/cockroachdb/c-lz4
   version: 834d3303c9e84b1045bc57c3eb3723ee8cb4d33b
 - name: github.com/cockroachdb/c-rocksdb
@@ -113,7 +111,7 @@ imports:
   - common/websocket
   - stream
 - name: github.com/uber/cherami-thrift
-  version: 0b29ca48a00837364f44084c2733bfc395585347
+  version: 158732d2fb0296d02c0b23aa343c0310b7b9a749
   subpackages:
   - .generated/go/admin
   - .generated/go/cherami
@@ -131,12 +129,11 @@ imports:
   - forward
   - hashring
   - logging
-  - membership
   - shared
   - swim
   - util
 - name: github.com/uber/tchannel-go
-  version: 2caa315516e1836b7b2eff70d2fcbd23538d1b22
+  version: 4a23f3aae76694b21107f118ece763a61b98ea07
   subpackages:
   - hyperbahn
   - hyperbahn/gen-go/hyperbahn
@@ -149,7 +146,7 @@ imports:
   - trand
   - typed
 - name: golang.org/x/net
-  version: 45e771701b814666a7eb299e6c7a57d0b1799e91
+  version: f2499483f923065a842d38eb4c7f1927e6fc6e6d
   subpackages:
   - context
 - name: golang.org/x/sys
