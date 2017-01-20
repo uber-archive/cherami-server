@@ -23,9 +23,9 @@ package main
 import (
 	"os"
 
+	"github.com/codegangsta/cli"
 	"github.com/uber/cherami-server/common"
 	"github.com/uber/cherami-server/tools/admin"
-	"github.com/codegangsta/cli"
 )
 
 func main() {
@@ -43,7 +43,7 @@ func main() {
 	})
 	app.Name = "cherami"
 	app.Usage = "A command-line tool for cherami developer, including debugging tool"
-	app.Version = "1.0"
+	app.Version = "1.1"
 	app.Flags = []cli.Flag{
 		cli.BoolTFlag{
 			Name:  "hyperbahn",
@@ -350,21 +350,6 @@ func main() {
 						admin.UpdateConsumerGroup(c)
 					},
 				},
-				{
-					Name:    "storehost",
-					Aliases: []string{"s", "sh"},
-					Usage:   "update storehost <host-name> <sku>",
-					Flags: []cli.Flag{
-						cli.StringFlag{
-							Name:  "status, s",
-							Value: "enabled",
-							Usage: "status: enabled | disabled",
-						},
-					},
-					Action: func(c *cli.Context) {
-						admin.UpdateStoreHost(c)
-					},
-				},
 			},
 		},
 		{
@@ -601,6 +586,44 @@ func main() {
 					},
 					Action: func(c *cli.Context) {
 						admin.UnloadConsumerGroup(c)
+					},
+				},
+			},
+		},
+		{
+			Name:    "serviceconfig",
+			Aliases: []string{"cfg"},
+			Usage:   "serviceconfig (get|set|delete)",
+			Subcommands: []cli.Command{
+				{
+					Name:    "get",
+					Aliases: []string{"g"},
+					Usage:   "serviceconfig get <service-name> [options]",
+					Flags: []cli.Flag{
+						cli.StringFlag{
+							Name:  "key, k",
+							Value: "",
+							Usage: "The config key whose value is to be fetched",
+						},
+					},
+					Action: func(c *cli.Context) {
+						admin.GetServiceConfig(c)
+					},
+				},
+				{
+					Name:    "set",
+					Aliases: []string{"s"},
+					Usage:   "serviceconfig set <service-name.version.sku.hostname.config-key> <config-value>",
+					Action: func(c *cli.Context) {
+						admin.SetServiceConfig(c)
+					},
+				},
+				{
+					Name:    "delete",
+					Aliases: []string{"d"},
+					Usage:   "serviceconfig delete <service-name.version.sku.hostname.config-key>",
+					Action: func(c *cli.Context) {
+						admin.DeleteServiceConfig(c)
 					},
 				},
 			},

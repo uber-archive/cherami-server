@@ -118,3 +118,15 @@ func MaxInt64(a, b int64) int64 {
 	}
 	return b
 }
+
+// IsValidServiceName returns true if the
+// given input is a valid service name,
+// false otherwise
+func IsValidServiceName(input string) bool {
+	for _, svc := range services {
+		if svc == input {
+			return true
+		}
+	}
+	return false
+}
