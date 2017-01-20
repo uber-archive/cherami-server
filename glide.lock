@@ -1,5 +1,5 @@
-hash: 34648d4186bdacac7e0b2ab203e5059dc32406e97ad4cc9ce4671e6f81bd77d3
-updated: 2017-01-20T12:55:28.462585745-08:00
+hash: 95f30a537dc5b2841e061722d66e26c58126e82c19e9ba29bb6b0f44cf1741d0
+updated: 2017-01-20T14:50:39.862787375-08:00
 imports:
 - name: github.com/apache/thrift
   version: 366e89ead7df34b4132c2accb59dc14fce564883
@@ -41,6 +41,8 @@ imports:
   version: d8eabe07bc70ff9ba6a56836cde99d1ea3d005f7
   subpackages:
   - statsd
+- name: github.com/cockroachdb/c-jemalloc
+  version: d726b40f0bc9c90ced1e00c044cf172ae094c083
 - name: github.com/cockroachdb/c-lz4
   version: 834d3303c9e84b1045bc57c3eb3723ee8cb4d33b
 - name: github.com/cockroachdb/c-rocksdb
