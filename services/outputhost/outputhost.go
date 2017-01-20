@@ -312,8 +312,6 @@ func (h *OutputHost) OpenConsumerStream(ctx thrift.Context, call stream.BOutOpen
 	}
 	conn := newConsConnection(cgCache.currID, cgCache, call, h.cacheTimeout, cgLogger)
 	cgCache.connections[cgCache.currID] = conn
-	// wait for shutdown here as well. this makes sure the pubconnection is done
-	h.shutdownWG.Add(1)
 	connWG := conn.open()
 	cgCache.currID++
 	// increment the active connection count
@@ -328,7 +326,6 @@ func (h *OutputHost) OpenConsumerStream(ctx thrift.Context, call stream.BOutOpen
 	// wait till the conn is closed. we cannot return immediately.
 	// If we do so, we will get data races reading/writing from/to the stream
 	connWG.Wait()
-	h.shutdownWG.Done()
 	h.hostMetrics.Decrement(load.HostMetricNumOpenConns)
 	return nil
 }

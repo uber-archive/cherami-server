@@ -774,6 +774,7 @@ func (msgCache *cgMsgCache) manageMessageDeliveryCache() {
 				}
 			}
 		case <-msgCache.closeChannel:
+			msgCache.cgCache.manageMsgCacheWG.Done()
 			return
 		} // select
 		msgCache.checkTimer()
