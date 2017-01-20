@@ -27,11 +27,11 @@ import (
 
 	"github.com/uber-common/bark"
 
-	"github.com/uber/cherami-thrift/.generated/go/cherami"
 	"github.com/uber/cherami-server/common"
 	"github.com/uber/cherami-server/common/metrics"
 	"github.com/uber/cherami-server/services/outputhost/load"
 	serverStream "github.com/uber/cherami-server/stream"
+	"github.com/uber/cherami-thrift/.generated/go/cherami"
 )
 
 type (
@@ -74,9 +74,6 @@ const (
 
 	// flushTimeout is the duration to wait before we trigger a flush
 	flushTimeout time.Duration = 5 * time.Millisecond
-
-	// cacheEnqueueTimeout is the duration to wait to insert message into the cache
-	cacheEnqueueTimeout time.Duration = 1 * time.Minute
 
 	// creditFlushTimeout is the time to flush accumulated credits to the write pump
 	creditFlushTimeout time.Duration = 5 * time.Second
@@ -238,9 +235,6 @@ func (conn *consConnection) writeMsgsStream() {
 	flushTicker := time.NewTicker(flushTimeout) // start ticker to flush tchannel stream
 	defer flushTicker.Stop()
 
-	cacheTimer := common.NewTimer(cacheEnqueueTimeout) // time to wait to send the message to the message cache
-	defer cacheTimer.Stop()
-
 	unflushedWrites := 0
 
 	// get the throttler
@@ -309,16 +303,16 @@ func (conn *consConnection) writeMsgsStream() {
 				conn.logger.WithField(common.TagAckID, common.FmtAckID(msg.GetAckId())).
 					WithField(common.TagSlowDownSeconds, common.FmtSlowDown(slowDown)).
 					Info("redelivering priority msg back to client")
-				conn.createMsgAndWriteToClientUtil(msg, &unflushedWrites, &localCredits, flushThreshold, conn.msgCacheRedeliveredCh, cacheTimer)
+				conn.createMsgAndWriteToClientUtil(msg, &unflushedWrites, &localCredits, flushThreshold, conn.msgCacheRedeliveredCh)
 				conn.reSentMsgs++
 			case msg := <-conn.msgsRedeliveryCh:
 				//conn.logger.WithField(common.TagAckID, common.FmtAckID(msg.GetAckId())).
 				//	WithField(`throttle`, float64(slowDown)/float64(time.Second)).
 				//	Info("consconnection: redelivering msg back to the client")
-				conn.createMsgAndWriteToClientUtil(msg, &unflushedWrites, &localCredits, flushThreshold, conn.msgCacheRedeliveredCh, cacheTimer)
+				conn.createMsgAndWriteToClientUtil(msg, &unflushedWrites, &localCredits, flushThreshold, conn.msgCacheRedeliveredCh)
 				conn.reSentMsgs++
 			case msg := <-conn.msgsCh:
-				conn.createMsgAndWriteToClientUtil(msg, &unflushedWrites, &localCredits, flushThreshold, conn.msgCacheCh, cacheTimer)
+				conn.createMsgAndWriteToClientUtil(msg, &unflushedWrites, &localCredits, flushThreshold, conn.msgCacheCh)
 			case <-flushTicker.C:
 				if unflushedWrites > 0 {
 					if err := conn.flushToClient(unflushedWrites); err == nil {
@@ -395,18 +389,19 @@ func (conn *consConnection) writeToClient(cmd *cherami.OutputHostCommand) error 
 	return nil
 }
 
-func (conn *consConnection) createMsgAndWriteToClientUtil(msg *cherami.ConsumerMessage, unflushedWrites *int, localCredits *int32, flushThreshold int, msgCacheCh chan<- cacheMsg, cacheTimer *common.Timer) {
+func (conn *consConnection) createMsgAndWriteToClientUtil(msg *cherami.ConsumerMessage, unflushedWrites *int, localCredits *int32, flushThreshold int, msgCacheCh chan<- cacheMsg) {
 	cmd := createMsgCmd(msg)
 	if err := conn.writeToClient(cmd); err == nil {
 		*unflushedWrites++
 		// Add the message to the message cache, on the appropriate channel
-		cacheTimer.Reset(cacheEnqueueTimeout)
+		// this should be blocking because we should not proceed forward if we
+		// cannot write to the message cache
 		select {
 		case msgCacheCh <- cacheMsg{msg: msg, connID: conn.connID}:
-		case <-cacheTimer.C:
+		case <-conn.closeChannel:
 			conn.logger.
 				WithField(common.TagAckID, common.FmtAckID(msg.GetAckId())).
-				Error("outputhost: Unable to write the message to the cache after a minute (shutdown?)")
+				Error("outputhost: Unable to write the message to the cache (shutdown?)")
 		}
 		*localCredits--
 		// flush if we have reached the threshold
