@@ -24,9 +24,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/uber/cherami-thrift/.generated/go/store"
 	"github.com/uber/cherami-server/services/storehost/load"
 	"github.com/uber/cherami-server/storage"
+	"github.com/uber/cherami-thrift/.generated/go/store"
 )
 
 // ExtentObj is allocated one per "open" to an extent

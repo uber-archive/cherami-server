@@ -26,16 +26,16 @@ import (
 	"sync"
 	"time"
 
-	"github.com/uber/cherami-thrift/.generated/go/cherami"
-	"github.com/uber/cherami-thrift/.generated/go/metadata"
-	"github.com/uber/cherami-thrift/.generated/go/shared"
-	"github.com/uber/cherami-thrift/.generated/go/store"
+	"github.com/pborman/uuid"
+	"github.com/uber-common/bark"
 	"github.com/uber/cherami-server/common"
 	"github.com/uber/cherami-server/common/metrics"
 	"github.com/uber/cherami-server/storage"
 	storeStream "github.com/uber/cherami-server/stream"
-	"github.com/pborman/uuid"
-	"github.com/uber-common/bark"
+	"github.com/uber/cherami-thrift/.generated/go/cherami"
+	"github.com/uber/cherami-thrift/.generated/go/metadata"
+	"github.com/uber/cherami-thrift/.generated/go/shared"
+	"github.com/uber/cherami-thrift/.generated/go/store"
 )
 
 const replicateDebug = false

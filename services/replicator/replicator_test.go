@@ -28,10 +28,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/uber/cherami-thrift/.generated/go/cherami"
-	"github.com/uber/cherami-thrift/.generated/go/metadata"
-	"github.com/uber/cherami-thrift/.generated/go/shared"
-	"github.com/uber/cherami-thrift/.generated/go/store"
 	"github.com/uber/cherami-server/common"
 	"github.com/uber/cherami-server/common/configure"
 	dconfig "github.com/uber/cherami-server/common/dconfigclient"
@@ -39,6 +35,10 @@ import (
 	mockcontroller "github.com/uber/cherami-server/test/mocks/controllerhost"
 	mockmeta "github.com/uber/cherami-server/test/mocks/metadata"
 	mockreplicator "github.com/uber/cherami-server/test/mocks/replicator"
+	"github.com/uber/cherami-thrift/.generated/go/cherami"
+	"github.com/uber/cherami-thrift/.generated/go/metadata"
+	"github.com/uber/cherami-thrift/.generated/go/shared"
+	"github.com/uber/cherami-thrift/.generated/go/store"
 
 	"github.com/pborman/uuid"
 	"github.com/stretchr/testify/assert"

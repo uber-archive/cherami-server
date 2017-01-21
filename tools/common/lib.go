@@ -35,18 +35,18 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/uber/cherami-thrift/.generated/go/cherami"
+	"github.com/apache/thrift/lib/go/thrift"
+	"github.com/codegangsta/cli"
 	ccli "github.com/uber/cherami-client-go/client/cherami"
-	"github.com/uber/cherami-thrift/.generated/go/admin"
-	"github.com/uber/cherami-thrift/.generated/go/metadata"
-	"github.com/uber/cherami-thrift/.generated/go/shared"
-	"github.com/uber/cherami-thrift/.generated/go/store"
 	mcli "github.com/uber/cherami-server/clients/metadata"
 	"github.com/uber/cherami-server/clients/outputhost"
 	"github.com/uber/cherami-server/clients/storehost"
 	"github.com/uber/cherami-server/common"
-	"github.com/apache/thrift/lib/go/thrift"
-	"github.com/codegangsta/cli"
+	"github.com/uber/cherami-thrift/.generated/go/admin"
+	"github.com/uber/cherami-thrift/.generated/go/cherami"
+	"github.com/uber/cherami-thrift/.generated/go/metadata"
+	"github.com/uber/cherami-thrift/.generated/go/shared"
+	"github.com/uber/cherami-thrift/.generated/go/store"
 )
 
 // GlobalOptions are options shared by most command line

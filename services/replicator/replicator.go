@@ -34,15 +34,15 @@ import (
 	"github.com/uber/tchannel-go/thrift"
 
 	ccommon "github.com/uber/cherami-client-go/common"
-	"github.com/uber/cherami-thrift/.generated/go/metadata"
-	rgen "github.com/uber/cherami-thrift/.generated/go/replicator"
-	"github.com/uber/cherami-thrift/.generated/go/shared"
 	"github.com/uber/cherami-server/common"
 	"github.com/uber/cherami-server/common/configure"
 	dconfig "github.com/uber/cherami-server/common/dconfigclient"
 	mm "github.com/uber/cherami-server/common/metadata"
 	"github.com/uber/cherami-server/common/metrics"
 	storeStream "github.com/uber/cherami-server/stream"
+	"github.com/uber/cherami-thrift/.generated/go/metadata"
+	rgen "github.com/uber/cherami-thrift/.generated/go/replicator"
+	"github.com/uber/cherami-thrift/.generated/go/shared"
 )
 
 type (

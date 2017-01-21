@@ -21,15 +21,15 @@
 package outputhost
 
 import (
-	"github.com/uber/cherami-thrift/.generated/go/controller"
-	"github.com/uber/cherami-thrift/.generated/go/shared"
+	"github.com/pborman/uuid"
+	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/suite"
 	"github.com/uber/cherami-server/common"
 	"github.com/uber/cherami-server/common/configure"
 	"github.com/uber/cherami-server/common/metrics"
 	"github.com/uber/cherami-server/services/outputhost/load"
-	"github.com/pborman/uuid"
-	"github.com/stretchr/testify/require"
-	"github.com/stretchr/testify/suite"
+	"github.com/uber/cherami-thrift/.generated/go/controller"
+	"github.com/uber/cherami-thrift/.generated/go/shared"
 
 	"testing"
 )

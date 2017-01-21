@@ -26,10 +26,10 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/uber/cherami-server/storage"
 	log "github.com/Sirupsen/logrus"
 	"github.com/pborman/uuid"
 	"github.com/stretchr/testify/suite"
+	"github.com/uber/cherami-server/storage"
 )
 
 type StorageSuite struct {

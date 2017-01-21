@@ -29,15 +29,15 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/uber/cherami-thrift/.generated/go/metadata"
-	"github.com/uber/cherami-thrift/.generated/go/shared"
-	"github.com/uber/cherami-server/common"
-	"github.com/uber/cherami-server/storage/manyrocks"
-	toolscommon "github.com/uber/cherami-server/tools/common"
 	log "github.com/Sirupsen/logrus"
 	"github.com/codegangsta/cli"
 	"github.com/tecbot/gorocksdb"
 	"github.com/uber-common/bark"
+	"github.com/uber/cherami-server/common"
+	"github.com/uber/cherami-server/storage/manyrocks"
+	toolscommon "github.com/uber/cherami-server/tools/common"
+	"github.com/uber/cherami-thrift/.generated/go/metadata"
+	"github.com/uber/cherami-thrift/.generated/go/shared"
 )
 
 const (

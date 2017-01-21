@@ -21,9 +21,9 @@
 package inputhost
 
 import (
+	log "github.com/Sirupsen/logrus"
 	"github.com/uber/cherami-server/common"
 	dconfig "github.com/uber/cherami-server/common/dconfigclient"
-	log "github.com/Sirupsen/logrus"
 )
 
 const (

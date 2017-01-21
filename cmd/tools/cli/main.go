@@ -24,9 +24,9 @@ import (
 	"os"
 	"time"
 
+	"github.com/codegangsta/cli"
 	"github.com/uber/cherami-server/common"
 	lib "github.com/uber/cherami-server/tools/cli"
-	"github.com/codegangsta/cli"
 )
 
 const (

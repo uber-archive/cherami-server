@@ -26,10 +26,10 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/uber-common/bark"
 	"github.com/uber/cherami-server/common"
 	"github.com/uber/cherami-server/common/metrics"
 	"github.com/uber/cherami-server/services/storehost/load"
-	"github.com/uber-common/bark"
 )
 
 // StorageStatus defines the different storage status

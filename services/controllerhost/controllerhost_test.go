@@ -30,15 +30,15 @@ import (
 	"testing"
 	"time"
 
-	c "github.com/uber/cherami-thrift/.generated/go/controller"
-	m "github.com/uber/cherami-thrift/.generated/go/metadata"
-	"github.com/uber/cherami-thrift/.generated/go/shared"
 	mc "github.com/uber/cherami-server/clients/metadata"
 	"github.com/uber/cherami-server/common"
 	"github.com/uber/cherami-server/common/configure"
 	dconfig "github.com/uber/cherami-server/common/dconfigclient"
 	mockcommon "github.com/uber/cherami-server/test/mocks/common"
 	mockreplicator "github.com/uber/cherami-server/test/mocks/replicator"
+	c "github.com/uber/cherami-thrift/.generated/go/controller"
+	m "github.com/uber/cherami-thrift/.generated/go/metadata"
+	"github.com/uber/cherami-thrift/.generated/go/shared"
 
 	"github.com/pborman/uuid"
 	"github.com/stretchr/testify/assert"

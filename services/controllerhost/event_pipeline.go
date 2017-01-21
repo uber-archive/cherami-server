@@ -27,9 +27,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/uber-common/bark"
 	"github.com/uber/cherami-server/common"
 	"github.com/uber/cherami-server/common/metrics"
-	"github.com/uber-common/bark"
 )
 
 var errRetryable = errors.New("Retry later")

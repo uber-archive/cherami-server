@@ -27,10 +27,10 @@ import (
 	"strings"
 	"time"
 
-	m "github.com/uber/cherami-thrift/.generated/go/metadata"
-	"github.com/uber/cherami-thrift/.generated/go/shared"
 	"github.com/uber/cherami-server/common"
 	"github.com/uber/cherami-server/common/configure"
+	m "github.com/uber/cherami-thrift/.generated/go/metadata"
+	"github.com/uber/cherami-thrift/.generated/go/shared"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/gocql/gocql"

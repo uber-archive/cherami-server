@@ -27,10 +27,10 @@ import (
 
 	"github.com/uber-common/bark"
 
-	"github.com/uber/cherami-thrift/.generated/go/cherami"
 	"github.com/uber/cherami-server/common"
 	"github.com/uber/cherami-server/common/metrics"
 	serverStream "github.com/uber/cherami-server/stream"
+	"github.com/uber/cherami-thrift/.generated/go/cherami"
 )
 
 // timeLatencyToLog is the time threshold for logging
@@ -72,7 +72,7 @@ type (
 		ackID       string            // this is unique identifier of message
 		userContext map[string]string // this is user specified context to pass through
 
-		putMsgRecvTime          time.Time // this is the msg receive time, used for latency metrics
+		putMsgRecvTime time.Time // this is the msg receive time, used for latency metrics
 	}
 
 	// inPutMessage is the wrapper struct which holds the actual message and
@@ -83,6 +83,14 @@ type (
 		putMsg         *cherami.PutMessage
 		putMsgAckCh    chan *cherami.PutMessageAck
 		putMsgRecvTime time.Time
+	}
+
+	earlyReplyAck struct {
+		// time when we receive ack from replica
+		ackReceiveTime time.Time
+
+		// time when we send ack back to stream
+		ackSentTime time.Time
 	}
 
 	pubConnectionClosedCb func(connectionID)
@@ -283,7 +291,7 @@ func (conn *pubConnection) readRequestStream() {
 // 2. make sure we respond failure back to the client in case something
 //    happens and we close the streams underneath
 func (conn *pubConnection) writeAcksStream() {
-	earlyReplyAcks := make(map[string]time.Time) // map of all the early acks
+	earlyReplyAcks := make(map[string]earlyReplyAck) // map of all the early acks
 	inflightMessages := make(map[string]response)
 	defer conn.failInflightMessages(inflightMessages, earlyReplyAcks)
 
@@ -349,8 +357,8 @@ func (conn *pubConnection) writeAcksStream() {
 				select {
 				case ack, ok := <-conn.ackChannel:
 					if ok {
-
-						exists, err := conn.writeAckToClient(inflightMessages, ack)
+						ackReceiveTime := time.Now()
+						exists, err := conn.writeAckToClient(inflightMessages, ack, ackReceiveTime)
 						if err != nil {
 							// trigger a close of the connection
 							go conn.close()
@@ -364,7 +372,10 @@ func (conn *pubConnection) writeAcksStream() {
 							// conn.logger.
 							//	WithField(common.TagInPutAckID, common.FmtInPutAckID(ack.GetID())).
 							//	Debug("received an ack even before we populated the inflight map")
-							earlyReplyAcks[ack.GetID()] = time.Now()
+							earlyReplyAcks[ack.GetID()] = earlyReplyAck{
+								ackReceiveTime: ackReceiveTime,
+								ackSentTime:    time.Now(),
+							}
 						}
 
 						unflushedWrites++
@@ -407,7 +418,7 @@ func (conn *pubConnection) writeAcksStream() {
 	}
 }
 
-func (conn *pubConnection) failInflightMessages(inflightMessages map[string]response, earlyReplyAcks map[string]time.Time) {
+func (conn *pubConnection) failInflightMessages(inflightMessages map[string]response, earlyReplyAcks map[string]earlyReplyAck) {
 	defer conn.stream.Done()
 	failTimer := common.NewTimer(failTimeout)
 	defer failTimer.Stop()
@@ -418,7 +429,7 @@ func (conn *pubConnection) failInflightMessages(inflightMessages map[string]resp
 		select {
 		case ack, ok := <-conn.ackChannel:
 			if ok {
-				conn.writeAckToClient(inflightMessages, ack)
+				conn.writeAckToClient(inflightMessages, ack, time.Now())
 				// ignore error above since we are anyway failing
 				// Since we are anyway failing here, we don't care about the
 				// early acks map since the only point for that map is to
@@ -452,11 +463,15 @@ func (conn *pubConnection) failInflightMessages(inflightMessages map[string]resp
 				Status:      common.CheramiStatusPtr(cherami.Status_FAILED),
 				Message:     common.StringPtr("inputhost: timing out unacked message"),
 			}
+			d := time.Since(resp.putMsgRecvTime)
+			conn.pathCache.m3Client.RecordTimer(metrics.PubConnectionStreamScope, metrics.InputhostWriteMessageExcludeSocketLatency, d)
+			conn.pathCache.destM3Client.RecordTimer(metrics.PubConnectionScope, metrics.InputhostDestWriteMessageExcludeSocketLatency, d)
+
 			conn.stream.Write(createAckCmd(putMsgAck))
 
-			d := time.Since(resp.putMsgRecvTime)
-			conn.pathCache.m3Client.RecordTimer(metrics.PubConnectionStreamScope, metrics.InputhostReceiveMessageLatency, d)
-			conn.pathCache.destM3Client.RecordTimer(metrics.PubConnectionScope, metrics.InputhostDestReceiveMessageLatency, d)
+			d = time.Since(resp.putMsgRecvTime)
+			conn.pathCache.m3Client.RecordTimer(metrics.PubConnectionStreamScope, metrics.InputhostWriteMessageLatency, d)
+			conn.pathCache.destM3Client.RecordTimer(metrics.PubConnectionScope, metrics.InputhostDestWriteMessageLatency, d)
 			if d > timeLatencyToLog {
 				conn.logger.WithFields(bark.Fields{
 					common.TagDstPth:     common.FmtDstPth(conn.destinationPath),
@@ -493,7 +508,7 @@ func (conn *pubConnection) writeCmdToClient(cmd *cherami.InputHostCommand) (err 
 	return
 }
 
-func (conn *pubConnection) writeAckToClient(inflightMessages map[string]response, ack *cherami.PutMessageAck) (exists bool, err error) {
+func (conn *pubConnection) writeAckToClient(inflightMessages map[string]response, ack *cherami.PutMessageAck, ackReceiveTime time.Time) (exists bool, err error) {
 	cmd := createAckCmd(ack)
 	err = conn.writeCmdToClient(cmd)
 	if err != nil {
@@ -501,7 +516,7 @@ func (conn *pubConnection) writeAckToClient(inflightMessages map[string]response
 			WithField(common.TagInPutAckID, common.FmtInPutAckID(ack.GetID())).
 			WithField(common.TagErr, err).Error(`inputhost: writing ack Id failed`)
 	}
-	exists = conn.updateInflightMap(inflightMessages, ack.GetID())
+	exists = conn.updateInflightMap(inflightMessages, ack.GetID(), ackReceiveTime)
 
 	// update the failure metric, if needed
 	if ack.GetStatus() == cherami.Status_FAILED || err != nil {
@@ -523,12 +538,16 @@ func (conn *pubConnection) writeAckToClient(inflightMessages map[string]response
 	return
 }
 
-func (conn *pubConnection) updateInflightMap(inflightMessages map[string]response, ackID string) bool {
+func (conn *pubConnection) updateInflightMap(inflightMessages map[string]response, ackID string, ackReceiveTime time.Time) bool {
 	if resp, ok := inflightMessages[ackID]; ok {
+
 		// record the latency
 		d := time.Since(resp.putMsgRecvTime)
-		conn.pathCache.m3Client.RecordTimer(metrics.PubConnectionStreamScope, metrics.InputhostReceiveMessageLatency, d)
-		conn.pathCache.destM3Client.RecordTimer(metrics.PubConnectionScope, metrics.InputhostDestReceiveMessageLatency, d)
+		conn.pathCache.m3Client.RecordTimer(metrics.PubConnectionStreamScope, metrics.InputhostWriteMessageLatency, d)
+		conn.pathCache.destM3Client.RecordTimer(metrics.PubConnectionScope, metrics.InputhostDestWriteMessageLatency, d)
+
+		conn.pathCache.m3Client.RecordTimer(metrics.PubConnectionStreamScope, metrics.InputhostWriteMessageExcludeSocketLatency, ackReceiveTime.Sub(resp.putMsgRecvTime))
+		conn.pathCache.destM3Client.RecordTimer(metrics.PubConnectionScope, metrics.InputhostDestWriteMessageExcludeSocketLatency, ackReceiveTime.Sub(resp.putMsgRecvTime))
 
 		if d > timeLatencyToLog {
 			conn.logger.
@@ -544,19 +563,25 @@ func (conn *pubConnection) updateInflightMap(inflightMessages map[string]respons
 	return false
 }
 
-func (conn *pubConnection) updateEarlyReplyAcks(resCh response, earlyReplyAcks map[string]time.Time) {
+func (conn *pubConnection) updateEarlyReplyAcks(resCh response, earlyReplyAcks map[string]earlyReplyAck) {
 	// make sure we account for the time when we sent the ack as well
 	d := time.Since(resCh.putMsgRecvTime)
-	ackSentTime, _ := earlyReplyAcks[resCh.ackID]
-	actualDuration := d - time.Since(ackSentTime)
+	ack, _ := earlyReplyAcks[resCh.ackID]
+	actualDuration := d - time.Since(ack.ackSentTime)
 	if d > timeLatencyToLog {
 		conn.logger.
 			WithField(common.TagDstPth, common.FmtDstPth(conn.destinationPath)).
 			WithField(common.TagInPutAckID, common.FmtInPutAckID(resCh.ackID)).
 			WithFields(bark.Fields{`d`: d, `actualDuration`: actualDuration}).Info(`publish message latency at updateEarlyReplyAcks and actualDuration`)
 	}
-	conn.pathCache.m3Client.RecordTimer(metrics.PubConnectionStreamScope, metrics.InputhostReceiveMessageLatency, actualDuration)
-	conn.pathCache.destM3Client.RecordTimer(metrics.PubConnectionScope, metrics.InputhostDestReceiveMessageLatency, actualDuration)
+	conn.pathCache.m3Client.RecordTimer(metrics.PubConnectionStreamScope, metrics.InputhostWriteMessageLatency, actualDuration)
+	conn.pathCache.destM3Client.RecordTimer(metrics.PubConnectionScope, metrics.InputhostDestWriteMessageLatency, actualDuration)
+
+	// also record the time that excludes the time for sending ack back to socket
+	actualDurationExcludeSocket := d - time.Since(ack.ackReceiveTime)
+	conn.pathCache.m3Client.RecordTimer(metrics.PubConnectionStreamScope, metrics.InputhostWriteMessageExcludeSocketLatency, actualDurationExcludeSocket)
+	conn.pathCache.destM3Client.RecordTimer(metrics.PubConnectionScope, metrics.InputhostDestWriteMessageExcludeSocketLatency, actualDurationExcludeSocket)
+
 	delete(earlyReplyAcks, resCh.ackID)
 	// XXX: Disabled due to log noise
 	// conn.logger.WithField(common.TagInPutAckID, common.FmtInPutAckID(resCh.ackID)).Info("Found ack for this response in earlyReplyAcks map. Not adding it to the inflight map")

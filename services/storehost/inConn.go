@@ -27,12 +27,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/uber/cherami-thrift/.generated/go/cherami"
-	"github.com/uber/cherami-thrift/.generated/go/store"
 	"github.com/uber/cherami-server/common"
 	"github.com/uber/cherami-server/common/metrics"
 	"github.com/uber/cherami-server/storage"
 	storeStream "github.com/uber/cherami-server/stream"
+	"github.com/uber/cherami-thrift/.generated/go/cherami"
+	"github.com/uber/cherami-thrift/.generated/go/store"
 
 	"github.com/pborman/uuid"
 	"github.com/uber-common/bark"
@@ -324,7 +324,7 @@ func (t *inConn) writeMessagesPumpAppendOnly(msgC <-chan *inMessage, ackC chan<-
 			// write message to storage
 			addr, err = x.storePut(key, val)
 
-			msg.m3Client.RecordTimer(metrics.InConnScope, metrics.StorageWriteStoreLatency, time.Since(tWrite))
+			t.m3Client.RecordTimer(metrics.InConnScope, metrics.StorageWriteStoreLatency, time.Since(tWrite))
 
 			if err != nil {
 

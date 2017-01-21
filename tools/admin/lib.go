@@ -30,13 +30,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/uber/cherami-thrift/.generated/go/cherami"
-	"github.com/uber/cherami-thrift/.generated/go/metadata"
-	"github.com/uber/cherami-thrift/.generated/go/shared"
+	"github.com/codegangsta/cli"
 	mcli "github.com/uber/cherami-server/clients/metadata"
 	"github.com/uber/cherami-server/common"
 	toolscommon "github.com/uber/cherami-server/tools/common"
-	"github.com/codegangsta/cli"
+	"github.com/uber/cherami-thrift/.generated/go/cherami"
+	"github.com/uber/cherami-thrift/.generated/go/metadata"
+	"github.com/uber/cherami-thrift/.generated/go/shared"
 )
 
 const (

@@ -28,7 +28,6 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 
-	m "github.com/uber/cherami-thrift/.generated/go/metadata"
 	"github.com/uber/cherami-server/clients/metadata"
 	"github.com/uber/cherami-server/common"
 	"github.com/uber/cherami-server/common/configure"
@@ -39,6 +38,7 @@ import (
 	"github.com/uber/cherami-server/services/outputhost"
 	"github.com/uber/cherami-server/services/replicator"
 	"github.com/uber/cherami-server/services/storehost"
+	m "github.com/uber/cherami-thrift/.generated/go/metadata"
 
 	"github.com/pborman/uuid"
 

@@ -27,12 +27,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/uber/cherami-thrift/.generated/go/controller"
+	log "github.com/Sirupsen/logrus"
+	"github.com/uber-common/bark"
 	"github.com/uber/cherami-server/common/configure"
 	dconfig "github.com/uber/cherami-server/common/dconfigclient"
 	"github.com/uber/cherami-server/common/metrics"
-	log "github.com/Sirupsen/logrus"
-	"github.com/uber-common/bark"
+	"github.com/uber/cherami-thrift/.generated/go/controller"
 	"github.com/uber/tchannel-go"
 	"github.com/uber/tchannel-go/thrift"
 )

@@ -28,14 +28,14 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/uber/cherami-thrift/.generated/go/controller"
-	"github.com/uber/cherami-thrift/.generated/go/shared"
+	"github.com/pborman/uuid"
+	"github.com/uber-common/bark"
 	"github.com/uber/cherami-server/common"
 	"github.com/uber/cherami-server/common/metrics"
 	"github.com/uber/cherami-server/services/storehost/load"
 	"github.com/uber/cherami-server/storage"
-	"github.com/pborman/uuid"
-	"github.com/uber-common/bark"
+	"github.com/uber/cherami-thrift/.generated/go/controller"
+	"github.com/uber/cherami-thrift/.generated/go/shared"
 )
 
 type (

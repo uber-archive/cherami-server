@@ -30,12 +30,6 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/uber/cherami-thrift/.generated/go/admin"
-	"github.com/uber/cherami-thrift/.generated/go/cherami"
-	"github.com/uber/cherami-thrift/.generated/go/controller"
-	"github.com/uber/cherami-thrift/.generated/go/metadata"
-	"github.com/uber/cherami-thrift/.generated/go/shared"
-	"github.com/uber/cherami-thrift/.generated/go/store"
 	"github.com/uber/cherami-server/common"
 	"github.com/uber/cherami-server/common/configure"
 	dconfig "github.com/uber/cherami-server/common/dconfigclient"
@@ -44,6 +38,12 @@ import (
 	mockmeta "github.com/uber/cherami-server/test/mocks/metadata"
 	mockin "github.com/uber/cherami-server/test/mocks/outputhost"
 	mockstore "github.com/uber/cherami-server/test/mocks/storehost"
+	"github.com/uber/cherami-thrift/.generated/go/admin"
+	"github.com/uber/cherami-thrift/.generated/go/cherami"
+	"github.com/uber/cherami-thrift/.generated/go/controller"
+	"github.com/uber/cherami-thrift/.generated/go/metadata"
+	"github.com/uber/cherami-thrift/.generated/go/shared"
+	"github.com/uber/cherami-thrift/.generated/go/store"
 
 	"github.com/pborman/uuid"
 	"github.com/stretchr/testify/assert"

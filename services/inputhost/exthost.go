@@ -32,13 +32,13 @@ import (
 	"github.com/uber-common/bark"
 	"github.com/uber/tchannel-go/thrift"
 
+	"github.com/uber/cherami-server/common"
+	"github.com/uber/cherami-server/services/inputhost/load"
 	"github.com/uber/cherami-thrift/.generated/go/admin"
 	"github.com/uber/cherami-thrift/.generated/go/cherami"
 	"github.com/uber/cherami-thrift/.generated/go/controller"
 	"github.com/uber/cherami-thrift/.generated/go/shared"
 	"github.com/uber/cherami-thrift/.generated/go/store"
-	"github.com/uber/cherami-server/common"
-	"github.com/uber/cherami-server/services/inputhost/load"
 )
 
 type (
@@ -413,6 +413,7 @@ func (conn *extHost) sendMessageToReplicas(pr *inPutMessage, extSendTimer *commo
 			return
 		}(stream, msg, appendMsgAckCh)
 	}
+
 	// Wait for all the go routines above; we wait on the errCh to get the response from all replicas
 	for replica, stream := range conn.streams {
 		err = <-errCh
@@ -430,7 +431,6 @@ func (conn *extHost) sendMessageToReplicas(pr *inPutMessage, extSendTimer *commo
 		extSendTimer.Reset(replicaSendTimeout)
 		// this is for the extHost's inflight messages for a successful message
 		select {
-		// stop watch here
 		case conn.replyClientCh <- writeResponse{pr.putMsg.GetID(), sequenceNumber, appendMsgAckCh, pr.putMsgAckCh, pr.putMsgRecvTime, pr.putMsg.GetUserContext()}:
 		case <-extSendTimer.C:
 			conn.logger.WithField(`lenReplyClientCh`, len(conn.replyClientCh)).Error(`inputhost: exthost: sending msg to the replyClientCh on exthost timed out`)
@@ -658,7 +658,6 @@ func (conn *extHost) aggregateAndSendReplies(numReplicas int) {
 				perMsgTimer.Reset(msgAckTimeout)
 				select {
 				case resCh.putMsgAck <- putMsgAck:
-					// add latency here
 				case <-perMsgTimer.C:
 					conn.logger.WithField(common.TagAckID, resCh.ackID).Error(`sending ack back to the client timed out`)
 				}

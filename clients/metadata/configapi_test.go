@@ -21,8 +21,8 @@
 package metadata
 
 import (
-	m "github.com/uber/cherami-thrift/.generated/go/metadata"
 	"github.com/uber/cherami-server/common"
+	m "github.com/uber/cherami-thrift/.generated/go/metadata"
 )
 
 func (s *CassandraSuite) TestHostInfoCRUD() {

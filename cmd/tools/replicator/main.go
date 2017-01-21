@@ -27,8 +27,8 @@ import (
 	"os/signal"
 	"time"
 
-	"github.com/uber/cherami-thrift/.generated/go/cherami"
 	"github.com/uber/cherami-server/common"
+	"github.com/uber/cherami-thrift/.generated/go/cherami"
 )
 
 func main() {

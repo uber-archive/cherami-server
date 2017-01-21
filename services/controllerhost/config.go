@@ -21,10 +21,10 @@
 package controllerhost
 
 import (
-	m "github.com/uber/cherami-thrift/.generated/go/metadata"
+	"github.com/uber-common/bark"
 	"github.com/uber/cherami-server/common"
 	"github.com/uber/cherami-server/common/dconfig"
-	"github.com/uber-common/bark"
+	m "github.com/uber/cherami-thrift/.generated/go/metadata"
 )
 
 type (

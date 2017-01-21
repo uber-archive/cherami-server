@@ -21,8 +21,8 @@
 package metadata
 
 import (
-	m "github.com/uber/cherami-thrift/.generated/go/metadata"
 	mock "github.com/uber/cherami-server/test/mocks/metadata"
+	m "github.com/uber/cherami-thrift/.generated/go/metadata"
 )
 
 // New creates a MemMetadata client for testing purposes. This will be replaced with a real implementation later.

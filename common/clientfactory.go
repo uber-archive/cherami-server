@@ -24,12 +24,12 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/uber-common/bark"
 	"github.com/uber/cherami-thrift/.generated/go/admin"
 	"github.com/uber/cherami-thrift/.generated/go/cherami"
 	"github.com/uber/cherami-thrift/.generated/go/controller"
 	"github.com/uber/cherami-thrift/.generated/go/replicator"
 	"github.com/uber/cherami-thrift/.generated/go/store"
-	"github.com/uber-common/bark"
 
 	tchannel "github.com/uber/tchannel-go"
 	"github.com/uber/tchannel-go/thrift"

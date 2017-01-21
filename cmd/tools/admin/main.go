@@ -23,9 +23,9 @@ package main
 import (
 	"os"
 
+	"github.com/codegangsta/cli"
 	"github.com/uber/cherami-server/common"
 	"github.com/uber/cherami-server/tools/admin"
-	"github.com/codegangsta/cli"
 )
 
 func main() {
