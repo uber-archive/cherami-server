@@ -38,6 +38,7 @@ import (
 	"github.com/uber/cherami-server/common/configure"
 	dconfig "github.com/uber/cherami-server/common/dconfigclient"
 	mockmeta "github.com/uber/cherami-server/test/mocks/metadata"
+
 	"github.com/uber/cherami-server/test"
 	"github.com/uber/cherami-thrift/.generated/go/cherami"
 	"github.com/uber/cherami-thrift/.generated/go/metadata"
