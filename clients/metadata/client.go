@@ -223,6 +223,18 @@ func (c *clientImpl) UpdateServiceConfig(request *m.UpdateServiceConfigRequest) 
 	return c.client.UpdateServiceConfig(ctx, request)
 }
 
+func (c *clientImpl) ReadServiceConfig(request *m.ReadServiceConfigRequest) (*m.ReadServiceConfigResult_, error) {
+	ctx, cancel := c.createContext()
+	defer cancel()
+	return c.client.ReadServiceConfig(ctx, request)
+}
+
+func (c *clientImpl) DeleteServiceConfig(request *m.DeleteServiceConfigRequest) error {
+	ctx, cancel := c.createContext()
+	defer cancel()
+	return c.client.DeleteServiceConfig(ctx, request)
+}
+
 func getDefaultOptions() *ccli.ClientOptions {
 	return &ccli.ClientOptions{Timeout: time.Minute}
 }

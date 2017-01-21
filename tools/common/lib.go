@@ -376,29 +376,6 @@ func UpdateConsumerGroup(c *cli.Context, cClient ccli.Client) {
 	fmt.Printf("%v\n", Jsonify(desc))
 }
 
-// UpdateStoreHost updates the storehost based on cli.Context
-func UpdateStoreHost(c *cli.Context, mClient mcli.Client) {
-	if len(c.Args()) < 2 {
-		ExitIfError(errors.New(strNotEnoughArgs))
-	}
-
-	host := c.Args()[0]
-	sku := c.Args()[1]
-	status := c.String("status")
-
-	cItem := metadata.ServiceConfigItem{
-		ServiceName: common.StringPtr(common.StoreServiceName),
-		Hostname:    common.StringPtr(strings.ToLower(host)),
-		Sku:         common.StringPtr(sku),
-		ConfigKey:   common.StringPtr("adminStatus"), // TODO: Move this to common util; right now this needs some tag changes as well on controllerhost so leaving it for now
-		ConfigValue: common.StringPtr(strings.ToLower(status)),
-	}
-	ur := &metadata.UpdateServiceConfigRequest{ConfigItem: &cItem}
-	err := mClient.UpdateServiceConfig(ur)
-
-	ExitIfError(err)
-}
-
 // UnloadConsumerGroup unloads the CG based on cli.Context
 func UnloadConsumerGroup(c *cli.Context, mClient mcli.Client) {
 	if len(c.Args()) < 1 {
