@@ -94,6 +94,7 @@ func (h *Service) UpdateAdvertisedName(deploymentName string) {
 
 // GetTChannel returns the tchannel for this service
 func (h *Service) GetTChannel() *tchannel.Channel {
+	h.startWg.Wait()
 	return h.ch
 }
 
@@ -104,17 +105,13 @@ func (h *Service) GetConfig() configure.CommonServiceConfig {
 
 // GetRingpopMonitor returns the RingpopMonitor for this service
 func (h *Service) GetRingpopMonitor() RingpopMonitor {
-	// This is needed to prevent overzealous TChannel clients from crashing us,
-	// since Start() registers before booting ringpop
-	if h.rpm == nil {
-		h.startWg.Wait()
-	}
-
+	h.startWg.Wait()
 	return h.rpm
 }
 
 // GetClientFactory returns the ClientFactory interface for this service
 func (h *Service) GetClientFactory() ClientFactory {
+	h.startWg.Wait()
 	return h.cFactory
 }
 
@@ -125,16 +122,19 @@ func (h *Service) SetClientFactory(cf ClientFactory) {
 
 // GetWSConnector returns websocket connector for establishing websocket connections
 func (h *Service) GetWSConnector() WSConnector {
+	h.startWg.Wait()
 	return h.wsConnector
 }
 
 // GetLoadReporterDaemonFactory is the factory interface for creating load reporters
 func (h *Service) GetLoadReporterDaemonFactory() LoadReporterDaemonFactory {
+	h.startWg.Wait()
 	return h.rFactory
 }
 
 // GetHostPort returns the host port for this service
 func (h *Service) GetHostPort() string {
+	h.startWg.Wait()
 	return h.hostPort
 }
 
@@ -213,6 +213,10 @@ func (h *Service) Start(thriftServices []thrift.TChanServer) {
 	// seed the random generator once for this service
 	rand.Seed(time.Now().UTC().UnixNano())
 
+	// Now decrements the counter. This should be the last step of this function
+	// All getters are blocked until this step
+        // This is needed to prevent overzealous TChannel clients from crashing us,
+        // since hyperbahn advertisement is done in early stage of this function
 	h.startWg.Done()
 }
 
