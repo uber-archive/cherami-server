@@ -23,7 +23,6 @@ package controllerhost
 import (
 	"fmt"
 	"math/rand"
-	"net"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -38,6 +37,7 @@ import (
 	"github.com/uber/cherami-server/common/configure"
 	dconfig "github.com/uber/cherami-server/common/dconfigclient"
 	mockcommon "github.com/uber/cherami-server/test/mocks/common"
+	"github.com/uber/cherami-server/test"
 	mockreplicator "github.com/uber/cherami-server/test/mocks/replicator"
 
 	"github.com/pborman/uuid"
@@ -45,7 +45,6 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
-	"github.com/uber/tchannel-go"
 )
 
 const (
@@ -90,34 +89,17 @@ func (s *McpSuite) generateName(prefix string) string {
 	return strings.Join([]string{prefix, strconv.Itoa(seq)}, ".")
 }
 
-func findEphemeralPort(ip, serviceName string) (int, error) {
-	addr := ip + ":0"
-	conn, err := net.Listen("tcp", addr)
-	if err != nil {
-		return 0, err
-	}
-	_, port, err := common.SplitHostPort(conn.Addr().String())
-	if err != nil {
-		conn.Close()
-		return 0, err
-	}
-	conn.Close()
-	return port, nil
-}
-
 func (s *McpSuite) startController() {
 	// first setup the port for the controller and also
 	// the ringhosts properly so that we can bootstrap.
-	ip, err := tchannel.ListenIP()
+	_, listenIP, port, err := test.FindEphemeralPort()
 	s.Nil(err)
-	listenIP := ip.String()
-	port, err := findEphemeralPort(listenIP, common.ControllerServiceName)
-	s.Nil(err)
-	wsPort, err := findEphemeralPort(listenIP, common.ControllerServiceName)
+	_, _, wsPort, err := test.FindEphemeralPort()
 	s.Nil(err)
 
 	ringHosts := fmt.Sprintf("%v:%d", listenIP, port)
 	serviceConfig := s.cfg.GetServiceConfig(common.ControllerServiceName)
+	serviceConfig.SetListenAddress(listenIP)
 	serviceConfig.SetPort(port)
 	serviceConfig.SetWebsocketPort(wsPort)
 	serviceConfig.SetRingHosts(ringHosts)

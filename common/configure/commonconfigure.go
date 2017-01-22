@@ -25,12 +25,14 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"net"
 	"os"
 	"path"
 	"runtime"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/pborman/uuid"
+	"github.com/uber/tchannel-go"
 	"gopkg.in/validator.v2"
 	"gopkg.in/yaml.v2"
 )
@@ -226,7 +228,20 @@ func (r *CommonConfigure) SetupServerConfig() CommonAppConfig {
 		}
 
 		if sCfg.GetListenAddress() == nil {
-			sCfg.SetListenAddress(cfg.GetDefaultServiceConfig().GetListenAddress().String())
+			// service-specific ListenAddress is not configured, try DefaultServiceConfig
+			listenAddress := cfg.GetDefaultServiceConfig().GetListenAddress().String()
+			if net.ParseIP(listenAddress) == nil {
+				// default ListenAddress is not set, try obtain from TChannel
+				ip, _ := tchannel.ListenIP()
+				log.Infof(`No listen address specified; setting %v instead`, ip)
+				if ip == nil {
+				  log.Panic(`Could not get listen address`)
+				}
+
+				listenAddress = ip.String()
+			}
+
+			sCfg.SetListenAddress(listenAddress)
 		}
 
 		if sCfg.GetRingHosts() == `` {
