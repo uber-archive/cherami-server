@@ -27,13 +27,13 @@ import (
 	"github.com/uber-common/bark"
 	"github.com/uber/tchannel-go/thrift"
 
+	"github.com/uber/cherami-server/common"
+	"github.com/uber/cherami-server/common/metrics"
+	"github.com/uber/cherami-server/services/outputhost/load"
 	"github.com/uber/cherami-thrift/.generated/go/cherami"
 	"github.com/uber/cherami-thrift/.generated/go/controller"
 	"github.com/uber/cherami-thrift/.generated/go/metadata"
 	"github.com/uber/cherami-thrift/.generated/go/shared"
-	"github.com/uber/cherami-server/common"
-	"github.com/uber/cherami-server/common/metrics"
-	"github.com/uber/cherami-server/services/outputhost/load"
 )
 
 type (
@@ -170,6 +170,15 @@ type (
 		hostMetrics *load.HostMetrics
 		// cgMetrics represents consgroup level load metrics reported to controller
 		cgMetrics *load.CGMetrics
+
+		// unloadInProgress is used to indicate if an unload of this CG is in progress to prevent racing loads from happening
+		unloadInProgress bool
+
+		// connsWG is used to wait for all the connections (including ext) to go away before stopping the manage routine.
+		connsWG sync.WaitGroup
+
+		// manageMsgCacheWG is used to wait for the manage delivery cache routine to go away. This is needed to make sure we cleanup all the buffered channels appropriately.
+		manageMsgCacheWG sync.WaitGroup
 	}
 )
 
@@ -269,28 +278,25 @@ func (cgCache *consumerGroupCache) getConsumerGroupTags() map[string]string {
 }
 
 // loadExtentCache loads the extent cache, if it doesn't already exist for this consumer group
-func (cgCache *consumerGroupCache) loadExtentCache(tClients common.ClientFactory,
-	metaClient metadata.TChanMetadataService, wsConnector common.WSConnector,
-	outputHostUUID string, destUUID string, destType shared.DestinationType,
-	cgUUID string, cge *metadata.ConsumerGroupExtent, startFrom int64) (err error) {
+func (cgCache *consumerGroupCache) loadExtentCache(destType shared.DestinationType, cge *metadata.ConsumerGroupExtent) (err error) {
 	extUUID := cge.GetExtentUUID()
 	extLogger := cgCache.logger.WithField(common.TagExt, extUUID)
 	if extCache, exists := cgCache.extentCache[extUUID]; !exists {
 		extCache = &extentCache{
-			cgUUID:               cgUUID,
+			cgUUID:               cgCache.cachedCGDesc.GetConsumerGroupUUID(),
 			extUUID:              extUUID,
-			destUUID:             destUUID,
+			destUUID:             cgCache.cachedCGDesc.GetDestinationUUID(),
 			destType:             destType,
 			storeUUIDs:           cge.StoreUUIDs,
-			startFrom:            startFrom,
+			startFrom:            cgCache.cachedCGDesc.GetStartFrom(),
 			notifyReplicaCloseCh: make(chan error, 5),
 			closeChannel:         make(chan struct{}),
 			waitConsumedCh:       make(chan bool, 1),
 			msgsCh:               cgCache.msgsCh,
 			connectionsClosedCh:  cgCache.notifyReplicaCloseCh,
-			shutdownWG:           cgCache.shutdownWG,
-			tClients:             tClients,
-			wsConnector:          wsConnector,
+			shutdownWG:           &cgCache.connsWG,
+			tClients:             cgCache.tClients,
+			wsConnector:          cgCache.wsConnector,
 			logger:               extLogger.WithField(common.TagModule, `extCache`),
 			creditNotifyCh:       cgCache.creditNotifyCh,
 			creditRequestCh:      cgCache.creditRequestCh,
@@ -303,14 +309,14 @@ func (cgCache *consumerGroupCache) loadExtentCache(tClients common.ClientFactory
 		cgCache.hostMetrics.Increment(load.HostMetricNumOpenExtents)
 
 		// TODO: create a newAckManagerRequestArgs struct here
-		extCache.ackMgr = newAckManager(cgCache, cgCache.ackIDGen.GetNextAckID(), outputHostUUID, cgUUID, extCache.extUUID, &extCache.connectedStoreUUID, extCache.waitConsumedCh, cge, metaClient, extCache.logger)
+		extCache.ackMgr = newAckManager(cgCache, cgCache.ackIDGen.GetNextAckID(), cgCache.outputHostUUID, cgCache.cachedCGDesc.GetConsumerGroupUUID(), extCache.extUUID, &extCache.connectedStoreUUID, extCache.waitConsumedCh, cge, cgCache.metaClient, extCache.logger)
 		extCache.loadReporter = cgCache.loadReporterFactory.CreateReporter(extentLoadReportingInterval, extCache, extCache.logger)
 
 		// make sure we prevent shutdown from racing
 		extCache.shutdownWG.Add(1)
 
 		// if load fails we will unload it the usual way
-		go extCache.load(outputHostUUID, cgUUID, metaClient, cge)
+		go extCache.load(cgCache.outputHostUUID, cgCache.cachedCGDesc.GetConsumerGroupUUID(), cgCache.metaClient, cge)
 
 		// now notify the outputhost
 		cgCache.ackMgrLoadCh <- ackMgrLoadMsg{uint32(extCache.ackMgr.ackMgrID), extCache.ackMgr}
@@ -402,9 +408,14 @@ func (cgCache *consumerGroupCache) manageConsumerGroupCache() {
 			}
 			cgCache.extMutex.Unlock()
 		case <-cgCache.closeChannel:
-			cgCache.logger.Info("stopped")
 			// stop the delivery cache as well
 			cgCache.msgDeliveryCache.stop()
+			// wait for the manage routine to go away
+			cgCache.manageMsgCacheWG.Wait()
+			// at this point, the cg is completely unloaded, close all message channels
+			// to cleanup
+			cgCache.cleanupChannels()
+			cgCache.logger.Info("cg is stopped and all channels are cleanedup")
 			quit = true
 		}
 	}
@@ -476,9 +487,7 @@ func (cgCache *consumerGroupCache) refreshCgCache(ctx thrift.Context) error {
 		// Now we have the cgCache. check and load extent for all extents
 		for _, cge := range cgRes.GetExtents() {
 			nExtents++
-			errR := cgCache.loadExtentCache(cgCache.tClients, cgCache.metaClient, cgCache.wsConnector,
-				cgCache.outputHostUUID, cgCache.cachedCGDesc.GetDestinationUUID(), dstDesc.GetType(),
-				cgCache.cachedCGDesc.GetConsumerGroupUUID(), cge, cgCache.cachedCGDesc.GetStartFrom())
+			errR := cgCache.loadExtentCache(dstDesc.GetType(), cge)
 			if errR != nil {
 				return errR
 			}
@@ -500,7 +509,7 @@ func (cgCache *consumerGroupCache) loadConsumerGroupCache(ctx thrift.Context, ex
 	defer cgCache.extMutex.Unlock()
 
 	// Make sure we don't race with an unload
-	if cgCache.isClosed() {
+	if cgCache.isClosed() || cgCache.unloadInProgress {
 		return ErrCgUnloaded
 	}
 
@@ -520,6 +529,7 @@ func (cgCache *consumerGroupCache) loadConsumerGroupCache(ctx thrift.Context, ex
 			cgCache.nackMsgCh, cgCache.cachedCGDesc, dlq, cgCache.logger, cgCache.m3Client, cgCache.consumerM3Client, cgCache.notifier, cgCache.creditNotifyCh, cgCache.creditRequestCh, defaultNumOutstandingMsgs, cgCache)
 		cgCache.shutdownWG.Add(1)
 		go cgCache.manageConsumerGroupCache() // Has cgCache.shutdownWG.Done()
+		cgCache.manageMsgCacheWG.Add(1)       // wait group for msgCache
 		go cgCache.msgDeliveryCache.start()   // Uses the dlq, so must be after it
 	}
 
@@ -621,12 +631,12 @@ func (cgCache *consumerGroupCache) updateLastDisconnectTime() {
 func (cgCache *consumerGroupCache) unloadConsumerGroupCache() {
 	cgCache.extMutex.Lock()
 
-	if cgCache.isClosed() {
+	if cgCache.isClosed() || cgCache.unloadInProgress {
 		cgCache.extMutex.Unlock()
 		return
 	}
 
-	close(cgCache.closeChannel)
+	cgCache.unloadInProgress = true
 	for _, conn := range cgCache.connections {
 		go conn.close()
 	}
@@ -644,12 +654,39 @@ func (cgCache *consumerGroupCache) unloadConsumerGroupCache() {
 	// before stopping the manageCgCache routine.
 	cgCache.notifyUnloadCh <- cgCache.cachedCGDesc.GetConsumerGroupUUID()
 
+	// wait for all the above connections to go away
+	cgCache.connsWG.Wait()
+
+	// now close the closeChannel which will stop the manage routine
+	close(cgCache.closeChannel)
+
 	cgCache.loadReporter.Stop()
 
 	// since the load reporter is stopped above make sure to mark the number of connections
 	// as 0 explicitly, since we close the connections in an asynchronous fashion
 	cgCache.consumerM3Client.UpdateGauge(metrics.ConsConnectionScope, metrics.OutputhostCGConsConnection, 0)
 	cgCache.consumerM3Client.UpdateGauge(metrics.ConsConnectionScope, metrics.OutputhostCGNumExtents, 0)
+}
+
+// this is a utility routine which closes all message channels
+// to make sure we free up memory
+// this can be done outside of a mutex since this will happen only after we
+// closed everything.
+func (cgCache *consumerGroupCache) cleanupChannels() {
+	// close msgsCh
+	close(cgCache.msgsCh)
+	// close cacheCh
+	close(cgCache.msgCacheCh)
+	// redelivery channel
+	close(cgCache.msgsRedeliveryCh)
+	// priority redelivery channel
+	close(cgCache.priorityMsgsRedeliveryCh)
+	// redeliverd channel
+	close(cgCache.msgCacheRedeliveredCh)
+	// ackMsgsCh
+	close(cgCache.ackMsgCh)
+	// nackMsgsCh
+	close(cgCache.nackMsgCh)
 }
 
 // this can be used to set the max outstanding messages for testing

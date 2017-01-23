@@ -32,19 +32,19 @@ import (
 	"github.com/uber-common/bark"
 	"github.com/uber/tchannel-go/thrift"
 
-	ccherami "github.com/uber/cherami-thrift/.generated/go/cherami"
 	ccommon "github.com/uber/cherami-client-go/common"
-	"github.com/uber/cherami-thrift/.generated/go/admin"
-	"github.com/uber/cherami-thrift/.generated/go/cherami"
-	"github.com/uber/cherami-thrift/.generated/go/controller"
-	"github.com/uber/cherami-thrift/.generated/go/metadata"
-	"github.com/uber/cherami-thrift/.generated/go/shared"
 	"github.com/uber/cherami-server/common"
 	dconfig "github.com/uber/cherami-server/common/dconfigclient"
 	mm "github.com/uber/cherami-server/common/metadata"
 	"github.com/uber/cherami-server/common/metrics"
 	"github.com/uber/cherami-server/services/outputhost/load"
 	"github.com/uber/cherami-server/stream"
+	"github.com/uber/cherami-thrift/.generated/go/admin"
+	"github.com/uber/cherami-thrift/.generated/go/cherami"
+	ccherami "github.com/uber/cherami-thrift/.generated/go/cherami"
+	"github.com/uber/cherami-thrift/.generated/go/controller"
+	"github.com/uber/cherami-thrift/.generated/go/metadata"
+	"github.com/uber/cherami-thrift/.generated/go/shared"
 )
 
 const (
@@ -312,8 +312,6 @@ func (h *OutputHost) OpenConsumerStream(ctx thrift.Context, call stream.BOutOpen
 	}
 	conn := newConsConnection(cgCache.currID, cgCache, call, h.cacheTimeout, cgLogger)
 	cgCache.connections[cgCache.currID] = conn
-	// wait for shutdown here as well. this makes sure the pubconnection is done
-	h.shutdownWG.Add(1)
 	connWG := conn.open()
 	cgCache.currID++
 	// increment the active connection count
@@ -328,7 +326,6 @@ func (h *OutputHost) OpenConsumerStream(ctx thrift.Context, call stream.BOutOpen
 	// wait till the conn is closed. we cannot return immediately.
 	// If we do so, we will get data races reading/writing from/to the stream
 	connWG.Wait()
-	h.shutdownWG.Done()
 	h.hostMetrics.Decrement(load.HostMetricNumOpenConns)
 	return nil
 }
@@ -461,6 +458,11 @@ func (h *OutputHost) ReceiveMessageBatch(ctx thrift.Context, request *cherami.Re
 	}
 
 	cgCache.updateLastDisconnectTime()
+
+	// make sure we don't close all the channels here
+	cgCache.connsWG.Add(1) // this WG is for the cgCache
+	defer cgCache.connsWG.Done()
+
 	res := cherami.NewReceiveMessageBatchResult_()
 	msgCacheWriteTicker := common.NewTimer(msgCacheWriteTimeout)
 	defer msgCacheWriteTicker.Stop()
@@ -492,9 +494,17 @@ func (h *OutputHost) ReceiveMessageBatch(ctx thrift.Context, request *cherami.Re
 	firstResultTimer := common.NewTimer(timeoutTime.Sub(time.Now()))
 	defer firstResultTimer.Stop()
 	select {
-	case msg := <-cgCache.msgsRedeliveryCh:
+	case msg, ok := <-cgCache.msgsRedeliveryCh:
+		if !ok {
+			h.m3Client.IncCounter(metrics.ReceiveMessageBatchOutputHostScope, metrics.OutputhostFailures)
+			return nil, ErrCgUnloaded
+		}
 		deliver(msg, cgCache.msgCacheRedeliveredCh)
-	case msg := <-cgCache.msgsCh:
+	case msg, ok := <-cgCache.msgsCh:
+		if !ok {
+			h.m3Client.IncCounter(metrics.ReceiveMessageBatchOutputHostScope, metrics.OutputhostFailures)
+			return nil, ErrCgUnloaded
+		}
 		deliver(msg, cgCache.msgCacheCh)
 	case <-firstResultTimer.C:
 		exception := cherami.NewTimeoutError()
@@ -513,9 +523,17 @@ MORERESULTLOOP:
 			break MORERESULTLOOP
 		default:
 			select {
-			case msg := <-cgCache.msgsRedeliveryCh:
+			case msg, ok := <-cgCache.msgsRedeliveryCh:
+				if !ok {
+					// the cg is already unloaded
+					break MORERESULTLOOP
+				}
 				deliver(msg, cgCache.msgCacheRedeliveredCh)
-			case msg := <-cgCache.msgsCh:
+			case msg, ok := <-cgCache.msgsCh:
+				if !ok {
+					// the cg is already unloaded
+					break MORERESULTLOOP
+				}
 				deliver(msg, cgCache.msgCacheCh)
 			case <-moreResultTimer.C:
 				break MORERESULTLOOP

@@ -782,10 +782,24 @@ func (msgCache *cgMsgCache) manageMessageDeliveryCache() {
 				}
 			}
 		case <-msgCache.closeChannel:
+			// now cleanup any existing entries in cache
+			// this is done to make sure we drop any references
+			// to the payload
+			msgCache.shutdownCleanupEntries()
+			msgCache.cgCache.manageMsgCacheWG.Done()
 			return
 		} // select
 		msgCache.checkTimer()
 	} // for
+}
+
+// shutdownCleanupEntries is used to cleanup the entire map in case of
+// shutdown.
+// this is needed to make sure we drop all references to the payload
+func (msgCache *cgMsgCache) shutdownCleanupEntries() {
+	for id := range msgCache.msgMap {
+		delete(msgCache.msgMap, id)
+	}
 }
 
 func (msgCache *cgMsgCache) reinjectlastAckMsg() bool {
