@@ -33,10 +33,9 @@ import (
 	"github.com/uber/cherami-server/common"
 	"github.com/uber/cherami-server/common/configure"
 	dconfig "github.com/uber/cherami-server/common/dconfigclient"
-	mockcommon "github.com/uber/cherami-server/test/mocks/common"
 	"github.com/uber/cherami-server/test"
+	mockcommon "github.com/uber/cherami-server/test/mocks/common"
 	mockreplicator "github.com/uber/cherami-server/test/mocks/replicator"
-	"github.com/uber/tchannel-go"
 	c "github.com/uber/cherami-thrift/.generated/go/controller"
 	m "github.com/uber/cherami-thrift/.generated/go/metadata"
 	"github.com/uber/cherami-thrift/.generated/go/shared"
@@ -49,9 +48,9 @@ import (
 )
 
 const (
-	inputAddr                      = "127.0.1.1"
-	outputAddr                     = "127.0.2.1"
-	storeAddr                      = "127.0.3.1"
+	inputAddr  = "127.0.1.1"
+	outputAddr = "127.0.2.1"
+	storeAddr  = "127.0.3.1"
 )
 
 type McpSuite struct {
