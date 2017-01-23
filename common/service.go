@@ -215,8 +215,8 @@ func (h *Service) Start(thriftServices []thrift.TChanServer) {
 
 	// Now decrements the counter. This should be the last step of this function
 	// All getters are blocked until this step
-        // This is needed to prevent overzealous TChannel clients from crashing us,
-        // since hyperbahn advertisement is done in early stage of this function
+	// This is needed to prevent overzealous TChannel clients from crashing us,
+	// since hyperbahn advertisement is done in early stage of this function
 	h.startWg.Done()
 }
 

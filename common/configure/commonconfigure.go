@@ -235,7 +235,7 @@ func (r *CommonConfigure) SetupServerConfig() CommonAppConfig {
 				ip, _ := tchannel.ListenIP()
 				log.Infof(`No listen address specified; setting %v instead`, ip)
 				if ip == nil {
-				  log.Panic(`Could not get listen address`)
+					log.Panic(`Could not get listen address`)
 				}
 
 				listenAddress = ip.String()

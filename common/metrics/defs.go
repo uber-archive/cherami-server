@@ -624,9 +624,9 @@ const (
 	InputhostLatencyTimer
 	// InputhostWriteMessageLatency is the latency from receiving a message from stream to returning ack back to stream
 	InputhostWriteMessageLatency
-	// InputhostWriteMessageExcludeSocketLatency is the latency from receiving a message from stream to getting ack from replicas
-	// the only difference with InputhostWriteMessageLatency is this metrics excludes the latency for writing ack back to the socket
-	InputhostWriteMessageExcludeSocketLatency
+	// InputhostWriteMessageBeforeAckLatency is the latency from receiving a message from stream to getting ack from replicas
+	// the only difference with InputhostWriteMessageLatency is this metrics excludes the latency for writing ack back to the stream
+	InputhostWriteMessageBeforeAckLatency
 	// InputhostDestMessageReceived  indicates prefix name for destinations request counter
 	// append the destination path will be the actual name for the counter.
 	// each destination has a unique name tag
@@ -649,11 +649,11 @@ const (
 	// append the destination path will be the actual name for the counter.
 	// each destination has a unique name tag
 	InputhostDestMessageInternalFailures
-	// InputhostDestWriteMessageLatency is the latency from receiving a message from stream to getting ack from replicas
+	// InputhostDestWriteMessageLatency is the latency from receiving a message from stream to returning ack back to stream
 	InputhostDestWriteMessageLatency
-	// InputhostDestWriteMessageExcludeSocketLatency is the latency from receiving a message from stream to getting ack from replicas
-	// the only difference with InputhostDestWriteMessageLatency is this metrics excludes the latency for writing ack back to the socket
-	InputhostDestWriteMessageExcludeSocketLatency
+	// InputhostDestWriteMessageBeforeAckLatency is the latency from receiving a message from stream to getting ack from replicas
+	// the only difference with InputhostDestWriteMessageLatency is this metrics excludes the latency for returning ack back to the stream
+	InputhostDestWriteMessageBeforeAckLatency
 	// InputhostDestPubConnection is the gauge of active connections per destination
 	InputhostDestPubConnection
 
@@ -794,10 +794,11 @@ const (
 	StorageLatencyTimer
 	// StorageWriteStoreLatency is the latency to write message to store
 	StorageWriteStoreLatency
-	// StorageWriteMessageLatency is the latency to write message to store and ack, but excludes time writing to socket
-	StorageWriteMessageExcludeSocketLatency
-	// StorageWriteMessageLatency is the latency to write message to store and ack
+	// StorageWriteMessageLatency is the latency from receiving a message from stream(input) to returning ack back to stream
 	StorageWriteMessageLatency
+	// StorageWriteMessageBeforeAckLatency is the latency from receiving a message from stream(input) to getting ack from store
+	// the only difference with StorageWriteMessageLatency is this metrics excludes the latency for returning ack back to the stream
+	StorageWriteMessageBeforeAckLatency
 	// StorageReadStoreLatency is the latency to read message from store
 	StorageReadStoreLatency
 	// StorageReadMessageLatency is the latency to read and send out a message
@@ -963,7 +964,7 @@ var metricDefs = map[ServiceIdx]map[int]metricDefinition{
 		InputhostPubConnection:                    {Gauge, "inputhost.pubconnection"},
 		InputhostLatencyTimer:                     {Timer, "inputhost.latency"},
 		InputhostWriteMessageLatency:              {Timer, "inputhost.message.write-latency"},
-		InputhostWriteMessageExcludeSocketLatency: {Timer, "inputhost.message.write-latency-exclude-socket"},
+		InputhostWriteMessageBeforeAckLatency:     {Timer, "inputhost.message.write-latency-before-ack"},
 	},
 
 	// definitions for Outputhost metrics
@@ -1019,8 +1020,8 @@ var metricDefs = map[ServiceIdx]map[int]metricDefinition{
 		StorageDiskAvailableSpacePcnt:           {Gauge, "storage.disk.availablespace.pcnt"},
 		StorageLatencyTimer:                     {Timer, "storage.latency"},
 		StorageWriteStoreLatency:                {Timer, "storage.write.store-latency"},
-		StorageWriteMessageExcludeSocketLatency: {Timer, "storage.write.message-latency-exclude-socket"},
 		StorageWriteMessageLatency:              {Timer, "storage.write.message-latency"},
+		StorageWriteMessageBeforeAckLatency:     {Timer, "storage.write.message-latency-before-ack"},
 		StorageReadStoreLatency:                 {Timer, "storage.read.store-latency"},
 		StorageReadMessageLatency:               {Timer, "storage.read.message-latency"},
 		StorageInWriteTChannelLatency:           {Timer, "storage.in.write-tchannel-latency"},
@@ -1097,7 +1098,7 @@ var dynamicMetricDefs = map[ServiceIdx]map[int]metricDefinition{
 		InputhostDestMessageUserFailures:              {Counter, "inputhost.message.user-errors.dest"},
 		InputhostDestMessageInternalFailures:          {Counter, "inputhost.message.internal-errors.dest"},
 		InputhostDestWriteMessageLatency:              {Timer, "inputhost.message.write-latency.dest"},
-		InputhostDestWriteMessageExcludeSocketLatency: {Timer, "inputhost.message.write-latency-exclude-socket.dest"},
+		InputhostDestWriteMessageBeforeAckLatency:     {Timer, "inputhost.message.write-latency-before-ack.dest"},
 		InputhostDestPubConnection:                    {Gauge, "inputhost.pubconnection.dest"},
 	},
 

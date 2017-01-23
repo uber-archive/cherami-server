@@ -464,8 +464,8 @@ func (conn *pubConnection) failInflightMessages(inflightMessages map[string]resp
 				Message:     common.StringPtr("inputhost: timing out unacked message"),
 			}
 			d := time.Since(resp.putMsgRecvTime)
-			conn.pathCache.m3Client.RecordTimer(metrics.PubConnectionStreamScope, metrics.InputhostWriteMessageExcludeSocketLatency, d)
-			conn.pathCache.destM3Client.RecordTimer(metrics.PubConnectionScope, metrics.InputhostDestWriteMessageExcludeSocketLatency, d)
+			conn.pathCache.m3Client.RecordTimer(metrics.PubConnectionStreamScope, metrics.InputhostWriteMessageBeforeAckLatency, d)
+			conn.pathCache.destM3Client.RecordTimer(metrics.PubConnectionScope, metrics.InputhostDestWriteMessageBeforeAckLatency, d)
 
 			conn.stream.Write(createAckCmd(putMsgAck))
 
@@ -546,8 +546,8 @@ func (conn *pubConnection) updateInflightMap(inflightMessages map[string]respons
 		conn.pathCache.m3Client.RecordTimer(metrics.PubConnectionStreamScope, metrics.InputhostWriteMessageLatency, d)
 		conn.pathCache.destM3Client.RecordTimer(metrics.PubConnectionScope, metrics.InputhostDestWriteMessageLatency, d)
 
-		conn.pathCache.m3Client.RecordTimer(metrics.PubConnectionStreamScope, metrics.InputhostWriteMessageExcludeSocketLatency, ackReceiveTime.Sub(resp.putMsgRecvTime))
-		conn.pathCache.destM3Client.RecordTimer(metrics.PubConnectionScope, metrics.InputhostDestWriteMessageExcludeSocketLatency, ackReceiveTime.Sub(resp.putMsgRecvTime))
+		conn.pathCache.m3Client.RecordTimer(metrics.PubConnectionStreamScope, metrics.InputhostWriteMessageBeforeAckLatency, ackReceiveTime.Sub(resp.putMsgRecvTime))
+		conn.pathCache.destM3Client.RecordTimer(metrics.PubConnectionScope, metrics.InputhostDestWriteMessageBeforeAckLatency, ackReceiveTime.Sub(resp.putMsgRecvTime))
 
 		if d > timeLatencyToLog {
 			conn.logger.
@@ -579,8 +579,8 @@ func (conn *pubConnection) updateEarlyReplyAcks(resCh response, earlyReplyAcks m
 
 	// also record the time that excludes the time for sending ack back to socket
 	actualDurationExcludeSocket := d - time.Since(ack.ackReceiveTime)
-	conn.pathCache.m3Client.RecordTimer(metrics.PubConnectionStreamScope, metrics.InputhostWriteMessageExcludeSocketLatency, actualDurationExcludeSocket)
-	conn.pathCache.destM3Client.RecordTimer(metrics.PubConnectionScope, metrics.InputhostDestWriteMessageExcludeSocketLatency, actualDurationExcludeSocket)
+	conn.pathCache.m3Client.RecordTimer(metrics.PubConnectionStreamScope, metrics.InputhostWriteMessageBeforeAckLatency, actualDurationExcludeSocket)
+	conn.pathCache.destM3Client.RecordTimer(metrics.PubConnectionScope, metrics.InputhostDestWriteMessageBeforeAckLatency, actualDurationExcludeSocket)
 
 	delete(earlyReplyAcks, resCh.ackID)
 	// XXX: Disabled due to log noise
