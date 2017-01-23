@@ -27,11 +27,11 @@ import (
 
 	"github.com/uber-common/bark"
 
-	"github.com/uber/cherami-thrift/.generated/go/cherami"
-	"github.com/uber/cherami-thrift/.generated/go/shared"
 	"github.com/uber/cherami-server/common"
 	"github.com/uber/cherami-server/common/metrics"
 	"github.com/uber/cherami-server/services/outputhost/load"
+	"github.com/uber/cherami-thrift/.generated/go/cherami"
+	"github.com/uber/cherami-thrift/.generated/go/shared"
 )
 
 //                                                                   +----------------------------------+
@@ -774,6 +774,10 @@ func (msgCache *cgMsgCache) manageMessageDeliveryCache() {
 				}
 			}
 		case <-msgCache.closeChannel:
+			// now cleanup any existing entries in cache
+			// this is done to make sure we drop any references
+			// to the payload
+			msgCache.shutdownCleanupEntries()
 			msgCache.cgCache.manageMsgCacheWG.Done()
 			return
 		} // select
@@ -781,6 +785,15 @@ func (msgCache *cgMsgCache) manageMessageDeliveryCache() {
 	} // for
 }
 
+// shutdownCleanupEntries is used to cleanup the entire map in case of
+// shutdown.
+// this is needed to make sure we drop all references to the payload
+func (msgCache *cgMsgCache) shutdownCleanupEntries() {
+	for id := range msgCache.msgMap {
+		delete(msgCache.msgMap, id)
+	}
+
+}
 func (msgCache *cgMsgCache) reinjectlastAckMsg() bool {
 	if msgCache.consumerHealth.lastAckMsg == nil {
 		msgCache.lclLg.Warn(`Couldn't inject good message: no message to inject`)

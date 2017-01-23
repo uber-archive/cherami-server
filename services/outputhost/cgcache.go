@@ -27,13 +27,13 @@ import (
 	"github.com/uber-common/bark"
 	"github.com/uber/tchannel-go/thrift"
 
+	"github.com/uber/cherami-server/common"
+	"github.com/uber/cherami-server/common/metrics"
+	"github.com/uber/cherami-server/services/outputhost/load"
 	"github.com/uber/cherami-thrift/.generated/go/cherami"
 	"github.com/uber/cherami-thrift/.generated/go/controller"
 	"github.com/uber/cherami-thrift/.generated/go/metadata"
 	"github.com/uber/cherami-thrift/.generated/go/shared"
-	"github.com/uber/cherami-server/common"
-	"github.com/uber/cherami-server/common/metrics"
-	"github.com/uber/cherami-server/services/outputhost/load"
 )
 
 type (
@@ -647,19 +647,20 @@ func (cgCache *consumerGroupCache) unloadConsumerGroupCache() {
 
 	cgCache.extMutex.Unlock()
 
-	// wait for all the above to go away
-	cgCache.connsWG.Wait()
-
-	// now close the closeChannel which will stop the manage routine
-	close(cgCache.closeChannel)
-
-	cgCache.loadReporter.Stop()
 	// notify the outputhost to remove this from the map
 	// We do this in a blocking way to make sure the cgCache is deleted from the
 	// map so that new connections can be opened on a new CG cache instance.
 	// Even during shutdown there is a guarantee that we will unload everything first
 	// before stopping the manageCgCache routine.
 	cgCache.notifyUnloadCh <- cgCache.cachedCGDesc.GetConsumerGroupUUID()
+
+	// wait for all the above connections to go away
+	cgCache.connsWG.Wait()
+
+	// now close the closeChannel which will stop the manage routine
+	close(cgCache.closeChannel)
+
+	cgCache.loadReporter.Stop()
 
 	// since the load reporter is stopped above make sure to mark the number of connections
 	// as 0 explicitly, since we close the connections in an asynchronous fashion
