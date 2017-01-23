@@ -35,6 +35,7 @@ import (
 	dconfig "github.com/uber/cherami-server/common/dconfigclient"
 	"github.com/uber/cherami-server/test"
 	mockcommon "github.com/uber/cherami-server/test/mocks/common"
+	"github.com/uber/cherami-server/test"
 	mockreplicator "github.com/uber/cherami-server/test/mocks/replicator"
 	c "github.com/uber/cherami-thrift/.generated/go/controller"
 	m "github.com/uber/cherami-thrift/.generated/go/metadata"
