@@ -792,8 +792,8 @@ func (msgCache *cgMsgCache) shutdownCleanupEntries() {
 	for id := range msgCache.msgMap {
 		delete(msgCache.msgMap, id)
 	}
-
 }
+
 func (msgCache *cgMsgCache) reinjectlastAckMsg() bool {
 	if msgCache.consumerHealth.lastAckMsg == nil {
 		msgCache.lclLg.Warn(`Couldn't inject good message: no message to inject`)
