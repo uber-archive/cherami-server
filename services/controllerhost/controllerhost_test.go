@@ -298,7 +298,7 @@ func (s *McpSuite) TestGetInputHosts() {
 	s.Equal(3, len(extent.StoreUUIDs), "Wrong number of replicas for extent")
 
 	for _, u := range extent.StoreUUIDs {
-		_, err := s.mockrpm.ResolveUUID(common.StoreServiceName, u)
+		_, err = s.mockrpm.ResolveUUID(common.StoreServiceName, u)
 		s.Nil(err, "GetInputHosts() created an extent with un-known store uuid")
 	}
 

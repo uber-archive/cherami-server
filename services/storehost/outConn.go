@@ -399,17 +399,17 @@ func (t *outConn) readMessagesPump(credC <-chan struct{}, msgC chan<- *outMessag
 
 	defer ext.Close() // cleanup/close extent (unlistens automatically)
 
-	gate := newGate(t.mode, ext)
+	gateVal := newGate(t.mode, ext)
 
-	defer gate.close()
+	defer gateVal.close()
 
 	if ext.next == storage.EOX {
 
-		gate.setEoxReached()
+		gateVal.setEoxReached()
 
 	} else {
 
-		gate.setNextKey(ext.nextKey)
+		gateVal.setNextKey(ext.nextKey)
 
 		if ext.extObj.isSealExtentKey(ext.nextKey) {
 			// check if we found the seal marker
@@ -437,7 +437,7 @@ func (t *outConn) readMessagesPump(credC <-chan struct{}, msgC chan<- *outMessag
 			`addr`:    ext.addr,    // #perfdisable
 			`next`:    ext.next,    // #perfdisable
 			`nextKey`: ext.nextKey, // #perfdisable
-			`gate`:    gate,        // #perfdisable
+			`gate`:    gateVal,     // #perfdisable
 		}).Debug(`readMessagesPump: starting message loop`) // #perfdisable
 	}
 
@@ -447,7 +447,7 @@ msgPump:
 		spurious := 0 // spurious wakeup
 
 		// wait until we have credits and at least one message ready to be delivered
-		for !t.credits.available() || ext.next == storage.EOX || gate.engaged() {
+		for !t.credits.available() || ext.next == storage.EOX || gateVal.engaged() {
 
 			if outConnDebug {
 				// DBG: collect stats on sleep/wakeup reasons
@@ -463,7 +463,7 @@ msgPump:
 
 				if ext.next == storage.EOX {
 					sleep |= sleepNoMessages
-				} else if gate.engaged() {
+				} else if gateVal.engaged() {
 					sleep |= sleepGate
 				}
 
@@ -471,13 +471,13 @@ msgPump:
 
 				log.WithFields(bark.Fields{ // #perfdisable
 					`sleep`:   sleep,     // #perfdisable
-					`gate`:    gate,      // #perfdisable
+					`gate`:    gateVal,   // #perfdisable
 					`credits`: t.credits, // #perfdisable
 					`next`:    ext.next,  // #perfdisable
 				}).Debug(`readMessagesPump: sleeping`) // #perfdisable
 			}
 
-			gateC := gate.beforeSleep()
+			gateC := gateVal.beforeSleep()
 
 			// wait until one of four things occurs:
 			// 1. new credits to come in
@@ -578,7 +578,7 @@ msgPump:
 					if (ext.next == storage.EOX) || (newNext < ext.next) {
 
 						ext.next = newNext
-						gate.setNextKey(newNextKey)
+						gateVal.setNextKey(newNextKey)
 						// TODO: NO GATING gate
 						//} else {
 						//	// TODO: decide if avoiding call to deconstructKey is worth not checking sequenceNumber here.
@@ -614,7 +614,7 @@ msgPump:
 		var batchSent int
 
 		// send out as many messages as we can, that are ready to deliver
-		for t.credits.available() && ext.next != storage.EOX && !gate.engaged() {
+		for t.credits.available() && ext.next != storage.EOX && !gateVal.engaged() {
 
 			msg := t.newOutMessage()
 
@@ -623,7 +623,7 @@ msgPump:
 			if outConnDebug {
 				log.WithFields(bark.Fields{ // #perfdisable
 					`addr`:    ext.next,  // #perfdisable
-					`gate`:    gate,      // #perfdisable
+					`gate`:    gateVal,   // #perfdisable
 					`credits`: t.credits, // #perfdisable
 				}).Debug(`readMessagesPump: send-msg loop`) // #perfdisable
 			}
@@ -668,9 +668,9 @@ msgPump:
 							break msgPump
 						}
 
-						gate.setNextKey(ext.nextKey)
+						gateVal.setNextKey(ext.nextKey)
 					} else {
-						gate.setEoxReached()
+						gateVal.setEoxReached()
 					}
 
 					continue // retry the Get
@@ -740,7 +740,7 @@ msgPump:
 					log.WithFields(bark.Fields{
 						`message`: fmt.Sprintf("seqnum=%d enq=%x delay=%ds", appMsg.GetSequenceNumber(), appMsg.GetEnqueueTimeUtc(), appMsg.GetPayload().GetDelayMessageInSeconds()),
 						`address`: fmt.Sprintf("addr=%v next=%v nextKey=%v", ext.addr, ext.next, ext.nextKey),
-						`gate`:    fmt.Sprintf("credits=%v eox=%v gate=%v", t.credits, ext.next == storage.EOX, gate),
+						`gate`:    fmt.Sprintf("credits=%v eox=%v gate=%v", t.credits, ext.next == storage.EOX, gateVal),
 						`context`: fmt.Sprintf("sentMsgs=%d sleepReason=%v wakeupReason=%v spuriousWakeups=%d batchSent=%d", sentMsgs, sleep, wakeup, spurious, batchSent),
 						`error`:   fmt.Sprintf("timer misfired: ETA=%v > NOW=%v (tETA=%x tFired=%x)", time.Unix(0, tETA), time.Unix(0, tFired), tETA, tFired),
 					}).Error("readMessagesPumpTimerQueue: message delivered before ETA")
@@ -783,7 +783,7 @@ msgPump:
 			}
 
 			if ext.next == storage.EOX {
-				gate.setEoxReached()
+				gateVal.setEoxReached()
 				break
 			}
 
@@ -801,7 +801,7 @@ msgPump:
 				break msgPump
 			}
 
-			gate.setNextKey(ext.nextKey)
+			gateVal.setNextKey(ext.nextKey)
 		}
 
 		if outConnDebug {

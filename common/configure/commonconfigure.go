@@ -178,7 +178,7 @@ func (r *CommonConfigure) LoadFiles(config interface{}, fnames ...string) error 
 			return err
 		}
 
-		if err := yaml.Unmarshal(data, config); err != nil {
+		if err = yaml.Unmarshal(data, config); err != nil {
 			return err
 		}
 

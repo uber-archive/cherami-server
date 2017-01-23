@@ -607,14 +607,14 @@ func (conn *extHost) aggregateAndSendReplies(numReplicas int) {
 				perMsgTimer.Reset(msgAckTimeout - elapsed)
 				for i := 0; i < numReplicas; i++ {
 					select {
-					case ack, ok := <-resCh.appendMsgAck:
-						if !ok || ack.GetStatus() != cherami.Status_OK {
+					case ack, okCh := <-resCh.appendMsgAck:
+						if !okCh || ack.GetStatus() != cherami.Status_OK {
 							stat = ack.GetStatus()
 							// error means we shutdown this extent and seal it
 							go conn.close()
 						}
 
-						if address == 0 && ok && ack.GetStatus() == cherami.Status_OK {
+						if address == 0 && okCh && ack.GetStatus() == cherami.Status_OK {
 							address = ack.GetAddress()
 						}
 					case <-perMsgTimer.C:
@@ -700,7 +700,7 @@ func (conn *extHost) sealExtent() error {
 		ctx, cancel := thrift.NewContext(thriftCallTimeout)
 		defer cancel()
 		// TODO: add retry here.
-		if err := extController.ExtentsUnreachable(ctx, req); err != nil {
+		if err = extController.ExtentsUnreachable(ctx, req); err != nil {
 			conn.logger.WithField(common.TagErr, err).Error(`ExtentsUnreachable call failed with err`)
 			return err
 		}

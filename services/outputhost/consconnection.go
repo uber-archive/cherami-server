@@ -406,7 +406,7 @@ func (conn *consConnection) createMsgAndWriteToClientUtil(msg *cherami.ConsumerM
 		*localCredits--
 		// flush if we have reached the threshold
 		if *unflushedWrites > flushThreshold {
-			if err := conn.flushToClient(*unflushedWrites); err == nil {
+			if err = conn.flushToClient(*unflushedWrites); err == nil {
 				*unflushedWrites = 0
 			}
 		}

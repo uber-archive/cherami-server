@@ -639,8 +639,8 @@ func (s *NetIntegrationSuiteParallelB) _TestTimerQueue() {
 
 			select {
 			case msg := <-delivery:
-
-				eta, err := time.Parse(time.RFC3339Nano, string(msg.GetMessage().Payload.GetData()))
+				var eta time.Time
+				eta, err = time.Parse(time.RFC3339Nano, string(msg.GetMessage().Payload.GetData()))
 				s.NoError(err)
 
 				now := time.Now()
@@ -761,7 +761,8 @@ ReadLoop2:
 
 		select {
 		case msg := <-delivery:
-			eta, err := time.Parse(time.RFC3339Nano, string(msg.GetMessage().Payload.GetData()))
+			var eta time.Time
+			eta, err = time.Parse(time.RFC3339Nano, string(msg.GetMessage().Payload.GetData()))
 			s.NoError(err)
 
 			now := time.Now()
@@ -1857,7 +1858,7 @@ func (s *NetIntegrationSuiteParallelB) TestQueueDepth() {
 
 		if dlqPublishers[cg] == nil {
 			// Create the publisher
-			cPublisherReq := &client.CreatePublisherRequest{
+			cPublisherReq = &client.CreatePublisherRequest{
 				Path: cgDescs[cg].GetDeadLetterQueueDestinationUUID(),
 			}
 

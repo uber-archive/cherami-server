@@ -86,7 +86,7 @@ func (s *LockMgrSuite) TestConcurrentLockUnlock() {
 	startWG.Add(1)
 	doneWG.Add(2)
 
-	for i := 0; i < 2; i++ {
+	for j := 0; j < 2; j++ {
 
 		go func() {
 
