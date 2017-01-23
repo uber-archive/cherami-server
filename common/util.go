@@ -41,12 +41,12 @@ import (
 	"github.com/uber-common/bark"
 	"github.com/uber/cherami-server/common/configure"
 	"github.com/uber/cherami-server/common/metrics"
-	"github.com/uber/ringpop-go"
-	"github.com/uber/tchannel-go"
 	"github.com/uber/cherami-thrift/.generated/go/admin"
 	"github.com/uber/cherami-thrift/.generated/go/cherami"
+	"github.com/uber/ringpop-go"
 	"github.com/uber/ringpop-go/discovery/statichosts"
 	"github.com/uber/ringpop-go/swim"
+	"github.com/uber/tchannel-go"
 	"github.com/uber/tchannel-go/hyperbahn"
 	"github.com/uber/tchannel-go/thrift"
 )
@@ -606,12 +606,20 @@ func NewCliHelper() CliHelper {
 	}
 }
 
+var overrideValueByPrefixLogMapLock sync.Mutex
 var overrideValueByPrefixLogMap = make(map[string]struct{})
 
 // OverrideValueByPrefix takes a list of override rules in the form 'prefix=val' and a given string, and determines the most specific rule
 // that applies to the given string. It then replaces the given default value with the override value. logFn is a logging closure that
 // allows lazy instatiation of a logger interface to log error conditions and override status. valName is used for logging purposes, to
 // differentiate multiple instantiations in the same context
+//
+// As an example, you could override a parameter, like the number of desired extents, according to various destination paths.
+// We could try to have 8 extents by default, and give destinations beginning with /test only 1, and give a particular destination
+// specifically a higher amount. To achieve this, we could configure the overrides like this:
+//
+// overrides := {`=8`, `/test=1`, `/JobPlatform/TripEvents$=16`}
+//
 func OverrideValueByPrefix(logFn func() bark.Logger, path string, overrides []string, defaultVal int64, valName string) int64 {
 	// Terminate the path with a dollarsign, so that we can do something like this:
 	//
@@ -656,10 +664,11 @@ moreOverrides:
 		}
 	}
 
-	if hasMatch { 
-		if len(longestMatchKey) > 1 { // Don't log for very short prefixes, e.g. '/', '' 
+	if hasMatch {
+		if len(longestMatchKey) > 1 { // Don't log for very short prefixes, e.g. '/', ''
 			// Log just once for this particular rule; if the value or rule changes, log again
 			logMapKey := valName + path + longestMatchKey + strconv.Itoa(int(longestMatchValue))
+			overrideValueByPrefixLogMapLock.Lock()
 			if _, ok := overrideValueByPrefixLogMap[logMapKey]; !ok {
 				overrideValueByPrefixLogMap[logMapKey] = struct{}{}
 				logFn().WithFields(bark.Fields{
@@ -668,6 +677,7 @@ moreOverrides:
 					`path`:     path,
 					`override`: longestMatchValue}).Info(`Overrided value`)
 			}
+			overrideValueByPrefixLogMapLock.Unlock()
 		}
 		return longestMatchValue
 	}

@@ -98,20 +98,20 @@ func maxExtentsToConsumeForDst(context *Context, dstPath, cgName string, dstType
 	cfgIface, err := context.cfgMgr.Get(common.ControllerServiceName, `*`, `*`, `*`)
 	if err != nil {
 		logFn().WithFields(bark.Fields{common.TagErr: err}).Error(`Couldn't get extent target configuration`)
-		return defaultMinOpenExtents * 2
+		return defaultMinConsumeExtents
 	}
 
-	cfg, ok := cfgIface.(ExtentAssignmentConfig)
+	cfg, ok := cfgIface.(ControllerDynamicConfig)
 	if !ok {
 		logFn().Error(`Couldn't cast cfg to ExtentAssignmentConfig`)
-		return defaultMinOpenExtents * 2
+		return defaultMinConsumeExtents
 	}
 
 	if remoteZones > 0 {
-		remoteExtentTarget = int(common.OverrideValueByPrefix(logFn, ruleKey, cfg.ConsumeExtentRemoteTargets, defaultRemoteExtents, `ConsumeExtentRemoteTargets`))
+		remoteExtentTarget = int(common.OverrideValueByPrefix(logFn, ruleKey, cfg.NumRemoteConsumerExtentsByPath, defaultRemoteExtents, `NumRemoteConsumerExtentsByPath`))
 	}
 
-	consumeExtentTarget = int(common.OverrideValueByPrefix(logFn, ruleKey, cfg.ConsumeExtentTargets, defaultMinConsumeExtents, `ConsumeExtentTargets`))
+	consumeExtentTarget = int(common.OverrideValueByPrefix(logFn, ruleKey, cfg.NumConsumerExtentsByPath, defaultMinConsumeExtents, `NumConsumerExtentsByPath`))
 	return consumeExtentTarget + remoteExtentTarget*remoteZones
 }
 

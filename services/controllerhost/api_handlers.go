@@ -52,11 +52,6 @@ const (
 	replicatorCallTimeout                        = 20 * time.Second
 )
 
-// limit on how many new extents we make available
-// for consumption to a consumer group in a single
-// call to GetOutputHosts
-const maxNewExtentsForCGPerCallFactorPerMille = 500
-
 var (
 	// ErrTooManyUnHealthy is returned when there are too many open but unhealthy extents for a destination
 	ErrTooManyUnHealthy = &shared.InternalServiceError{Message: "Too many open, but unhealthy extents for destination"}
@@ -244,13 +239,13 @@ func minOpenExtentsForDst(context *Context, dstPath string, dstType dstType) int
 		return defaultMinOpenExtents
 	}
 
-	cfg, ok := cfgIface.(ExtentAssignmentConfig)
+	cfg, ok := cfgIface.(ControllerDynamicConfig)
 	if !ok {
-		logFn().Error(`Couldn't cast cfg to ExtentAssignmentConfig`)
+		logFn().Error(`Couldn't cast cfg to ControllerDynamicConfig`)
 		return defaultMinOpenExtents
 	}
 
-	return int(common.OverrideValueByPrefix(logFn, dstPath, cfg.PublishExtentTargets, defaultMinOpenExtents, `PublishExtentTargets`))
+	return int(common.OverrideValueByPrefix(logFn, dstPath, cfg.NumPublisherExtentsByPath, defaultMinOpenExtents, `NumPublisherExtentsByPath`))
 }
 
 func getInputAddrIfExtentIsWritable(context *Context, extent *shared.Extent, m3Scope int) (string, error) {

@@ -21,6 +21,7 @@
 package common
 
 import (
+	"sync"
 	"testing"
 
 	"github.com/Sirupsen/logrus"
@@ -156,4 +157,25 @@ func (s *UtilSuite) TestOverrideValueByPrefixNormal() {
 		phase++
 	}
 
+}
+
+// This test is only useful if the race flag is given
+func (s *UtilSuite) TestOverrideValueByPrefixConcurrency() {
+	var startersPistol sync.RWMutex
+	var wg sync.WaitGroup
+
+	startersPistol.Lock() // and load
+
+	for i := 0; i < 1000; i++ {
+		wg.Add(1)
+		go func(i int) {
+			startersPistol.RLock()
+			OverrideValueByPrefix(logFn, `foo`, []string{`=1`, `fo=2`}, 3, `concurrent`)
+			startersPistol.RUnlock()
+			wg.Done()
+		}(i)
+	}
+
+	startersPistol.Unlock() // bang!
+	wg.Wait()
 }
