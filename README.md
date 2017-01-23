@@ -40,11 +40,11 @@ Run Cherami locally
 CHERAMI_ENVIRONMENT=local ./cherami-server start all
 ```
 
-Note: `cherami-server` is configured via `config/base.yaml` with some parameters overriden by `config/local.yaml`.
+Note: `cherami-server` is configured via `config/base.yaml` with some parameters overriden by `config/local.yaml`. In this config, Cherami is bound to `localhost`.
 
 One can use the CLI to verify if Cherami is running properly:
 ```
-./cherami-cli --env=prod --hostport=<localIP>:4922 create destination /test/cherami
+./cherami-cli --env=prod --hostport=127.0.0.1:4922 create destination /test/cherami
 ```
 
 Deploy Cherami as a cluster

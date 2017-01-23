@@ -41,7 +41,7 @@ import (
 	"github.com/uber/cherami-server/common/configure"
 	dconfig "github.com/uber/cherami-server/common/dconfigclient"
 	mockmeta "github.com/uber/cherami-server/test/mocks/metadata"
-
+	"github.com/uber/cherami-server/test"
 	log "github.com/Sirupsen/logrus"
 	"github.com/pborman/uuid"
 	"github.com/stretchr/testify/mock"
@@ -203,7 +203,7 @@ func (t *testBase) newTestStoreHost(store Store) *testStoreHost {
 
 	hostID := uuid.NewRandom()
 
-	hostPort, port := findEphemeralPort()
+	hostPort, listenIP, port, _ := test.FindEphemeralPort()
 
 	// if listenHosts is 'nil', this is the first storehost,
 	// so use its hostPort that for listenHosts and ringhosts
@@ -218,6 +218,7 @@ func (t *testBase) newTestStoreHost(store Store) *testStoreHost {
 		Port:          port,
 		RingHosts:     t.ringhosts,
 		LimitsEnabled: false,
+		ListenAddress: listenIP,
 	}
 
 	reporter := common.NewMetricReporterWithHostname(configure.NewCommonServiceConfig())
@@ -229,7 +230,7 @@ func (t *testBase) newTestStoreHost(store Store) *testStoreHost {
 
 	storehost.Start(tc)
 
-	_, wsPort := findEphemeralPort()
+	_, _, wsPort, _ := test.FindEphemeralPort()
 	common.WSStart(``, wsPort, storehost) // start websocket server, listen on all addresses
 
 	sh := &testStoreHost{
