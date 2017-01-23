@@ -86,7 +86,7 @@ func (tb *testBase) buildConfig(clusterSz map[string]int, numReplicas int) map[s
 			_, _, wsPort, err := test.FindEphemeralPort()
 			tb.Nil(err)
 			log.Debugf("serviceName: %#q addr:%v", common.StoreServiceName, hostPort)
-			
+
 			if ringHosts == "" {
 				ringHosts = fmt.Sprintf("%v:%d", listenIP, port)
 			}
