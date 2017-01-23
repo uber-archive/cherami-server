@@ -458,6 +458,11 @@ func (h *OutputHost) ReceiveMessageBatch(ctx thrift.Context, request *cherami.Re
 	}
 
 	cgCache.updateLastDisconnectTime()
+
+	// make sure we don't close all the channels here
+	cgCache.connsWG.Add(1) // this WG is for the cgCache
+	defer cgCache.connsWG.Done()
+
 	res := cherami.NewReceiveMessageBatchResult_()
 	msgCacheWriteTicker := common.NewTimer(msgCacheWriteTimeout)
 	defer msgCacheWriteTicker.Stop()

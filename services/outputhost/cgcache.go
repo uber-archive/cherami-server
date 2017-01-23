@@ -408,7 +408,6 @@ func (cgCache *consumerGroupCache) manageConsumerGroupCache() {
 			}
 			cgCache.extMutex.Unlock()
 		case <-cgCache.closeChannel:
-			cgCache.logger.Info("stopped")
 			// stop the delivery cache as well
 			cgCache.msgDeliveryCache.stop()
 			// wait for the manage routine to go away
@@ -416,6 +415,7 @@ func (cgCache *consumerGroupCache) manageConsumerGroupCache() {
 			// at this point, the cg is completely unloaded, close all message channels
 			// to cleanup
 			cgCache.cleanupChannels()
+			cgCache.logger.Info("cg is stopped and all channels are cleanedup")
 			quit = true
 		}
 	}
