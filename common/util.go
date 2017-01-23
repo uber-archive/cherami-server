@@ -298,6 +298,26 @@ func AwaitWaitGroup(wg *sync.WaitGroup, timeout time.Duration) bool {
 	}
 }
 
+// RWLockReadAndConditionalWrite implements the RWLock Read+Read&Conditional-Write pattern.
+// m is the RWMutex covering a shared resource
+// readFn is a function that returns a true if a write on the shared resource is required.
+// writeFn is a function that updates the shared resource.
+// The result of the read/write can be returned by capturing return variables in your provided functions
+func RWLockReadAndConditionalWrite(m *sync.RWMutex, readFn func() bool, writeFn func()) {
+	m.RLock()
+	writeRequired := readFn()
+	m.RUnlock()
+	if writeRequired {
+		m.Lock()
+		writeRequired = readFn()
+		if writeRequired {
+			writeFn()
+		}
+		m.Unlock()
+	}
+	return
+}
+
 // CreateInputHostAdminClient creates and returns tchannel client
 // for the input host admin API
 func CreateInputHostAdminClient(ch *tchannel.Channel, hostPort string) (admin.TChanInputHostAdmin, error) {
@@ -606,7 +626,7 @@ func NewCliHelper() CliHelper {
 	}
 }
 
-var overrideValueByPrefixLogMapLock sync.Mutex
+var overrideValueByPrefixLogMapLock sync.RWMutex
 var overrideValueByPrefixLogMap = make(map[string]struct{})
 
 // OverrideValueByPrefix takes a list of override rules in the form 'prefix=val' and a given string, and determines the most specific rule
@@ -668,8 +688,15 @@ moreOverrides:
 		if len(longestMatchKey) > 1 { // Don't log for very short prefixes, e.g. '/', ''
 			// Log just once for this particular rule; if the value or rule changes, log again
 			logMapKey := valName + path + longestMatchKey + strconv.Itoa(int(longestMatchValue))
-			overrideValueByPrefixLogMapLock.Lock()
-			if _, ok := overrideValueByPrefixLogMap[logMapKey]; !ok {
+
+			readFn := func() bool {
+				_, logPreviouslyEmitted := overrideValueByPrefixLogMap[logMapKey]
+				return !logPreviouslyEmitted
+			}
+			writeFn := func() {
+				if _, logPreviouslyEmitted2 := overrideValueByPrefixLogMap[logMapKey]; logPreviouslyEmitted2 {
+					return
+				}
 				overrideValueByPrefixLogMap[logMapKey] = struct{}{}
 				logFn().WithFields(bark.Fields{
 					`valName`:  valName,
@@ -677,7 +704,7 @@ moreOverrides:
 					`path`:     path,
 					`override`: longestMatchValue}).Info(`Overrided value`)
 			}
-			overrideValueByPrefixLogMapLock.Unlock()
+			RWLockReadAndConditionalWrite(&overrideValueByPrefixLogMapLock, readFn, writeFn)
 		}
 		return longestMatchValue
 	}

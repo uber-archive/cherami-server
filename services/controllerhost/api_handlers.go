@@ -44,9 +44,9 @@ const (
 	minOpenExtentsForDstDLQ                      = 1
 	maxExtentsToConsumeForDstDLQ                 = 2
 	minOpenExtentsForDstTimer                    = 2
-	defaultMinOpenExtents                        = 2 // Only used if the extent configuration can't be retrieved
+	defaultMinOpenPublishExtents                 = 2 // Only used if the extent configuration can't be retrieved
 	defaultRemoteExtents                         = 2
-	defaultMinConsumeExtents                     = defaultMinOpenExtents * 2
+	defaultMinConsumeExtents                     = defaultMinOpenPublishExtents * 2
 	maxExtentsToConsumeForDstTimer               = 64 // timer dst need to consume from all open extents
 	minExtentsToConsumeForSingleCGVisibleExtents = 1
 	replicatorCallTimeout                        = 20 * time.Second
@@ -236,7 +236,7 @@ func minOpenExtentsForDst(context *Context, dstPath string, dstType dstType) int
 	cfgIface, err := context.cfgMgr.Get(common.ControllerServiceName, `*`, `*`, `*`)
 	if err != nil {
 		logFn().WithField(common.TagErr, err).Error(`Couldn't get extent target configuration`)
-		return defaultMinOpenExtents
+		return defaultMinOpenPublishExtents
 	}
 
 	cfg, ok := cfgIface.(ControllerDynamicConfig)
