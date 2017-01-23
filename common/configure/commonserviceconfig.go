@@ -93,17 +93,8 @@ func (r *ServiceConfig) GetLogger() bark.Logger {
 }
 
 // GetListenAddress returns the listen address for this service
-func (r *ServiceConfig) GetListenAddress() (a net.IP) {
-	a = net.ParseIP(r.ListenAddress)
-	if a == nil {
-		a, _ = tchannel.ListenIP()
-		log.Infof(`No listen address specified; setting %v instead`, a)
-		r.ListenAddress = a.String()
-	}
-	if a == nil {
-		log.Panic(`Could not get listen address`)
-	}
-	return
+func (r *ServiceConfig) GetListenAddress() net.IP {
+	return net.ParseIP(r.ListenAddress)
 }
 
 // SetListenAddress sets the listen address for this service
