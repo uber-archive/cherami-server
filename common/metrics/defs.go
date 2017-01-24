@@ -902,9 +902,9 @@ const (
 
 	// -- Replicator metrics -- //
 
-	// ReplicatorWsFailure indicates failure when creating in stream
+	// ReplicatorCreateInStreamFailure indicates failure when creating in stream
 	ReplicatorCreateInStreamFailure
-	// ReplicatorWsFailure indicates failure when creating out stream
+	// ReplicatorCreateOutStreamFailure indicates failure when creating out stream
 	ReplicatorCreateOutStreamFailure
 	// ReplicatorRequests indicates non-messaging request count for replicator
 	ReplicatorRequests
