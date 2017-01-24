@@ -902,8 +902,10 @@ const (
 
 	// -- Replicator metrics -- //
 
-	// ReplicatorWsFailure indicates websocket failure
-	ReplicatorWsFailure
+	// ReplicatorCreateInStreamFailure indicates failure when creating in stream
+	ReplicatorCreateInStreamFailure
+	// ReplicatorCreateOutStreamFailure indicates failure when creating out stream
+	ReplicatorCreateOutStreamFailure
 	// ReplicatorRequests indicates non-messaging request count for replicator
 	ReplicatorRequests
 	// ReplicatorFailures indicates non-messaging failure count for replicator
@@ -915,11 +917,11 @@ const (
 	ReplicatorInConnCreditsReceived
 	// ReplicatorInConnMsgWritten indicates how many messages InConn writes to client
 	ReplicatorInConnMsgWritten
-
 	// ReplicatorOutConnCreditsSent indicates how many credits OutConn sent
 	ReplicatorOutConnCreditsSent
 	// ReplicatorOutConnMsgRead indicates how many messages OutConn read
 	ReplicatorOutConnMsgRead
+
 	// ReplicatorReconcileDestRun indicates the reconcile for dest runs
 	ReplicatorReconcileDestRun
 	// ReplicatorReconcileDestFail indicates the reconcile for dest fails
@@ -1070,7 +1072,8 @@ var metricDefs = map[ServiceIdx]map[int]metricDefinition{
 
 	// definitions for Replicator metrics
 	Replicator: {
-		ReplicatorWsFailure:                             {Counter, "replicator.websocket.failure"},
+		ReplicatorCreateInStreamFailure:                 {Counter, "replicator.create-in-stream.failure"},
+		ReplicatorCreateOutStreamFailure:                {Counter, "replicator.create-out-stream.failure"},
 		ReplicatorRequests:                              {Counter, "replicator.requests"},
 		ReplicatorFailures:                              {Counter, "replicator.errors"},
 		ReplicatorBadRequest:                            {Counter, "replicator.requests.bad"},
@@ -1078,13 +1081,13 @@ var metricDefs = map[ServiceIdx]map[int]metricDefinition{
 		ReplicatorInConnMsgWritten:                      {Counter, "replicator.inconn.msgwritten"},
 		ReplicatorOutConnCreditsSent:                    {Counter, "replicator.outconn.creditssent"},
 		ReplicatorOutConnMsgRead:                        {Counter, "replicator.outconn.msgread"},
-		ReplicatorReconcileDestRun:                      {Counter, "replicator.reconcile.dest.run"},
-		ReplicatorReconcileDestFail:                     {Counter, "replicator.reconcile.dest.fail"},
-		ReplicatorReconcileDestFoundMissing:             {Counter, "replicator.reconcile.dest.foundmissing"},
-		ReplicatorReconcileDestExtentRun:                {Counter, "replicator.reconcile.destextent.run"},
-		ReplicatorReconcileDestExtentFail:               {Counter, "replicator.reconcile.destextent.fail"},
-		ReplicatorReconcileDestExtentFoundMissing:       {Counter, "replicator.reconcile.destextent.foundmissing"},
-		ReplicatorReconcileDestExtentInconsistentStatus: {Counter, "replicator.reconcile.destextent.inconsistentstatus"},
+		ReplicatorReconcileDestRun:                      {Gauge, "replicator.reconcile.dest.run"},
+		ReplicatorReconcileDestFail:                     {Gauge, "replicator.reconcile.dest.fail"},
+		ReplicatorReconcileDestFoundMissing:             {Gauge, "replicator.reconcile.dest.foundmissing"},
+		ReplicatorReconcileDestExtentRun:                {Gauge, "replicator.reconcile.destextent.run"},
+		ReplicatorReconcileDestExtentFail:               {Gauge, "replicator.reconcile.destextent.fail"},
+		ReplicatorReconcileDestExtentFoundMissing:       {Gauge, "replicator.reconcile.destextent.foundmissing"},
+		ReplicatorReconcileDestExtentInconsistentStatus: {Gauge, "replicator.reconcile.destextent.inconsistentstatus"},
 	},
 }
 
