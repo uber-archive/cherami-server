@@ -32,6 +32,7 @@ import (
 	"github.com/uber/cherami-server/clients/metadata"
 	"github.com/uber/cherami-server/common"
 	"github.com/uber/cherami-server/common/configure"
+	cassConfig "github.com/uber/cherami-server/common/dconfig"
 	dconfig "github.com/uber/cherami-server/common/dconfigclient"
 	"github.com/uber/cherami-server/services/controllerhost"
 	"github.com/uber/cherami-server/services/frontendhost"
@@ -161,6 +162,9 @@ func (tb *testBase) setupSuiteImpl(t *testing.T) {
 	controllerhost.IntervalBtwnScans = time.Second
 	storehost.ReportInterval = time.Second
 	storehost.ReportPause = common.Int32Ptr(0) // unpaused
+
+	// Make sure the cassandra config refresh interval is small
+	cassConfig.SetRefreshInterval(10 * time.Millisecond)
 }
 
 func (tb *testBase) TearDownSuite() {

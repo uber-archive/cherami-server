@@ -236,6 +236,7 @@ type cgMsgCache struct {
 	zeroTimerCache           []*timerCacheEntry // Timer cache for things delayed by zero
 	closeChannel             chan struct{}
 	redeliveryTicker         *time.Ticker
+	cfgRefreshTicker         *time.Ticker
 	msgsRedeliveryCh         chan<- *cherami.ConsumerMessage // channel to resend messages to the client connectons
 	priorityMsgsRedeliveryCh chan<- *cherami.ConsumerMessage // channel to resend messages to the client connectons
 	msgCacheCh               <-chan cacheMsg                 // channel to get messages to be stored on the cache
@@ -781,6 +782,8 @@ func (msgCache *cgMsgCache) manageMessageDeliveryCache() {
 					msgCache.numAcks = 0
 				}
 			}
+		case <-msgCache.cfgRefreshTicker.C:
+			msgCache.refreshCgConfig(msgCache.maxOutstandingMsgs)
 		case <-msgCache.closeChannel:
 			// now cleanup any existing entries in cache
 			// this is done to make sure we drop any references
@@ -966,30 +969,27 @@ func (msgCache *cgMsgCache) updateConn(connID int, event msgEvent, badConns map[
 	}
 }
 
-// TODO: Make the delivery cache shared among all consumer groups
-func newMessageDeliveryCache(
-	msgsRedeliveryCh chan<- *cherami.ConsumerMessage,
-	priorityMsgsRedeliveryCh chan<- *cherami.ConsumerMessage,
-	msgCacheCh <-chan cacheMsg,
-	msgCacheRedeliveredCh <-chan cacheMsg,
-	ackMsgCh <-chan timestampedAckID,
-	nackMsgCh <-chan timestampedAckID,
-	cgDesc shared.ConsumerGroupDescription,
-	dlq *deadLetterQueue,
-	logger bark.Logger,
-	m3Client metrics.Client,
-	consumerM3Client metrics.Client,
-	notifier Notifier,
-	creditNotifyCh chan int32,
-	creditRequestCh chan string,
-	numOutstandingMsgs int32,
-	cgCache *consumerGroupCache) *cgMsgCache {
-	if cgDesc.GetLockTimeoutSeconds() == 0 {
-		cgDesc.LockTimeoutSeconds = common.Int32Ptr(defaultLockTimeoutInSeconds)
+func (msgCache *cgMsgCache) refreshCgConfig(oldOutstandingMessages int32) {
+	outstandingMsgs := oldOutstandingMessages
+	cfg, err := msgCache.cgCache.getDynamicCgConfig()
+	if err == nil {
+		outstandingMsgs = msgCache.cgCache.getMessageCacheSize(cfg, oldOutstandingMessages)
 	}
 
-	if cgDesc.GetMaxDeliveryCount() == 0 {
-		cgDesc.MaxDeliveryCount = common.Int32Ptr(defaultMaxDeliveryCount)
+	msgCache.maxOutstandingMsgs = outstandingMsgs
+}
+
+// TODO: Make the delivery cache shared among all consumer groups
+func newMessageDeliveryCache(
+	dlq *deadLetterQueue,
+	defaultNumOutstandingMsgs int32,
+	cgCache *consumerGroupCache) *cgMsgCache {
+	if cgCache.cachedCGDesc.GetLockTimeoutSeconds() == 0 {
+		cgCache.cachedCGDesc.LockTimeoutSeconds = common.Int32Ptr(defaultLockTimeoutInSeconds)
+	}
+
+	if cgCache.cachedCGDesc.GetMaxDeliveryCount() == 0 {
+		cgCache.cachedCGDesc.MaxDeliveryCount = common.Int32Ptr(defaultMaxDeliveryCount)
 	}
 
 	msgCache := &cgMsgCache{
@@ -997,22 +997,22 @@ func newMessageDeliveryCache(
 		redeliveryTimerCache:     make([]*timerCacheEntry, 0),
 		cleanupTimerCache:        make([]*timerCacheEntry, 0),
 		dlq:                      dlq,
-		msgsRedeliveryCh:         msgsRedeliveryCh,
-		priorityMsgsRedeliveryCh: priorityMsgsRedeliveryCh,
-		msgCacheCh:               msgCacheCh,
-		msgCacheRedeliveredCh:    msgCacheRedeliveredCh,
-		ackMsgCh:                 ackMsgCh,
-		nackMsgCh:                nackMsgCh,
+		msgsRedeliveryCh:         cgCache.msgsRedeliveryCh,
+		priorityMsgsRedeliveryCh: cgCache.priorityMsgsRedeliveryCh,
+		msgCacheCh:               cgCache.msgCacheCh,
+		msgCacheRedeliveredCh:    cgCache.msgCacheRedeliveredCh,
+		ackMsgCh:                 cgCache.ackMsgCh,
+		nackMsgCh:                cgCache.nackMsgCh,
 		closeChannel:             make(chan struct{}),
 		redeliveryTicker:         time.NewTicker(time.Second / 2),
-		ConsumerGroupDescription: cgDesc,
-		consumerM3Client:         consumerM3Client,
-		m3Client:                 m3Client,
-		notifier:                 notifier,
-		creditNotifyCh:           creditNotifyCh,
-		creditRequestCh:          creditRequestCh,
-		maxOutstandingMsgs:       numOutstandingMsgs, // ideally this should be part of the cgDesc
-		cgCache:                  cgCache,            // just a reference to the cgCache
+		cfgRefreshTicker:         time.NewTicker(time.Minute),
+		ConsumerGroupDescription: cgCache.cachedCGDesc,
+		consumerM3Client:         cgCache.consumerM3Client,
+		m3Client:                 cgCache.m3Client,
+		notifier:                 cgCache.notifier,
+		creditNotifyCh:           cgCache.creditNotifyCh,
+		creditRequestCh:          cgCache.creditRequestCh,
+		cgCache:                  cgCache, // just a reference to the cgCache
 		consumerHealth: consumerHealth{
 			badConns:        make(map[int]int),
 			lastAckTime:     common.Now(), // Need to start in the non-stalled state
@@ -1020,7 +1020,8 @@ func newMessageDeliveryCache(
 		},
 	}
 
-	msgCache.lclLg = logger
+	msgCache.lclLg = cgCache.logger
+	msgCache.refreshCgConfig(defaultNumOutstandingMsgs)
 
 	return msgCache
 }

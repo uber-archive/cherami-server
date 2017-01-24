@@ -99,10 +99,11 @@ type (
 )
 
 const (
-	wildcardToken      = "*"
-	sliceSplitToken    = ","
-	cfgRefreshInterval = time.Minute
+	wildcardToken   = "*"
+	sliceSplitToken = ","
 )
+
+var cfgRefreshInterval = time.Minute
 
 // NewCassandraConfigManager constructs and returns an
 // implementation of config managed backed by a store
@@ -536,4 +537,9 @@ func setStringField(field reflect.Value, fieldName string, keyValues map[string]
 		return
 	}
 	field.SetString(defaultStr)
+}
+
+// SetRefreshInterval is used to set the refresh interval
+func SetRefreshInterval(interval time.Duration) {
+	cfgRefreshInterval = interval
 }

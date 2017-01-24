@@ -34,6 +34,7 @@ import (
 
 	ccommon "github.com/uber/cherami-client-go/common"
 	"github.com/uber/cherami-server/common"
+	cassDconfig "github.com/uber/cherami-server/common/dconfig"
 	dconfig "github.com/uber/cherami-server/common/dconfigclient"
 	mm "github.com/uber/cherami-server/common/metadata"
 	"github.com/uber/cherami-server/common/metrics"
@@ -87,6 +88,7 @@ type (
 		ackMgrLoadCh      chan ackMgrLoadMsg
 		ackMgrUnloadCh    chan uint32
 		hostMetrics       *load.HostMetrics
+		cfgMgr            *cassDconfig.CassandraConfigManager
 		common.SCommon
 	}
 
@@ -662,6 +664,7 @@ func (h *OutputHost) Start(thriftService []thrift.TChanServer) {
 	h.loadReporter = h.GetLoadReporterDaemonFactory().CreateReporter(hostLoadReportingInterval, h, h.logger)
 	h.loadReporter.Start()
 	h.hostIDHeartbeater.Start()
+	h.cfgMgr.Start()
 	go h.manageCgCache()
 }
 
@@ -717,6 +720,7 @@ func (h *OutputHost) Report(reporter common.LoadReporter) {
 func (h *OutputHost) Stop() {
 	h.hostIDHeartbeater.Stop()
 	h.loadReporter.Stop()
+	h.cfgMgr.Stop()
 	h.SCommon.Stop()
 }
 
@@ -764,6 +768,9 @@ func NewOutputHost(serviceName string, sVice common.SCommon, metadataClient meta
 	// manage uconfig, regiester handerFunc and verifyFunc for uConfig values
 	bs.dClient = sVice.GetDConfigClient()
 	bs.dynamicConfigManage()
+
+	// cassandra config manager
+	bs.cfgMgr = newConfigManager(metadataClient, bs.logger)
 
 	common.StartEKG(bs.logger)
 	thisOutputHost = &bs
@@ -829,13 +836,6 @@ func (h *OutputHost) UtilGetPickedStore(cgName string, path string) (connStore s
 		h.cgMutex.Unlock()
 	}
 	return
-}
-
-// UtilSetMsgCacheLimit is a utility routine to update the
-// default value of max outstanding messages
-// XXX: this should be used only for testing
-func (h *OutputHost) UtilSetMsgCacheLimit(limit int32) int32 {
-	return setDefaultMaxOutstandingMessages(limit)
 }
 
 // OpenStreamingConsumerStream is unimplemented

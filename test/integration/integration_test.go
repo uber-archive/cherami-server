@@ -90,7 +90,24 @@ func (s *NetIntegrationSuiteParallelC) TestMsgCacheLimit() {
 	testMsgCount := 100
 	testMsgCacheLimit := 50
 	log := common.GetDefaultLogger()
-	var oldLimit int32
+
+	value := fmt.Sprintf("%v/%v=%v", destPath, cgPath, testMsgCacheLimit)
+	log.Infof("VALUE IS: %v", value)
+	// set the message cache limit for this cg on the outputhost to be a smaller number
+	cItem := &metadata.ServiceConfigItem{
+		ServiceName:    common.StringPtr("cherami-outputhost"),
+		ServiceVersion: common.StringPtr("*"),
+		Sku:            common.StringPtr("*"),
+		Hostname:       common.StringPtr("*"),
+		ConfigKey:      common.StringPtr("messagecachesize"),
+		ConfigValue:    common.StringPtr(value),
+	}
+
+	req := &metadata.UpdateServiceConfigRequest{ConfigItem: cItem}
+	err := s.mClient.UpdateServiceConfig(nil, req)
+	s.NoError(err)
+
+	time.Sleep(10 * time.Millisecond)
 
 	// Create the client
 	ipaddr, port, _ := net.SplitHostPort(s.GetFrontend().GetTChannel().PeerInfo().HostPort)
@@ -126,7 +143,7 @@ func (s *NetIntegrationSuiteParallelC) TestMsgCacheLimit() {
 	publisherTest := cheramiClient.CreatePublisher(cPublisherReq)
 	s.NotNil(publisherTest)
 
-	err := publisherTest.Open()
+	err = publisherTest.Open()
 	s.NoError(err)
 	// Publish messages
 	doneCh := make(chan *client.PublisherReceipt, testMsgCount)
@@ -156,14 +173,6 @@ func (s *NetIntegrationSuiteParallelC) TestMsgCacheLimit() {
 	wg.Wait()
 	publisherTest.Close()
 
-	// set the message cache limit for this cg on the outputhost to be a smaller number
-	for uuid, outputHost := range s.testBase.OutputHosts {
-		log.Infof("setting the message cache limit for outhost: %v to be: %v",
-			uuid, testMsgCacheLimit)
-		oldLimit = outputHost.UtilSetMsgCacheLimit(int32(testMsgCacheLimit))
-		defer outputHost.UtilSetMsgCacheLimit(oldLimit)
-	}
-
 	// ==READ==
 
 	// Create the consumer group
@@ -183,6 +192,7 @@ func (s *NetIntegrationSuiteParallelC) TestMsgCacheLimit() {
 	s.Equal(cgReq.GetMaxDeliveryCount(), cgDesc.GetMaxDeliveryCount(), "Wrong MaxDeliveryCount")
 	s.Equal(cherami.ConsumerGroupStatus_ENABLED, cgDesc.GetStatus(), "Wrong Status")
 	s.Equal(cgReq.GetOwnerEmail(), cgDesc.GetOwnerEmail(), "Wrong OwnerEmail")
+
 	cConsumerReq := &client.CreateConsumerRequest{
 		Path:              destPath,
 		ConsumerGroupName: cgPath,

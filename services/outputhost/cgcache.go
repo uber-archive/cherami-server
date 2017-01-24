@@ -28,6 +28,7 @@ import (
 	"github.com/uber/tchannel-go/thrift"
 
 	"github.com/uber/cherami-server/common"
+	"github.com/uber/cherami-server/common/dconfig"
 	"github.com/uber/cherami-server/common/metrics"
 	"github.com/uber/cherami-server/services/outputhost/load"
 	"github.com/uber/cherami-thrift/.generated/go/cherami"
@@ -168,6 +169,7 @@ type (
 
 		// hostMetrics represents the host level load metrics reported to controller
 		hostMetrics *load.HostMetrics
+
 		// cgMetrics represents consgroup level load metrics reported to controller
 		cgMetrics *load.CGMetrics
 
@@ -179,6 +181,9 @@ type (
 
 		// manageMsgCacheWG is used to wait for the manage delivery cache routine to go away. This is needed to make sure we cleanup all the buffered channels appropriately.
 		manageMsgCacheWG sync.WaitGroup
+
+		// cfgMgr is the reference to the cassandra backed cfgMgr
+		cfgMgr *dconfig.CassandraConfigManager
 	}
 )
 
@@ -203,10 +208,13 @@ const defaultMaxResults = 500
 const consGroupLoadReportingInterval = 2 * time.Second
 
 // defaultNumOutstandingMsgs is the number of outstanding messages we can have for this CG
-var defaultNumOutstandingMsgs int32 = 10000
+const defaultNumOutstandingMsgs int32 = 10000
 
 // ErrCgUnloaded is returned when the cgCache is already unloaded
 var ErrCgUnloaded = &cherami.InternalServiceError{Message: "ConsumerGroup already unloaded"}
+
+// ErrConfigCast is returned when we are unable to cast to the CgConfig type
+var ErrConfigCast = &cherami.InternalServiceError{Message: "Unable to cast to OutputCgConfig"}
 
 // newConsumerGroupCache is used to get a new instance of the CG cache
 func newConsumerGroupCache(destPath string, cgDesc shared.ConsumerGroupDescription, cgLogger bark.Logger, h *OutputHost) *consumerGroupCache {
@@ -245,6 +253,7 @@ func newConsumerGroupCache(destPath string, cgDesc shared.ConsumerGroupDescripti
 		loadReporterFactory:      h.GetLoadReporterDaemonFactory(),
 		hostMetrics:              h.hostMetrics,
 		cgMetrics:                load.NewCGMetrics(),
+		cfgMgr:                   h.cfgMgr,
 	}
 
 	cgCache.consumerM3Client = metrics.NewClientWithTags(h.m3Client, metrics.Outputhost, cgCache.getConsumerGroupTags())
@@ -308,6 +317,11 @@ func (cgCache *consumerGroupCache) loadExtentCache(destType shared.DestinationTy
 		cgCache.cgMetrics.Increment(load.CGMetricNumOpenExtents)
 		cgCache.hostMetrics.Increment(load.HostMetricNumOpenExtents)
 
+		// get the initial credits based on the message cache size
+		cfg, err := cgCache.getDynamicCgConfig()
+		if err == nil {
+			extCache.initialCredits = cgCache.getMessageCacheSize(cfg, defaultNumOutstandingMsgs)
+		}
 		// TODO: create a newAckManagerRequestArgs struct here
 		extCache.ackMgr = newAckManager(cgCache, cgCache.ackIDGen.GetNextAckID(), cgCache.outputHostUUID, cgCache.cachedCGDesc.GetConsumerGroupUUID(), extCache.extUUID, &extCache.connectedStoreUUID, extCache.waitConsumedCh, cge, cgCache.metaClient, extCache.logger)
 		extCache.loadReporter = cgCache.loadReporterFactory.CreateReporter(extentLoadReportingInterval, extCache, extCache.logger)
@@ -503,6 +517,32 @@ func (cgCache *consumerGroupCache) refreshCgCache(ctx thrift.Context) error {
 	return nil
 }
 
+// getDynamicCgConfig gets the configuration object for this host
+func (cgCache *consumerGroupCache) getDynamicCgConfig() (OutputCgConfig, error) {
+	dCfgIface, err := cgCache.cfgMgr.Get(common.OutputServiceName, `*`, `*`, `*`)
+	if err != nil {
+		cgCache.logger.WithFields(bark.Fields{common.TagErr: err}).Error(`Couldn't get the configuration object`)
+		return OutputCgConfig{}, err
+	}
+	cfg, ok := dCfgIface.(OutputCgConfig)
+	if !ok {
+		cgCache.logger.Error(`Couldn't cast cfg to OutputCgConfig`)
+		return OutputCgConfig{}, ErrConfigCast
+	}
+	return cfg, nil
+}
+
+// getMessageCacheSize gets the configured value for the message cache for this CG
+func (cgCache *consumerGroupCache) getMessageCacheSize(cfg OutputCgConfig, oldSize int32) (cacheSize int32) {
+	logFn := func() bark.Logger {
+		return cgCache.logger
+	}
+	ruleKey := cgCache.destPath + `/` + cgCache.cachedCGDesc.GetConsumerGroupName()
+	cacheSize = int32(common.OverrideValueByPrefix(logFn, ruleKey, cfg.MessageCacheSize, int64(oldSize), `messagecachesize`))
+
+	return cacheSize
+}
+
 // loadConsumerGroupCache loads everything on this cache including the extents and within the cache
 func (cgCache *consumerGroupCache) loadConsumerGroupCache(ctx thrift.Context, exists bool) error {
 	cgCache.extMutex.Lock()
@@ -524,9 +564,7 @@ func (cgCache *consumerGroupCache) loadConsumerGroupCache(ctx thrift.Context, ex
 			return err
 		}
 
-		cgCache.msgDeliveryCache = newMessageDeliveryCache(cgCache.msgsRedeliveryCh, cgCache.priorityMsgsRedeliveryCh, cgCache.msgCacheCh,
-			cgCache.msgCacheRedeliveredCh, cgCache.ackMsgCh,
-			cgCache.nackMsgCh, cgCache.cachedCGDesc, dlq, cgCache.logger, cgCache.m3Client, cgCache.consumerM3Client, cgCache.notifier, cgCache.creditNotifyCh, cgCache.creditRequestCh, defaultNumOutstandingMsgs, cgCache)
+		cgCache.msgDeliveryCache = newMessageDeliveryCache(dlq, defaultNumOutstandingMsgs, cgCache)
 		cgCache.shutdownWG.Add(1)
 		go cgCache.manageConsumerGroupCache() // Has cgCache.shutdownWG.Done()
 		cgCache.manageMsgCacheWG.Add(1)       // wait group for msgCache
@@ -687,12 +725,4 @@ func (cgCache *consumerGroupCache) cleanupChannels() {
 	close(cgCache.ackMsgCh)
 	// nackMsgsCh
 	close(cgCache.nackMsgCh)
-}
-
-// this can be used to set the max outstanding messages for testing
-// XXX: this is not thread safe
-func setDefaultMaxOutstandingMessages(limit int32) int32 {
-	oldLimit := defaultNumOutstandingMsgs
-	defaultNumOutstandingMsgs = limit
-	return oldLimit
 }
