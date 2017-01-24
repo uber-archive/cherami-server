@@ -114,7 +114,8 @@ func (conn *consConnection) open() *sync.WaitGroup {
 	if !conn.opened {
 		// register with the notifier first
 		conn.cgCache.notifier.Register(conn.connID, conn.notifyCh)
-		conn.waitWG.Add(2)
+		conn.waitWG.Add(2)          // this WG is the local WG for the pumps
+		conn.cgCache.connsWG.Add(1) // this WG is for the cgCache
 		go conn.writeMsgsStream()
 		go conn.readCreditsStream()
 
@@ -137,14 +138,12 @@ func (conn *consConnection) close() {
 		// 2. close the credits stream
 		close(conn.closeChannel)
 		conn.closed = true
-		// now notify the CGCache to update its connections map
-		select {
-		case conn.connectionsClosedCh <- conn.connID:
-		default:
-		}
-
 		conn.waitWG.Wait() // wait until the pumps have closed
+		// now notify the CGCache to update its connections map
+		conn.connectionsClosedCh <- conn.connID
 
+		// now set the WG to unblock cgCache unload
+		conn.cgCache.connsWG.Done()
 		conn.logger.WithFields(bark.Fields{
 			`sentMsgs`:   conn.sentMsgs,
 			`reSentMsgs`: conn.reSentMsgs,

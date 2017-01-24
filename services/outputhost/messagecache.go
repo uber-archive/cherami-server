@@ -399,17 +399,19 @@ func (msgCache *cgMsgCache) utilHandleRedeliveryTicker(badConns map[int]int) {
 	}
 
 	for _, cache := range timerCaches {
+
+		nExpired := 0
+
 	thisCache:
-		for i, entry := range *cache {
+		for _, entry := range *cache {
 
 			// When we reach the first entry that shouldn't be fired,
-			// remove all previous entries and break
+			// break and remove all prior entries
 			if entry.fireTime > now {
-				if i > 0 {
-					*cache = (*cache)[i:]
-				}
 				break thisCache
 			}
+
+			nExpired++
 
 			ackID := entry.AckID
 			cm := msgCache.getState(ackID)
@@ -421,7 +423,6 @@ func (msgCache *cgMsgCache) utilHandleRedeliveryTicker(badConns map[int]int) {
 
 			switch cm.currentState {
 			case stateDelivered:
-
 				// Check if we need to put the message to DLQ or if we need to redeliver.
 				// We put the msg to DLQ on these conditions
 				// 1. We have already redelivered upto the max delivery count
@@ -457,6 +458,13 @@ func (msgCache *cgMsgCache) utilHandleRedeliveryTicker(badConns map[int]int) {
 				panic("Unhandled msgCache state: " + getStateString(cm.currentState) + " <- " + getStateString(cm.previousState) + ` (` + string(ackID) + `)`)
 			} // switch cm.currentState
 		} // for thisCache
+
+		if nExpired > 0 {
+			// remove all the entries that expired
+			// above by simply advancing the slice
+			*cache = (*cache)[nExpired:]
+		}
+
 	} // for timercaches
 
 	// Report redelivery metrics; consider moving to utilHandleRedeliveredMsg
@@ -774,10 +782,24 @@ func (msgCache *cgMsgCache) manageMessageDeliveryCache() {
 				}
 			}
 		case <-msgCache.closeChannel:
+			// now cleanup any existing entries in cache
+			// this is done to make sure we drop any references
+			// to the payload
+			msgCache.shutdownCleanupEntries()
+			msgCache.cgCache.manageMsgCacheWG.Done()
 			return
 		} // select
 		msgCache.checkTimer()
 	} // for
+}
+
+// shutdownCleanupEntries is used to cleanup the entire map in case of
+// shutdown.
+// this is needed to make sure we drop all references to the payload
+func (msgCache *cgMsgCache) shutdownCleanupEntries() {
+	for id := range msgCache.msgMap {
+		delete(msgCache.msgMap, id)
+	}
 }
 
 func (msgCache *cgMsgCache) reinjectlastAckMsg() bool {
