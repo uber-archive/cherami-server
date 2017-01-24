@@ -174,6 +174,7 @@ func (conn *inConnection) writeMsgsStream() {
 				}
 			case <-conn.closeChannel:
 				return
+			}
 		}
 	}
 }
