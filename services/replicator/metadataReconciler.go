@@ -327,7 +327,7 @@ func (r *metadataReconciler) reconcileDestExtentMetadata() error {
 	for _, dest := range dests {
 		localExtents, errCur := r.getAllDestExtentInCurrentZone(dest.GetDestinationUUID())
 		if errCur != nil {
-			return errCur
+			continue
 		}
 		for _, zoneConfig := range dest.GetZoneConfigs() {
 			// skip local zone
@@ -338,11 +338,11 @@ func (r *metadataReconciler) reconcileDestExtentMetadata() error {
 			if zoneConfig.GetAllowPublish() {
 				remoteExtents, errRemote := r.getAllDestExtentInRemoteZone(zoneConfig.GetZone(), dest.GetDestinationUUID())
 				if errRemote != nil {
-					return errRemote
+					continue
 				}
 
 				if err = r.reconcileDestExtent(dest.GetDestinationUUID(), localExtents, remoteExtents, zoneConfig.GetZone()); err != nil {
-					return err
+					continue
 				}
 			}
 		}
