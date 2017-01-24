@@ -1078,12 +1078,12 @@ func SetServiceConfig(c *cli.Context) {
 	mClient := toolscommon.GetMClient(c, adminToolService)
 
 	cItem := &metadata.ServiceConfigItem{
-		ServiceName:    common.StringPtr(strings.ToLower(tokens[0])),
-		ServiceVersion: common.StringPtr(strings.ToLower(tokens[1])),
-		Sku:            common.StringPtr(strings.ToLower(tokens[2])),
-		Hostname:       common.StringPtr(strings.ToLower(tokens[3])),
-		ConfigKey:      common.StringPtr(strings.ToLower(tokens[4])),
-		ConfigValue:    common.StringPtr(strings.ToLower(configValue)),
+		ServiceName:    common.StringPtr(tokens[0]),
+		ServiceVersion: common.StringPtr(tokens[1]),
+		Sku:            common.StringPtr(tokens[2]),
+		Hostname:       common.StringPtr(tokens[3]),
+		ConfigKey:      common.StringPtr(tokens[4]),
+		ConfigValue:    common.StringPtr(configValue),
 	}
 
 	req := &metadata.UpdateServiceConfigRequest{ConfigItem: cItem}

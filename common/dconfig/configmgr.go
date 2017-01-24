@@ -516,6 +516,7 @@ func setSliceField(field reflect.Value, fieldName string, keyValues map[string]s
 	if val, ok := keyValues[fieldName]; ok {
 		v := strings.Split(val, sliceSplitToken)
 		field.Set(reflect.ValueOf(v))
+		return
 	}
 	if defaultVal.IsValid() && !defaultVal.IsNil() {
 		field.Set(defaultVal)
