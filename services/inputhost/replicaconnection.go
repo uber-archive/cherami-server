@@ -24,10 +24,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/uber/cherami-thrift/.generated/go/cherami"
-	"github.com/uber/cherami-thrift/.generated/go/store"
 	"github.com/uber/cherami-server/common"
 	storeStream "github.com/uber/cherami-server/stream"
+	"github.com/uber/cherami-thrift/.generated/go/cherami"
+	"github.com/uber/cherami-thrift/.generated/go/store"
 
 	"github.com/uber-common/bark"
 	"golang.org/x/net/context"

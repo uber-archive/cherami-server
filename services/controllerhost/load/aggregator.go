@@ -26,8 +26,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/uber/cherami-server/common"
 	"github.com/uber-common/bark"
+	"github.com/uber/cherami-server/common"
 )
 
 type (

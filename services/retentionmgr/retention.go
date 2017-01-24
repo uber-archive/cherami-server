@@ -26,13 +26,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/uber/cherami-thrift/.generated/go/metadata"
-	"github.com/uber/cherami-thrift/.generated/go/shared"
-	"github.com/uber/cherami-thrift/.generated/go/store"
+	"github.com/uber-common/bark"
 	"github.com/uber/cherami-server/common"
 	metadataMetrics "github.com/uber/cherami-server/common/metadata"
 	"github.com/uber/cherami-server/common/metrics"
-	"github.com/uber-common/bark"
+	"github.com/uber/cherami-thrift/.generated/go/metadata"
+	"github.com/uber/cherami-thrift/.generated/go/shared"
+	"github.com/uber/cherami-thrift/.generated/go/store"
 )
 
 const numWorkersDefault = 1                      // default number of workers to use

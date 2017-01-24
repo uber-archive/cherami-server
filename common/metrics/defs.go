@@ -622,8 +622,11 @@ const (
 	InputhostPubConnection
 	// InputhostLatencyTimer represents time taken by an operation
 	InputhostLatencyTimer
-	// InputhostReceiveMessageLatency is the latency to recieve a message
-	InputhostReceiveMessageLatency
+	// InputhostWriteMessageLatency is the latency from receiving a message from stream to returning ack back to stream
+	InputhostWriteMessageLatency
+	// InputhostWriteMessageBeforeAckLatency is the latency from receiving a message from stream to getting ack from replicas
+	// the only difference with InputhostWriteMessageLatency is this metrics excludes the latency for writing ack back to the stream
+	InputhostWriteMessageBeforeAckLatency
 	// InputhostDestMessageReceived  indicates prefix name for destinations request counter
 	// append the destination path will be the actual name for the counter.
 	// each destination has a unique name tag
@@ -646,8 +649,11 @@ const (
 	// append the destination path will be the actual name for the counter.
 	// each destination has a unique name tag
 	InputhostDestMessageInternalFailures
-	// InputhostDestReceiveMessageLatency  indicates name for destinations request latency
-	InputhostDestReceiveMessageLatency
+	// InputhostDestWriteMessageLatency is the latency from receiving a message from stream to returning ack back to stream
+	InputhostDestWriteMessageLatency
+	// InputhostDestWriteMessageBeforeAckLatency is the latency from receiving a message from stream to getting ack from replicas
+	// the only difference with InputhostDestWriteMessageLatency is this metrics excludes the latency for returning ack back to the stream
+	InputhostDestWriteMessageBeforeAckLatency
 	// InputhostDestPubConnection is the gauge of active connections per destination
 	InputhostDestPubConnection
 
@@ -788,8 +794,11 @@ const (
 	StorageLatencyTimer
 	// StorageWriteStoreLatency is the latency to write message to store
 	StorageWriteStoreLatency
-	// StorageWriteMessageLatency is the latency to write message to store and ack
+	// StorageWriteMessageLatency is the latency from receiving a message from stream(input) to returning ack back to stream
 	StorageWriteMessageLatency
+	// StorageWriteMessageBeforeAckLatency is the latency from receiving a message from stream(input) to getting ack from store
+	// the only difference with StorageWriteMessageLatency is this metrics excludes the latency for returning ack back to the stream
+	StorageWriteMessageBeforeAckLatency
 	// StorageReadStoreLatency is the latency to read message from store
 	StorageReadStoreLatency
 	// StorageReadMessageLatency is the latency to read and send out a message
@@ -941,20 +950,21 @@ var metricDefs = map[ServiceIdx]map[int]metricDefinition{
 
 	// definitions for Inputhost metrics
 	Inputhost: {
-		InputhostRequests:                    {Counter, "inputhost.requests"},
-		InputhostFailures:                    {Counter, "inputhost.errors"},
-		InputhostMessageReceived:             {Counter, "inputhost.message.received"},
-		InputhostMessageFailures:             {Counter, "inputhost.message.errors"},
-		InputhostReconfClientRequests:        {Counter, "inputhost.reconfigure.client.request"},
-		InputhostMessageLimitThrottled:       {Counter, "inputhost.message.limit.throttled"},
-		InputhostMessageChannelFullThrottled: {Counter, "inputhost.message.channel.throttled"},
-		InputhostUserFailures:                {Counter, "inputhost.user-errors"},
-		InputhostInternalFailures:            {Counter, "inputhost.internal-errors"},
-		InputhostMessageUserFailures:         {Counter, "inputhost.message.user-errors"},
-		InputhostMessageInternalFailures:     {Counter, "inputhost.message.internal-errors"},
-		InputhostPubConnection:               {Gauge, "inputhost.pubconnection"},
-		InputhostLatencyTimer:                {Timer, "inputhost.latency"},
-		InputhostReceiveMessageLatency:       {Timer, "inputhost.message.recv-latency"},
+		InputhostRequests:                     {Counter, "inputhost.requests"},
+		InputhostFailures:                     {Counter, "inputhost.errors"},
+		InputhostMessageReceived:              {Counter, "inputhost.message.received"},
+		InputhostMessageFailures:              {Counter, "inputhost.message.errors"},
+		InputhostReconfClientRequests:         {Counter, "inputhost.reconfigure.client.request"},
+		InputhostMessageLimitThrottled:        {Counter, "inputhost.message.limit.throttled"},
+		InputhostMessageChannelFullThrottled:  {Counter, "inputhost.message.channel.throttled"},
+		InputhostUserFailures:                 {Counter, "inputhost.user-errors"},
+		InputhostInternalFailures:             {Counter, "inputhost.internal-errors"},
+		InputhostMessageUserFailures:          {Counter, "inputhost.message.user-errors"},
+		InputhostMessageInternalFailures:      {Counter, "inputhost.message.internal-errors"},
+		InputhostPubConnection:                {Gauge, "inputhost.pubconnection"},
+		InputhostLatencyTimer:                 {Timer, "inputhost.latency"},
+		InputhostWriteMessageLatency:          {Timer, "inputhost.message.write-latency"},
+		InputhostWriteMessageBeforeAckLatency: {Timer, "inputhost.message.write-latency-before-ack"},
 	},
 
 	// definitions for Outputhost metrics
@@ -994,29 +1004,30 @@ var metricDefs = map[ServiceIdx]map[int]metricDefinition{
 
 	// definitions for Storehost metrics
 	Storage: {
-		StorageRequests:                {Counter, "storage.requests"},
-		StorageFailures:                {Counter, "storage.errors"},
-		StorageStoreFailures:           {Counter, "storage.store-error"},
-		StorageMessageReceived:         {Counter, "storage.message.received"},
-		StorageMessageSent:             {Counter, "storage.message.sent"},
-		WatermarksReceived:             {Counter, "storage.watermarks"},
-		StorageOpenExtents:             {Gauge, "storage.open-extents"},
-		StorageWriteStreams:            {Gauge, "storage.write.streams"},
-		StorageReadStreams:             {Gauge, "storage.read.streams"},
-		StorageInMsgChanDepth:          {Gauge, "storage.in.msgchan-depth"},
-		StorageInAckChanDepth:          {Gauge, "storage.in.ackchan-depth"},
-		StorageOutMsgChanDepth:         {Gauge, "storage.out.msgchan-depth"},
-		StorageDiskAvailableSpaceMB:    {Gauge, "storage.disk.availablespace.mb"},
-		StorageDiskAvailableSpacePcnt:  {Gauge, "storage.disk.availablespace.pcnt"},
-		StorageLatencyTimer:            {Timer, "storage.latency"},
-		StorageWriteStoreLatency:       {Timer, "storage.write.store-latency"},
-		StorageWriteMessageLatency:     {Timer, "storage.write.message-latency"},
-		StorageReadStoreLatency:        {Timer, "storage.read.store-latency"},
-		StorageReadMessageLatency:      {Timer, "storage.read.message-latency"},
-		StorageInWriteTChannelLatency:  {Timer, "storage.in.write-tchannel-latency"},
-		StorageInFlushTChannelLatency:  {Timer, "storage.in.flush-tchannel-latency"},
-		StorageOutWriteTChannelLatency: {Timer, "storage.out.write-tchannel-latency"},
-		StorageOutFlushTChannelLatency: {Timer, "storage.out.flush-tchannel-latency"},
+		StorageRequests:                     {Counter, "storage.requests"},
+		StorageFailures:                     {Counter, "storage.errors"},
+		StorageStoreFailures:                {Counter, "storage.store-error"},
+		StorageMessageReceived:              {Counter, "storage.message.received"},
+		StorageMessageSent:                  {Counter, "storage.message.sent"},
+		WatermarksReceived:                  {Counter, "storage.watermarks"},
+		StorageOpenExtents:                  {Gauge, "storage.open-extents"},
+		StorageWriteStreams:                 {Gauge, "storage.write.streams"},
+		StorageReadStreams:                  {Gauge, "storage.read.streams"},
+		StorageInMsgChanDepth:               {Gauge, "storage.in.msgchan-depth"},
+		StorageInAckChanDepth:               {Gauge, "storage.in.ackchan-depth"},
+		StorageOutMsgChanDepth:              {Gauge, "storage.out.msgchan-depth"},
+		StorageDiskAvailableSpaceMB:         {Gauge, "storage.disk.availablespace.mb"},
+		StorageDiskAvailableSpacePcnt:       {Gauge, "storage.disk.availablespace.pcnt"},
+		StorageLatencyTimer:                 {Timer, "storage.latency"},
+		StorageWriteStoreLatency:            {Timer, "storage.write.store-latency"},
+		StorageWriteMessageLatency:          {Timer, "storage.write.message-latency"},
+		StorageWriteMessageBeforeAckLatency: {Timer, "storage.write.message-latency-before-ack"},
+		StorageReadStoreLatency:             {Timer, "storage.read.store-latency"},
+		StorageReadMessageLatency:           {Timer, "storage.read.message-latency"},
+		StorageInWriteTChannelLatency:       {Timer, "storage.in.write-tchannel-latency"},
+		StorageInFlushTChannelLatency:       {Timer, "storage.in.flush-tchannel-latency"},
+		StorageOutWriteTChannelLatency:      {Timer, "storage.out.write-tchannel-latency"},
+		StorageOutFlushTChannelLatency:      {Timer, "storage.out.flush-tchannel-latency"},
 	},
 
 	// definitions for Controller metrics
@@ -1080,14 +1091,15 @@ var metricDefs = map[ServiceIdx]map[int]metricDefinition{
 var dynamicMetricDefs = map[ServiceIdx]map[int]metricDefinition{
 	// definitions for Inputhost metrics
 	Inputhost: {
-		InputhostDestMessageReceived:             {Counter, "inputhost.message.received.dest"},
-		InputhostDestMessageFailures:             {Counter, "inputhost.message.errors.dest"},
-		InputhostDestMessageLimitThrottled:       {Counter, "inputhost.message.limit.throttled.dest"},
-		InputhostDestMessageChannelFullThrottled: {Counter, "inputhost.message.channel.throttled.dest"},
-		InputhostDestMessageUserFailures:         {Counter, "inputhost.message.user-errors.dest"},
-		InputhostDestMessageInternalFailures:     {Counter, "inputhost.message.internal-errors.dest"},
-		InputhostDestReceiveMessageLatency:       {Timer, "inputhost.message.recv-latency.dest"},
-		InputhostDestPubConnection:               {Gauge, "inputhost.pubconnection.dest"},
+		InputhostDestMessageReceived:              {Counter, "inputhost.message.received.dest"},
+		InputhostDestMessageFailures:              {Counter, "inputhost.message.errors.dest"},
+		InputhostDestMessageLimitThrottled:        {Counter, "inputhost.message.limit.throttled.dest"},
+		InputhostDestMessageChannelFullThrottled:  {Counter, "inputhost.message.channel.throttled.dest"},
+		InputhostDestMessageUserFailures:          {Counter, "inputhost.message.user-errors.dest"},
+		InputhostDestMessageInternalFailures:      {Counter, "inputhost.message.internal-errors.dest"},
+		InputhostDestWriteMessageLatency:          {Timer, "inputhost.message.write-latency.dest"},
+		InputhostDestWriteMessageBeforeAckLatency: {Timer, "inputhost.message.write-latency-before-ack.dest"},
+		InputhostDestPubConnection:                {Gauge, "inputhost.pubconnection.dest"},
 	},
 
 	// definitions for Outputhost metrics

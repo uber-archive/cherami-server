@@ -25,9 +25,9 @@ import (
 
 	"github.com/uber-common/bark"
 
+	"github.com/uber/cherami-server/common/metrics"
 	m "github.com/uber/cherami-thrift/.generated/go/metadata"
 	"github.com/uber/cherami-thrift/.generated/go/shared"
-	"github.com/uber/cherami-server/common/metrics"
 )
 
 const defaultPageSize = 4000

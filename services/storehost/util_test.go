@@ -21,8 +21,8 @@
 package storehost
 
 import (
-	"sync"
 	"github.com/uber/cherami-server/common"
+	"sync"
 )
 
 type mockHostInfoReader struct{}

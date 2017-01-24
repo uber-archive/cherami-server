@@ -29,11 +29,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/uber/cherami-thrift/.generated/go/cherami"
-	"github.com/uber/cherami-thrift/.generated/go/store"
 	"github.com/uber/cherami-server/common"
 	"github.com/uber/cherami-server/common/configure"
 	dconfig "github.com/uber/cherami-server/common/dconfigclient"
+	"github.com/uber/cherami-thrift/.generated/go/cherami"
+	"github.com/uber/cherami-thrift/.generated/go/store"
 
 	"github.com/pborman/uuid"
 )

@@ -23,10 +23,10 @@ package metadata
 import (
 	"fmt"
 
+	"github.com/gocql/gocql"
+	"github.com/uber/cherami-server/common"
 	m "github.com/uber/cherami-thrift/.generated/go/metadata"
 	"github.com/uber/cherami-thrift/.generated/go/shared"
-	"github.com/uber/cherami-server/common"
-	"github.com/gocql/gocql"
 	"github.com/uber/tchannel-go/thrift"
 )
 

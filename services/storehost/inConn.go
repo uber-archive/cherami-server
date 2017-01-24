@@ -27,12 +27,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/uber/cherami-thrift/.generated/go/cherami"
-	"github.com/uber/cherami-thrift/.generated/go/store"
 	"github.com/uber/cherami-server/common"
 	"github.com/uber/cherami-server/common/metrics"
 	"github.com/uber/cherami-server/storage"
 	storeStream "github.com/uber/cherami-server/stream"
+	"github.com/uber/cherami-thrift/.generated/go/cherami"
+	"github.com/uber/cherami-thrift/.generated/go/store"
 
 	"github.com/pborman/uuid"
 	"github.com/uber-common/bark"
@@ -319,12 +319,12 @@ func (t *inConn) writeMessagesPumpAppendOnly(msgC <-chan *inMessage, ackC chan<-
 				return newInternalServiceError(fmt.Sprintf("%v msg seqnum=%x out of order (expected=%x)", t.extentID, msg.GetSequenceNumber(), expectedSeqNum))
 			}
 
-			// tWrite := time.Now() // #perfdisable
+			tWrite := time.Now()
 
 			// write message to storage
 			addr, err = x.storePut(key, val)
 
-			// msg.m3Client.RecordTimer(metrics.InConnScope, metrics.StorageWriteStoreLatency, time.Since(tWrite)) // #perfdisable
+			t.m3Client.RecordTimer(metrics.InConnScope, metrics.StorageWriteStoreLatency, time.Since(tWrite))
 
 			if err != nil {
 
@@ -675,6 +675,8 @@ pump:
 				}
 				break pump
 			}
+
+			t.m3Client.RecordTimer(metrics.InConnScope, metrics.StorageWriteMessageBeforeAckLatency, time.Since(ack.t0))
 
 			// write out (blocking) to stream
 			if err := stream.Write(ack.AppendMessageAck); err != nil {

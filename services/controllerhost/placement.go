@@ -27,10 +27,10 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/uber-common/bark"
 	"github.com/uber/cherami-server/common"
 	"github.com/uber/cherami-server/distance"
 	"github.com/uber/cherami-server/services/controllerhost/load"
-	"github.com/uber-common/bark"
 )
 
 var errNoHosts = errors.New("Unable to find healthy hosts")

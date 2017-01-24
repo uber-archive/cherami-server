@@ -27,12 +27,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/uber/cherami-thrift/.generated/go/controller"
+	log "github.com/Sirupsen/logrus"
+	"github.com/uber-common/bark"
 	"github.com/uber/cherami-server/common/configure"
 	dconfig "github.com/uber/cherami-server/common/dconfigclient"
 	"github.com/uber/cherami-server/common/metrics"
-	log "github.com/Sirupsen/logrus"
-	"github.com/uber-common/bark"
+	"github.com/uber/cherami-thrift/.generated/go/controller"
 	"github.com/uber/tchannel-go"
 	"github.com/uber/tchannel-go/thrift"
 )
@@ -215,8 +215,8 @@ func (h *Service) Start(thriftServices []thrift.TChanServer) {
 
 	// Now decrements the counter. This should be the last step of this function
 	// All getters are blocked until this step
-        // This is needed to prevent overzealous TChannel clients from crashing us,
-        // since hyperbahn advertisement is done in early stage of this function
+	// This is needed to prevent overzealous TChannel clients from crashing us,
+	// since hyperbahn advertisement is done in early stage of this function
 	h.startWg.Done()
 }
 

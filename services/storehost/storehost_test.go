@@ -32,10 +32,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/uber/cherami-thrift/.generated/go/cherami"
-	"github.com/uber/cherami-thrift/.generated/go/store"
 	log "github.com/Sirupsen/logrus"
 	"github.com/pborman/uuid"
+	"github.com/uber/cherami-thrift/.generated/go/cherami"
+	"github.com/uber/cherami-thrift/.generated/go/store"
 )
 
 func (s *StoreHostSuite) TestStoreHostTimerQueueWriteWithRead() {

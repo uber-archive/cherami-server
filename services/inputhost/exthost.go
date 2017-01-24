@@ -32,13 +32,13 @@ import (
 	"github.com/uber-common/bark"
 	"github.com/uber/tchannel-go/thrift"
 
+	"github.com/uber/cherami-server/common"
+	"github.com/uber/cherami-server/services/inputhost/load"
 	"github.com/uber/cherami-thrift/.generated/go/admin"
 	"github.com/uber/cherami-thrift/.generated/go/cherami"
 	"github.com/uber/cherami-thrift/.generated/go/controller"
 	"github.com/uber/cherami-thrift/.generated/go/shared"
 	"github.com/uber/cherami-thrift/.generated/go/store"
-	"github.com/uber/cherami-server/common"
-	"github.com/uber/cherami-server/services/inputhost/load"
 )
 
 type (
@@ -413,6 +413,7 @@ func (conn *extHost) sendMessageToReplicas(pr *inPutMessage, extSendTimer *commo
 			return
 		}(stream, msg, appendMsgAckCh)
 	}
+
 	// Wait for all the go routines above; we wait on the errCh to get the response from all replicas
 	for replica, stream := range conn.streams {
 		err = <-errCh

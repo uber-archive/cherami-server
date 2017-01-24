@@ -26,15 +26,15 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/pborman/uuid"
+	"github.com/uber-common/bark"
 	"github.com/uber/cherami-client-go/common/backoff"
-	"github.com/uber/cherami-thrift/.generated/go/admin"
-	"github.com/uber/cherami-thrift/.generated/go/metadata"
-	"github.com/uber/cherami-thrift/.generated/go/shared"
 	"github.com/uber/cherami-server/common"
 	"github.com/uber/cherami-server/common/cache"
 	"github.com/uber/cherami-server/common/metrics"
-	"github.com/pborman/uuid"
-	"github.com/uber-common/bark"
+	"github.com/uber/cherami-thrift/.generated/go/admin"
+	"github.com/uber/cherami-thrift/.generated/go/metadata"
+	"github.com/uber/cherami-thrift/.generated/go/shared"
 	"github.com/uber/tchannel-go/thrift"
 )
 

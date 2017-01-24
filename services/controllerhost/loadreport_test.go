@@ -26,15 +26,15 @@ import (
 	"testing"
 	"time"
 
-	c "github.com/uber/cherami-thrift/.generated/go/controller"
-	"github.com/uber/cherami-thrift/.generated/go/shared"
-	"github.com/uber/cherami-server/common"
-	"github.com/uber/cherami-server/services/controllerhost/load"
 	log "github.com/Sirupsen/logrus"
 	"github.com/pborman/uuid"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 	"github.com/uber-common/bark"
+	"github.com/uber/cherami-server/common"
+	"github.com/uber/cherami-server/services/controllerhost/load"
+	c "github.com/uber/cherami-thrift/.generated/go/controller"
+	"github.com/uber/cherami-thrift/.generated/go/shared"
 )
 
 type LoadReportAPISuite struct {

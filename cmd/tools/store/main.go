@@ -24,9 +24,9 @@ import (
 	"errors"
 	"os"
 
+	"github.com/codegangsta/cli"
 	"github.com/uber/cherami-server/tools/common"
 	"github.com/uber/cherami-server/tools/store"
-	"github.com/codegangsta/cli"
 )
 
 func main() {

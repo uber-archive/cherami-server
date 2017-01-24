@@ -30,9 +30,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	m "github.com/uber/cherami-thrift/.generated/go/metadata"
-	"github.com/uber/cherami-server/common"
 	"github.com/uber-common/bark"
+	"github.com/uber/cherami-server/common"
+	m "github.com/uber/cherami-thrift/.generated/go/metadata"
 )
 
 type (

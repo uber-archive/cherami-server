@@ -28,9 +28,9 @@ import (
 	"github.com/uber-common/bark"
 	"github.com/uber/tchannel-go/thrift"
 
-	"github.com/uber/cherami-thrift/.generated/go/metadata"
 	"github.com/uber/cherami-server/common"
 	"github.com/uber/cherami-server/common/metrics"
+	"github.com/uber/cherami-thrift/.generated/go/metadata"
 )
 
 const ackLevelInterval = 5 * time.Second

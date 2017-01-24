@@ -21,9 +21,9 @@
 package cli
 
 import (
+	"github.com/codegangsta/cli"
 	scommon "github.com/uber/cherami-server/common"
 	"github.com/uber/cherami-server/tools/common"
-	"github.com/codegangsta/cli"
 )
 
 const (

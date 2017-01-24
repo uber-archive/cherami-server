@@ -26,11 +26,11 @@ import (
 
 	client "github.com/uber/cherami-client-go/client/cherami"
 	"github.com/uber/cherami-client-go/common/backoff"
+	"github.com/uber/cherami-server/common"
+	"github.com/uber/cherami-server/common/metrics"
 	"github.com/uber/cherami-thrift/.generated/go/cherami"
 	"github.com/uber/cherami-thrift/.generated/go/metadata"
 	"github.com/uber/cherami-thrift/.generated/go/shared"
-	"github.com/uber/cherami-server/common"
-	"github.com/uber/cherami-server/common/metrics"
 
 	"github.com/uber-common/bark"
 	"github.com/uber/tchannel-go/thrift"

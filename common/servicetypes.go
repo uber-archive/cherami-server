@@ -24,10 +24,10 @@ import (
 	"net/http"
 	"sync"
 
+	"github.com/uber-common/bark"
 	"github.com/uber/cherami-server/common/configure"
 	dconfig "github.com/uber/cherami-server/common/dconfigclient"
 	"github.com/uber/cherami-server/common/metrics"
-	"github.com/uber-common/bark"
 	"github.com/uber/ringpop-go"
 	"github.com/uber/tchannel-go"
 	"github.com/uber/tchannel-go/thrift"

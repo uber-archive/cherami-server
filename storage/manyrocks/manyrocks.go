@@ -30,10 +30,10 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/uber/cherami-server/common"
-	s "github.com/uber/cherami-server/storage"
 	"github.com/tecbot/gorocksdb"
 	"github.com/uber-common/bark"
+	"github.com/uber/cherami-server/common"
+	s "github.com/uber/cherami-server/storage"
 )
 
 const rocksdbNotExistError = "does not exist (create_if_missing is false)"

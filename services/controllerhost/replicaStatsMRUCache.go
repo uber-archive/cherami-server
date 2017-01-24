@@ -27,9 +27,9 @@ package controllerhost
 // MRU will fill up at some point and simply stop accepting entries until it has been manually cleared.
 
 import (
-	"github.com/uber/cherami-thrift/.generated/go/shared"
-	"github.com/uber/cherami-server/common"
 	"github.com/uber-common/bark"
+	"github.com/uber/cherami-server/common"
+	"github.com/uber/cherami-thrift/.generated/go/shared"
 )
 
 // Replica stats MRU cache types

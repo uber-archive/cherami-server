@@ -34,9 +34,9 @@ import (
 
 	"errors"
 
+	"github.com/stretchr/testify/mock"
 	mockcommon "github.com/uber/cherami-server/test/mocks/common"
 	mockcontroller "github.com/uber/cherami-server/test/mocks/controllerhost"
-	"github.com/stretchr/testify/mock"
 )
 
 type (
