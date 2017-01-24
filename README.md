@@ -32,7 +32,7 @@ Run Cherami locally
 -------------------
 * Setup the cherami keyspace for metadata:
 ```
-./scripts/cherami-setup-schema
+RF=1 ./scripts/cherami-setup-schema
 ```
 
 * The service can be started as follows:
