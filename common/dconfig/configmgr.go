@@ -320,7 +320,7 @@ func (cfgMgr *CassandraConfigManager) mkKVTreeForSvc(service string, items []*m.
 
 	for _, item := range items {
 
-		cfgKey := item.GetConfigKey()
+		cfgKey := strings.ToLower(item.GetConfigKey())
 		cfgValue := item.GetConfigValue()
 
 		sku := item.GetSku()
@@ -396,7 +396,7 @@ func (cfgMgr *CassandraConfigManager) mkConfig(configType interface{}, defaults 
 			defaultVal = defaultCfg.Field(i)
 		}
 
-		var name = valueType.Field(i).Tag.Get("name")
+		var name = strings.ToLower(valueType.Field(i).Tag.Get("name"))
 		var defaultStr = valueType.Field(i).Tag.Get("default")
 
 		switch field.Kind() {
