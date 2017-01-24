@@ -30,6 +30,11 @@ import (
 	"github.com/uber/cherami-thrift/.generated/go/shared"
 )
 
+const (
+	maxExtentsToConsumeForDstPlain = 8
+	extentsToConsumePerRemoteZone  = 4
+)
+
 func (s *McpSuite) TestCGExtentSelectorWithNoExtents() {
 	dstPath := s.generateName("/test/selector")
 	dstDesc, err := s.createDestination(dstPath, shared.DestinationType_PLAIN)

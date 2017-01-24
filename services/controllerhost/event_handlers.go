@@ -976,10 +976,11 @@ func triggerCacheRefreshForCG(context *Context, cgID string) {
 	// overwrite the next refresh time to now
 	context.resultCache.write(cgID,
 		resultCacheParams{
-			dstType:  cacheEntry.dstType,
-			nExtents: cacheEntry.nExtents,
-			hostIDs:  cacheEntry.hostIDs,
-			expiry:   now,
+			dstType:    cacheEntry.dstType,
+			nExtents:   cacheEntry.nExtents,
+			maxExtents: cacheEntry.maxExtents,
+			hostIDs:    cacheEntry.hostIDs,
+			expiry:     now,
 		})
 }
 

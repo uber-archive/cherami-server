@@ -167,10 +167,11 @@ func (s *EventPipelineSuite) TestExtentCreatedEvent() {
 
 		s.mcp.context.resultCache.write(cgIDs[i],
 			resultCacheParams{
-				dstType:  dstTypePlain,
-				nExtents: 10,
-				hostIDs:  cacheAddrs,
-				expiry:   now + int64(time.Hour),
+				dstType:    dstTypePlain,
+				nExtents:   10,
+				maxExtents: 10,
+				hostIDs:    cacheAddrs,
+				expiry:     now + int64(time.Hour),
 			})
 	}
 

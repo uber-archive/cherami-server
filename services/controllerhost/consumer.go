@@ -68,27 +68,51 @@ func newCGExtentsByCategory() *cgExtentsByCategory {
 	}
 }
 
-func maxExtentsToConsumeForDstType(dstType dstType, zoneConfigs []*shared.DestinationZoneConfig) int {
+func maxExtentsToConsumeForDst(context *Context, dstPath, cgName string, dstType dstType, zoneConfigs []*shared.DestinationZoneConfig) int {
 	switch dstType {
-	case dstTypePlain:
-		var remoteZones int
-		if len(zoneConfigs) > 0 {
-			totalZones := 0
-			for _, zone := range zoneConfigs {
-				if zone.GetAllowPublish() {
-					totalZones++
-				}
-			}
-			remoteZones = common.MaxInt(0, totalZones-1)
-		}
-		return maxExtentsToConsumeForDstPlain + extentsToConsumePerRemoteZone*remoteZones
 	case dstTypeTimer:
 		return maxExtentsToConsumeForDstTimer
 	case dstTypeDLQ:
 		return maxExtentsToConsumeForDstDLQ
-	default:
-		return maxExtentsToConsumeForDstPlain
 	}
+
+	logFn := func() bark.Logger {
+		return context.log.WithFields(bark.Fields{
+			common.TagDstPth: common.FmtDstPth(dstPath),
+			common.TagCnsPth: common.FmtCnsPth(cgName),
+			common.TagModule: `extentAssign`})
+	}
+
+	ruleKey := dstPath + `/` + cgName
+	var remoteZones, remoteExtentTarget, consumeExtentTarget int
+	if len(zoneConfigs) > 0 {
+		totalZones := 0
+		for _, zone := range zoneConfigs {
+			if zone.GetAllowPublish() {
+				totalZones++
+			}
+		}
+		remoteZones = common.MaxInt(0, totalZones-1)
+	}
+
+	cfgIface, err := context.cfgMgr.Get(common.ControllerServiceName, `*`, `*`, `*`)
+	if err != nil {
+		logFn().WithFields(bark.Fields{common.TagErr: err}).Error(`Couldn't get extent target configuration`)
+		return defaultMinConsumeExtents
+	}
+
+	cfg, ok := cfgIface.(ControllerDynamicConfig)
+	if !ok {
+		logFn().Error(`Couldn't cast cfg to ExtentAssignmentConfig`)
+		return defaultMinConsumeExtents
+	}
+
+	if remoteZones > 0 {
+		remoteExtentTarget = int(common.OverrideValueByPrefix(logFn, ruleKey, cfg.NumRemoteConsumerExtentsByPath, defaultRemoteExtents, `NumRemoteConsumerExtentsByPath`))
+	}
+
+	consumeExtentTarget = int(common.OverrideValueByPrefix(logFn, ruleKey, cfg.NumConsumerExtentsByPath, defaultMinConsumeExtents, `NumConsumerExtentsByPath`))
+	return consumeExtentTarget + remoteExtentTarget*remoteZones
 }
 
 func hostInfoMapToSlice(hosts map[string]*common.HostInfo) ([]string, []string) {
@@ -399,7 +423,7 @@ func selectNextExtentsToConsume(
 	}
 
 	// capacity is the target number of cgextents to achieve
-	capacity := maxExtentsToConsumeForDstType(getDstType(dstDesc), dstDesc.GetZoneConfigs())
+	capacity := maxExtentsToConsumeForDst(context, dstDesc.GetPath(), cgDesc.GetConsumerGroupName(), getDstType(dstDesc), dstDesc.GetZoneConfigs())
 	dlqQuota := common.MaxInt(1, capacity/4)
 	nAvailable := len(dstDlqExtents) + dstExtentsCount
 
@@ -484,7 +508,7 @@ func refreshCGExtents(context *Context,
 	if len(cgExtents.openHealthy) == 0 && len(newExtents) == 0 {
 
 		nBacklog := nAvailable + len(cgExtents.open)
-		maxExtentsToConsume := maxExtentsToConsumeForDstType(getDstType(dstDesc), dstDesc.GetZoneConfigs())
+		maxExtentsToConsume := maxExtentsToConsumeForDst(context, dstDesc.GetPath(), cgDesc.GetConsumerGroupName(), getDstType(dstDesc), dstDesc.GetZoneConfigs())
 
 		if nBacklog < maxExtentsToConsume {
 			// No consumable extents for this destination, create one
@@ -534,19 +558,6 @@ func refreshOutputHostsForConsGroup(context *Context,
 	var outputIDs []string
 	var outputHosts map[string]*common.HostInfo
 
-	writeToCache := func(ttl int64) {
-
-		outputIDs, outputAddrs = hostInfoMapToSlice(outputHosts)
-
-		context.resultCache.write(cgID,
-			resultCacheParams{
-				dstType:  dstType,
-				nExtents: nConsumable,
-				hostIDs:  outputIDs,
-				expiry:   now + ttl,
-			})
-	}
-
 	cgDesc, err := context.mm.ReadConsumerGroup(dstID, "", cgID, "")
 	if err != nil {
 		context.m3Client.IncCounter(m3Scope, metrics.ControllerErrMetadataReadCounter)
@@ -557,7 +568,21 @@ func refreshOutputHostsForConsGroup(context *Context,
 		return nil, err
 	}
 
-	var maxExtentsToConsume = maxExtentsToConsumeForDstType(dstType, dstDesc.GetZoneConfigs())
+	var maxExtentsToConsume = maxExtentsToConsumeForDst(context, dstDesc.GetPath(), cgDesc.GetConsumerGroupName(), dstType, dstDesc.GetZoneConfigs())
+
+	writeToCache := func(ttl int64) {
+
+		outputIDs, outputAddrs = hostInfoMapToSlice(outputHosts)
+
+		context.resultCache.write(cgID,
+			resultCacheParams{
+				dstType:    dstType,
+				nExtents:   nConsumable,
+				maxExtents: maxExtentsToConsume,
+				hostIDs:    outputIDs,
+				expiry:     now + ttl,
+			})
+	}
 
 	cgExtents, outputHosts, err := fetchClassifyOpenCGExtents(context, dstID, cgID, m3Scope)
 	if err != nil {
