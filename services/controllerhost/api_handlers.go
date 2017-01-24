@@ -242,10 +242,10 @@ func minOpenExtentsForDst(context *Context, dstPath string, dstType dstType) int
 	cfg, ok := cfgIface.(ControllerDynamicConfig)
 	if !ok {
 		logFn().Error(`Couldn't cast cfg to ControllerDynamicConfig`)
-		return defaultMinOpenExtents
+		return defaultMinOpenPublishExtents
 	}
 
-	return int(common.OverrideValueByPrefix(logFn, dstPath, cfg.NumPublisherExtentsByPath, defaultMinOpenExtents, `NumPublisherExtentsByPath`))
+	return int(common.OverrideValueByPrefix(logFn, dstPath, cfg.NumPublisherExtentsByPath, defaultMinOpenPublishExtents, `NumPublisherExtentsByPath`))
 }
 
 func getInputAddrIfExtentIsWritable(context *Context, extent *shared.Extent, m3Scope int) (string, error) {
