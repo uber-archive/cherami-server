@@ -47,6 +47,12 @@ type (
 		// input parameters refer to the 4 levels in the
 		// config hierarchy
 		Get(svc string, version string, sku string, host string) (interface{}, error)
+
+		//Start starts the config manager
+		Start()
+
+		//Stop stops the running config manager
+		Stop()
 	}
 
 	// CassandraConfigManager is an implementation of
@@ -173,7 +179,7 @@ var cfgRefreshInterval = time.Minute
 //
 // Future Work:
 //   Notifications to observers on config changes
-func NewCassandraConfigManager(mClient m.TChanMetadataService, configTypes map[string]interface{}, logger bark.Logger) *CassandraConfigManager {
+func NewCassandraConfigManager(mClient m.TChanMetadataService, configTypes map[string]interface{}, logger bark.Logger) ConfigManager {
 	cfgMgr := new(CassandraConfigManager)
 	cfgMgr.mClient = mClient
 	cfgMgr.configTypes = configTypes

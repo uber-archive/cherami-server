@@ -184,7 +184,8 @@ func (s *ConfigManagerTestSuite) TestConfigOverrides() {
 	configTypes["input"] = testInputConfig1{}
 	configTypes["store"] = testStoreConfig1{}
 
-	cfgMgr := NewCassandraConfigManager(s.cdb.GetClient(), configTypes, s.logger)
+	cfgMgrIface := NewCassandraConfigManager(s.cdb.GetClient(), configTypes, s.logger)
+	cfgMgr := cfgMgrIface.(*CassandraConfigManager)
 	cfgMgr.refresh() // force refresh from cassandra
 
 	for i, tc := range inputTestCases {

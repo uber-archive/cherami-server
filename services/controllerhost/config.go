@@ -59,7 +59,7 @@ type (
 
 // newConfigManager creates and returns a new instance
 // of CassandraConfigManager.
-func newConfigManager(mClient m.TChanMetadataService, logger bark.Logger) *dconfig.CassandraConfigManager {
+func newConfigManager(mClient m.TChanMetadataService, logger bark.Logger) dconfig.ConfigManager {
 	cfgTypes := map[string]interface{}{
 		common.InputServiceName:      InputPlacementConfig{},
 		common.OutputServiceName:     OutputPlacementConfig{},
