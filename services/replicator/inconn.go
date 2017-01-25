@@ -150,9 +150,6 @@ func (conn *inConnection) writeMsgsStream() {
 				return
 			}
 		} else {
-			// Note: we check closeChannel only in the default case.
-			// This makes sure if the connection is closed, we'll still try to read messages from msgCh
-			// and write to stream
 			select {
 			case msg := <-conn.msgCh:
 				if err := conn.stream.Write(msg); err != nil {
@@ -175,14 +172,8 @@ func (conn *inConnection) writeMsgsStream() {
 					conn.logger.Error(`flush msg failed`)
 					go conn.close()
 				}
-
-			default:
-				select {
-				case <-conn.closeChannel:
-					return
-				default:
-					break
-				}
+			case <-conn.closeChannel:
+				return
 			}
 		}
 	}
