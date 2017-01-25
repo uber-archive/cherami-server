@@ -1034,7 +1034,7 @@ func GetServiceConfig(c *cli.Context) {
 
 	isKeySet := c.IsSet("key")
 	if isKeySet {
-		configKey = c.String("key")
+		configKey = strings.ToLower(c.String("key"))
 	}
 
 	mClient := toolscommon.GetMClient(c, adminToolService)
@@ -1083,7 +1083,7 @@ func SetServiceConfig(c *cli.Context) {
 		Sku:            common.StringPtr(strings.ToLower(tokens[2])),
 		Hostname:       common.StringPtr(strings.ToLower(tokens[3])),
 		ConfigKey:      common.StringPtr(strings.ToLower(tokens[4])),
-		ConfigValue:    common.StringPtr(strings.ToLower(configValue)),
+		ConfigValue:    common.StringPtr(configValue),
 	}
 
 	req := &metadata.UpdateServiceConfigRequest{ConfigItem: cItem}

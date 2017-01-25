@@ -71,6 +71,7 @@ func (s *ConfigManagerTestSuite) TestDefaults() {
 		Int64Item   int64    `name:"int64-item" default:"32767"`
 		Float64Item float64  `name:"float64-item" default:"15.64"`
 		SliceItem   []string `name:"states" default:"a,b,c"`
+		CaseItem    string   `name:"camelCase" default:"Case"` // intentionally make sure the value is caseSensitive
 	}
 
 	configTypes := make(map[string]interface{})
@@ -96,6 +97,7 @@ func (s *ConfigManagerTestSuite) TestDefaults() {
 		s.Equal(50, value.IntItem, "Wrong int value for input %v", i)
 		s.Equal(int64(32767), value.Int64Item, "Wrong int64 value for input %v", i)
 		s.Equal(15.64, value.Float64Item, "Wrong float64 value for input %v", i)
+		s.Equal("Case", value.CaseItem, "Wrong valuse for CaseItem %v", i)
 		s.True(reflect.DeepEqual([]string{"a", "b", "c"}, value.SliceItem), "Wrong slice value for input %v", i)
 	}
 }
@@ -113,9 +115,11 @@ func (s *ConfigManagerTestSuite) TestConfigOverrides() {
 	}
 
 	type testStoreConfig1 struct {
-		MaxInConns  int64  `name:"max-inconns" default:"111"`
-		MaxOutConns int64  `name:"max-outconns" default:"222"`
-		AdminStatus string `name:"admin-status" default:"enabled"`
+		MaxInConns  int64    `name:"max-inconns" default:"111"`
+		MaxOutConns int64    `name:"max-outconns" default:"222"`
+		AdminStatus string   `name:"admin-status" default:"enabled"`
+		CamelCase   string   `name:"camelCase" default:"Case"`
+		SliceItem   []string `name:"slice-set" default:"a,b,c"`
 	}
 
 	cfgItems := []m.ServiceConfigItem{
@@ -129,6 +133,8 @@ func (s *ConfigManagerTestSuite) TestConfigOverrides() {
 		{ServiceName: strp("input"), ServiceVersion: strp("v2"), Sku: strp("whitesnake"), Hostname: strp("*"), ConfigKey: strp("max-extents"), ConfigValue: strp("170")},
 		{ServiceName: strp("store"), ServiceVersion: strp("*"), Sku: strp("*"), Hostname: strp("*"), ConfigKey: strp("max-inconns"), ConfigValue: strp("2000")},
 		{ServiceName: strp("store"), ServiceVersion: strp("*"), Sku: strp("*"), Hostname: strp("*"), ConfigKey: strp("max-outconns"), ConfigValue: strp("1000")},
+		{ServiceName: strp("store"), ServiceVersion: strp("*"), Sku: strp("*"), Hostname: strp("*"), ConfigKey: strp("camelcase"), ConfigValue: strp("normalize")}, // intentionally use a normalized key to set in cassandra
+		{ServiceName: strp("store"), ServiceVersion: strp("*"), Sku: strp("*"), Hostname: strp("*"), ConfigKey: strp("slice-set"), ConfigValue: strp("Z")},
 	}
 
 	for i, item := range cfgItems {
@@ -167,11 +173,11 @@ func (s *ConfigManagerTestSuite) TestConfigOverrides() {
 	}
 
 	storeTestCases := []storeTestCase1{
-		{configGetterTestInput{svc: "store"}, testStoreConfig1{MaxInConns: 2000, MaxOutConns: 1000, AdminStatus: "enabled"}},
-		{configGetterTestInput{svc: "store", vers: "*", sku: "*", host: "*"}, testStoreConfig1{MaxInConns: 2000, MaxOutConns: 1000, AdminStatus: "enabled"}},
-		{configGetterTestInput{svc: "store", vers: "v1"}, testStoreConfig1{MaxInConns: 2000, MaxOutConns: 1000, AdminStatus: "enabled"}},
-		{configGetterTestInput{svc: "store", vers: "v1", sku: "sku1"}, testStoreConfig1{MaxInConns: 2000, MaxOutConns: 1000, AdminStatus: "enabled"}},
-		{configGetterTestInput{svc: "store", vers: "v1", sku: "sku1", host: "host1"}, testStoreConfig1{MaxInConns: 2000, MaxOutConns: 1000, AdminStatus: "enabled"}},
+		{configGetterTestInput{svc: "store"}, testStoreConfig1{MaxInConns: 2000, MaxOutConns: 1000, AdminStatus: "enabled", CamelCase: "normalize", SliceItem: []string{"Z"}}},
+		{configGetterTestInput{svc: "store", vers: "*", sku: "*", host: "*"}, testStoreConfig1{MaxInConns: 2000, MaxOutConns: 1000, AdminStatus: "enabled", CamelCase: "normalize", SliceItem: []string{"Z"}}},
+		{configGetterTestInput{svc: "store", vers: "v1"}, testStoreConfig1{MaxInConns: 2000, MaxOutConns: 1000, AdminStatus: "enabled", CamelCase: "normalize", SliceItem: []string{"Z"}}},
+		{configGetterTestInput{svc: "store", vers: "v1", sku: "sku1"}, testStoreConfig1{MaxInConns: 2000, MaxOutConns: 1000, AdminStatus: "enabled", CamelCase: "normalize", SliceItem: []string{"Z"}}},
+		{configGetterTestInput{svc: "store", vers: "v1", sku: "sku1", host: "host1"}, testStoreConfig1{MaxInConns: 2000, MaxOutConns: 1000, AdminStatus: "enabled", CamelCase: "normalize", SliceItem: []string{"Z"}}},
 	}
 
 	configTypes := make(map[string]interface{})
