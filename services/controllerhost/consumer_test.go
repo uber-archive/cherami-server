@@ -217,6 +217,7 @@ func (s *McpSuite) TestCGExtentSelectorHonorsDlqQuota() {
 	for _, ext := range gotExtents {
 		if _, ok := dlqExtents[ext.GetExtentUUID()]; ok {
 			nDlq++
+			cgExtents.open[ext.GetExtentUUID()] = struct{}{}
 		}
 	}
 
@@ -231,10 +232,7 @@ func (s *McpSuite) TestCGExtentSelectorHonorsDlqQuota() {
 
 	gotExtents, avail, err = selectNextExtentsToConsume(context, dstDesc, cgDesc, cgExtents, metrics.GetOutputHostsScope)
 	s.Nil(err, "selectNextExtentsToConsume() error")
-	for _, ext := range gotExtents {
-		_, ok := dlqExtents[ext.GetExtentUUID()]
-		s.True(ok, "DLQ extent added, when there is room and there is no other extent available")
-	}
+	s.Equal(0, len(gotExtents), "DLQ quota not strictly honored")
 }
 
 func (s *McpSuite) TestCGExtentSelectorHonorsRemoteExtent() {
@@ -332,6 +330,7 @@ func (s *McpSuite) TestCGExtentSelectorWithBacklog() {
 	}
 
 	cgExtents := newCGExtentsByCategory()
+	openDLQExtents := make(map[string]struct{})
 	dlqExtsAvail, dlqExtsAssigned := len(dlqExtents), 0
 	openExtsAvail, openExtsAssigned := len(openExtents), 0
 
@@ -341,12 +340,13 @@ func (s *McpSuite) TestCGExtentSelectorWithBacklog() {
 
 		gotExtents, avail, err1 := selectNextExtentsToConsume(context, dstDesc, cgDesc, cgExtents, metrics.GetOutputHostsScope)
 		s.Nil(err1, "selectNextExtentsToConsume() error")
-		expectedCount := common.MinInt(maxExtentsToConsumeForDstPlain, totalAvail)
+
+		dlqQuota := common.MinInt(dlqExtsAvail, maxExtentsToConsumeForDstPlain/4-len(openDLQExtents))
+		dlqQuota = common.MaxInt(0, dlqQuota)
+
+		expectedCount := common.MinInt(maxExtentsToConsumeForDstPlain, (openExtsAvail + dlqQuota))
 		s.Equal(expectedCount, len(gotExtents), "Wrong number of next extents to consume")
 		s.Equal(totalAvail, avail, "Wrong number of available extents")
-
-		dlqQuota := common.MinInt(maxExtentsToConsumeForDstPlain/4, dlqExtsAvail)
-		dlqQuota = common.MaxInt(0, dlqQuota-dlqExtsAssigned)
 
 		for _, ext := range gotExtents {
 
@@ -358,6 +358,7 @@ func (s *McpSuite) TestCGExtentSelectorWithBacklog() {
 				// for DLQ extents. So, this will appear first
 				s.Equal(dlqExtents[dlqExtsAssigned], extID, "Incorrect extent serving order")
 				cgExtents.open[extID] = struct{}{}
+				openDLQExtents[extID] = struct{}{}
 				dlqExtsAssigned++
 				dlqExtsAvail--
 				dlqQuota--
@@ -372,6 +373,7 @@ func (s *McpSuite) TestCGExtentSelectorWithBacklog() {
 				// If there are still dlq extents left, then should show up next
 				s.Equal(dlqExtents[dlqExtsAssigned], extID, "Incorrect extent serving order")
 				cgExtents.open[extID] = struct{}{}
+				openDLQExtents[extID] = struct{}{}
 				dlqExtsAssigned++
 				dlqExtsAvail--
 			}
@@ -380,6 +382,7 @@ func (s *McpSuite) TestCGExtentSelectorWithBacklog() {
 		target := gotExtents[0].GetExtentUUID()
 		s.updateCGExtentStatus(cgDesc.GetConsumerGroupUUID(), target, m.ConsumerGroupExtentStatus_CONSUMED)
 		delete(cgExtents.open, target)
+		delete(openDLQExtents, target)
 		cgExtents.consumed[target] = struct{}{}
 	}
 }

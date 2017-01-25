@@ -351,7 +351,7 @@ func fetchClassifyOpenCGExtents(context *Context, dstUUID string, cgUUID string,
 //   merges their dlq to their normal destination. When this
 //   happens, the customer expectation is to start seeing
 //   messages from the merge operation immediately.
-//   (2) Avoid all consumed extens being DLQ extents.
+//   (2) Avoid all consumed extents being DLQ extents.
 //   This is because, a merge could potentially bring in
 //   a lot of dlq extents and in case, these are poison
 //   pills, the customer will make no progress w.r.t their
@@ -425,12 +425,13 @@ func selectNextExtentsToConsume(
 	// capacity is the target number of cgextents to achieve
 	capacity := maxExtentsToConsumeForDst(context, dstDesc.GetPath(), cgDesc.GetConsumerGroupName(), getDstType(dstDesc), dstDesc.GetZoneConfigs())
 	dlqQuota := common.MaxInt(1, capacity/4)
-	nAvailable := len(dstDlqExtents) + dstExtentsCount
+	dlqQuota = common.MaxInt(0, dlqQuota-nCGDlqExtents)
+
+	nAvailable := dstExtentsCount + len(dstDlqExtents)
+	nConsumable := dstExtentsCount + common.MinInt(dlqQuota, len(dstDlqExtents))
 
 	capacity = common.MaxInt(0, capacity-len(cgExtents.openHealthy))
-	capacity = common.MinInt(capacity, nAvailable)
-
-	dlqQuota = common.MaxInt(0, dlqQuota-nCGDlqExtents)
+	capacity = common.MinInt(capacity, nConsumable)
 
 	if capacity == 0 {
 		if nCGDlqExtents == 0 && len(dstDlqExtents) > 0 {
@@ -453,7 +454,7 @@ func selectNextExtentsToConsume(
 
 	for i := 0; i < capacity; i++ {
 		if remDstDlqExtents > 0 {
-			if nDstDlqExtents < dlqQuota || remDstExtents == 0 {
+			if nDstDlqExtents < dlqQuota {
 				result[i] = dstDlqExtents[nDstDlqExtents]
 				nDstDlqExtents++
 				remDstDlqExtents--
