@@ -163,7 +163,6 @@ const defaultLockTimeoutInSeconds int32 = 42
 const defaultMaxDeliveryCount int32 = 2
 const blockCheckingTimeout time.Duration = time.Minute
 const redeliveryInterval = time.Second / 2
-const cfgRefreshInterval = time.Minute
 
 // SmartRetryDisableString can be added to a destination or CG owner email to request smart retry to be disabled
 // Note that Google allows something like this: gbailey+smartRetryDisable@uber.com
@@ -238,7 +237,6 @@ type cgMsgCache struct {
 	zeroTimerCache           []*timerCacheEntry // Timer cache for things delayed by zero
 	closeChannel             chan struct{}
 	redeliveryTicker         *time.Ticker
-	cfgRefreshTicker         *time.Ticker
 	msgsRedeliveryCh         chan<- *cherami.ConsumerMessage // channel to resend messages to the client connectons
 	priorityMsgsRedeliveryCh chan<- *cherami.ConsumerMessage // channel to resend messages to the client connectons
 	msgCacheCh               <-chan cacheMsg                 // channel to get messages to be stored on the cache
@@ -722,7 +720,6 @@ func (msgCache *cgMsgCache) stop() {
 		msgCache.dlq.close()
 	}
 	msgCache.redeliveryTicker.Stop()
-	msgCache.cfgRefreshTicker.Stop()
 }
 
 func (msgCache *cgMsgCache) start() {
@@ -740,12 +737,16 @@ func (msgCache *cgMsgCache) start() {
 func (msgCache *cgMsgCache) manageMessageDeliveryCache() {
 	msgCache.blockCheckingTimer = common.NewTimer(blockCheckingTimeout)
 	msgCache.dlqPublishCh = msgCache.dlq.getPublishCh()
-	badConns := make(map[int]int)                       // this is the map of all bad connections, i.e, connections which get Nacks and timeouts
-	creditBatchSize := msgCache.maxOutstandingMsgs / 10 // this is the number of acks we need to get before renewing credits
+	badConns := make(map[int]int) // this is the map of all bad connections, i.e, connections which get Nacks and timeouts
 	lastPumpHealthLog := common.UnixNanoTime(0)
+	var creditBatchSize int32
 
 	for {
 		fullCount := msgCache.updatePumpHealth()
+		// calculate the creditBatchSize here, since we could have updated the
+		// maxOutstandingMsgs dynamically.
+		// This is the number of acks we need to get before renewing credits
+		creditBatchSize = msgCache.maxOutstandingMsgs / 10
 
 		if fullCount > 3 && common.Now()-lastPumpHealthLog > common.UnixNanoTime(time.Minute) {
 			msgCache.logMessageCacheHealth()
@@ -773,6 +774,7 @@ func (msgCache *cgMsgCache) manageMessageDeliveryCache() {
 			if msgCache.numAcks > 0 && numOutstandingMsgs < msgCache.maxOutstandingMsgs {
 				msgCache.utilRenewCredits()
 			}
+			msgCache.refreshCgConfig(msgCache.maxOutstandingMsgs)
 		case ackID := <-msgCache.nackMsgCh:
 			msgCache.utilHandleNackMsg(ackID, badConns)
 		case ackID := <-msgCache.ackMsgCh:
@@ -786,8 +788,6 @@ func (msgCache *cgMsgCache) manageMessageDeliveryCache() {
 					msgCache.numAcks = 0
 				}
 			}
-		case <-msgCache.cfgRefreshTicker.C:
-			msgCache.refreshCgConfig(msgCache.maxOutstandingMsgs)
 		case <-msgCache.closeChannel:
 			// now cleanup any existing entries in cache
 			// this is done to make sure we drop any references
@@ -1009,7 +1009,6 @@ func newMessageDeliveryCache(
 		nackMsgCh:                cgCache.nackMsgCh,
 		closeChannel:             make(chan struct{}),
 		redeliveryTicker:         time.NewTicker(redeliveryInterval),
-		cfgRefreshTicker:         time.NewTicker(cfgRefreshInterval),
 		ConsumerGroupDescription: cgCache.cachedCGDesc,
 		consumerM3Client:         cgCache.consumerM3Client,
 		m3Client:                 cgCache.m3Client,
