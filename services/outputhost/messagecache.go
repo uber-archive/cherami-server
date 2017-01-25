@@ -1073,9 +1073,11 @@ func (msgCache *cgMsgCache) isStalled() bool {
 	var m3St m3HealthState
 	var smartRetryDisabled bool
 
-	if strings.Contains(msgCache.GetOwnerEmail(), SmartRetryDisableString) {
+	msgCache.cgCache.extMutex.RLock()
+	if msgCache.cgCache.dlqMerging || strings.Contains(msgCache.GetOwnerEmail(), SmartRetryDisableString) {
 		smartRetryDisabled = true
 	}
+	msgCache.cgCache.extMutex.RUnlock()
 
 	now := common.Now()
 
@@ -1164,8 +1166,8 @@ func (msgCache *cgMsgCache) isStalled() bool {
 		msgCache.logMessageCacheHealth()
 	}
 
-	// Assign M3 state, preferring progressing over idle. It is possible for both progressing and idle to be true if there are
-	// no redeliveries are happening
+	// Assign M3 state, preferring progressing over idle. It is possible for both
+	// progressing and idle to be true if there are no redeliveries happening
 	switch {
 	case stalled:
 		m3St = stateStalled

@@ -147,6 +147,9 @@ type (
 		// lastDisconnectTime is the time the last consumer got disconnected
 		lastDisconnectTime time.Time
 
+		// dlqMerging indicates whether any DLQ extent is presently being merged
+		dlqMerging bool
+
 		// sessionID is the 16 bit session identifier for this host
 		sessionID uint16
 
@@ -287,7 +290,7 @@ func (cgCache *consumerGroupCache) getConsumerGroupTags() map[string]string {
 }
 
 // loadExtentCache loads the extent cache, if it doesn't already exist for this consumer group
-func (cgCache *consumerGroupCache) loadExtentCache(destType shared.DestinationType, cge *metadata.ConsumerGroupExtent) (err error) {
+func (cgCache *consumerGroupCache) loadExtentCache(destType shared.DestinationType, cge *metadata.ConsumerGroupExtent) {
 	extUUID := cge.GetExtentUUID()
 	extLogger := cgCache.logger.WithField(common.TagExt, extUUID)
 	if extCache, exists := cgCache.extentCache[extUUID]; !exists {
@@ -435,8 +438,8 @@ func (cgCache *consumerGroupCache) manageConsumerGroupCache() {
 	}
 }
 
-// refreshCgCache contacts metadata to get all the open extents and then
-// loads them if needed
+// refreshCgCache contacts metadata to get all the open extents and then loads them if needed
+// Note that this function is and must be run under the cgCache.extMutex lock
 func (cgCache *consumerGroupCache) refreshCgCache(ctx thrift.Context) error {
 
 	// First check any status changes to the destination or consumer group
@@ -488,7 +491,7 @@ func (cgCache *consumerGroupCache) refreshCgCache(ctx thrift.Context) error {
 		MaxResults:        common.Int32Ptr(defaultMaxResults),
 	}
 
-	var nExtents = 0
+	var nSingleCGExtents = 0
 
 	for {
 		cgRes, errRCGES := cgCache.metaClient.ReadConsumerGroupExtents(ctx, cgReq)
@@ -500,11 +503,10 @@ func (cgCache *consumerGroupCache) refreshCgCache(ctx thrift.Context) error {
 
 		// Now we have the cgCache. check and load extent for all extents
 		for _, cge := range cgRes.GetExtents() {
-			nExtents++
-			errR := cgCache.loadExtentCache(dstDesc.GetType(), cge)
-			if errR != nil {
-				return errR
+			if cgCache.checkSingleCGVisible(ctx, cge) {
+				nSingleCGExtents++
 			}
+			cgCache.loadExtentCache(dstDesc.GetType(), cge)
 		}
 
 		if len(cgRes.GetNextPageToken()) == 0 {
@@ -514,7 +516,53 @@ func (cgCache *consumerGroupCache) refreshCgCache(ctx thrift.Context) error {
 		}
 	}
 
+	newDLQMerging := nSingleCGExtents > 0
+	if cgCache.dlqMerging != newDLQMerging {
+		cgCache.dlqMerging = newDLQMerging
+		if newDLQMerging {
+			cgCache.logger.WithField(`nSingleCGExtents`, nSingleCGExtents).Info("Merging DLQ Extent(s)")
+
+		} else {
+			cgCache.logger.Info("Done merging DLQ Extent(s)")
+		}
+	}
+
 	return nil
+}
+
+var checkSingleCGVisibleCacheLock sync.RWMutex
+var checkSingleCGVisibleCache = make(map[string]bool)
+
+// checkSingleCGVisible determines if an extent under a certain destination is visible only to one consumer group. It is a cached call, so the
+// metadata client will only be invoked once per destination+extent
+func (cgCache *consumerGroupCache) checkSingleCGVisible(ctx thrift.Context, cge *metadata.ConsumerGroupExtent) bool {
+	// Key must have destination, since this extent can be loaded as either the DLQ destination or the merged destination
+	key := cgCache.cachedCGDesc.GetDestinationUUID() + cge.GetExtentUUID()
+	var ok, val bool
+	readFn := func() bool {
+		val, ok = checkSingleCGVisibleCache[key]
+		return !ok
+	}
+	writeFn := func() {
+		req := &metadata.ReadExtentStatsRequest{
+			DestinationUUID: common.StringPtr(cgCache.cachedCGDesc.GetDestinationUUID()),
+			ExtentUUID:      common.StringPtr(cge.GetExtentUUID()),
+		}
+		ext, err := cgCache.metaClient.ReadExtentStats(ctx, req)
+		if err != nil {
+			if ext != nil && ext.GetExtentStats() != nil {
+				val = ext.GetExtentStats().GetConsumerGroupVisibility() != ``
+				if val {
+					cgCache.logger.WithFields(bark.Fields{common.TagExt: common.FmtExt(cge.GetExtentUUID())}).Info("Consuming single CG visible extent")
+				}
+				return
+			}
+		} else {
+			cgCache.logger.WithFields(bark.Fields{common.TagErr: err, common.TagExt: common.FmtExt(cge.GetExtentUUID())}).Error("ReadExtentStats failed on refresh")
+		}
+	}
+	common.RWLockReadAndConditionalWrite(&checkSingleCGVisibleCacheLock, readFn, writeFn)
+	return val
 }
 
 // getDynamicCgConfig gets the configuration object for this host
