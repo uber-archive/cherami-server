@@ -92,7 +92,7 @@ func (s *NetIntegrationSuiteParallelC) TestMsgCacheLimit() {
 	log := common.GetDefaultLogger()
 
 	value := fmt.Sprintf("%v/%v=%v", destPath, cgPath, testMsgCacheLimit)
-	log.Infof("VALUE IS: %v", value)
+
 	// set the message cache limit for this cg on the outputhost to be a smaller number
 	cItem := &metadata.ServiceConfigItem{
 		ServiceName:    common.StringPtr("cherami-outputhost"),
