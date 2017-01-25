@@ -870,3 +870,23 @@ func (s *McpSuite) TestCreateRemoteZoneExtent() {
 	}
 	s.True(primaryValid)
 }
+
+func (s *McpSuite) TestGetDstType() {
+
+	dstType := shared.DestinationType_PLAIN
+
+	dstDesc := &shared.DestinationDescription{
+		Path:            common.StringPtr("/unit/desttype"),
+		DestinationUUID: common.StringPtr(uuid.New()),
+		Type:            &dstType,
+	}
+
+	s.Equal(dstTypePlain, getDstType(dstDesc), "getDstType(PLAIN) failed")
+	dstType = shared.DestinationType_TIMER
+	s.Equal(dstTypeTimer, getDstType(dstDesc), "getDstType(TIMER) failed")
+
+	// test dlq
+	dstType = shared.DestinationType_PLAIN
+	dstDesc.Path = common.StringPtr("/unit/desttype.dlq")
+	s.Equal(dstTypeDLQ, getDstType(dstDesc), "getDstType(TIMER) failed")
+}
