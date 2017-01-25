@@ -210,13 +210,12 @@ func getDstType(desc *shared.DestinationDescription) dstType {
 	dstType := desc.GetType()
 	switch dstType {
 	case shared.DestinationType_PLAIN:
-		return dstTypePlain
-	case shared.DestinationType_TIMER:
-		return dstTypeTimer
-	default:
 		if common.PathDLQRegex.MatchString(desc.GetPath()) {
 			return dstTypeDLQ
 		}
+		return dstTypePlain
+	case shared.DestinationType_TIMER:
+		return dstTypeTimer
 	}
 	return dstTypePlain
 }
