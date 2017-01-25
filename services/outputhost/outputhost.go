@@ -88,7 +88,7 @@ type (
 		ackMgrLoadCh      chan ackMgrLoadMsg
 		ackMgrUnloadCh    chan uint32
 		hostMetrics       *load.HostMetrics
-		cfgMgr            *cassDconfig.CassandraConfigManager
+		cfgMgr            cassDconfig.ConfigManager
 		common.SCommon
 	}
 

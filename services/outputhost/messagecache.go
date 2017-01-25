@@ -162,6 +162,8 @@ type AckID string
 const defaultLockTimeoutInSeconds int32 = 42
 const defaultMaxDeliveryCount int32 = 2
 const blockCheckingTimeout time.Duration = time.Minute
+const redeliveryInterval = time.Second / 2
+const cfgRefreshInterval = time.Minute
 
 // SmartRetryDisableString can be added to a destination or CG owner email to request smart retry to be disabled
 // Note that Google allows something like this: gbailey+smartRetryDisable@uber.com
@@ -719,6 +721,8 @@ func (msgCache *cgMsgCache) stop() {
 	if msgCache.dlq != nil {
 		msgCache.dlq.close()
 	}
+	msgCache.redeliveryTicker.Stop()
+	msgCache.cfgRefreshTicker.Stop()
 }
 
 func (msgCache *cgMsgCache) start() {
@@ -1004,8 +1008,8 @@ func newMessageDeliveryCache(
 		ackMsgCh:                 cgCache.ackMsgCh,
 		nackMsgCh:                cgCache.nackMsgCh,
 		closeChannel:             make(chan struct{}),
-		redeliveryTicker:         time.NewTicker(time.Second / 2),
-		cfgRefreshTicker:         time.NewTicker(time.Minute),
+		redeliveryTicker:         time.NewTicker(redeliveryInterval),
+		cfgRefreshTicker:         time.NewTicker(cfgRefreshInterval),
 		ConsumerGroupDescription: cgCache.cachedCGDesc,
 		consumerM3Client:         cgCache.consumerM3Client,
 		m3Client:                 cgCache.m3Client,

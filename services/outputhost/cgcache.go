@@ -183,7 +183,7 @@ type (
 		manageMsgCacheWG sync.WaitGroup
 
 		// cfgMgr is the reference to the cassandra backed cfgMgr
-		cfgMgr *dconfig.CassandraConfigManager
+		cfgMgr dconfig.ConfigManager
 	}
 )
 

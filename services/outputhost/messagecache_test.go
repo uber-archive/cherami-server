@@ -21,6 +21,7 @@
 package outputhost
 
 import (
+	"errors"
 	"strconv"
 	"testing"
 	"time"
@@ -64,28 +65,27 @@ func (s *MessageCacheSuite) SetupTest() {
 		OwnerEmail:         common.StringPtr("foo+smartRetryDisable@uber.com"),
 	}
 
+	s.msgRedeliveryCh = make(chan *cherami.ConsumerMessage, 128)
 	cgCache := &consumerGroupCache{
-		cachedCGDesc: *cgDesc,
-		cgMetrics:    load.NewCGMetrics(),
+		cachedCGDesc:          *cgDesc,
+		cgMetrics:             load.NewCGMetrics(),
+		msgsRedeliveryCh:      s.msgRedeliveryCh,
+		msgsCh:                make(chan *cherami.ConsumerMessage, 32),
+		msgCacheCh:            make(chan cacheMsg, 32),
+		msgCacheRedeliveredCh: make(chan cacheMsg, 32),
+		ackMsgCh:              make(chan timestampedAckID, 32),
+		nackMsgCh:             make(chan timestampedAckID, 32),
+		logger:                bark.NewLoggerFromLogrus(log.New()),
+		m3Client:              &mockM3Client{},
+		consumerM3Client:      &mockM3Client{},
+		notifier:              &mockNotifier{},
+		creditNotifyCh:        make(chan int32, 8),
+		creditRequestCh:       make(chan string, 8),
+		cfgMgr:                &mockConfigMgr{},
 	}
 
-	s.msgRedeliveryCh = make(chan *cherami.ConsumerMessage, 128)
-
 	s.msgCache = newMessageDeliveryCache(
-		s.msgRedeliveryCh,
-		make(chan *cherami.ConsumerMessage, 32),
-		make(chan cacheMsg, 32),
-		make(chan cacheMsg, 32),
-		make(chan timestampedAckID, 32),
-		make(chan timestampedAckID, 32),
-		*cgDesc,
 		nil,
-		bark.NewLoggerFromLogrus(log.New()),
-		&mockM3Client{},
-		&mockM3Client{},
-		&mockNotifier{},
-		make(chan int32, 8),
-		make(chan string, 8),
 		128,
 		cgCache)
 }
@@ -160,4 +160,12 @@ func (m *mockM3Client) StartTimer(scopeIdx int, timerIdx int) metrics.Stopwatch 
 func (m *mockM3Client) GetParentReporter() metrics.Reporter { return nil }
 func (m *mockStopwatch) Stop() time.Duration {
 	return time.Second
+}
+
+type mockConfigMgr struct{}
+
+func (m *mockConfigMgr) Start() {}
+func (m *mockConfigMgr) Stop()  {}
+func (m *mockConfigMgr) Get(svc string, version string, sku string, host string) (interface{}, error) {
+	return nil, errors.New("mock cfg")
 }
