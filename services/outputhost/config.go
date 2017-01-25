@@ -31,6 +31,12 @@ type (
 	// OutputCgConfig is the per cg config used by the
 	// cassandra config manager
 	OutputCgConfig struct {
+		// MessageCacheSize is used to configure the per CG cache size.
+		// This is a string slice, where each entry is a tuple with the
+		// destination/CG_name=value.
+		// For example, we can ideally have two CGs for the same destination
+		// with different size config as follows:
+		// "/test/destination//test/cg_1=50,/test/destination//test/cg_2=100"
 		MessageCacheSize []string `name:"messagecachesize" default:"/=10000"`
 	}
 )
