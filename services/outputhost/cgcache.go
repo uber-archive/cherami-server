@@ -549,7 +549,7 @@ func (cgCache *consumerGroupCache) checkSingleCGVisible(ctx thrift.Context, cge 
 			ExtentUUID:      common.StringPtr(cge.GetExtentUUID()),
 		}
 		ext, err := cgCache.metaClient.ReadExtentStats(ctx, req)
-		if err != nil {
+		if err == nil {
 			if ext != nil && ext.GetExtentStats() != nil {
 				val = ext.GetExtentStats().GetConsumerGroupVisibility() != ``
 				if val {

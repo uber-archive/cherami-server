@@ -23,6 +23,7 @@ package outputhost
 import (
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/uber-common/bark"
@@ -1177,6 +1178,8 @@ func (msgCache *cgMsgCache) isStalled() bool {
 		m3St = stateIdle
 	}
 
+	// These metrics are reported to customers, and they don't reflect the possibility of smart retry being disabled.
+	// It's a feedback mechanism to the customer to give an idea of the health of their consumer group
 	msgCache.consumerM3Client.UpdateGauge(metrics.ConsConnectionScope, metrics.OutputhostCGHealthState, int64(m3St))
 	msgCache.consumerM3Client.UpdateGauge(metrics.ConsConnectionScope, metrics.OutputhostCGOutstandingDeliveries, int64(msgCache.countStateDelivered+msgCache.countStateEarlyNACK))
 
@@ -1187,6 +1190,7 @@ func (msgCache *cgMsgCache) isStalled() bool {
 		stalled = false
 	}
 
+	// These metrics are reported to the controller, and represent the true state of smart retry
 	if stalled {
 		msgCache.cgCache.cgMetrics.Set(load.CGMetricSmartRetryOn, 1)
 	} else {
@@ -1212,12 +1216,10 @@ func (msgCache *cgMsgCache) logStateMachineHealth() {
 	}).Info(`state machine health`)
 }
 
-var logPumpHealthOnce bool
+var logPumpHealthOnce sync.Once
 
 func (msgCache *cgMsgCache) logPumpHealth() {
-	if !logPumpHealthOnce {
-		logPumpHealthOnce = true
-
+	logPumpHealthOnce.Do(func() {
 		msgCache.lclLg.WithFields(bark.Fields{
 			`MsgsRedeliveryChCap`:         cap(msgCache.msgsRedeliveryCh),
 			`PriorityMsgsRedeliveryChCap`: cap(msgCache.priorityMsgsRedeliveryCh),
@@ -1230,7 +1232,7 @@ func (msgCache *cgMsgCache) logPumpHealth() {
 			`CreditRequestChCap`:          cap(msgCache.creditRequestCh),
 			`RedeliveryTickerCap`:         cap(msgCache.redeliveryTicker.C),
 		}).Info(`cache pump health capacities`)
-	}
+	})
 
 	msgCache.lclLg.WithFields(bark.Fields{
 		`MsgsRedeliveryChLen`:         len(msgCache.msgsRedeliveryCh),
