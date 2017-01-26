@@ -197,7 +197,7 @@ func (tb *testBase) SetUp(clusterSz map[string]int, numReplicas int) {
 		}
 
 		cfg := cfgMap[common.StoreServiceName][i].ServiceConfig[common.StoreServiceName]
-		reporter := common.NewMetricReporterWithHostname(configure.NewCommonServiceConfig())
+		reporter := common.NewTestMetricsReporter()
 		dClient := dconfig.NewDconfigClient(configure.NewCommonServiceConfig(), common.StoreServiceName)
 		sCommon := common.NewService(common.StoreServiceName, hostID, cfg, tb.UUIDResolver, hwInfoReader, reporter, dClient)
 		log.Infof("store ringHosts: %v", cfg.GetRingHosts())
@@ -221,7 +221,7 @@ func (tb *testBase) SetUp(clusterSz map[string]int, numReplicas int) {
 	for i := 0; i < clusterSz[common.InputServiceName]; i++ {
 		hostID := uuid.New()
 		cfg := cfgMap[common.InputServiceName][i].ServiceConfig[common.InputServiceName]
-		reporter := common.NewMetricReporterWithHostname(configure.NewCommonServiceConfig())
+		reporter := common.NewTestMetricsReporter()
 		dClient := dconfig.NewDconfigClient(configure.NewCommonServiceConfig(), common.InputServiceName)
 		sCommon := common.NewService(common.InputServiceName, hostID, cfg, tb.UUIDResolver, hwInfoReader, reporter, dClient)
 		log.Infof("input ringHosts: %v", cfg.GetRingHosts())
@@ -236,7 +236,7 @@ func (tb *testBase) SetUp(clusterSz map[string]int, numReplicas int) {
 	for i := 0; i < clusterSz[common.FrontendServiceName]; i++ {
 		hostID := uuid.New()
 		cfg := cfgMap[common.FrontendServiceName][i].ServiceConfig[common.FrontendServiceName]
-		reporter := common.NewMetricReporterWithHostname(configure.NewCommonServiceConfig())
+		reporter := common.NewTestMetricsReporter()
 		dClient := dconfig.NewDconfigClient(configure.NewCommonServiceConfig(), common.FrontendServiceName)
 
 		sCommon := common.NewService(common.FrontendServiceName, hostID, cfg, tb.UUIDResolver, hwInfoReader, reporter, dClient)
@@ -250,7 +250,7 @@ func (tb *testBase) SetUp(clusterSz map[string]int, numReplicas int) {
 	for i := 0; i < clusterSz[common.OutputServiceName]; i++ {
 		hostID := uuid.New()
 		cfg := cfgMap[common.OutputServiceName][i].ServiceConfig[common.OutputServiceName]
-		reporter := common.NewMetricReporterWithHostname(configure.NewCommonServiceConfig())
+		reporter := common.NewTestMetricsReporter()
 		dClient := dconfig.NewDconfigClient(configure.NewCommonServiceConfig(), common.OutputServiceName)
 		sCommon := common.NewService(common.OutputServiceName, hostID, cfg, tb.UUIDResolver, hwInfoReader, reporter, dClient)
 		log.Infof("output ringHosts: %v", cfg.GetRingHosts())
@@ -267,7 +267,7 @@ func (tb *testBase) SetUp(clusterSz map[string]int, numReplicas int) {
 		cfg := cfgMap[common.ControllerServiceName][i]
 		log.Infof("ctrlr ringHosts: %v", cfg.ServiceConfig[common.ControllerServiceName].RingHosts)
 		serviceName := common.ControllerServiceName
-		reporter := common.NewMetricReporterWithHostname(configure.NewCommonServiceConfig())
+		reporter := common.NewTestMetricsReporter()
 		dClient := dconfig.NewDconfigClient(configure.NewCommonServiceConfig(), common.ControllerServiceName)
 		sVice := common.NewService(serviceName, uuid.New(), cfg.ServiceConfig[serviceName], tb.UUIDResolver, hwInfoReader, reporter, dClient)
 		ch, tc := controllerhost.NewController(cfg, sVice, tb.mClient)
