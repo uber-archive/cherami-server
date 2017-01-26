@@ -20,7 +20,11 @@
 
 package metrics
 
-import "time"
+import (
+	"fmt"
+	"sync"
+	"time"
+)
 
 type (
 	// SimpleReporter is the reporter used to dump metric to console for stress runs
@@ -35,6 +39,11 @@ type (
 		elasped    time.Duration
 	}
 )
+
+type HandlerFn func(metricName string, baseTags, tags map[string]string, value int64)
+
+var handlers = make(map[string]map[string]HandlerFn) // Key1 - metricName; Key2 - "filterTag:filterVal"
+var handlerMutex sync.RWMutex
 
 // NewSimpleReporter create an instance of Reporter which can be used for driver to emit metric to console
 func NewSimpleReporter(tags map[string]string) Reporter {
@@ -78,12 +87,78 @@ func (r *SimpleReporter) GetTags() map[string]string {
 
 // IncCounter reports Counter metric to M3
 func (r *SimpleReporter) IncCounter(name string, tags map[string]string, delta int64) {
-	// not implemented
+	r.executeHandler(name, tags, delta)
 }
 
 // UpdateGauge reports Gauge type metric
 func (r *SimpleReporter) UpdateGauge(name string, tags map[string]string, value int64) {
-	// Not implemented
+	r.executeHandler(name, tags, value)
+}
+
+func (r *SimpleReporter) executeHandler(name string, tags map[string]string, value int64) {
+	handlerMutex.RLock()
+	 _, ok0 := handlers[``]
+	 _, ok1 := handlers[name]
+	if ok0 || ok1 {
+		if allHandler2, ok2 := handlers[``][``]; ok2 { // Global handler
+			allHandler2(name, r.tags, tags, value)
+		}
+		if allHandler3, ok3 := handlers[name][``]; ok3 { // Handler for all metrics named 'name'
+			allHandler3(name, r.tags, tags, value)
+		}
+
+		// TODO: technically, this is wrong, as we don't have the local tags overriding the struct tags, but this
+		// has no practical effect in our current use of metrics, since we never override
+		for _, q := range []map[string]string{r.tags, tags} {
+			for filterTag, filterTagVal := range q {
+				key2 := filterTag + `:` + filterTagVal
+				if handler4, ok4 := handlers[``][key2]; ok4 { // Handler for this tag, any name
+					handler4(name, r.tags, tags, value)
+				}
+				if handler5, ok5 := handlers[name][key2]; ok5 { // Handler for specifically this name and tag
+					handler5(name, r.tags, tags, value)
+				}
+			}
+		}
+	}
+	handlerMutex.RUnlock()
+}
+
+// Register a handler (closure) that receives updates for a particular guage or counter based on the metric name and
+// the name/value of one of the metric's tags. If the filterTag/Val are both empty, all updates to that metric will
+// trigger the handler. If metricName is empty, all metrics matching the tag filter will pass through your function.
+// A nil handler unregisters the handler for the given filter parameters
+//
+// Dev notes:
+// * It is advisible to defer a call to unregister your handler when your test ends
+// * Your handler can be called concurrently. Capture your own sync.Mutex if you must serialize
+// * Counters report the delta; you must maintain the cumulative value of your counter if it is important
+// * Your handler executes synchronously with the metrics code; DO NOT BLOCK
+func RegisterHandler(metricName, filterTag, filterTagVal string, handler HandlerFn) {
+	defer handlerMutex.Unlock()
+	handlerMutex.Lock()
+	if _, ok := handlers[metricName]; !ok {
+		handlers[metricName] = make(map[string]HandlerFn)
+	}
+
+	key2 := filterTag + `:` + filterTagVal
+	if key2 == `:` {
+		key2 = ``
+	}
+
+	if handler == nil {
+		delete(handlers[metricName], key2)
+		if len(handlers[metricName]) == 0 {
+			delete(handlers, metricName)
+		}
+		return
+	}
+
+	if hf, ok2 := handlers[metricName][key2]; ok2 {
+		panic(fmt.Sprintf("Metrics handler %v (for '%s'/'%s') should have been unregistered", hf, metricName, key2))
+	}
+
+	handlers[metricName][key2] = handler
 }
 
 func newSimpleStopWatch(metricName string, reporter *SimpleReporter) *simpleStopWatch {
