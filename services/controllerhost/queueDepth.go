@@ -645,7 +645,7 @@ func (qdc *queueDepthCalculator) isCGExtentStalled(cge *metadata.ConsumerGroupEx
 		return false
 	}
 
-	msgsOut, err := context.loadMetrics.Get(hostID, extID, load.MsgsOutPerSec, load.FiveMinAvg)
+	msgsOut, err := context.loadMetrics.Get(hostID, extID, load.MsgsOutPerSec, load.FiveMinSum)
 	if err != nil {
 		return false
 	}

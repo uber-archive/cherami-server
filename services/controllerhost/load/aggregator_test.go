@@ -125,6 +125,15 @@ func (s *MetricsAggregatorSuite) validateGet(maggr MetricsAggregator, timeslotDa
 			expected = timeslotData[min-1].tagCounts[t][m] / int64(60) // should give the avg in the last time slot
 			s.Equal(expected, result, "Get(%v, %v, %v) returned wrong result", tags[t], metricNames[m], OneMinAvg)
 
+			result, err = maggr.Get(hostID, tags[t], metricNames[m], OneMinSum)
+			if min < 1 {
+				s.Equal(ErrNoData, err, "Get() expected to return error when data is missing")
+				continue
+			}
+
+			expected = timeslotData[min-1].tagCounts[t][m]
+			s.Equal(expected, result, "Get(%v, %v, %v) returned wrong result", tags[t], metricNames[m], OneMinSum)
+
 			// validate 5min avg
 			result, err = maggr.Get(hostID, tags[t], metricNames[m], FiveMinAvg)
 			if min < 5 {
@@ -134,12 +143,21 @@ func (s *MetricsAggregatorSuite) validateGet(maggr MetricsAggregator, timeslotDa
 
 			s.Nil(err, "Get(%v, %v, %v) returned error", tags[t], metricNames[m], FiveMinAvg)
 
-			expected = 0
+			sum := int64(0)
 			for i := 5; i > 0; i-- {
-				expected += timeslotData[min-i].tagCounts[t][m]
+				sum += timeslotData[min-i].tagCounts[t][m]
 			}
-			expected = expected / (5 * 60) // 5 mins * 60 secs of data points
+			expected = sum / (5 * 60) // 5 mins * 60 secs of data points
 			s.Equal(expected, result, "Get(%v, %v, %v) returned wrong result", tags[t], metricNames[m], FiveMinAvg)
+
+			result, err = maggr.Get(hostID, tags[t], metricNames[m], FiveMinSum)
+			if min < 1 {
+				s.Equal(ErrNoData, err, "Get() expected to return error when data is missing")
+				continue
+			}
+
+			s.Nil(err, "Get(%v, %v, %v) returned error", tags[t], metricNames[m], FiveMinSum)
+			s.Equal(sum, result, "Get(%v, %v, %v) returned wrong result", tags[t], metricNames[m], FiveMinAvg)
 		}
 	}
 }
