@@ -21,6 +21,7 @@
 package outputhost
 
 import (
+	"sync/atomic"
 	"fmt"
 	"strings"
 	"sync"
@@ -1074,12 +1075,10 @@ func (msgCache *cgMsgCache) isStalled() bool {
 	var m3St m3HealthState
 	var smartRetryDisabled bool
 
-	msgCache.cgCache.extMutex.RLock()
-	if msgCache.cgCache.dlqMerging || strings.Contains(msgCache.GetOwnerEmail(), SmartRetryDisableString) {
+	if atomic.LoadInt32(&msgCache.cgCache.dlqMerging) > 0 || strings.Contains(msgCache.GetOwnerEmail(), SmartRetryDisableString) {
 		smartRetryDisabled = true
 	}
-	msgCache.cgCache.extMutex.RUnlock()
-
+	
 	now := common.Now()
 
 	// Determines that no progress has been made in the recent past; this is half the lock timeout to be
