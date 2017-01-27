@@ -399,11 +399,12 @@ func (t *Rock) Put(key s.Key, val s.Value) (addr s.Address, err error) {
 		addr, err = s.InvalidAddr, errPutFailed
 		return
 	}
+	*/
+
 	// notify all listeners there's a new message available to read
 	// TODO: when used with 'IncreasingKeys' coalesce multiple notify
 	// calls and sent notification less often to improve write perf
 	t.notify(key, addr)
-	*/
 
 	// This log line evaluation (even not printed) takes 10% CPU
 	// log.WithFields(log.Fields{`id`: t.id,  `key`: key,  `valLength`: len(val),  `addr`: addr,}).Debug(`Rock.Put()`)
