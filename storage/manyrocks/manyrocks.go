@@ -20,6 +20,8 @@
 
 package manyrocks
 
+// #include <math.h>
+import "C"
 import (
 	"encoding/binary"
 	"errors"
@@ -390,6 +392,8 @@ func (t *Rock) Put(key s.Key, val s.Value) (addr s.Address, err error) {
 		return
 	}
 
+	// make a CGO call
+	C.sqrt(1)
 	// store message
 	// XXX: NO-OP here for now to test
 	/* err = t.db.Put(t.writeOpts, t.serializeAddr(addr), []byte(val))
