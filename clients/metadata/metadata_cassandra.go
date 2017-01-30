@@ -156,10 +156,15 @@ const (
 	columnReplicationStatus              = "replication_status"
 )
 
-const userOperationTTL = "31536000"
+const userOperationTTL = "2592000" // 30 days
 
 const cassandraProtoVersion = 4
 
+// Large TTLs for extents will in turn make the
+// listExtents() API expensive. Keep the extent
+// around just for a day after its deleted for
+// visibility
+const deleteExtentTTLSeconds = int64(time.Hour*24) / int64(time.Second)
 const defaultDeleteTTLSeconds = int64(time.Hour*24*30) / int64(time.Second)
 
 // CassandraMetadataService Implements TChanMetadataServiceClient interface
@@ -208,6 +213,11 @@ func NewCassandraMetadataService(cfg configure.CommonMetadataConfig) (*Cassandra
 	// will be local.
 	if filter, ok := cfg.GetDcFilter()[cms.clusterName]; ok {
 		cluster.HostFilter = gocql.DataCentreHostFilter(strings.TrimSpace(filter))
+	}
+
+	numConns := cfg.GetNumConns()
+	if numConns > 0 {
+		cluster.NumConns = numConns
 	}
 
 	// Highest consistency level applies to all sessions/queries derived from this cluster
@@ -2200,7 +2210,7 @@ func (s *CassandraMetadataService) deleteExtentImpl(extent *shared.Extent, exten
 		shared.ExtentStatus_DELETED,
 		extentStatsMap,
 		extentStats.ConsumerGroupVisibility,
-		defaultDeleteTTLSeconds,
+		deleteExtentTTLSeconds,
 	)
 
 	batch.Query(
@@ -2218,7 +2228,7 @@ func (s *CassandraMetadataService) deleteExtentImpl(extent *shared.Extent, exten
 		extent.GetRemoteExtentPrimaryStore(),
 		shared.ExtentStatus_DELETED,
 		extentStatsMap,
-		defaultDeleteTTLSeconds,
+		deleteExtentTTLSeconds,
 	)
 
 	if !forMove { // Shouldn't mark store extents as deleted for move extent
@@ -2238,7 +2248,7 @@ func (s *CassandraMetadataService) deleteExtentImpl(extent *shared.Extent, exten
 				extent.GetRemoteExtentPrimaryStore(),
 				shared.ExtentStatus_DELETED,
 				replicaStats,
-				defaultDeleteTTLSeconds,
+				deleteExtentTTLSeconds,
 			)
 		}
 	}
@@ -3324,7 +3334,7 @@ func (s *CassandraMetadataService) deleteConsumerGroupExtent(cgUUID string, exte
 		cge.GetReadLevelSeqNoRate(),
 		connectedStore,
 		cge.GetStoreUUIDs(),
-		defaultDeleteTTLSeconds)
+		deleteExtentTTLSeconds)
 
 	query.Consistency(s.midConsLevel)
 

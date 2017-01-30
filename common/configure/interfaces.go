@@ -153,6 +153,10 @@ type (
 		SetCassandraHosts(hosts string)
 		// GetClusterName gets the cassandra cluster name
 		GetClusterName() string
+		// GetNumConns returns the desired number of
+		// conns from the client to every cassandra
+		// server
+		GetNumConns() int
 	}
 
 	// CommonControllerConfig holds the controller related config

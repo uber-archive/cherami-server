@@ -26,6 +26,7 @@ type MetadataConfig struct {
 	Keyspace       string            `yaml:"Keyspace"`
 	Consistency    string            `yaml:"Consistency"`
 	ClusterName    string            `yaml:"ClusterName"`
+	NumConns       int               `yaml:"NumConns"`
 	DcFilter       map[string]string `yaml:"DcFilter"`
 }
 
@@ -64,4 +65,11 @@ func (r *MetadataConfig) SetCassandraHosts(cHosts string) {
 // GetClusterName gets the cassandra cluster name
 func (r *MetadataConfig) GetClusterName() string {
 	return r.ClusterName
+}
+
+// GetNumConns returns the desired number of
+// conns from the client to every cassandra
+// server
+func (r *MetadataConfig) GetNumConns() int {
+	return r.NumConns
 }
