@@ -63,7 +63,6 @@ func NewLRUWithInitialCapacity(initialCapacity, maxSize int) Cache {
 	return New(maxSize, &Options{
 		InitialCapacity: initialCapacity,
 	})
-
 }
 
 // Get retrieves the value stored under the given key

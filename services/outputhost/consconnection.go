@@ -312,13 +312,16 @@ func (conn *consConnection) writeMsgsStream() {
 				conn.reSentMsgs++
 			case msg := <-conn.msgsCh:
 				conn.createMsgAndWriteToClientUtil(msg, &unflushedWrites, &localCredits, flushThreshold, conn.msgCacheCh)
-			case <-flushTicker.C:
+			case f := <-flushTicker.C:
 				if unflushedWrites > 0 {
 					if err := conn.flushToClient(unflushedWrites); err == nil {
 						unflushedWrites = 0
 					}
 				}
-				conn.cgCache.consumerM3Client.UpdateGauge(metrics.ConsConnectionScope, metrics.OutputhostCGMessageCacheSize, int64(len(conn.msgsCh)))
+				
+				if f.Second() == 0 && f.Nanosecond() < int(flushTimeout*2) { // Record every minute or so
+					conn.cgCache.consumerM3Client.UpdateGauge(metrics.ConsConnectionScope, metrics.OutputhostCGMessageCacheSize, int64(len(conn.msgsCh)))
+				}
 			case updateUUID := <-conn.reconfigureClientCh:
 				conn.logger.WithField(`updateUUID`, updateUUID).Debug(`reconfiguring client with updateUUID`)
 				cmd := createReconfigureCmd(updateUUID)

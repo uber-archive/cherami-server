@@ -21,8 +21,10 @@
 package outputhost
 
 import (
+	"sync/atomic"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/uber-common/bark"
@@ -1073,10 +1075,10 @@ func (msgCache *cgMsgCache) isStalled() bool {
 	var m3St m3HealthState
 	var smartRetryDisabled bool
 
-	if strings.Contains(msgCache.GetOwnerEmail(), SmartRetryDisableString) {
+	if atomic.LoadInt32(&msgCache.cgCache.dlqMerging) > 0 || strings.Contains(msgCache.GetOwnerEmail(), SmartRetryDisableString) {
 		smartRetryDisabled = true
 	}
-
+	
 	now := common.Now()
 
 	// Determines that no progress has been made in the recent past; this is half the lock timeout to be
@@ -1164,8 +1166,8 @@ func (msgCache *cgMsgCache) isStalled() bool {
 		msgCache.logMessageCacheHealth()
 	}
 
-	// Assign M3 state, preferring progressing over idle. It is possible for both progressing and idle to be true if there are
-	// no redeliveries are happening
+	// Assign M3 state, preferring progressing over idle. It is possible for both
+	// progressing and idle to be true if there are no redeliveries happening
 	switch {
 	case stalled:
 		m3St = stateStalled
@@ -1175,6 +1177,8 @@ func (msgCache *cgMsgCache) isStalled() bool {
 		m3St = stateIdle
 	}
 
+	// These metrics are reported to customers, and they don't reflect the possibility of smart retry being disabled.
+	// It's a feedback mechanism to the customer to give an idea of the health of their consumer group
 	msgCache.consumerM3Client.UpdateGauge(metrics.ConsConnectionScope, metrics.OutputhostCGHealthState, int64(m3St))
 	msgCache.consumerM3Client.UpdateGauge(metrics.ConsConnectionScope, metrics.OutputhostCGOutstandingDeliveries, int64(msgCache.countStateDelivered+msgCache.countStateEarlyNACK))
 
@@ -1185,6 +1189,7 @@ func (msgCache *cgMsgCache) isStalled() bool {
 		stalled = false
 	}
 
+	// These metrics are reported to the controller, and represent the true state of smart retry
 	if stalled {
 		msgCache.cgCache.cgMetrics.Set(load.CGMetricSmartRetryOn, 1)
 	} else {
@@ -1210,12 +1215,10 @@ func (msgCache *cgMsgCache) logStateMachineHealth() {
 	}).Info(`state machine health`)
 }
 
-var logPumpHealthOnce bool
+var logPumpHealthOnce sync.Once
 
 func (msgCache *cgMsgCache) logPumpHealth() {
-	if !logPumpHealthOnce {
-		logPumpHealthOnce = true
-
+	logPumpHealthOnce.Do(func() {
 		msgCache.lclLg.WithFields(bark.Fields{
 			`MsgsRedeliveryChCap`:         cap(msgCache.msgsRedeliveryCh),
 			`PriorityMsgsRedeliveryChCap`: cap(msgCache.priorityMsgsRedeliveryCh),
@@ -1228,7 +1231,7 @@ func (msgCache *cgMsgCache) logPumpHealth() {
 			`CreditRequestChCap`:          cap(msgCache.creditRequestCh),
 			`RedeliveryTickerCap`:         cap(msgCache.redeliveryTicker.C),
 		}).Info(`cache pump health capacities`)
-	}
+	})
 
 	msgCache.lclLg.WithFields(bark.Fields{
 		`MsgsRedeliveryChLen`:         len(msgCache.msgsRedeliveryCh),
