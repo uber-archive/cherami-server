@@ -563,6 +563,20 @@ func NewMetricReporterWithHostname(cfg configure.CommonServiceConfig) metrics.Re
 	return reporter
 }
 
+//NewTestMetricsReporter creates a test reporter that allows registration of handler functions
+func NewTestMetricsReporter() metrics.Reporter {
+	hostName, e := os.Hostname()
+	lcLg := GetDefaultLogger()
+	if e != nil {
+		lcLg.WithFields(bark.Fields{TagErr: e}).Fatal("Error getting hostname")
+	}
+
+	reporter := metrics.NewTestReporter(map[string]string{
+		metrics.HostnameTagName: hostName,
+	})
+	return reporter
+}
+
 //GetLocalClusterInfo gets the zone and tenancy from the given deployment
 func GetLocalClusterInfo(deployment string) (zone string, tenancy string) {
 	parts := strings.Split(deployment, "_")
