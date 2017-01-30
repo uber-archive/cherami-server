@@ -20,7 +20,18 @@
 
 package manyrocks
 
-// #include <math.h>
+/*
+#include <math.h>
+#include <stdlib.h>
+
+int test(const char* key) {
+	if (key) {
+		return sizeof(key);
+	}
+
+	return 0;
+}
+*/
 import "C"
 import (
 	"encoding/binary"
@@ -31,6 +42,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"unsafe"
 
 	"github.com/tecbot/gorocksdb"
 	"github.com/uber-common/bark"
@@ -393,7 +405,15 @@ func (t *Rock) Put(key s.Key, val s.Value) (addr s.Address, err error) {
 	}
 
 	// make a CGO call
-	C.sqrt(1)
+	// first convert key to C.char *
+	var c *C.char
+	cKey := t.serializeAddr(addr)
+	if len(cKey) > 0 {
+		c = (*C.char)(unsafe.Pointer(&cKey[0]))
+		// get the size
+		_ = C.size_t(len(cKey))
+	}
+	C.test(c)
 	// store message
 	// XXX: NO-OP here for now to test
 	/* err = t.db.Put(t.writeOpts, t.serializeAddr(addr), []byte(val))
