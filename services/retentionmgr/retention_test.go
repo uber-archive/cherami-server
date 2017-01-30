@@ -85,6 +85,9 @@ func (s *RetentionMgrSuite) TestRetentionManager() {
 	// DEST2,EXT8:
 	// DEST2,EXT9:
 	// DEST2,EXTA: test DeleteConsumerGroupExtent returns EntityNotExistsError
+	// DEST2,EXTE0: test extent that is 'active', but hardRetentionConsumed = true (should not move to 'consumed')
+	// DEST2,EXTE1: test extent that is 'sealed', but hardRetentionConsumed = true (should move to 'consumed')
+	// DEST2,EXTE2: test extent that is 'sealed', but softRetentionConsumed = true (should move to 'consumed')
 
 	softRetSecs, hardRetSecs := int32(10), int32(20)
 
@@ -126,6 +129,11 @@ func (s *RetentionMgrSuite) TestRetentionManager() {
 		"EXTB":  {"STOR2", "STOR3", "STOR4"},
 		"EXTC":  {"STOR2", "STOR4", "STOR6"},
 		"EXTD1": {"STOR2", "STOR4", "STOR6"},
+		"EXTE0": {"STOR2", "STOR3", "STOR4"},
+		"EXTE1": {"STOR2", "STOR3", "STOR4"},
+		"EXTE2": {"STOR2", "STOR3", "STOR4"},
+		"EXTE3": {"STOR2", "STOR3", "STOR4"},
+		"EXTE4": {"STOR2", "STOR3", "STOR4"},
 		"EXTm":  {"STOR3"}, // Single CG Visible
 		"EXTn":  {"STOR7"}, // Single CG Visible
 	}
@@ -148,6 +156,11 @@ func (s *RetentionMgrSuite) TestRetentionManager() {
 		"EXTC":  shared.ExtentStatus_OPEN,
 		"EXTD":  shared.ExtentStatus_SEALED,
 		"EXTD1": shared.ExtentStatus_SEALED,
+		"EXTE0": shared.ExtentStatus_OPEN,
+		"EXTE1": shared.ExtentStatus_SEALED,
+		"EXTE2": shared.ExtentStatus_SEALED,
+		"EXTE3": shared.ExtentStatus_SEALED,
+		"EXTE4": shared.ExtentStatus_SEALED,
 		"EXTm":  shared.ExtentStatus_SEALED, // Merged DLQ extents should always be sealed
 		"EXTn":  shared.ExtentStatus_SEALED, //
 	}
@@ -230,6 +243,11 @@ func (s *RetentionMgrSuite) TestRetentionManager() {
 		"EXTC":  {"STOR2": {addrHard, false}, "STOR4": {addrHard, false}, "STOR6": {addrHard, false}},
 		"EXTD":  {"STOR2": {addrHard, false}, "STOR4": {addrHard, false}, "STOR6": {addrHard, false}},
 		"EXTD1": {"STOR2": {addrHard, true}, "STOR4": {addrHard, false}, "STOR6": {addrHard, false}},
+		"EXTE0": {"STOR2": {addrBegin, false}, "STOR3": {addrBegin, true}, "STOR4": {addrBegin, false}},
+		"EXTE1": {"STOR2": {addrBegin, false}, "STOR3": {addrBegin, true}, "STOR4": {addrBegin, false}},
+		"EXTE2": {"STOR2": {addrBegin, false}, "STOR3": {addrBegin, false}, "STOR4": {addrBegin, false}},
+		"EXTE3": {"STOR2": {addrBegin, false}, "STOR3": {addrBegin, false}, "STOR4": {addrBegin, false}},
+		"EXTE4": {"STOR2": {addrBegin, false}, "STOR3": {addrBegin, false}, "STOR4": {addrBegin, false}},
 		"EXTm":  {"STOR3": {addrHard - 100, true}},
 		"EXTn":  {"STOR7": {addrHard - 100, true}},
 	}
@@ -253,6 +271,11 @@ func (s *RetentionMgrSuite) TestRetentionManager() {
 		"EXTC":  {"STOR2": {addrSoft, true}, "STOR4": {addrSoft, true}, "STOR6": {addrSoft, true}},
 		"EXTD":  {"STOR2": {addrSoft, true}, "STOR4": {addrSoft, true}, "STOR6": {addrSoft, true}},
 		"EXTD1": {"STOR2": {addrBegin, false}, "STOR4": {addrBegin, false}, "STOR6": {addrBegin, false}},
+		"EXTE0": {"STOR2": {addrBegin, false}, "STOR3": {addrBegin, false}, "STOR4": {addrBegin, false}},
+		"EXTE1": {"STOR2": {addrBegin, false}, "STOR3": {addrBegin, false}, "STOR4": {addrBegin, false}},
+		"EXTE2": {"STOR2": {addrBegin, false}, "STOR3": {addrBegin, false}, "STOR4": {addrBegin, true}},
+		"EXTE3": {"STOR2": {addrBegin, false}, "STOR3": {addrBegin, false}, "STOR4": {addrBegin, false}},
+		"EXTE4": {"STOR2": {addrBegin, false}, "STOR3": {addrBegin, false}, "STOR4": {addrBegin, true}},
 		"EXTm":  {"STOR3": {addrSoft, true}},
 		"EXTn":  {"STOR7": {addrSoft, true}},
 	}
@@ -275,6 +298,11 @@ func (s *RetentionMgrSuite) TestRetentionManager() {
 		"EXTC":  {"CGm": addrSeal, "CG1": addrSeal, "CG2": addrSeal, "CG3": addrSeal},
 		"EXTD":  {"CGm": addrSeal, "CG1": addrSeal, "CG2": addrSeal, "CG3": addrSeal},
 		"EXTD1": {"CGm": addrBegin, "CG1": addrBegin, "CG2": addrBegin, "CG3": addrBegin},
+		"EXTE0": {"CGm": addrBegin, "CG1": addrBegin, "CG2": addrBegin, "CG3": addrBegin},
+		"EXTE1": {"CGm": addrBegin, "CG1": addrBegin, "CG2": addrBegin, "CG3": addrBegin},
+		"EXTE2": {"CGm": addrBegin, "CG1": addrBegin, "CG2": addrBegin, "CG3": addrBegin},
+		"EXTE3": {"CGm": addrBegin, "CG1": addrBegin, "CG2": addrSeal, "CG3": addrBegin},
+		"EXTE4": {"CGm": addrSeal, "CG1": addrBegin, "CG2": addrBegin, "CG3": addrBegin},
 		"EXTm":  {"CGm": addrPostSoft},
 		"EXTn":  {"CGm": addrPreSoft},
 	}
@@ -303,6 +331,8 @@ func (s *RetentionMgrSuite) TestRetentionManager() {
 	s.metadata.On("MarkExtentConsumed", destinationID("DEST2"), extentID("EXTB")).Return(nil).Once()
 	s.metadata.On("MarkExtentConsumed", destinationID("DEST2"), extentID("EXTD")).Return(nil).Once()
 	s.metadata.On("MarkExtentConsumed", destinationID("DEST2"), extentID("EXTD1")).Return(nil).Once()
+	s.metadata.On("MarkExtentConsumed", destinationID("DEST2"), extentID("EXTE1")).Return(nil).Once()
+	s.metadata.On("MarkExtentConsumed", destinationID("DEST2"), extentID("EXTE4")).Return(nil).Once()
 	s.metadata.On("MarkExtentConsumed", destinationID("DEST2"), extentID("EXTm")).Return(nil).Once()
 	s.metadata.On("MarkExtentConsumed", destinationID("DEST2"), extentID("EXTn")).Return(nil).Once()
 
@@ -359,7 +389,7 @@ func (s *RetentionMgrSuite) TestRetentionManager() {
 	// retMgr.Start()
 	// retMgr.wait()
 
-	//s.metadata.AssertExpectations(s.T())
+	// s.metadata.AssertExpectations(s.T())
 }
 
 func (s *RetentionMgrSuite) TestRetentionManagerOnDeletedDestinations() {
