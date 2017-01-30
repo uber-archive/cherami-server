@@ -30,7 +30,13 @@ import (
 	"github.com/uber/cherami-thrift/.generated/go/shared"
 )
 
-const defaultPageSize = 4000
+// Some of our records like ExtentStats are
+// huge. Larger records along with large
+// pageSize will result in bigger response
+// payloads. This can impact latency for all
+// queries multiplexed on a tcp conn. So,
+// keep the pageSize small.
+const defaultPageSize = 512
 
 type (
 	// MetadataMgr manages extents. It exposes easy

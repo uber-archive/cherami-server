@@ -79,6 +79,7 @@ MetadataConfig:
   Keyspace: "cherami"
   Consistency: "one"
   ClusterName: "base"
+  NumConns: 1
 
 # ReplicatorConfig specifies 
 ReplicatorConfig:
