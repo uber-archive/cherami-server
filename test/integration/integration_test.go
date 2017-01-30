@@ -26,6 +26,7 @@ import (
 	"net"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/uber-common/bark"
@@ -34,6 +35,7 @@ import (
 	"github.com/stretchr/testify/suite"
 	client "github.com/uber/cherami-client-go/client/cherami"
 	"github.com/uber/cherami-server/common"
+	"github.com/uber/cherami-server/common/metrics"
 	"github.com/uber/cherami-server/services/controllerhost"
 	"github.com/uber/cherami-server/services/storehost"
 	"github.com/uber/cherami-thrift/.generated/go/cherami"
@@ -50,6 +52,9 @@ type NetIntegrationSuiteParallelA struct {
 	testBase
 }
 type NetIntegrationSuiteParallelC struct {
+	testBase
+}
+type NetIntegrationSuiteParallelD struct {
 	testBase
 }
 type NetIntegrationSuiteSerial struct {
@@ -70,6 +75,12 @@ func TestNetIntegrationSuiteParallelB(t *testing.T) {
 }
 func TestNetIntegrationSuiteParallelC(t *testing.T) {
 	s := new(NetIntegrationSuiteParallelC)
+	s.testBase.SetupSuite(t)
+	t.Parallel()
+	suite.Run(t, s)
+}
+func TestNetIntegrationSuiteParallelD(t *testing.T) {
+	s := new(NetIntegrationSuiteParallelD)
 	s.testBase.SetupSuite(t)
 	t.Parallel()
 	suite.Run(t, s)
@@ -1242,6 +1253,320 @@ operationsLoop:
 		log.WithField(common.TagAckID, dlqAckIDMap[id]).Errorf("DLQ Message %v wasn't merged [%v]", id, v)
 	}
 
+}
+
+func (s *NetIntegrationSuiteParallelD) TestSmartRetryDisableDuringDLQMerge() {
+	const (
+		destPath                   = `/test.runner.SmartRetry/SRDDDM` // This path ensures that throttling is limited for this test
+		cgPath                     = `/test.runner.SmartRetry/SRDDDMCG`
+		metricsName                = `_test.runner.SmartRetry_SRDDDM`
+		cgMaxDeliveryCount         = 1
+		cgLockTimeout              = 1
+		cnsmrPrefetch              = 10
+		publisherPubInterval       = time.Second / 5
+		publisherPubSlowInterval   = publisherPubInterval * 10 // This is 10x slower
+		DLQPublishClearTime        = cgLockTimeout * time.Second * 2
+		DLQMergeMessageTargetCount = 2
+		DLQMessageStart            = 10
+		DLQMessageSpacing          = 6
+		mergeAssumedCompleteTime   = cgLockTimeout * (cgMaxDeliveryCount + 1) * 2 * time.Second * 2 // +1 for initial delivery, *2 for dlqInhibit, *2 for fudge
+		testTimeout                = time.Second * 180
+	)
+
+	const (
+		// Operation/Phase IDS
+		produceDLQ = iota
+		smartRetryProvoke1
+		mergeOp
+		smartRetryProvoke3
+		smartRetryProvoke4
+		done
+		PhaseCount
+	)
+
+	const (
+		stateStalled = iota
+		stateIdle
+		stateProgressing
+	)
+
+	var dlqMutex sync.RWMutex
+	phase := produceDLQ
+	var currentHealth = stateIdle
+	var dlqDeliveryCount int
+	var dlqDeliveryTime time.Time
+	phaseOnce := make([]sync.Once, PhaseCount)
+
+	// ll - local log
+	ll := func(fmtS string, rest ...interface{}) {
+		common.GetDefaultLogger().WithFields(bark.Fields{`phase`: phase}).Infof(fmtS, rest...)
+		//fmt.Printf(`p`+strconv.Itoa(phase)+` `+fmtS+"\n", rest...)
+	}
+
+	// lll - local log with lock (for race on access to phase)
+	lll := func(fmtS string, rest ...interface{}) {
+		dlqMutex.Lock()
+		ll(fmtS, rest...)
+		dlqMutex.Unlock()
+	}
+
+	// == Metrics ===
+
+	getCurrentHealth := func() int {
+		dlqMutex.RLock()
+		r := currentHealth
+		dlqMutex.RUnlock()
+		return r
+	}
+
+	getDLQDeliveryCount := func() int {
+		dlqMutex.RLock()
+		r := dlqDeliveryCount
+		dlqMutex.RUnlock()
+		return r
+	}
+
+	getDLQDeliveryTime := func() time.Time {
+		dlqMutex.RLock()
+		r := dlqDeliveryTime
+		dlqMutex.RUnlock()
+		return r
+	}
+
+	defer metrics.RegisterHandler(`outputhost.healthstate.cg`, `destination`, metricsName, nil)
+	metrics.RegisterHandler(`outputhost.healthstate.cg`, `destination`, metricsName,
+		func(metricName string, baseTags, tags map[string]string, value int64) {
+			dlqMutex.Lock()
+			last := currentHealth
+			currentHealth = int(value)
+			if last != currentHealth {
+				ll("Metric %s: %d", metricName, value)
+			}
+			dlqMutex.Unlock()
+		})
+
+	defer metrics.RegisterHandler(`outputhost.message.sent-dlq.cg`, `destination`, metricsName, nil)
+	metrics.RegisterHandler(`outputhost.message.sent-dlq.cg`, `destination`, metricsName,
+		func(metricName string, baseTags, tags map[string]string, value int64) {
+			dlqMutex.Lock()
+			dlqDeliveryCount += int(value)
+			ll("Metric %s: %d (+%d)", metricName, dlqDeliveryCount, value)
+			if value > 0 {
+				dlqDeliveryTime = time.Now()
+			}
+			dlqMutex.Unlock()
+		})
+
+	// == Merge ==
+
+	merge := func() {
+		fe := s.GetFrontend()
+		s.NotNil(fe)
+		mergeReq := cherami.NewMergeDLQForConsumerGroupRequest()
+		mergeReq.DestinationPath = common.StringPtr(destPath)
+		mergeReq.ConsumerGroupName = common.StringPtr(cgPath)
+
+		time.Sleep(DLQPublishClearTime)
+		// Merge DLQ
+		err := fe.MergeDLQForConsumerGroup(nil, mergeReq)
+		s.NoError(err)
+	}
+
+	// == Setup ==
+
+	// Create the client
+	ipaddr, port, _ := net.SplitHostPort(s.GetFrontend().GetTChannel().PeerInfo().HostPort)
+	portNum, _ := strconv.Atoi(port)
+	cheramiClient, _ := client.NewClient("cherami-test", ipaddr, portNum, nil)
+
+	// Create the destination to publish message
+	crReq := cherami.NewCreateDestinationRequest()
+	crReq.Path = common.StringPtr(destPath)
+	crReq.Type = cherami.DestinationTypePtr(cherami.DestinationType_PLAIN)
+	crReq.ConsumedMessagesRetention = common.Int32Ptr(60)
+	crReq.UnconsumedMessagesRetention = common.Int32Ptr(120)
+	crReq.OwnerEmail = common.StringPtr("lhcIntegration@uber.com")
+
+	desDesc, _ := cheramiClient.CreateDestination(crReq)
+	s.NotNil(desDesc)
+
+	// we should see the destination now in cassandra
+	rReq := cherami.NewReadDestinationRequest()
+	rReq.Path = common.StringPtr(destPath)
+	readDesc, _ := cheramiClient.ReadDestination(rReq)
+	s.NotNil(readDesc)
+
+	// ==WRITE==
+
+	// Create the publisher
+	cPublisherReq := &client.CreatePublisherRequest{
+		Path: destPath,
+	}
+
+	publisherTest := cheramiClient.CreatePublisher(cPublisherReq)
+	s.NotNil(publisherTest)
+
+	err := publisherTest.Open()
+	s.NoError(err)
+
+	// Publish messages continuously in a goroutine to ensures a steady supply of 'good' messages so
+	// that smart retry will not affect us.
+	var curPubInterval = int64(publisherPubInterval)
+	closeCh := make(chan struct{})
+	defer close(closeCh)
+	go func() {
+		i := 0
+		defer lll("DONE PUBLISHING %v MESSAGES", i)
+		defer publisherTest.Close()
+		myIntrvl := atomic.LoadInt64(&curPubInterval)
+		ticker := time.NewTicker(time.Duration(myIntrvl))
+		for {
+			select {
+			case <-ticker.C:
+				data := []byte(fmt.Sprintf("msg_%d", i+1))
+				receipt := publisherTest.Publish(&client.PublisherMessage{Data: data})
+				s.NoError(receipt.Error)
+				i++
+
+				if atomic.LoadInt64(&curPubInterval) != myIntrvl { // Adjust publish speed as requested
+					ticker.Stop()
+					myIntrvl = atomic.LoadInt64(&curPubInterval)
+					ticker = time.NewTicker(time.Duration(myIntrvl))
+					lll("publisher changed interval to %v seconds", common.UnixNanoTime(myIntrvl).ToSeconds())
+				}
+			case <-closeCh:
+				return
+			}
+		}
+	}()
+
+	// ==READ==
+
+	// Create the consumer group
+	cgReq := cherami.NewCreateConsumerGroupRequest()
+	cgReq.ConsumerGroupName = common.StringPtr(cgPath)
+	cgReq.DestinationPath = common.StringPtr(destPath)
+	cgReq.LockTimeoutInSeconds = common.Int32Ptr(cgLockTimeout) // this is the message redelivery timeout
+	cgReq.MaxDeliveryCount = common.Int32Ptr(cgMaxDeliveryCount)
+	cgReq.OwnerEmail = common.StringPtr("consumer_integration_test@uber.com")
+
+	cgDesc, err := cheramiClient.CreateConsumerGroup(cgReq)
+	s.NoError(err)
+	s.NotNil(cgDesc)
+
+	cConsumerReq := &client.CreateConsumerRequest{
+		Path:              destPath,
+		ConsumerGroupName: cgPath,
+		ConsumerName:      "consumerName",
+		PrefetchCount:     cnsmrPrefetch,
+		Options:           &client.ClientOptions{Timeout: time.Second * 30}, // this is the thrift context timeout
+	}
+
+	consumerTest := cheramiClient.CreateConsumer(cConsumerReq)
+	s.NotNil(consumerTest)
+
+	// Open the consumer channel
+	delivery := make(chan client.Delivery, 1)
+	delivery, err = consumerTest.Open(delivery)
+	s.NoError(err)
+
+	beforeMergeDLQDeliveryCount := -1
+	testStartTime := time.Now()
+
+	// Read the messages in a loop.
+readLoop:
+	for msgCount := 0; ; {
+		select {
+		case msg := <-delivery:
+			msgCount++
+			msgID, _ := strconv.Atoi(string(msg.GetMessage().GetPayload().GetData()[4:]))
+			var ack, poison, merged bool
+
+			msgDecorator := `  `
+			if msgID > DLQMessageStart && msgID%DLQMessageSpacing == 0 {
+				msgDecorator = `* ` // DLQ Message
+				poison = true
+				if msgID < DLQMessageStart+beforeMergeDLQDeliveryCount*DLQMessageSpacing {
+					merged = true
+					msgDecorator = `*M` // DLQ Message, and was likely merged
+				}
+			}
+
+			lll("msgId %3d %s dlqDvlry=%3d (merged %2d, last %-12s), health = %d",
+				msgID,
+				msgDecorator,
+				getDLQDeliveryCount(),
+				beforeMergeDLQDeliveryCount,
+				common.UnixNanoTime(time.Since(getDLQDeliveryTime())).ToSecondsFmt(),
+				getCurrentHealth())
+
+			if time.Since(testStartTime) > testTimeout {
+				s.Fail("This test should complete quickly")
+				break
+			}
+
+			switch phase {
+			case produceDLQ: // Normal consumption with some selected 'poison' message. This is dilute poison going to DLQ
+				if !poison {
+					ack = true
+				}
+				s.NotEqual(getCurrentHealth(), stateStalled)
+				if getDLQDeliveryCount() >= DLQMergeMessageTargetCount { // Produced enough DLQ, move on
+					phase++
+				}
+			case smartRetryProvoke1: // Provoke smart retry by NACKing everything
+				if getCurrentHealth() == stateStalled {
+					phase++
+				}
+			case mergeOp: // Now in smart retry, perform the merge, wait for it to come into effect; transition to healthy state by acking
+				beforeMergeDLQDeliveryCount = getDLQDeliveryCount()
+				phaseOnce[phase].Do(func() { go merge() }) // Perform the merge once, asychronously
+
+				if merged {
+					s.True(poison) // This is just an assertion/sanity check
+					if getCurrentHealth() == stateProgressing {
+						phase++
+					}
+				} else {
+					// ACK all messages until we see something get merged; this halts DLQ production
+					ack = true
+				}
+			case smartRetryProvoke3:
+				phaseOnce[phase].Do(func() { lll("smartRetryProvoke3") })
+
+				// We will transition from healthy to stalled by NACKing in this phase
+				s.False(getCurrentHealth() == stateIdle)
+				if getCurrentHealth() == stateStalled {
+					phase++
+				}
+			case smartRetryProvoke4:
+				phaseOnce[phase].Do(func() {
+					lll("smartRetryProvoke4")
+					atomic.StoreInt64(&curPubInterval, int64(publisherPubSlowInterval)) // Slow down the publisher so that we can finish faster
+				})
+
+				// Since we are merging, the indicated state is stalled, but smart retry is disabled until the merge completes
+				s.Equal(getCurrentHealth(), stateStalled, `While NACKING, indicated state should be stalled`)
+
+				if getDLQDeliveryCount() > beforeMergeDLQDeliveryCount*2 && // Verify that we've published enough to DLQ since the merge
+					time.Since(getDLQDeliveryTime()) > mergeAssumedCompleteTime { // Verify that we are done DLQ publishing (i.e. transitioned to normal smart retry behavior)
+					phase++
+				}
+			case done:
+				phaseOnce[phase].Do(func() { lll("done") })
+				ack = true
+				if getCurrentHealth() == stateProgressing { // Verify that we can get back to fully normal health
+					break readLoop
+				}
+			}
+
+			if ack {
+				msg.Ack()
+			} else {
+				msg.Nack()
+			}
+		}
+	}
 }
 
 func (s *NetIntegrationSuiteParallelA) _TestSmartRetry() {

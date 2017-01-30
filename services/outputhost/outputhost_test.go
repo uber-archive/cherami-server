@@ -177,6 +177,7 @@ func (s *OutputHostSuite) TestOutputHostReadMessage() {
 	destDesc.DestinationUUID = common.StringPtr(destUUID)
 	destDesc.Status = common.InternalDestinationStatusPtr(shared.DestinationStatus_ENABLED)
 	s.mockMeta.On("ReadDestination", mock.Anything, mock.Anything).Return(destDesc, nil).Once()
+	s.mockMeta.On("ReadExtentStats", mock.Anything, mock.Anything).Return(nil, fmt.Errorf(`foo`))
 
 	cgDesc := shared.NewConsumerGroupDescription()
 	cgDesc.ConsumerGroupUUID = common.StringPtr(uuid.New())
@@ -239,6 +240,7 @@ func (s *OutputHostSuite) TestOutputHostAckMessage() {
 	destDesc.DestinationUUID = common.StringPtr(destUUID)
 	destDesc.Status = common.InternalDestinationStatusPtr(shared.DestinationStatus_ENABLED)
 	s.mockMeta.On("ReadDestination", mock.Anything, mock.Anything).Return(destDesc, nil).Once()
+	s.mockMeta.On("ReadExtentStats", mock.Anything, mock.Anything).Return(nil, fmt.Errorf(`foo`))
 
 	cgUUID := uuid.New()
 	extUUID := uuid.New()
@@ -355,6 +357,7 @@ func (s *OutputHostSuite) TestOutputHostReconfigure() {
 	destDesc.DestinationUUID = common.StringPtr(destUUID)
 	destDesc.Status = common.InternalDestinationStatusPtr(shared.DestinationStatus_ENABLED)
 	s.mockMeta.On("ReadDestination", mock.Anything, mock.Anything).Return(destDesc, nil).Twice()
+	s.mockMeta.On("ReadExtentStats", mock.Anything, mock.Anything).Return(nil, fmt.Errorf(`foo`))
 
 	// 1. Make sure we setup the ReadConsumerGroup metadata
 	cgDesc := shared.NewConsumerGroupDescription()
@@ -478,6 +481,7 @@ func (s *OutputHostSuite) TestOutputHostReceiveMessageBatch() {
 	destDesc.DestinationUUID = common.StringPtr(destUUID)
 	destDesc.Status = common.InternalDestinationStatusPtr(shared.DestinationStatus_ENABLED)
 	s.mockMeta.On("ReadDestination", mock.Anything, mock.Anything).Return(destDesc, nil).Once()
+	s.mockMeta.On("ReadExtentStats", mock.Anything, mock.Anything).Return(nil, fmt.Errorf(`foo`))
 
 	cgDesc := shared.NewConsumerGroupDescription()
 	cgDesc.ConsumerGroupUUID = common.StringPtr(uuid.New())
@@ -546,6 +550,7 @@ func (s *OutputHostSuite) TestOutputHostReceiveMessageBatch_NoMsg() {
 	destDesc.DestinationUUID = common.StringPtr(destUUID)
 	destDesc.Status = common.InternalDestinationStatusPtr(shared.DestinationStatus_ENABLED)
 	s.mockMeta.On("ReadDestination", mock.Anything, mock.Anything).Return(destDesc, nil)
+	s.mockMeta.On("ReadExtentStats", mock.Anything, mock.Anything).Return(nil, fmt.Errorf(`foo`))
 
 	cgDesc := shared.NewConsumerGroupDescription()
 	cgDesc.ConsumerGroupUUID = common.StringPtr(uuid.New())
@@ -595,6 +600,7 @@ func (s *OutputHostSuite) TestOutputHostReceiveMessageBatch_SomeMsgAvailable() {
 	destDesc.DestinationUUID = common.StringPtr(destUUID)
 	destDesc.Status = common.InternalDestinationStatusPtr(shared.DestinationStatus_ENABLED)
 	s.mockMeta.On("ReadDestination", mock.Anything, mock.Anything).Return(destDesc, nil)
+	s.mockMeta.On("ReadExtentStats", mock.Anything, mock.Anything).Return(nil, fmt.Errorf(`foo`))
 
 	cgDesc := shared.NewConsumerGroupDescription()
 	cgDesc.ConsumerGroupUUID = common.StringPtr(uuid.New())
@@ -667,6 +673,7 @@ func (s *OutputHostSuite) TestOutputCgUnload() {
 	destDesc.DestinationUUID = common.StringPtr(destUUID)
 	destDesc.Status = common.InternalDestinationStatusPtr(shared.DestinationStatus_ENABLED)
 	s.mockMeta.On("ReadDestination", mock.Anything, mock.Anything).Return(destDesc, nil).Twice()
+	s.mockMeta.On("ReadExtentStats", mock.Anything, mock.Anything).Return(nil, fmt.Errorf(`foo`))
 
 	// 1. Make sure we setup the ReadConsumerGroup metadata
 	cgDesc := shared.NewConsumerGroupDescription()
@@ -759,6 +766,7 @@ func (s *OutputHostSuite) TestOutputAckMgrReset() {
 	destDesc.DestinationUUID = common.StringPtr(destUUID)
 	destDesc.Status = common.InternalDestinationStatusPtr(shared.DestinationStatus_ENABLED)
 	s.mockMeta.On("ReadDestination", mock.Anything, mock.Anything).Return(destDesc, nil).Twice()
+	s.mockMeta.On("ReadExtentStats", mock.Anything, mock.Anything).Return(nil, fmt.Errorf(`foo`))
 
 	// 1. Make sure we setup the ReadConsumerGroup metadata
 	cgDesc := shared.NewConsumerGroupDescription()
