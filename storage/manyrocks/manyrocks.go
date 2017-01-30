@@ -42,7 +42,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
-	"unsafe"
+	//"unsafe"
 
 	"github.com/tecbot/gorocksdb"
 	"github.com/uber-common/bark"
@@ -182,8 +182,8 @@ func (t *ManyRocks) OpenExtent(id s.ExtentUUID, keyPattern s.KeyPattern, notify 
 	opts.SetKeepLogFileNum(5)
 
 	// dump stats every minute
-	opts.EnableStatistics()
-	opts.SetStatsDumpPeriodSec(60)
+	//	opts.EnableStatistics()
+	//	opts.SetStatsDumpPeriodSec(60)
 
 	// since we are using one instance of RocksDB per extent,
 	// limit the number of open files we use per instance.
@@ -406,24 +406,24 @@ func (t *Rock) Put(key s.Key, val s.Value) (addr s.Address, err error) {
 
 	// make a CGO call
 	// first convert key to C.char *
-	var c *C.char
-	cKey := t.serializeAddr(addr)
-	if len(cKey) > 0 {
-		c = (*C.char)(unsafe.Pointer(&cKey[0]))
-		// get the size
-		_ = C.size_t(len(cKey))
-	}
-	C.test(c)
+	/*
+		var c *C.char
+		cKey := t.serializeAddr(addr)
+		if len(cKey) > 0 {
+			c = (*C.char)(unsafe.Pointer(&cKey[0]))
+			// get the size
+			_ = C.size_t(len(cKey))
+		}
+		C.test(c)
+	*/
 	// store message
-	// XXX: NO-OP here for now to test
-	/* err = t.db.Put(t.writeOpts, t.serializeAddr(addr), []byte(val))
+	err = t.db.Put(t.writeOpts, t.serializeAddr(addr), []byte(val))
 
 	if err != nil {
 		t.store.logger.WithFields(bark.Fields{`id`: t.id, `addr`: addr, `valLength`: len(val), common.TagErr: err}).Error(`Rock.Put error`)
 		addr, err = s.InvalidAddr, errPutFailed
 		return
 	}
-	*/
 
 	// notify all listeners there's a new message available to read
 	// TODO: when used with 'IncreasingKeys' coalesce multiple notify
