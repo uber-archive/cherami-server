@@ -69,17 +69,20 @@ const (
 	DestinationType = "DST"
 	// ConsumerGroupType is the name for entity type for consumer group in listEntityOps
 	ConsumerGroupType = "CG"
+	// MinUnconsumedMessagesRetentionForMultiZoneDest is the minimum unconsumed retention allowed
+	MinUnconsumedMessagesRetentionForMultiZoneDest = 3 * 24 * 3600
 )
 
 const (
-	strNotEnoughArgs        = "Not enough arguments. Try \"--help\""
-	strNoChange             = "Update must update something. Try \"--help\""
-	strCGSpecIncorrectArgs  = "Incorrect consumer group specification. Use \"<cg_uuid>\" or \"<dest_path> <cg_name>\""
-	strDestStatus           = "Destination status must be \"enabled\", \"disabled\", \"sendonly\", or \"recvonly\""
-	strCGStatus             = "Consumer group status must be \"enabled\", or \"disabled\""
-	strWrongDestZoneConfig  = "Format of destination zone config is wrong, should be \"ZoneName,AllowPublish,AllowConsume,ReplicaCount\". For example: \"zone1,true,true,3\""
-	strWrongReplicaCount    = "Replica count must be within 1 to 3"
-	strWrongZoneConfigCount = "Multi zone destination must have at least 2 zone configs"
+	strNotEnoughArgs               = "Not enough arguments. Try \"--help\""
+	strNoChange                    = "Update must update something. Try \"--help\""
+	strCGSpecIncorrectArgs         = "Incorrect consumer group specification. Use \"<cg_uuid>\" or \"<dest_path> <cg_name>\""
+	strDestStatus                  = "Destination status must be \"enabled\", \"disabled\", \"sendonly\", or \"recvonly\""
+	strCGStatus                    = "Consumer group status must be \"enabled\", or \"disabled\""
+	strWrongDestZoneConfig         = "Format of destination zone config is wrong, should be \"ZoneName,AllowPublish,AllowConsume,ReplicaCount\". For example: \"zone1,true,true,3\""
+	strWrongReplicaCount           = "Replica count must be within 1 to 3"
+	strWrongZoneConfigCount        = "Multi zone destination must have at least 2 zone configs"
+	strUnconsumedRetentionTooSmall = "Unconsumed retention period for multi zone destination should be at least 3 days"
 )
 
 var uuidRegex, _ = regexp.Compile(`^[[:xdigit:]]{8}-[[:xdigit:]]{4}-[[:xdigit:]]{4}-[[:xdigit:]]{4}-[[:xdigit:]]{12}$`)
@@ -228,6 +231,13 @@ func CreateDestination(c *cli.Context, cClient ccli.Client, cliHelper common.Cli
 		ExitIfError(errors.New(strWrongZoneConfigCount))
 	}
 
+	// don't allow short unconsumed message retention for multi_zone destination
+	// this is a prevention mechanism to prevent messages from being deleted in source zone in case there's some
+	// issue with cross zone replication(for example, network down between zones)
+	if len(zoneConfigs.Configs) > 1 && unconsumedMessagesRetention < MinUnconsumedMessagesRetentionForMultiZoneDest {
+		ExitIfError(errors.New(strUnconsumedRetentionTooSmall))
+	}
+
 	desc, err := cClient.CreateDestination(&cherami.CreateDestinationRequest{
 		Path: &path,
 		Type: &dType,
@@ -244,7 +254,7 @@ func CreateDestination(c *cli.Context, cClient ccli.Client, cliHelper common.Cli
 }
 
 // UpdateDestination update destination based on cli
-func UpdateDestination(c *cli.Context, cClient ccli.Client) {
+func UpdateDestination(c *cli.Context, cClient ccli.Client, mClient mcli.Client) {
 	if len(c.Args()) < 1 {
 		ExitIfError(errors.New(strNotEnoughArgs))
 	}
@@ -263,6 +273,19 @@ func UpdateDestination(c *cli.Context, cClient ccli.Client) {
 	default:
 		if c.IsSet(`status`) {
 			ExitIfError(errors.New(strDestStatus))
+		}
+	}
+
+	// don't allow short unconsumed message retention for multi_zone destination
+	// this is a prevention mechanism to prevent messages from being deleted in source zone in case there's some
+	// issue with cross zone replication(for example, network down between zones)
+	if c.IsSet(`unconsumed_messages_retention`) && int32(c.Int(`unconsumed_messages_retention`)) < MinUnconsumedMessagesRetentionForMultiZoneDest {
+		desc, err := mClient.ReadDestination(&metadata.ReadDestinationRequest{
+			Path: &path,
+		})
+		ExitIfError(err)
+		if desc.GetIsMultiZone() {
+			ExitIfError(errors.New(strUnconsumedRetentionTooSmall))
 		}
 	}
 
@@ -403,17 +426,19 @@ func UnloadConsumerGroup(c *cli.Context, mClient mcli.Client) {
 }
 
 type destDescJSONOutputFields struct {
-	Path                        string                   `json:"path"`
-	UUID                        string                   `json:"uuid"`
-	Status                      shared.DestinationStatus `json:"status"`
-	Type                        shared.DestinationType   `json:"type"`
-	ChecksumOption              string                   `json:"checksum_option"`
-	OwnerEmail                  string                   `json:"owner_email"`
-	ConsumedMessagesRetention   int32                    `json:"consumed_messages_retention"`
-	UnconsumedMessagesRetention int32                    `json:"unconsumed_messages_retention"`
-	DLQCGUUID                   string                   `json:"dlq_cg_uuid"`
-	DLQPurgeBefore              int64                    `json:"dlq_purge_before"`
-	DLQMergeBefore              int64                    `json:"dlq_merge_before"`
+	Path                        string                          `json:"path"`
+	UUID                        string                          `json:"uuid"`
+	Status                      shared.DestinationStatus        `json:"status"`
+	Type                        shared.DestinationType          `json:"type"`
+	ChecksumOption              string                          `json:"checksum_option"`
+	OwnerEmail                  string                          `json:"owner_email"`
+	ConsumedMessagesRetention   int32                           `json:"consumed_messages_retention"`
+	UnconsumedMessagesRetention int32                           `json:"unconsumed_messages_retention"`
+	DLQCGUUID                   string                          `json:"dlq_cg_uuid"`
+	DLQPurgeBefore              int64                           `json:"dlq_purge_before"`
+	DLQMergeBefore              int64                           `json:"dlq_merge_before"`
+	IsMultiZone                 bool                            `json:"is_multi_zone"`
+	ZoneConfigs                 []*shared.DestinationZoneConfig `json:"zone_configs"`
 }
 
 func printDest(dest *shared.DestinationDescription) {
@@ -428,6 +453,8 @@ func printDest(dest *shared.DestinationDescription) {
 		DLQCGUUID:                   dest.GetDLQConsumerGroupUUID(),
 		DLQPurgeBefore:              dest.GetDLQPurgeBefore(),
 		DLQMergeBefore:              dest.GetDLQMergeBefore(),
+		IsMultiZone:                 dest.GetIsMultiZone(),
+		ZoneConfigs:                 dest.GetZoneConfigs(),
 	}
 
 	switch dest.GetChecksumOption() {
@@ -670,18 +697,20 @@ func PurgeDLQForConsumerGroup(c *cli.Context, cClient ccli.Client) {
 }
 
 type destJSONOutputFields struct {
-	DestinationName             string                   `json:"destination_name"`
-	DestinationUUID             string                   `json:"destination_uuid"`
-	Status                      shared.DestinationStatus `json:"status"`
-	Type                        shared.DestinationType   `json:"type"`
-	OwnerEmail                  string                   `json:"owner_email"`
-	TotalExts                   int                      `json:"total_ext"`
-	OpenExts                    int                      `json:"open"`
-	SealedExts                  int                      `json:"sealed"`
-	ConsumedExts                int                      `json:"consumed"`
-	DeletedExts                 int                      `json:"Deleted"`
-	ConsumedMessagesRetention   int32                    `json:"consumed_messages_retention"`
-	UnconsumedMessagesRetention int32                    `json:"unconsumed_messages_retention"`
+	DestinationName             string                          `json:"destination_name"`
+	DestinationUUID             string                          `json:"destination_uuid"`
+	Status                      shared.DestinationStatus        `json:"status"`
+	Type                        shared.DestinationType          `json:"type"`
+	OwnerEmail                  string                          `json:"owner_email"`
+	TotalExts                   int                             `json:"total_ext"`
+	OpenExts                    int                             `json:"open"`
+	SealedExts                  int                             `json:"sealed"`
+	ConsumedExts                int                             `json:"consumed"`
+	DeletedExts                 int                             `json:"Deleted"`
+	ConsumedMessagesRetention   int32                           `json:"consumed_messages_retention"`
+	UnconsumedMessagesRetention int32                           `json:"unconsumed_messages_retention"`
+	IsMultiZone                 bool                            `json:"is_multi_zone"`
+	ZoneConfigs                 []*shared.DestinationZoneConfig `json:"zone_configs"`
 }
 
 func matchDestStatus(status string, wantStatus shared.DestinationStatus) bool {
@@ -851,6 +880,8 @@ func ListDestinations(c *cli.Context, mClient mcli.Client) {
 					DeletedExts:                 nDeleted,
 					ConsumedMessagesRetention:   desc.GetConsumedMessagesRetention(),
 					UnconsumedMessagesRetention: desc.GetUnconsumedMessagesRetention(),
+					IsMultiZone:                 desc.GetIsMultiZone(),
+					ZoneConfigs:                 desc.GetZoneConfigs(),
 				}
 				destsInfo[status] = append(destsInfo[status], outputDest)
 			}

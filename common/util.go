@@ -613,6 +613,15 @@ func (r *cliHelper) GetDefaultOwnerEmail() string {
 // GetCanonicalZone is the implementation of the corresponding method
 func (r *cliHelper) GetCanonicalZone(zone string) (cZone string, err error) {
 	var ok bool
+	if len(zone) == 0 {
+		return "", errors.New("Invalid Zone Name")
+	}
+
+	// If canonical zone list is empty, then any zone is valid
+	if len(r.cZones) == 0 {
+		return zone, nil
+	}
+
 	if cZone, ok = r.cZones[zone]; !ok {
 		return "", errors.New("Invalid Zone Name")
 	}

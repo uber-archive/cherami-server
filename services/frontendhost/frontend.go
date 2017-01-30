@@ -238,11 +238,21 @@ func convertCreateDestRequestToInternal(createRequest *c.CreateDestinationReques
 func convertUpdateDestRequestToInternal(updateRequest *c.UpdateDestinationRequest, destUUID string) *shared.UpdateDestinationRequest {
 	internalUpdateRequest := shared.NewUpdateDestinationRequest()
 	internalUpdateRequest.DestinationUUID = common.StringPtr(destUUID)
-	internalUpdateRequest.Status = common.InternalDestinationStatusPtr(shared.DestinationStatus(updateRequest.GetStatus()))
-	internalUpdateRequest.ConsumedMessagesRetention = common.Int32Ptr(updateRequest.GetConsumedMessagesRetention())
-	internalUpdateRequest.UnconsumedMessagesRetention = common.Int32Ptr(updateRequest.GetUnconsumedMessagesRetention())
-	internalUpdateRequest.OwnerEmail = common.StringPtr(updateRequest.GetOwnerEmail())
-	internalUpdateRequest.ChecksumOption = common.InternalChecksumOptionPtr(shared.ChecksumOption(updateRequest.GetChecksumOption()))
+	if updateRequest.IsSetStatus() {
+		internalUpdateRequest.Status = common.InternalDestinationStatusPtr(shared.DestinationStatus(updateRequest.GetStatus()))
+	}
+	if updateRequest.IsSetConsumedMessagesRetention() {
+		internalUpdateRequest.ConsumedMessagesRetention = common.Int32Ptr(updateRequest.GetConsumedMessagesRetention())
+	}
+	if updateRequest.IsSetUnconsumedMessagesRetention() {
+		internalUpdateRequest.UnconsumedMessagesRetention = common.Int32Ptr(updateRequest.GetUnconsumedMessagesRetention())
+	}
+	if updateRequest.IsSetOwnerEmail() {
+		internalUpdateRequest.OwnerEmail = common.StringPtr(updateRequest.GetOwnerEmail())
+	}
+	if updateRequest.IsSetChecksumOption() {
+		internalUpdateRequest.ChecksumOption = common.InternalChecksumOptionPtr(shared.ChecksumOption(updateRequest.GetChecksumOption()))
+	}
 	return internalUpdateRequest
 }
 

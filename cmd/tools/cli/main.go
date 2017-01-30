@@ -53,7 +53,7 @@ func main() {
 	})
 	app.Name = "cherami"
 	app.Usage = "A command-line tool for cherami users"
-	app.Version = "1.1.5"
+	app.Version = "1.1.6"
 	app.Flags = []cli.Flag{
 		cli.BoolTFlag{
 			Name:  "hyperbahn",

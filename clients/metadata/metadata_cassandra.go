@@ -687,19 +687,19 @@ func (s *CassandraMetadataService) UpdateDestination(ctx thrift.Context, updateR
 	}
 
 	// Note: if we add a new updatable property here, we also need to update the metadataReconciler in replicator to do reconcilation
-	if updateRequest.Status == nil {
+	if !updateRequest.IsSetStatus() {
 		updateRequest.Status = common.InternalDestinationStatusPtr(existing.GetStatus())
 	}
-	if updateRequest.ConsumedMessagesRetention == nil {
+	if !updateRequest.IsSetConsumedMessagesRetention() {
 		updateRequest.ConsumedMessagesRetention = common.Int32Ptr(existing.GetConsumedMessagesRetention())
 	}
-	if updateRequest.UnconsumedMessagesRetention == nil {
+	if !updateRequest.IsSetUnconsumedMessagesRetention() {
 		updateRequest.UnconsumedMessagesRetention = common.Int32Ptr(existing.GetUnconsumedMessagesRetention())
 	}
-	if updateRequest.OwnerEmail == nil {
+	if !updateRequest.IsSetOwnerEmail() {
 		updateRequest.OwnerEmail = common.StringPtr(existing.GetOwnerEmail())
 	}
-	if updateRequest.ChecksumOption == nil {
+	if !updateRequest.IsSetChecksumOption() {
 		updateRequest.ChecksumOption = common.InternalChecksumOptionPtr(existing.GetChecksumOption())
 	}
 	batch := s.session.NewBatch(gocql.LoggedBatch) // Consider switching to unlogged
@@ -755,11 +755,21 @@ func (s *CassandraMetadataService) UpdateDestination(ctx thrift.Context, updateR
 		time.Now(),
 		marshalRequest(updateRequest))
 
-	existing.Status = common.InternalDestinationStatusPtr(updateRequest.GetStatus())
-	existing.ConsumedMessagesRetention = common.Int32Ptr(updateRequest.GetConsumedMessagesRetention())
-	existing.UnconsumedMessagesRetention = common.Int32Ptr(updateRequest.GetUnconsumedMessagesRetention())
-	existing.OwnerEmail = common.StringPtr(updateRequest.GetOwnerEmail())
-	existing.ChecksumOption = common.InternalChecksumOptionPtr(updateRequest.GetChecksumOption())
+	if updateRequest.IsSetStatus() {
+		existing.Status = common.InternalDestinationStatusPtr(updateRequest.GetStatus())
+	}
+	if updateRequest.IsSetConsumedMessagesRetention() {
+		existing.ConsumedMessagesRetention = common.Int32Ptr(updateRequest.GetConsumedMessagesRetention())
+	}
+	if updateRequest.IsSetUnconsumedMessagesRetention() {
+		existing.UnconsumedMessagesRetention = common.Int32Ptr(updateRequest.GetUnconsumedMessagesRetention())
+	}
+	if updateRequest.IsSetOwnerEmail() {
+		existing.OwnerEmail = common.StringPtr(updateRequest.GetOwnerEmail())
+	}
+	if updateRequest.IsSetChecksumOption() {
+		existing.ChecksumOption = common.InternalChecksumOptionPtr(updateRequest.GetChecksumOption())
+	}
 	return existing, nil
 }
 
