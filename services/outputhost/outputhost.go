@@ -596,10 +596,16 @@ func (h *OutputHost) ConsumerGroupsUpdated(ctx thrift.Context, request *admin.Co
 				// Notify the client
 				cg.reconfigureClients(updateUUID)
 			case admin.NotificationType_HOST:
-				_, intErr = h.loadCGCache(ctx, ok, cg)
+				// just refresh the cg directly.
+				// at this point cg is already loaded
+				intErr = cg.refreshCgCacheNoLock(ctx)
 			case admin.NotificationType_ALL:
-				_, intErr = h.loadCGCache(ctx, ok, cg)
-				cg.reconfigureClients(updateUUID)
+				// just refresh the cg directly.
+				// at this point cg is already loaded
+				intErr = cg.refreshCgCacheNoLock(ctx)
+				if intErr == nil {
+					cg.reconfigureClients(updateUUID)
+				}
 			default:
 				h.logger.WithFields(bark.Fields{
 					common.TagCnsm:       common.FmtCnsm(cgUUID),

@@ -21,8 +21,8 @@
 package outputhost
 
 import (
-	"sync/atomic"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/uber-common/bark"
@@ -151,8 +151,8 @@ type (
 
 		// dlqMerging indicates whether any DLQ extent is presently being merged. ATOMIC OPERATIONS ONLY
 		dlqMerging int32
-		
-		// checkSingleCGVisibleCache reduces ListExtentStats calls 
+
+		// checkSingleCGVisibleCache reduces ListExtentStats calls
 		checkSingleCGVisibleCache cache.Cache // Key is the extent UUID, value is whether it is single-CG-visible
 
 		// sessionID is the 16 bit session identifier for this host
@@ -264,7 +264,7 @@ func newConsumerGroupCache(destPath string, cgDesc shared.ConsumerGroupDescripti
 		cfgMgr:                   h.cfgMgr,
 	}
 
-	cgCache.checkSingleCGVisibleCache = cache.NewLRUWithInitialCapacity(1, 1 << 6)
+	cgCache.checkSingleCGVisibleCache = cache.NewLRUWithInitialCapacity(1, 1<<6)
 	cgCache.consumerM3Client = metrics.NewClientWithTags(h.m3Client, metrics.Outputhost, cgCache.getConsumerGroupTags())
 	cgCache.loadReporter = cgCache.loadReporterFactory.CreateReporter(consGroupLoadReportingInterval, cgCache, cgLogger)
 	cgCache.loadReporter.Start()
@@ -444,7 +444,23 @@ func (cgCache *consumerGroupCache) manageConsumerGroupCache() {
 	}
 }
 
-// refreshCgCache contacts metadata to get all the open extents and then loads them if needed
+// refreshCgCacheNoLock is a routine which is called without the extMutex held.
+// It takes the mutex and in turn refreshes the cg by contactingmetadata to
+// get all the open extents and then loads them if needed
+func (cgCache *consumerGroupCache) refreshCgCacheNoLock(ctx thrift.Context) error {
+	cgCache.extMutex.Lock()
+	defer cgCache.extMutex.Unlock()
+
+	// Make sure we don't race with an unload
+	if cgCache.isClosed() || cgCache.unloadInProgress {
+		return ErrCgUnloaded
+	}
+
+	return cgCache.refreshCgCache(ctx)
+}
+
+// refreshCgCache contacts metadata to get all the open extents and then
+// loads them if needed
 // Note that this function is and must be run under the cgCache.extMutex lock
 func (cgCache *consumerGroupCache) refreshCgCache(ctx thrift.Context) error {
 
@@ -522,7 +538,7 @@ func (cgCache *consumerGroupCache) refreshCgCache(ctx thrift.Context) error {
 		}
 	}
 
-	// DEVNOTE: The term 'merging' here is a reference to the DLQ Merge feature/operation. These extents are 
+	// DEVNOTE: The term 'merging' here is a reference to the DLQ Merge feature/operation. These extents are
 	// 'served' just like any other, but they are visible to this one consumer group, hence 'SingleCG'
 	newDLQMerging := int32(nSingleCGExtents)
 	oldDLQMerging := atomic.SwapInt32(&cgCache.dlqMerging, newDLQMerging)
@@ -537,7 +553,6 @@ func (cgCache *consumerGroupCache) refreshCgCache(ctx thrift.Context) error {
 	return nil
 }
 
-
 // checkSingleCGVisible determines if an extent under a certain destination is visible only to one consumer group. It is a cached call, so the
 // metadata client will only be invoked once per destination+extent
 func (cgCache *consumerGroupCache) checkSingleCGVisible(ctx thrift.Context, cge *metadata.ConsumerGroupExtent) (singleCgVisible bool) {
@@ -549,7 +564,7 @@ func (cgCache *consumerGroupCache) checkSingleCGVisible(ctx thrift.Context, cge 
 	if val != nil {
 		return val.(bool)
 	}
-	
+
 	req := &metadata.ReadExtentStatsRequest{
 		DestinationUUID: common.StringPtr(cgCache.cachedCGDesc.GetDestinationUUID()),
 		ExtentUUID:      common.StringPtr(cge.GetExtentUUID()),
@@ -622,9 +637,14 @@ func (cgCache *consumerGroupCache) loadConsumerGroupCache(ctx thrift.Context, ex
 		go cgCache.manageConsumerGroupCache() // Has cgCache.shutdownWG.Done()
 		cgCache.manageMsgCacheWG.Add(1)       // wait group for msgCache
 		go cgCache.msgDeliveryCache.start()   // Uses the dlq, so must be after it
+
+		// trigger a refresh the first time. If we already have the CG loaded,
+		// then the refresh loop will load and refresh extents as part of the
+		// event loop.
+		return cgCache.refreshCgCache(ctx)
 	}
 
-	return cgCache.refreshCgCache(ctx)
+	return nil
 }
 
 func (cgCache *consumerGroupCache) reconfigureClients(updateUUID string) {

@@ -168,8 +168,9 @@ func (conn *consConnection) sendCreditsToWritePump(localCredits *int32) {
 	default:
 		// If we cannot send the credits at this time, just accumulate it
 		// but don't reset the counter
-		conn.logger.WithField(`localCredits`, *localCredits).
-			Info("unable to send credits to write pump; accumulating locally")
+		// update M3 to record this
+		conn.cgCache.m3Client.UpdateGauge(metrics.ConsConnectionStreamScope, metrics.OutputhostCreditsAccumulated, int64(*localCredits))
+		conn.cgCache.consumerM3Client.UpdateGauge(metrics.ConsConnectionScope, metrics.OutputhostCGCreditsAccumulated, int64(*localCredits))
 	}
 
 }

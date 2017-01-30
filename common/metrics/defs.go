@@ -699,6 +699,8 @@ const (
 	OutputhostInternalFailures
 	// OutputhostConsConnection is the number of active connections
 	OutputhostConsConnection
+	// OutputhostCreditsAccumulated is a gauge to record credits that are accumulated locally
+	OutputhostCreditsAccumulated
 	// OutputhostLatencyTimer represents time taken by an operation
 	OutputhostLatencyTimer
 	// OutputhostCGMessageSent records the count of messages sent per consumer group
@@ -743,6 +745,10 @@ const (
 	OutputhostCGAckMgrResetMsgError
 	// OutputhostCGSkippedMessages is the gauge to track skipped messages
 	OutputhostCGSkippedMessages
+	// OutputhostCGAckMgrSeqNotFound is the gauge to track acks whose seq number is not found
+	OutputhostCGAckMgrSeqNotFound
+	// OutputhostCGCreditsAccumulated is a gauge to record credits that are accumulated locally per consumer group
+	OutputhostCGCreditsAccumulated
 
 	// -- Frontend metrics -- //
 
@@ -991,6 +997,7 @@ var metricDefs = map[ServiceIdx]map[int]metricDefinition{
 		OutputhostUserFailures:                          {Counter, "outputhost.user-errors"},
 		OutputhostInternalFailures:                      {Counter, "outputhost.internal-errors"},
 		OutputhostConsConnection:                        {Gauge, "outputhost.consconnection"},
+		OutputhostCreditsAccumulated:                    {Gauge, "outputhost.credit-accumulated"},
 		OutputhostLatencyTimer:                          {Timer, "outputhost.latency"},
 	},
 
@@ -1128,6 +1135,8 @@ var dynamicMetricDefs = map[ServiceIdx]map[int]metricDefinition{
 		OutputhostCGAckMgrResetMsg:        {Gauge, "outputhost.ackmgr.reset.message.cg"},
 		OutputhostCGAckMgrResetMsgError:   {Gauge, "outputhost.ackmgr.reset.message.error.cg"},
 		OutputhostCGSkippedMessages:       {Gauge, "outputhost.skipped.messages.cg"},
+		OutputhostCGAckMgrSeqNotFound:     {Gauge, "outputhost.ackmgr.seq-not-found.cg"},
+		OutputhostCGCreditsAccumulated:    {Gauge, "outputhost.credit-accumulated.cg"},
 	},
 
 	// definitions for Controller metrics
