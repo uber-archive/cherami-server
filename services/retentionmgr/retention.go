@@ -620,6 +620,7 @@ func (t *RetentionManager) computeRetention(job *retentionJob, log bark.Logger) 
 	log.Debug("computing minAckAddr")
 
 	var minAckAddr = int64(store.ADDR_END)
+	var allHaveConsumed = true // start by assuming this is all-consumed
 
 	for _, cgInfo := range job.consumers {
 
@@ -649,12 +650,18 @@ func (t *RetentionManager) computeRetention(job *retentionJob, log bark.Logger) 
 			}).Error(`computeRetention: minAckAddr GetAckLevel failed`)
 
 			minAckAddr = store.ADDR_BEGIN
+			allHaveConsumed = false
 			break
+		}
+
+		// check if all CGs have consumed this extent
+		if ackAddr != store.ADDR_SEAL {
+			allHaveConsumed = false
 		}
 
 		// update minAckAddr, if ackAddr is less than the current value
 		if (minAckAddr == store.ADDR_END) ||
-			(minAckAddr == store.ADDR_SEAL) || // -> all existing consumers have completely consumed this extent
+			(minAckAddr == store.ADDR_SEAL) || // -> consumers we have seen so far have completely consumed this extent
 			(ackAddr != store.ADDR_SEAL && ackAddr < minAckAddr) {
 
 			minAckAddr = ackAddr
@@ -696,21 +703,21 @@ func (t *RetentionManager) computeRetention(job *retentionJob, log bark.Logger) 
 
 	// -- step 6: check to see if the extent status can be updated to 'consumed' -- //
 
-	// move the extent to 'consumed' if either:
+	// move the extent to 'consumed' if the extent is "sealed" _and_ either:
 	// A. all of the following are true:
-	// 	1. the extent was sealed
-	// 	2. the extent as fully consumed by all of the consumer groups
-	// 	3. a period of 'soft retention period' has passed (in other words,
+	// 	1. the extent was fully consumed by all of the consumer groups
+	// 	2. a period of 'soft retention period' has passed (in other words,
 	// 	   a consumer that is consuming along the soft retention time has
 	//	   "consumed" the extent)
 	// B. or, the hard-retention has reached the end of the sealed extent,
 	// 	in which case we will force the extent to be "consumed"
-	// NB: retentionAddr == ADDR_BEGIN indicates there was an error, so we no-op
-	if job.retentionAddr != store.ADDR_BEGIN &&
-		((ext.status == shared.ExtentStatus_SEALED &&
-			minAckAddr == store.ADDR_SEAL &&
-			softRetentionConsumed) ||
-			hardRetentionConsumed) {
+	// NB: if there was an error querying either the hard/soft retention addresses,
+	// {soft,hard}RetentionConsumed would be set to 'false'; if there was an error
+	// querying ack-addr, then allHaveConsumed will be false. therefore errors in
+	// either of the conditions would cause the extent to *not* be moved to the
+	// CONSUMED state, and would cause it to be retried on the next iteration.
+	if (ext.status == shared.ExtentStatus_SEALED) &&
+		((allHaveConsumed && softRetentionConsumed) || hardRetentionConsumed) {
 
 		log.WithFields(bark.Fields{
 			`retentionAddr`:         job.retentionAddr,
