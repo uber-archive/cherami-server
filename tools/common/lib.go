@@ -231,6 +231,9 @@ func CreateDestination(c *cli.Context, cClient ccli.Client, cliHelper common.Cli
 		ExitIfError(errors.New(strWrongZoneConfigCount))
 	}
 
+	// don't allow short unconsumed message retention for multi_zone destination
+	// this is a prevention mechanism to prevent messages from being deleted in source zone in case there's some
+	// issue with cross zone replication(for example, network down between zones)
 	if len(zoneConfigs.Configs) > 1 && unconsumedMessagesRetention < MinUnconsumedMessagesRetentionForMultiZoneDest {
 		ExitIfError(errors.New(strUnconsumedRetentionTooSmall))
 	}
@@ -251,7 +254,7 @@ func CreateDestination(c *cli.Context, cClient ccli.Client, cliHelper common.Cli
 }
 
 // UpdateDestination update destination based on cli
-func UpdateDestination(c *cli.Context, cClient ccli.Client) {
+func UpdateDestination(c *cli.Context, cClient ccli.Client, mClient mcli.Client) {
 	if len(c.Args()) < 1 {
 		ExitIfError(errors.New(strNotEnoughArgs))
 	}
@@ -270,6 +273,19 @@ func UpdateDestination(c *cli.Context, cClient ccli.Client) {
 	default:
 		if c.IsSet(`status`) {
 			ExitIfError(errors.New(strDestStatus))
+		}
+	}
+
+	// don't allow short unconsumed message retention for multi_zone destination
+	// this is a prevention mechanism to prevent messages from being deleted in source zone in case there's some
+	// issue with cross zone replication(for example, network down between zones)
+	if c.IsSet(`unconsumed_messages_retention`) && int32(c.Int(`unconsumed_messages_retention`)) < MinUnconsumedMessagesRetentionForMultiZoneDest {
+		desc, err := mClient.ReadDestination(&metadata.ReadDestinationRequest{
+			Path: &path,
+		})
+		ExitIfError(err)
+		if desc.GetIsMultiZone() {
+			ExitIfError(errors.New(strUnconsumedRetentionTooSmall))
 		}
 	}
 
