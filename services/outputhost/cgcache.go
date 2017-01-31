@@ -445,7 +445,7 @@ func (cgCache *consumerGroupCache) manageConsumerGroupCache() {
 }
 
 // refreshCgCacheNoLock is a routine which is called without the extMutex held.
-// It takes the mutex and in turn refreshes the cg by contactingmetadata to
+// It takes the mutex and in turn refreshes the cg by contacting metadata to
 // get all the open extents and then loads them if needed
 func (cgCache *consumerGroupCache) refreshCgCacheNoLock(ctx thrift.Context) error {
 	cgCache.extMutex.Lock()

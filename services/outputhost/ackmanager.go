@@ -383,7 +383,7 @@ func (ackMgr *ackManager) acknowledgeMessage(ackID AckID, seqNum uint32, address
 		}
 	} else {
 		// Update metric to reflect that the sequence number is not found
-		ackMgr.cgCache.consumerM3Client.UpdateGauge(metrics.ConsConnectionScope, metrics.OutputhostCGAckMgrSeqNotFound, 1)
+		ackMgr.cgCache.consumerM3Client.IncCounter(metrics.ConsConnectionScope, metrics.OutputhostCGAckMgrSeqNotFound)
 	}
 	ackMgr.lk.Unlock()
 
