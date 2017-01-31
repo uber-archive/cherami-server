@@ -26,8 +26,8 @@ package manyrocks
 #include <unistd.h>
 
 int test(const char* key) {
-	// sleep for a bit
-	usleep(2000);
+	// sleep between 0 to 1000ms
+	usleep(rand()%1000);
 	if (key) {
 		return sizeof(key);
 	}
@@ -408,15 +408,7 @@ func (t *Rock) Put(key s.Key, val s.Value) (addr s.Address, err error) {
 	}
 
 	// make a CGO call
-	// first convert key to C.char *
-	var c *C.char
-	cKey := t.serializeAddr(addr)
-	if len(cKey) > 0 {
-		c = (*C.char)(unsafe.Pointer(&cKey[0]))
-		// get the size
-		_ = C.size_t(len(cKey))
-	}
-	ret := C.test(c)
+	C.test(c)
 
 	// store message
 	/* err = t.db.Put(t.writeOpts, t.serializeAddr(addr), []byte(val))
@@ -430,9 +422,7 @@ func (t *Rock) Put(key s.Key, val s.Value) (addr s.Address, err error) {
 	// notify all listeners there's a new message available to read
 	// TODO: when used with 'IncreasingKeys' coalesce multiple notify
 	// calls and sent notification less often to improve write perf
-	if ret != 0 {
-		t.notify(key, addr)
-	}
+	t.notify(key, addr)
 
 	// This log line evaluation (even not printed) takes 10% CPU
 	// log.WithFields(log.Fields{`id`: t.id,  `key`: key,  `valLength`: len(val),  `addr`: addr,}).Debug(`Rock.Put()`)

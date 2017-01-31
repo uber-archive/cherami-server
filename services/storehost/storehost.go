@@ -20,6 +20,16 @@
 
 package storehost
 
+/*
+#include <stdlib.h>
+#include <time.h>
+
+void initrand() {
+	srand(time(NULL));
+}
+*/
+
+import "C"
 import (
 	"fmt"
 	"net"
@@ -247,6 +257,8 @@ func NewStoreHost(serviceName string, sCommon common.SCommon, mClient metadata.T
 
 	t.mClient = mm.NewMetadataMetricsMgr(mClient, t.m3Client, t.logger)
 
+	// initialize random number seed
+	C.initrand()
 	return t, []thrift.TChanServer{store.NewTChanBStoreServer(t)}
 }
 
