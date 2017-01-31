@@ -90,8 +90,10 @@ var uuidRegex, _ = regexp.Compile(`^[[:xdigit:]]{8}-[[:xdigit:]]{4}-[[:xdigit:]]
 // ExitIfError exit while err is not nil and print the calling stack also
 func ExitIfError(err error) {
 	const stacksEnv = `CHERAMI_SHOW_STACKS`
+	envReminder := "\n--env=staging is now the default. Did you mean '--env=prod' ?\n"
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err.Error())
+		fmt.Fprintln(os.Stderr, envReminder)
 		if os.Getenv(stacksEnv) != `` {
 			debug.PrintStack()
 		} else {
