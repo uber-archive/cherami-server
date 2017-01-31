@@ -25,13 +25,9 @@ package manyrocks
 #include <stdlib.h>
 #include <unistd.h>
 
-int test(const char* key) {
+int test() {
 	// sleep between 0 to 1000ms
 	usleep(rand()%1000);
-	if (key) {
-		return sizeof(key);
-	}
-
 	return 0;
 }
 */
@@ -45,7 +41,6 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
-	"unsafe"
 
 	"github.com/tecbot/gorocksdb"
 	"github.com/uber-common/bark"
@@ -408,7 +403,7 @@ func (t *Rock) Put(key s.Key, val s.Value) (addr s.Address, err error) {
 	}
 
 	// make a CGO call
-	C.test(c)
+	C.test()
 
 	// store message
 	/* err = t.db.Put(t.writeOpts, t.serializeAddr(addr), []byte(val))

@@ -28,7 +28,6 @@ void initrand() {
 	srand(time(NULL));
 }
 */
-
 import "C"
 import (
 	"fmt"
