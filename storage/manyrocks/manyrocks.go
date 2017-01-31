@@ -23,8 +23,11 @@ package manyrocks
 /*
 #include <math.h>
 #include <stdlib.h>
+#include <unistd.h>
 
 int test(const char* key) {
+	// sleep for a bit
+	usleep(2000);
 	if (key) {
 		return sizeof(key);
 	}
@@ -42,7 +45,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
-	//"unsafe"
+	"unsafe"
 
 	"github.com/tecbot/gorocksdb"
 	"github.com/uber-common/bark"
@@ -406,29 +409,30 @@ func (t *Rock) Put(key s.Key, val s.Value) (addr s.Address, err error) {
 
 	// make a CGO call
 	// first convert key to C.char *
-	/*
-		var c *C.char
-		cKey := t.serializeAddr(addr)
-		if len(cKey) > 0 {
-			c = (*C.char)(unsafe.Pointer(&cKey[0]))
-			// get the size
-			_ = C.size_t(len(cKey))
-		}
-		C.test(c)
-	*/
+	var c *C.char
+	cKey := t.serializeAddr(addr)
+	if len(cKey) > 0 {
+		c = (*C.char)(unsafe.Pointer(&cKey[0]))
+		// get the size
+		_ = C.size_t(len(cKey))
+	}
+	ret := C.test(c)
+
 	// store message
-	err = t.db.Put(t.writeOpts, t.serializeAddr(addr), []byte(val))
+	/* err = t.db.Put(t.writeOpts, t.serializeAddr(addr), []byte(val))
 
 	if err != nil {
 		t.store.logger.WithFields(bark.Fields{`id`: t.id, `addr`: addr, `valLength`: len(val), common.TagErr: err}).Error(`Rock.Put error`)
 		addr, err = s.InvalidAddr, errPutFailed
 		return
 	}
-
+	*/
 	// notify all listeners there's a new message available to read
 	// TODO: when used with 'IncreasingKeys' coalesce multiple notify
 	// calls and sent notification less often to improve write perf
-	t.notify(key, addr)
+	if ret != 0 {
+		t.notify(key, addr)
+	}
 
 	// This log line evaluation (even not printed) takes 10% CPU
 	// log.WithFields(log.Fields{`id`: t.id,  `key`: key,  `valLength`: len(val),  `addr`: addr,}).Debug(`Rock.Put()`)
