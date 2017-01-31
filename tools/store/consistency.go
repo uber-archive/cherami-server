@@ -28,6 +28,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/codegangsta/cli"
@@ -214,6 +215,7 @@ func getStorageStatus(extentid string, mgr *manyrocks.ManyRocks, fullPath string
 	}()
 
 	if db == nil || err != nil {
+		fmt.Fprintf(os.Stderr, "Coudln't open rocksdb(%v): %v\n", fullPath, err)
 		return StorageStatusCorrupted
 	}
 
@@ -239,6 +241,11 @@ func convertMetadataStatus2Str(status shared.ExtentStatus) string {
 
 // CheckStoreConsistency checks the consistency inforamtion of the store
 func CheckStoreConsistency(c *cli.Context) {
+	var infoRoot os.FileInfo
+	var list []os.FileInfo
+	var mgr *manyrocks.ManyRocks
+	var err error
+
 	if len(c.Args()) < 1 {
 		toolscommon.ExitIfError(errors.New("not enough arguments"))
 	}
@@ -248,23 +255,28 @@ func CheckStoreConsistency(c *cli.Context) {
 	// check the root folder
 	rootdir := string(c.String("rootdir"))
 
-	if _, err := os.Stat(rootdir); err != nil {
-		fmt.Fprintf(os.Stdout, "rootdir does not exist: %s\n", rootdir)
-		toolscommon.ExitIfError(err)
-	}
+	chkRoot := func() {
+		if _, err = os.Stat(rootdir); err != nil {
+			fmt.Fprintf(os.Stdout, "rootdir does not exist: %s\n", rootdir)
+			toolscommon.ExitIfError(err)
+		}
 
-	if infoRoot, err := os.Lstat(rootdir); err != nil || !infoRoot.IsDir() {
-		fmt.Fprintf(os.Stdout, "This is not a folder: %s\n", rootdir)
-		toolscommon.ExitIfError(err)
-	}
+		if infoRoot, err = os.Lstat(rootdir); err != nil || !infoRoot.IsDir() {
+			fmt.Fprintf(os.Stdout, "This is not a folder: %s\n", rootdir)
+			toolscommon.ExitIfError(err)
+		}
 
-	list, err := ioutil.ReadDir(rootdir)
-	if err != nil {
-		fmt.Fprintf(os.Stdout, "ReadDir failed: %s\n", rootdir)
-		toolscommon.ExitIfError(err)
+		list, err = ioutil.ReadDir(rootdir)
+		if err != nil {
+			fmt.Fprintf(os.Stdout, "ReadDir failed: %s\n", rootdir)
+			toolscommon.ExitIfError(err)
+		}
 	}
+	chkRoot()
 
 	storeHost := string(c.Args().Get(1))
+
+	// Calculate the storehost IP address from the local interface
 	var storeIP net.IP
 	if len(storeHost) == 0 {
 		storeIP, err = getLocalIPv4Address("eth0")
@@ -274,18 +286,27 @@ func CheckStoreConsistency(c *cli.Context) {
 		}
 		storeHost = storeIP.String()
 	}
-
 	storeHostAddr := fmt.Sprintf("%s:%s", storeHost, common.ServiceToPort[common.StoreServiceName])
 
+	// Get the UUID for this storehost
 	mClient := toolscommon.GetMClient(c, storeToolService)
 	storeHostUUID, err := mClient.HostAddrToUUID(storeHostAddr)
 	toolscommon.ExitIfError(err)
 
+	// Switch to the store UUID directory, if available; root may already be this directory, as well
+	newRootDir := rootdir + "/" + storeHostUUID
+	if _, err = os.Stat(newRootDir); err == nil {
+		rootdir = newRootDir
+		chkRoot()
+	}
+
+	// List all extents for this storehost from metadata
 	extRes, err1 := mClient.ListStoreExtentsStats(&metadata.ListStoreExtentsStatsRequest{
 		StoreUUID: common.StringPtr(storeHostUUID),
 	})
 	toolscommon.ExitIfError(err1)
 
+	// Build an extent map to cross-check with on-disk state
 	extentMetadataCache := make(map[string]*shared.ExtentStats)
 	for _, stats := range extRes.GetExtentStatsList() {
 		extent := stats.GetExtent()
@@ -294,10 +315,11 @@ func CheckStoreConsistency(c *cli.Context) {
 		// TODO: check if extent status is consistent with the replica status
 	}
 
-	mgr, err2 := manyrocks.New(&manyrocks.Opts{BaseDir: rootdir}, bark.NewLoggerFromLogrus(log.StandardLogger()))
-	if err2 != nil {
+	// Open the ManyRocks library
+	mgr, err = manyrocks.New(&manyrocks.Opts{BaseDir: rootdir}, bark.NewLoggerFromLogrus(log.StandardLogger()))
+	if err != nil {
 		fmt.Fprintf(os.Stdout, "Cannot create a rocksdb manyrocks manager")
-		toolscommon.ExitIfError(err2)
+		toolscommon.ExitIfError(err)
 	}
 
 	// Store existing extents map
@@ -309,32 +331,39 @@ func CheckStoreConsistency(c *cli.Context) {
 		fInfo := list[i]
 
 		if !fInfo.IsDir() {
-			// Right now we will only check folders, warn about orphant files
+			// Right now we will only check folders, warn about orphaned files
 			fmt.Fprintf(
-				os.Stdout,
+				os.Stderr,
 				"Warning, id:%s, not a folder, action:%s\n",
 				fInfo.Name(),
 				cleanupAction2Str(ActionNA))
 			continue
 		}
 
-		extentid := fInfo.Name()
+		extentID := fInfo.Name()
 
-		storageStatus := getStorageStatus(extentid, mgr, fullPath, fInfo)
+		storageStatus := getStorageStatus(extentID, mgr, fullPath, fInfo)
 
 		consistencyInfo := &extentConsistencyInfo{
-			extentUUID:        extentid,
+			extentUUID:        extentID,
 			storageStatus:     storageStatus,
 			consistencyResult: ConsistencyResultGOOD,
 			consistencyAction: ActionNA,
 		}
 
-		extentStats, ok := extentMetadataCache[extentid]
+		extentStats, ok := extentMetadataCache[extentID]
 		if !ok {
-			// There is no metadata entry, but we do have orphant folder
-			consistencyInfo.metadataStatus = "nonexist"
-			consistencyInfo.consistencyResult = ConsistencyResultError
-			consistencyInfo.consistencyAction = ActionRemoveFolder
+			if time.Since(fInfo.ModTime()) < time.Hour {
+				fmt.Fprintf(os.Stderr, "Race detected for extent %v. Metadata missing, disk modified at %v\n", extentID, fInfo.ModTime())
+				consistencyInfo.metadataStatus = "newextent"
+				consistencyInfo.consistencyResult = ConsistencyResultWarning
+				consistencyInfo.consistencyAction = ActionNA
+			} else {
+				// There is no metadata entry, but we do have orphaned folder
+				consistencyInfo.metadataStatus = "nonexist"
+				consistencyInfo.consistencyResult = ConsistencyResultError
+				consistencyInfo.consistencyAction = ActionRemoveFolder
+			}
 		} else {
 			switch extentStats.GetStatus() {
 			case shared.ExtentStatus_DELETED:
@@ -368,13 +397,13 @@ func CheckStoreConsistency(c *cli.Context) {
 			}
 		}
 
-		storeExtentsInfoMap[extentid] = consistencyInfo
+		storeExtentsInfoMap[extentID] = consistencyInfo
 
 		fmt.Fprintf(
 			os.Stdout,
 			"%s, id:%s, size:%d, createat:%v storage:%s metadata:%s, action:%s\n",
 			consistencyResult2Str(consistencyInfo.consistencyResult),
-			extentid,
+			extentID,
 			fInfo.Size(),
 			fInfo.ModTime(),
 			storageStatus2Str(consistencyInfo.storageStatus),
