@@ -483,9 +483,6 @@ func (t *RetentionManager) computeRetention(job *retentionJob, log bark.Logger) 
 		}
 	}
 
-	// isRemoteZoneExtent is set if the extent is a remote multi-zone extent
-	var isRemoteZoneExtent = dest.isMultiZone && !common.IsRemoteZoneExtent(ext.originZone, t.Options.LocalZone)
-
 	// -- step 1: take a snapshot of the current time and compute retention timestamps -- //
 
 	tNow := time.Now().UnixNano()
