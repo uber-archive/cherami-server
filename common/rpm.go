@@ -22,6 +22,7 @@ package common
 
 import (
 	"errors"
+	"hash/fnv"
 	"math/rand"
 	"net"
 	"sort"
@@ -245,27 +246,35 @@ func (rpm *ringpopMonitorImpl) FindHostForAddr(service string, addr string) (*Ho
 
 // FindHostForKey finds and returns the host responsible for handling the given key
 func (rpm *ringpopMonitorImpl) FindHostForKey(service string, key string) (*HostInfo, error) {
-	// Note: we don't have Lookup(key, predicate..)
-	// so just get all reachable hosts return the first instance
+
+	// get list of hosts that for the given service
 	members, err := rpm.GetHosts(service)
 	if err != nil || members == nil || len(members) == 0 {
 		return nil, ErrUnknownService
 	}
 
-	// We need to make sure we always return the same node
-	// So sort members by IP and return the lowest.
+	// this function should be consistent in picking and returning the
+	// same node for a given key on a specific 'set' of hosts; so we sort
+	// all the hosts by their ip-addresses and use a hash of the key to
+	// pick the host from that list.
 	var ipAddrs []string
-	tempMap := make(map[string]int, len(members))
-	for k, member := range members {
+	hostInfoMap := make(map[string]*HostInfo, len(members))
+	for _, member := range members {
 		ipAddrs = append(ipAddrs, member.Addr)
-		// maintain the reverse mapping to have the index
-		tempMap[member.Addr] = k
+		hostInfoMap[member.Addr] = member
 	}
-	// sort the ip addresses
-	sort.Strings(ipAddrs)
-	// get the key of the lowest
-	lowestIndex := tempMap[ipAddrs[0]]
-	return members[lowestIndex], nil
+
+	// choose an ipAddr using hash of the given key
+	sort.Strings(ipAddrs) // sort ip-addresses
+
+	// compute FNV-1a hash of the key
+	fnv1a := fnv.New32a()
+	fnv1a.Write([]byte(key))
+	hash := int(fnv1a.Sum32())
+
+	ipAddr := ipAddrs[hash%len(ipAddrs)] // pick ip-addr corresponding to hash
+
+	return hostInfoMap[ipAddr], nil
 }
 
 // IsHostHealthy returns true if the given host is healthy and false otherwise
