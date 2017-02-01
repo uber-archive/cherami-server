@@ -24,6 +24,7 @@ import:
   - require
   - suite
 - package: github.com/tecbot/gorocksdb
+- package: github.com/cockroachdb/c-jemalloc
 - package: github.com/uber-common/bark
 - package: github.com/uber/cherami-client-go
   subpackages:

@@ -323,7 +323,7 @@ func (h *InputHost) OpenPublisherStream(ctx thrift.Context, call stream.BInOpenP
 
 	// make sure the rate is satisfied. If not reject the request outright
 	if h.IsLimitsEnabled() {
-		if ok, _ := h.GetTokenBucketValue().TryConsume(1); !ok {
+		if ok, _ = h.GetTokenBucketValue().TryConsume(1); !ok {
 			h.logger.WithField(common.TagHostConnLimit,
 				common.FmtHostConnLimit(h.GetHostConnLimitPerSecond())).
 				Warn("Too many open publisher streams on this inputhost within a second")

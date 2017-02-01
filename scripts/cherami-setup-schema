@@ -1,15 +1,24 @@
 #!/bin/bash
-set -uxeo pipefail
-# this script is used to setup the "cherami" keyspace
+set -xeo pipefail
+# This script is used to setup the "cherami" keyspace
 # and load all the tables in the .cql file within this keyspace,
-# assuming cassandra is up and running
-#
-# this script is only intended to be used in test environments
+# assuming cassandra is up and running.
+# The default keyspace is "cherami", default replication factor is 3.
 
-# the default keyspace is cherami
-keyspace="cherami"
-CHERAMI_CQLSH_DIR="/usr/local/bin"
-CHERAMI_SCHEMA_DIR="clients/metadata/schema"
+# To run against a specific Cassandra deployment, set CQLSH_HOST to the 
+# Cassandra IP address
 
-$CHERAMI_CQLSH_DIR/cqlsh -f $CHERAMI_SCHEMA_DIR/metadata_keyspace.cql
-$CHERAMI_CQLSH_DIR/cqlsh -k $keyspace -f $CHERAMI_SCHEMA_DIR/metadata.cql
+if [ -z "$KEYSPACE" ]; then
+    KEYSPACE="cherami"
+fi
+
+if [ -z "$RF" ]; then
+    RF=3
+fi
+
+if [ -z "$CQLSH" ]; then
+    CQLSH=cqlsh
+fi
+
+$CQLSH -e "CREATE KEYSPACE IF NOT EXISTS $KEYSPACE WITH replication = {'class': 'SimpleStrategy', 'replication_factor': '$RF'};"
+$CQLSH -k $KEYSPACE -f `dirname $0`/../clients/metadata/schema/metadata.cql

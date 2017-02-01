@@ -109,6 +109,7 @@ func (s *OutputHostSuite) SetupCommonMock() {
 	s.mockService.On("GetClientFactory").Return(s.mockClientFactory)
 	s.mockClientFactory.On("GetControllerClient").Return(s.mockControllerClient, nil)
 	s.mockControllerClient.On("ReportConsumerGroupExtentMetric", mock.Anything, mock.Anything).Return(nil)
+	s.mockControllerClient.On("ReportConsumerGroupMetric", mock.Anything, mock.Anything).Return(nil)
 
 	s.mockWSConnector.On("AcceptConsumerStream", mock.Anything, mock.Anything).Return(s.mockCons, nil)
 	s.mockWSConnector.On("OpenReadStream", mock.Anything, mock.Anything).Return(s.mockRead, nil)
@@ -176,6 +177,7 @@ func (s *OutputHostSuite) TestOutputHostReadMessage() {
 	destDesc.DestinationUUID = common.StringPtr(destUUID)
 	destDesc.Status = common.InternalDestinationStatusPtr(shared.DestinationStatus_ENABLED)
 	s.mockMeta.On("ReadDestination", mock.Anything, mock.Anything).Return(destDesc, nil).Once()
+	s.mockMeta.On("ReadExtentStats", mock.Anything, mock.Anything).Return(nil, fmt.Errorf(`foo`))
 
 	cgDesc := shared.NewConsumerGroupDescription()
 	cgDesc.ConsumerGroupUUID = common.StringPtr(uuid.New())
@@ -238,6 +240,7 @@ func (s *OutputHostSuite) TestOutputHostAckMessage() {
 	destDesc.DestinationUUID = common.StringPtr(destUUID)
 	destDesc.Status = common.InternalDestinationStatusPtr(shared.DestinationStatus_ENABLED)
 	s.mockMeta.On("ReadDestination", mock.Anything, mock.Anything).Return(destDesc, nil).Once()
+	s.mockMeta.On("ReadExtentStats", mock.Anything, mock.Anything).Return(nil, fmt.Errorf(`foo`))
 
 	cgUUID := uuid.New()
 	extUUID := uuid.New()
@@ -354,6 +357,7 @@ func (s *OutputHostSuite) TestOutputHostReconfigure() {
 	destDesc.DestinationUUID = common.StringPtr(destUUID)
 	destDesc.Status = common.InternalDestinationStatusPtr(shared.DestinationStatus_ENABLED)
 	s.mockMeta.On("ReadDestination", mock.Anything, mock.Anything).Return(destDesc, nil).Twice()
+	s.mockMeta.On("ReadExtentStats", mock.Anything, mock.Anything).Return(nil, fmt.Errorf(`foo`))
 
 	// 1. Make sure we setup the ReadConsumerGroup metadata
 	cgDesc := shared.NewConsumerGroupDescription()
@@ -408,11 +412,12 @@ func (s *OutputHostSuite) TestOutputHostReconfigure() {
 
 	// 6. Make sure we just have one extent in the CGCache
 	outputHost.cgMutex.Lock()
-	if cg, ok := outputHost.cgCache[cgUUID]; ok {
-		cg.extMutex.Lock()
-		s.Equal(1, len(cg.extentCache))
-		cg.extMutex.Unlock()
-	}
+	cg, ok := outputHost.cgCache[cgUUID]
+	s.True(ok, "CG not found in the outputhost")
+	s.NotNil(cg, "CG should be loaded but it is not")
+	cg.extMutex.Lock()
+	s.Equal(1, len(cg.extentCache))
+	cg.extMutex.Unlock()
 	outputHost.cgMutex.Unlock()
 
 	// 7. Now add another extent to the "ReadConsumerGroupExtents" call (extUUID2)
@@ -433,15 +438,9 @@ func (s *OutputHostSuite) TestOutputHostReconfigure() {
 	outputHost.ConsumerGroupsUpdated(ctx, req)
 
 	// 9. Make sure we now have 2 and exactly 2 extents
-	var ok bool
-	var cgCache *consumerGroupCache
-	outputHost.cgMutex.Lock()
-	if cgCache, ok = outputHost.cgCache[cgUUID]; ok {
-		cgCache.extMutex.Lock()
-		s.Equal(2, len(cgCache.extentCache))
-		cgCache.extMutex.Unlock()
-	}
-	outputHost.cgMutex.Unlock()
+	cg.extMutex.Lock()
+	s.Equal(2, len(cg.extentCache))
+	cg.extMutex.Unlock()
 
 	// 10. Mark the consumer group as deleted and make sure its unloaded
 	cgDesc.Status = common.InternalConsumerGroupStatusPtr(shared.ConsumerGroupStatus_DELETED)
@@ -458,15 +457,10 @@ func (s *OutputHostSuite) TestOutputHostReconfigure() {
 	req.Updates = append(req.Updates, cgUpdate)
 	outputHost.ConsumerGroupsUpdated(ctx, req)
 
-	var succ = false
-	select {
-	case <-cgCache.closeChannel:
-		succ = true
-	case <-time.After(time.Second):
-		succ = false
-	}
-
-	s.True(succ, "refreshCGCache failed to unload extents for DELETED consumer group")
+	time.Sleep(1 * time.Second)
+	cg.extMutex.Lock()
+	s.True(cg.unloadInProgress, "refreshCGCache failed to unload extents for DELETED consumer group")
+	cg.extMutex.Unlock()
 
 	// 12. Shutdown
 	outputHost.Shutdown()
@@ -487,6 +481,7 @@ func (s *OutputHostSuite) TestOutputHostReceiveMessageBatch() {
 	destDesc.DestinationUUID = common.StringPtr(destUUID)
 	destDesc.Status = common.InternalDestinationStatusPtr(shared.DestinationStatus_ENABLED)
 	s.mockMeta.On("ReadDestination", mock.Anything, mock.Anything).Return(destDesc, nil).Once()
+	s.mockMeta.On("ReadExtentStats", mock.Anything, mock.Anything).Return(nil, fmt.Errorf(`foo`))
 
 	cgDesc := shared.NewConsumerGroupDescription()
 	cgDesc.ConsumerGroupUUID = common.StringPtr(uuid.New())
@@ -555,6 +550,7 @@ func (s *OutputHostSuite) TestOutputHostReceiveMessageBatch_NoMsg() {
 	destDesc.DestinationUUID = common.StringPtr(destUUID)
 	destDesc.Status = common.InternalDestinationStatusPtr(shared.DestinationStatus_ENABLED)
 	s.mockMeta.On("ReadDestination", mock.Anything, mock.Anything).Return(destDesc, nil)
+	s.mockMeta.On("ReadExtentStats", mock.Anything, mock.Anything).Return(nil, fmt.Errorf(`foo`))
 
 	cgDesc := shared.NewConsumerGroupDescription()
 	cgDesc.ConsumerGroupUUID = common.StringPtr(uuid.New())
@@ -604,6 +600,7 @@ func (s *OutputHostSuite) TestOutputHostReceiveMessageBatch_SomeMsgAvailable() {
 	destDesc.DestinationUUID = common.StringPtr(destUUID)
 	destDesc.Status = common.InternalDestinationStatusPtr(shared.DestinationStatus_ENABLED)
 	s.mockMeta.On("ReadDestination", mock.Anything, mock.Anything).Return(destDesc, nil)
+	s.mockMeta.On("ReadExtentStats", mock.Anything, mock.Anything).Return(nil, fmt.Errorf(`foo`))
 
 	cgDesc := shared.NewConsumerGroupDescription()
 	cgDesc.ConsumerGroupUUID = common.StringPtr(uuid.New())
@@ -676,6 +673,7 @@ func (s *OutputHostSuite) TestOutputCgUnload() {
 	destDesc.DestinationUUID = common.StringPtr(destUUID)
 	destDesc.Status = common.InternalDestinationStatusPtr(shared.DestinationStatus_ENABLED)
 	s.mockMeta.On("ReadDestination", mock.Anything, mock.Anything).Return(destDesc, nil).Twice()
+	s.mockMeta.On("ReadExtentStats", mock.Anything, mock.Anything).Return(nil, fmt.Errorf(`foo`))
 
 	// 1. Make sure we setup the ReadConsumerGroup metadata
 	cgDesc := shared.NewConsumerGroupDescription()
@@ -730,7 +728,8 @@ func (s *OutputHostSuite) TestOutputCgUnload() {
 
 	// 6. Make sure we just have one extent in the CGCache
 	outputHost.cgMutex.Lock()
-	if cg, ok := outputHost.cgCache[cgUUID]; ok {
+	cg, ok := outputHost.cgCache[cgUUID]
+	if ok {
 		cg.extMutex.Lock()
 		s.Equal(1, len(cg.extentCache))
 		cg.extMutex.Unlock()
@@ -745,14 +744,9 @@ func (s *OutputHostSuite) TestOutputCgUnload() {
 
 	time.Sleep(1 * time.Second)
 	// 8. Make sure it is unloaded
-	outputHost.cgMutex.Lock()
-	_, ok := outputHost.cgCache[cgUUID]
-	outputHost.cgMutex.Unlock()
-	s.Equal(ok, false)
-
-	// 9. try to unload again. should get an error
-	err = outputHost.UnloadConsumerGroups(ctx, cgUnloadReq)
-	s.Error(err)
+	cg.extMutex.Lock()
+	s.Equal(cg.unloadInProgress, true)
+	cg.extMutex.Unlock()
 
 	outputHost.Shutdown()
 }
@@ -772,6 +766,7 @@ func (s *OutputHostSuite) TestOutputAckMgrReset() {
 	destDesc.DestinationUUID = common.StringPtr(destUUID)
 	destDesc.Status = common.InternalDestinationStatusPtr(shared.DestinationStatus_ENABLED)
 	s.mockMeta.On("ReadDestination", mock.Anything, mock.Anything).Return(destDesc, nil).Twice()
+	s.mockMeta.On("ReadExtentStats", mock.Anything, mock.Anything).Return(nil, fmt.Errorf(`foo`))
 
 	// 1. Make sure we setup the ReadConsumerGroup metadata
 	cgDesc := shared.NewConsumerGroupDescription()

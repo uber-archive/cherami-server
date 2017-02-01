@@ -23,7 +23,6 @@ package controllerhost
 import (
 	"fmt"
 	"math/rand"
-	"net"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -34,6 +33,7 @@ import (
 	"github.com/uber/cherami-server/common"
 	"github.com/uber/cherami-server/common/configure"
 	dconfig "github.com/uber/cherami-server/common/dconfigclient"
+	"github.com/uber/cherami-server/test"
 	mockcommon "github.com/uber/cherami-server/test/mocks/common"
 	mockreplicator "github.com/uber/cherami-server/test/mocks/replicator"
 	c "github.com/uber/cherami-thrift/.generated/go/controller"
@@ -45,7 +45,6 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
-	"github.com/uber/tchannel-go"
 )
 
 const (
@@ -90,34 +89,17 @@ func (s *McpSuite) generateName(prefix string) string {
 	return strings.Join([]string{prefix, strconv.Itoa(seq)}, ".")
 }
 
-func findEphemeralPort(ip, serviceName string) (int, error) {
-	addr := ip + ":0"
-	conn, err := net.Listen("tcp", addr)
-	if err != nil {
-		return 0, err
-	}
-	_, port, err := common.SplitHostPort(conn.Addr().String())
-	if err != nil {
-		conn.Close()
-		return 0, err
-	}
-	conn.Close()
-	return port, nil
-}
-
 func (s *McpSuite) startController() {
 	// first setup the port for the controller and also
 	// the ringhosts properly so that we can bootstrap.
-	ip, err := tchannel.ListenIP()
+	_, listenIP, port, err := test.FindEphemeralPort()
 	s.Nil(err)
-	listenIP := ip.String()
-	port, err := findEphemeralPort(listenIP, common.ControllerServiceName)
-	s.Nil(err)
-	wsPort, err := findEphemeralPort(listenIP, common.ControllerServiceName)
+	_, _, wsPort, err := test.FindEphemeralPort()
 	s.Nil(err)
 
 	ringHosts := fmt.Sprintf("%v:%d", listenIP, port)
 	serviceConfig := s.cfg.GetServiceConfig(common.ControllerServiceName)
+	serviceConfig.SetListenAddress(listenIP)
 	serviceConfig.SetPort(port)
 	serviceConfig.SetWebsocketPort(wsPort)
 	serviceConfig.SetRingHosts(ringHosts)
@@ -316,7 +298,7 @@ func (s *McpSuite) TestGetInputHosts() {
 	s.Equal(3, len(extent.StoreUUIDs), "Wrong number of replicas for extent")
 
 	for _, u := range extent.StoreUUIDs {
-		_, err := s.mockrpm.ResolveUUID(common.StoreServiceName, u)
+		_, err = s.mockrpm.ResolveUUID(common.StoreServiceName, u)
 		s.Nil(err, "GetInputHosts() created an extent with un-known store uuid")
 	}
 
@@ -378,12 +360,12 @@ func (s *McpSuite) TestGetInputHosts() {
 	// make sure we create no more extents than needed
 	extentStats, err := s.listExtents(dstUUID)
 	s.Equal(totalExtents, len(extentStats), "Wrong number of extents for destination")
-	for i := 0; i < minOpenExtentsForDstType(dstTypePlain); i++ {
+	for i := 0; i < minOpenExtentsForDst(s.mcp.context, `/`, dstTypePlain); i++ {
 		resp, err = s.mcp.GetInputHosts(nil, &c.GetInputHostsRequest{DestinationUUID: dstDesc.DestinationUUID})
 		s.Nil(err)
 	}
 	extentStats, err = s.listExtents(dstUUID)
-	s.Equal(sealedExtents+minOpenExtentsForDstType(dstTypePlain), len(extentStats), "Wrong number of extents for destination")
+	s.Equal(sealedExtents+minOpenExtentsForDst(s.mcp.context, `/`, dstTypePlain), len(extentStats), "Wrong number of extents for destination")
 
 	// now verify we serve results from cache until ttl
 	// seal the extents and verify we still get them
@@ -398,7 +380,7 @@ func (s *McpSuite) TestGetInputHosts() {
 	resp, err = s.mcp.GetInputHosts(nil, &c.GetInputHostsRequest{DestinationUUID: dstDesc.DestinationUUID})
 	s.Nil(err, "GetInputHosts() failed to serve result from cache")
 	extentStats, err = s.listExtents(dstUUID)
-	s.Equal(sealedExtents+minOpenExtentsForDstType(dstTypePlain), len(extentStats), "Wrong number of extents for destination")
+	s.Equal(sealedExtents+minOpenExtentsForDst(s.mcp.context, `/`, dstTypePlain), len(extentStats), "Wrong number of extents for destination")
 
 	// now advance clock and expire the cache
 	timeSource.currTime = time.Now().Add(time.Hour).Add(time.Second)
@@ -406,7 +388,7 @@ func (s *McpSuite) TestGetInputHosts() {
 	s.Nil(err, "GetInputHosts() failed to return non-empty result")
 	s.Equal(1, len(resp.GetInputHostIds()), "GetInputHosts() must return only one value")
 	extentStats, err = s.listExtents(dstUUID)
-	s.Equal(1+sealedExtents+minOpenExtentsForDstType(dstTypePlain), len(extentStats), "Wrong number of extents for destination")
+	s.Equal(1+sealedExtents+minOpenExtentsForDst(s.mcp.context, `/`, dstTypePlain), len(extentStats), "Wrong number of extents for destination")
 }
 
 func (s *McpSuite) TestGetOutputHostsMaxOpenExtentsLimit() {
@@ -437,7 +419,7 @@ func (s *McpSuite) TestGetOutputHostsMaxOpenExtentsLimit() {
 
 		extents := make(map[string]bool)
 
-		maxExtents := maxExtentsToConsumeForDstType(getDstType(dstDesc), nil)
+		maxExtents := maxExtentsToConsumeForDst(s.mcp.context, `/`, `/`, getDstType(dstDesc), nil)
 
 		for i := 0; i < maxExtents+1; i++ {
 			extentUUID := uuid.New()
@@ -887,4 +869,24 @@ func (s *McpSuite) TestCreateRemoteZoneExtent() {
 		}
 	}
 	s.True(primaryValid)
+}
+
+func (s *McpSuite) TestGetDstType() {
+
+	dstType := shared.DestinationType_PLAIN
+
+	dstDesc := &shared.DestinationDescription{
+		Path:            common.StringPtr("/unit/desttype"),
+		DestinationUUID: common.StringPtr(uuid.New()),
+		Type:            &dstType,
+	}
+
+	s.Equal(dstTypePlain, getDstType(dstDesc), "getDstType(PLAIN) failed")
+	dstType = shared.DestinationType_TIMER
+	s.Equal(dstTypeTimer, getDstType(dstDesc), "getDstType(TIMER) failed")
+
+	// test dlq
+	dstType = shared.DestinationType_PLAIN
+	dstDesc.Path = common.StringPtr("/unit/desttype.dlq")
+	s.Equal(dstTypeDLQ, getDstType(dstDesc), "getDstType(TIMER) failed")
 }

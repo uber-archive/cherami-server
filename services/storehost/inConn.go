@@ -676,7 +676,7 @@ pump:
 				break pump
 			}
 
-			t.m3Client.RecordTimer(metrics.InConnScope, metrics.StorageWriteMessageExcludeSocketLatency, time.Since(ack.t0))
+			t.m3Client.RecordTimer(metrics.InConnScope, metrics.StorageWriteMessageBeforeAckLatency, time.Since(ack.t0))
 
 			// write out (blocking) to stream
 			if err := stream.Write(ack.AppendMessageAck); err != nil {

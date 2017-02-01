@@ -129,7 +129,7 @@ func (s *EventPipelineSuite) TestEventStream() {
 }
 
 func (s *EventPipelineSuite) TestExtentCreatedEvent() {
-
+	var succ bool
 	path := s.generateName("/cherami/event-test")
 	dstDesc, err := s.createDestination(path)
 	s.Nil(err, "Failed to create destination")
@@ -158,8 +158,8 @@ func (s *EventPipelineSuite) TestExtentCreatedEvent() {
 	cgNames := []string{s.generateName("cons-1"), s.generateName("cons-2")}
 	cgIDs := make([]string, len(cgNames))
 	for i, name := range cgNames {
-		cgDesc, err := s.createConsumerGroup(dstDesc.GetPath(), name)
-		s.Nil(err, "Failed to create consumer group")
+		cgDesc, errCCG := s.createConsumerGroup(dstDesc.GetPath(), name)
+		s.Nil(errCCG, "Failed to create consumer group")
 		cgIDs[i] = cgDesc.GetConsumerGroupUUID()
 		for _, extID := range extentIDs {
 			s.mcp.context.mm.AddExtentToConsumerGroup(dstID, cgIDs[i], extID, outHostID, storeIDs)
@@ -167,10 +167,11 @@ func (s *EventPipelineSuite) TestExtentCreatedEvent() {
 
 		s.mcp.context.resultCache.write(cgIDs[i],
 			resultCacheParams{
-				dstType:  dstTypePlain,
-				nExtents: 10,
-				hostIDs:  cacheAddrs,
-				expiry:   now + int64(time.Hour),
+				dstType:    dstTypePlain,
+				nExtents:   10,
+				maxExtents: 10,
+				hostIDs:    cacheAddrs,
+				expiry:     now + int64(time.Hour),
 			})
 	}
 
@@ -198,12 +199,12 @@ func (s *EventPipelineSuite) TestExtentCreatedEvent() {
 	for i, extentID := range extentIDs {
 
 		event := NewExtentCreatedEvent(dstID, inHostIDs[i], extentID, storeIDs)
-		succ := s.mcp.context.eventPipeline.Add(event)
+		succ = s.mcp.context.eventPipeline.Add(event)
 		s.True(succ, "Failed to enqueue ExtentCreatedEvent")
 
 		for _, cgID := range cgIDs {
 			event = NewConsGroupUpdatedEvent(dstID, cgID, extentID, outHostID)
-			succ := s.mcp.context.eventPipeline.Add(event)
+			succ = s.mcp.context.eventPipeline.Add(event)
 			s.True(succ, "Failed to enqueue ExtentCreatedEvent")
 		}
 	}
@@ -213,15 +214,15 @@ func (s *EventPipelineSuite) TestExtentCreatedEvent() {
 		return (count == len(inHostIDs)*len(extentIDs))
 	}
 
-	succ := common.SpinWaitOnCondition(cond, 60*time.Second)
+	succ = common.SpinWaitOnCondition(cond, 60*time.Second)
 	s.True(succ, "Input host failed to receive notification on time")
 
 	for _, cgID := range cgIDs {
-		cond := func() bool {
+		cond = func() bool {
 			count := outputService.GetUpdatedCount(cgID)
 			return (count == 2*len(extentIDs)) // once for extentcreated and once for consgroupupdated
 		}
-		succ := common.SpinWaitOnCondition(cond, 60*time.Second)
+		succ = common.SpinWaitOnCondition(cond, 60*time.Second)
 		s.True(succ, "Output host failed to receive notification within timeout")
 		result := s.mcp.context.resultCache.readOutputHosts(cgID, time.Now().UnixNano())
 		s.True(result.cacheHit, "Unexpected resultCache miss")
@@ -451,10 +452,10 @@ func (s *EventPipelineSuite) TestRemoteZoneExtentCreatedEvent() {
 
 	// The other two stores are expected to be re-replicated
 	for i := 1; i < len(storeIDs); i++ {
-		cond := func() bool {
+		cond = func() bool {
 			return stores[i].isExtentReReplicated(extentID) && !stores[i].isExtentRemoteReplicated(extentID)
 		}
-		succ := common.SpinWaitOnCondition(cond, 2*time.Second)
+		succ = common.SpinWaitOnCondition(cond, 2*time.Second)
 		s.True(succ, "Timed out waiting for exent to be rereplicated")
 	}
 }
@@ -536,8 +537,7 @@ func setupTestTChannelUtil(sName string, thriftService thrift.TChanServer) (*tch
 	server := thrift.NewServer(ch)
 	server.Register(thriftService)
 
-	ip, _ := tchannel.ListenIP()
-	if err = ch.ListenAndServe(fmt.Sprintf("%s:0", ip.String())); err != nil {
+	if err = ch.ListenAndServe("127.0.0.1:0"); err != nil {
 		log.Fatalf("Unable to start tchannel server: %v", err)
 	}
 

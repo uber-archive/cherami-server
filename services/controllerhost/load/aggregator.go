@@ -197,11 +197,12 @@ func (tsaggr *TimeslotAggregator) Get(hostID string, groupTag string, metricName
 
 	key := buildKey(hostID, groupTag, metricName)
 	minSlots := tsaggr.minSlotsForAggrType(resultType)
+	maxSlots := tsaggr.maxSlotsForAggrType(resultType)
 
 	var nSlots int
 	var result timeslotData
 
-	for nSlots < minSlots {
+	for nSlots < maxSlots {
 
 		slotEndTime := currSlot.beginTime + aggregationPeriod
 		if slotEndTime <= oldestDataTime {
@@ -222,7 +223,7 @@ func (tsaggr *TimeslotAggregator) Get(hostID string, groupTag string, metricName
 		return 0, ErrNoData
 	}
 
-	if resultType == OneMinSum {
+	if resultType == OneMinSum || resultType == FiveMinSum {
 		return result.sum, nil
 	}
 
@@ -322,6 +323,8 @@ func (tsaggr *TimeslotAggregator) getOldestDataTimeForAggrType(aggrType Aggregat
 		return now - int64(time.Minute)
 	case OneMinSum:
 		return now - int64(time.Minute)
+	case FiveMinSum:
+		return now - int64(time.Minute*5)
 	default:
 		tsaggr.logger.Fatalf("Unknown aggregate type %v", aggrType)
 	}
@@ -343,6 +346,24 @@ func (tsaggr *TimeslotAggregator) minDataPointsForAggrType(aggrType AggregateTyp
 func (tsaggr *TimeslotAggregator) minSlotsForAggrType(aggrType AggregateType) int {
 	switch aggrType {
 	case FiveMinAvg:
+		return 5
+	case FiveMinSum:
+		return 1
+	case OneMinAvg:
+		return 1
+	case OneMinSum:
+		return 1
+	default:
+		tsaggr.logger.Fatalf("Unknown aggregate type %v", aggrType)
+	}
+	return 0
+}
+
+func (tsaggr *TimeslotAggregator) maxSlotsForAggrType(aggrType AggregateType) int {
+	switch aggrType {
+	case FiveMinAvg:
+		return 5
+	case FiveMinSum:
 		return 5
 	case OneMinAvg:
 		return 1

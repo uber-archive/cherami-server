@@ -115,7 +115,7 @@ type (
 		retMgr          *retMgrRunner
 		appConfig       configure.CommonAppConfig
 		m3Client        metrics.Client
-		cfgMgr          *dconfig.CassandraConfigManager
+		cfgMgr          dconfig.ConfigManager
 		loadMetrics     load.MetricsAggregator
 		placement       Placement
 		extentSeals     struct {

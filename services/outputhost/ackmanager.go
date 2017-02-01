@@ -382,7 +382,8 @@ func (ackMgr *ackManager) acknowledgeMessage(ackID AckID, seqNum uint32, address
 			}
 		}
 	} else {
-		ackMgr.logger.WithField(common.TagSeq, seqNum).Error(`seqNum of acked msg not found!`)
+		// Update metric to reflect that the sequence number is not found
+		ackMgr.cgCache.consumerM3Client.IncCounter(metrics.ConsConnectionScope, metrics.OutputhostCGAckMgrSeqNotFound)
 	}
 	ackMgr.lk.Unlock()
 

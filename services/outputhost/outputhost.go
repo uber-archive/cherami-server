@@ -34,6 +34,7 @@ import (
 
 	ccommon "github.com/uber/cherami-client-go/common"
 	"github.com/uber/cherami-server/common"
+	cassDconfig "github.com/uber/cherami-server/common/dconfig"
 	dconfig "github.com/uber/cherami-server/common/dconfigclient"
 	mm "github.com/uber/cherami-server/common/metadata"
 	"github.com/uber/cherami-server/common/metrics"
@@ -87,6 +88,7 @@ type (
 		ackMgrLoadCh      chan ackMgrLoadMsg
 		ackMgrUnloadCh    chan uint32
 		hostMetrics       *load.HostMetrics
+		cfgMgr            cassDconfig.ConfigManager
 		common.SCommon
 	}
 
@@ -312,8 +314,6 @@ func (h *OutputHost) OpenConsumerStream(ctx thrift.Context, call stream.BOutOpen
 	}
 	conn := newConsConnection(cgCache.currID, cgCache, call, h.cacheTimeout, cgLogger)
 	cgCache.connections[cgCache.currID] = conn
-	// wait for shutdown here as well. this makes sure the pubconnection is done
-	h.shutdownWG.Add(1)
 	connWG := conn.open()
 	cgCache.currID++
 	// increment the active connection count
@@ -328,7 +328,6 @@ func (h *OutputHost) OpenConsumerStream(ctx thrift.Context, call stream.BOutOpen
 	// wait till the conn is closed. we cannot return immediately.
 	// If we do so, we will get data races reading/writing from/to the stream
 	connWG.Wait()
-	h.shutdownWG.Done()
 	h.hostMetrics.Decrement(load.HostMetricNumOpenConns)
 	return nil
 }
@@ -381,7 +380,7 @@ func (h *OutputHost) processAcks(ackIds []string, isNack bool) (invalidIDs []str
 		}
 
 		// let the ackMgr know; from the perspective of the ackManager, ack == nack
-		if err := ackMgr.acknowledgeMessage(ackID, seqNum, ackIDObj.Address, isNack); err == nil {
+		if err = ackMgr.acknowledgeMessage(ackID, seqNum, ackIDObj.Address, isNack); err == nil {
 			continue
 		} else {
 			h.logger.WithFields(bark.Fields{
@@ -461,6 +460,11 @@ func (h *OutputHost) ReceiveMessageBatch(ctx thrift.Context, request *cherami.Re
 	}
 
 	cgCache.updateLastDisconnectTime()
+
+	// make sure we don't close all the channels here
+	cgCache.connsWG.Add(1) // this WG is for the cgCache
+	defer cgCache.connsWG.Done()
+
 	res := cherami.NewReceiveMessageBatchResult_()
 	msgCacheWriteTicker := common.NewTimer(msgCacheWriteTimeout)
 	defer msgCacheWriteTicker.Stop()
@@ -492,9 +496,17 @@ func (h *OutputHost) ReceiveMessageBatch(ctx thrift.Context, request *cherami.Re
 	firstResultTimer := common.NewTimer(timeoutTime.Sub(time.Now()))
 	defer firstResultTimer.Stop()
 	select {
-	case msg := <-cgCache.msgsRedeliveryCh:
+	case msg, ok := <-cgCache.msgsRedeliveryCh:
+		if !ok {
+			h.m3Client.IncCounter(metrics.ReceiveMessageBatchOutputHostScope, metrics.OutputhostFailures)
+			return nil, ErrCgUnloaded
+		}
 		deliver(msg, cgCache.msgCacheRedeliveredCh)
-	case msg := <-cgCache.msgsCh:
+	case msg, ok := <-cgCache.msgsCh:
+		if !ok {
+			h.m3Client.IncCounter(metrics.ReceiveMessageBatchOutputHostScope, metrics.OutputhostFailures)
+			return nil, ErrCgUnloaded
+		}
 		deliver(msg, cgCache.msgCacheCh)
 	case <-firstResultTimer.C:
 		exception := cherami.NewTimeoutError()
@@ -513,9 +525,17 @@ MORERESULTLOOP:
 			break MORERESULTLOOP
 		default:
 			select {
-			case msg := <-cgCache.msgsRedeliveryCh:
+			case msg, ok := <-cgCache.msgsRedeliveryCh:
+				if !ok {
+					// the cg is already unloaded
+					break MORERESULTLOOP
+				}
 				deliver(msg, cgCache.msgCacheRedeliveredCh)
-			case msg := <-cgCache.msgsCh:
+			case msg, ok := <-cgCache.msgsCh:
+				if !ok {
+					// the cg is already unloaded
+					break MORERESULTLOOP
+				}
 				deliver(msg, cgCache.msgCacheCh)
 			case <-moreResultTimer.C:
 				break MORERESULTLOOP
@@ -576,10 +596,16 @@ func (h *OutputHost) ConsumerGroupsUpdated(ctx thrift.Context, request *admin.Co
 				// Notify the client
 				cg.reconfigureClients(updateUUID)
 			case admin.NotificationType_HOST:
-				_, intErr = h.loadCGCache(ctx, ok, cg)
+				// just refresh the cg directly.
+				// at this point cg is already loaded
+				intErr = cg.refreshCgCacheNoLock(ctx)
 			case admin.NotificationType_ALL:
-				_, intErr = h.loadCGCache(ctx, ok, cg)
-				cg.reconfigureClients(updateUUID)
+				// just refresh the cg directly.
+				// at this point cg is already loaded
+				intErr = cg.refreshCgCacheNoLock(ctx)
+				if intErr == nil {
+					cg.reconfigureClients(updateUUID)
+				}
 			default:
 				h.logger.WithFields(bark.Fields{
 					common.TagCnsm:       common.FmtCnsm(cgUUID),
@@ -644,6 +670,7 @@ func (h *OutputHost) Start(thriftService []thrift.TChanServer) {
 	h.loadReporter = h.GetLoadReporterDaemonFactory().CreateReporter(hostLoadReportingInterval, h, h.logger)
 	h.loadReporter.Start()
 	h.hostIDHeartbeater.Start()
+	h.cfgMgr.Start()
 	go h.manageCgCache()
 }
 
@@ -699,6 +726,7 @@ func (h *OutputHost) Report(reporter common.LoadReporter) {
 func (h *OutputHost) Stop() {
 	h.hostIDHeartbeater.Stop()
 	h.loadReporter.Stop()
+	h.cfgMgr.Stop()
 	h.SCommon.Stop()
 }
 
@@ -746,6 +774,9 @@ func NewOutputHost(serviceName string, sVice common.SCommon, metadataClient meta
 	// manage uconfig, regiester handerFunc and verifyFunc for uConfig values
 	bs.dClient = sVice.GetDConfigClient()
 	bs.dynamicConfigManage()
+
+	// cassandra config manager
+	bs.cfgMgr = newConfigManager(metadataClient, bs.logger)
 
 	common.StartEKG(bs.logger)
 	thisOutputHost = &bs
@@ -811,13 +842,6 @@ func (h *OutputHost) UtilGetPickedStore(cgName string, path string) (connStore s
 		h.cgMutex.Unlock()
 	}
 	return
-}
-
-// UtilSetMsgCacheLimit is a utility routine to update the
-// default value of max outstanding messages
-// XXX: this should be used only for testing
-func (h *OutputHost) UtilSetMsgCacheLimit(limit int32) int32 {
-	return setDefaultMaxOutstandingMessages(limit)
 }
 
 // OpenStreamingConsumerStream is unimplemented

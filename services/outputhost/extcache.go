@@ -305,10 +305,7 @@ func (extCache *extentCache) stop(notify bool) {
 	extCache.ackMgr.stop()
 	if notify {
 		// notify cgCache and stop
-		select {
-		case extCache.connectionsClosedCh <- extCache.extUUID:
-		default:
-		}
+		extCache.connectionsClosedCh <- extCache.extUUID
 	}
 	// stop the load reporter pump as well
 	extCache.loadReporter.Stop()

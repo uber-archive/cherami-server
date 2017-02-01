@@ -298,6 +298,26 @@ func AwaitWaitGroup(wg *sync.WaitGroup, timeout time.Duration) bool {
 	}
 }
 
+// RWLockReadAndConditionalWrite implements the RWLock Read+Read&Conditional-Write pattern.
+// m is the RWMutex covering a shared resource
+// readFn is a function that returns a true if a write on the shared resource is required.
+// writeFn is a function that updates the shared resource.
+// The result of the read/write can be returned by capturing return variables in your provided functions
+func RWLockReadAndConditionalWrite(m *sync.RWMutex, readFn func() bool, writeFn func()) {
+	m.RLock()
+	writeRequired := readFn()
+	m.RUnlock()
+	if writeRequired {
+		m.Lock()
+		writeRequired = readFn()
+		if writeRequired {
+			writeFn()
+		}
+		m.Unlock()
+	}
+	return
+}
+
 // CreateInputHostAdminClient creates and returns tchannel client
 // for the input host admin API
 func CreateInputHostAdminClient(ch *tchannel.Channel, hostPort string) (admin.TChanInputHostAdmin, error) {
@@ -543,6 +563,20 @@ func NewMetricReporterWithHostname(cfg configure.CommonServiceConfig) metrics.Re
 	return reporter
 }
 
+//NewTestMetricsReporter creates a test reporter that allows registration of handler functions
+func NewTestMetricsReporter() metrics.Reporter {
+	hostName, e := os.Hostname()
+	lcLg := GetDefaultLogger()
+	if e != nil {
+		lcLg.WithFields(bark.Fields{TagErr: e}).Fatal("Error getting hostname")
+	}
+
+	reporter := metrics.NewTestReporter(map[string]string{
+		metrics.HostnameTagName: hostName,
+	})
+	return reporter
+}
+
 //GetLocalClusterInfo gets the zone and tenancy from the given deployment
 func GetLocalClusterInfo(deployment string) (zone string, tenancy string) {
 	parts := strings.Split(deployment, "_")
@@ -579,6 +613,15 @@ func (r *cliHelper) GetDefaultOwnerEmail() string {
 // GetCanonicalZone is the implementation of the corresponding method
 func (r *cliHelper) GetCanonicalZone(zone string) (cZone string, err error) {
 	var ok bool
+	if len(zone) == 0 {
+		return "", errors.New("Invalid Zone Name")
+	}
+
+	// If canonical zone list is empty, then any zone is valid
+	if len(r.cZones) == 0 {
+		return zone, nil
+	}
+
 	if cZone, ok = r.cZones[zone]; !ok {
 		return "", errors.New("Invalid Zone Name")
 	}
@@ -604,4 +647,90 @@ func NewCliHelper() CliHelper {
 		defaultOwnerEmail: "cherami@cli",
 		cZones:            make(map[string]string),
 	}
+}
+
+var overrideValueByPrefixLogMapLock sync.RWMutex
+var overrideValueByPrefixLogMap = make(map[string]struct{})
+
+// OverrideValueByPrefix takes a list of override rules in the form 'prefix=val' and a given string, and determines the most specific rule
+// that applies to the given string. It then replaces the given default value with the override value. logFn is a logging closure that
+// allows lazy instatiation of a logger interface to log error conditions and override status. valName is used for logging purposes, to
+// differentiate multiple instantiations in the same context
+//
+// As an example, you could override a parameter, like the number of desired extents, according to various destination paths.
+// We could try to have 8 extents by default, and give destinations beginning with /test only 1, and give a particular destination
+// specifically a higher amount. To achieve this, we could configure the overrides like this:
+//
+// overrides := {`=8`, `/test=1`, `/JobPlatform/TripEvents$=16`}
+//
+func OverrideValueByPrefix(logFn func() bark.Logger, path string, overrides []string, defaultVal int64, valName string) int64 {
+	// Terminate the path with a dollarsign, so that we can do something like this:
+	//
+	// This rule : /foo/bar$=X
+	// Gives:
+	// /foo/bar     = X
+	// /foo/bar_baz = default
+	// /foo/quz     = default
+	//
+	// This rule : /foo/bar=X
+	// Gives:
+	// /foo/bar     = X
+	// /foo/bar_baz = X
+	// /foo/quz     = default
+	//
+	path += `$`
+
+	var longestMatchValue int64
+	var longestMatchKey string
+	var hasMatch bool
+	var err error
+
+moreOverrides:
+	for _, ovrd := range overrides {
+		split := strings.Split(ovrd, `=`)
+		if len(split) != 2 {
+			logFn().WithFields(bark.Fields{`rule`: ovrd, `valName`: valName}).Error(`Invalid override rule, couldn't split`)
+			continue moreOverrides
+		}
+		if strings.HasPrefix(path, split[0]) {
+			if len(split[0]) > len(longestMatchKey) || (split[0] == `` && !hasMatch) { // Match for a longer key, or just the empty default
+				var lmv int
+				lmv, err = strconv.Atoi(split[1])
+				if err != nil {
+					logFn().WithFields(bark.Fields{`rule`: ovrd, `valName`: valName, TagErr: err}).Error(`Invalid override rule, couldn't covert value`)
+					continue moreOverrides
+				}
+				longestMatchKey = split[0]
+				longestMatchValue = int64(lmv)
+				hasMatch = true
+			}
+		}
+	}
+
+	if hasMatch {
+		if len(longestMatchKey) > 1 { // Don't log for very short prefixes, e.g. '/', ''
+			// Log just once for this particular rule; if the value or rule changes, log again
+			logMapKey := valName + path + longestMatchKey + strconv.Itoa(int(longestMatchValue))
+
+			readFn := func() bool {
+				_, logPreviouslyEmitted := overrideValueByPrefixLogMap[logMapKey]
+				return !logPreviouslyEmitted
+			}
+			writeFn := func() {
+				if _, logPreviouslyEmitted2 := overrideValueByPrefixLogMap[logMapKey]; logPreviouslyEmitted2 {
+					return
+				}
+				overrideValueByPrefixLogMap[logMapKey] = struct{}{}
+				logFn().WithFields(bark.Fields{
+					`valName`:  valName,
+					`rule`:     longestMatchKey,
+					`path`:     path,
+					`override`: longestMatchValue}).Info(`Overrided value`)
+			}
+			RWLockReadAndConditionalWrite(&overrideValueByPrefixLogMapLock, readFn, writeFn)
+		}
+		return longestMatchValue
+	}
+
+	return defaultVal
 }

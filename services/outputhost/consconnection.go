@@ -75,9 +75,6 @@ const (
 	// flushTimeout is the duration to wait before we trigger a flush
 	flushTimeout time.Duration = 5 * time.Millisecond
 
-	// cacheEnqueueTimeout is the duration to wait to insert message into the cache
-	cacheEnqueueTimeout time.Duration = 1 * time.Minute
-
 	// creditFlushTimeout is the time to flush accumulated credits to the write pump
 	creditFlushTimeout time.Duration = 5 * time.Second
 )
@@ -117,7 +114,8 @@ func (conn *consConnection) open() *sync.WaitGroup {
 	if !conn.opened {
 		// register with the notifier first
 		conn.cgCache.notifier.Register(conn.connID, conn.notifyCh)
-		conn.waitWG.Add(2)
+		conn.waitWG.Add(2)          // this WG is the local WG for the pumps
+		conn.cgCache.connsWG.Add(1) // this WG is for the cgCache
 		go conn.writeMsgsStream()
 		go conn.readCreditsStream()
 
@@ -140,14 +138,12 @@ func (conn *consConnection) close() {
 		// 2. close the credits stream
 		close(conn.closeChannel)
 		conn.closed = true
-		// now notify the CGCache to update its connections map
-		select {
-		case conn.connectionsClosedCh <- conn.connID:
-		default:
-		}
-
 		conn.waitWG.Wait() // wait until the pumps have closed
+		// now notify the CGCache to update its connections map
+		conn.connectionsClosedCh <- conn.connID
 
+		// now set the WG to unblock cgCache unload
+		conn.cgCache.connsWG.Done()
 		conn.logger.WithFields(bark.Fields{
 			`sentMsgs`:   conn.sentMsgs,
 			`reSentMsgs`: conn.reSentMsgs,
@@ -172,8 +168,9 @@ func (conn *consConnection) sendCreditsToWritePump(localCredits *int32) {
 	default:
 		// If we cannot send the credits at this time, just accumulate it
 		// but don't reset the counter
-		conn.logger.WithField(`localCredits`, *localCredits).
-			Info("unable to send credits to write pump; accumulating locally")
+		// update M3 to record this
+		conn.cgCache.m3Client.UpdateGauge(metrics.ConsConnectionStreamScope, metrics.OutputhostCreditsAccumulated, int64(*localCredits))
+		conn.cgCache.consumerM3Client.UpdateGauge(metrics.ConsConnectionScope, metrics.OutputhostCGCreditsAccumulated, int64(*localCredits))
 	}
 
 }
@@ -237,9 +234,6 @@ func (conn *consConnection) writeMsgsStream() {
 
 	flushTicker := time.NewTicker(flushTimeout) // start ticker to flush tchannel stream
 	defer flushTicker.Stop()
-
-	cacheTimer := common.NewTimer(cacheEnqueueTimeout) // time to wait to send the message to the message cache
-	defer cacheTimer.Stop()
 
 	unflushedWrites := 0
 
@@ -309,23 +303,26 @@ func (conn *consConnection) writeMsgsStream() {
 				conn.logger.WithField(common.TagAckID, common.FmtAckID(msg.GetAckId())).
 					WithField(common.TagSlowDownSeconds, common.FmtSlowDown(slowDown)).
 					Info("redelivering priority msg back to client")
-				conn.createMsgAndWriteToClientUtil(msg, &unflushedWrites, &localCredits, flushThreshold, conn.msgCacheRedeliveredCh, cacheTimer)
+				conn.createMsgAndWriteToClientUtil(msg, &unflushedWrites, &localCredits, flushThreshold, conn.msgCacheRedeliveredCh)
 				conn.reSentMsgs++
 			case msg := <-conn.msgsRedeliveryCh:
 				//conn.logger.WithField(common.TagAckID, common.FmtAckID(msg.GetAckId())).
 				//	WithField(`throttle`, float64(slowDown)/float64(time.Second)).
 				//	Info("consconnection: redelivering msg back to the client")
-				conn.createMsgAndWriteToClientUtil(msg, &unflushedWrites, &localCredits, flushThreshold, conn.msgCacheRedeliveredCh, cacheTimer)
+				conn.createMsgAndWriteToClientUtil(msg, &unflushedWrites, &localCredits, flushThreshold, conn.msgCacheRedeliveredCh)
 				conn.reSentMsgs++
 			case msg := <-conn.msgsCh:
-				conn.createMsgAndWriteToClientUtil(msg, &unflushedWrites, &localCredits, flushThreshold, conn.msgCacheCh, cacheTimer)
-			case <-flushTicker.C:
+				conn.createMsgAndWriteToClientUtil(msg, &unflushedWrites, &localCredits, flushThreshold, conn.msgCacheCh)
+			case f := <-flushTicker.C:
 				if unflushedWrites > 0 {
 					if err := conn.flushToClient(unflushedWrites); err == nil {
 						unflushedWrites = 0
 					}
 				}
-				conn.cgCache.consumerM3Client.UpdateGauge(metrics.ConsConnectionScope, metrics.OutputhostCGMessageCacheSize, int64(len(conn.msgsCh)))
+				
+				if f.Second() == 0 && f.Nanosecond() < int(flushTimeout*2) { // Record every minute or so
+					conn.cgCache.consumerM3Client.UpdateGauge(metrics.ConsConnectionScope, metrics.OutputhostCGMessageCacheSize, int64(len(conn.msgsCh)))
+				}
 			case updateUUID := <-conn.reconfigureClientCh:
 				conn.logger.WithField(`updateUUID`, updateUUID).Debug(`reconfiguring client with updateUUID`)
 				cmd := createReconfigureCmd(updateUUID)
@@ -395,23 +392,24 @@ func (conn *consConnection) writeToClient(cmd *cherami.OutputHostCommand) error 
 	return nil
 }
 
-func (conn *consConnection) createMsgAndWriteToClientUtil(msg *cherami.ConsumerMessage, unflushedWrites *int, localCredits *int32, flushThreshold int, msgCacheCh chan<- cacheMsg, cacheTimer *common.Timer) {
+func (conn *consConnection) createMsgAndWriteToClientUtil(msg *cherami.ConsumerMessage, unflushedWrites *int, localCredits *int32, flushThreshold int, msgCacheCh chan<- cacheMsg) {
 	cmd := createMsgCmd(msg)
 	if err := conn.writeToClient(cmd); err == nil {
 		*unflushedWrites++
 		// Add the message to the message cache, on the appropriate channel
-		cacheTimer.Reset(cacheEnqueueTimeout)
+		// this should be blocking because we should not proceed forward if we
+		// cannot write to the message cache
 		select {
 		case msgCacheCh <- cacheMsg{msg: msg, connID: conn.connID}:
-		case <-cacheTimer.C:
+		case <-conn.closeChannel:
 			conn.logger.
 				WithField(common.TagAckID, common.FmtAckID(msg.GetAckId())).
-				Error("outputhost: Unable to write the message to the cache after a minute (shutdown?)")
+				Error("outputhost: Unable to write the message to the cache (shutdown?)")
 		}
 		*localCredits--
 		// flush if we have reached the threshold
 		if *unflushedWrites > flushThreshold {
-			if err := conn.flushToClient(*unflushedWrites); err == nil {
+			if err = conn.flushToClient(*unflushedWrites); err == nil {
 				*unflushedWrites = 0
 			}
 		}

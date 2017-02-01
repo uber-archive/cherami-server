@@ -19,16 +19,16 @@
 # THE SOFTWARE.
 
 DefaultServiceConfig:
-  ListenAddress: "127.0.0.1"
+  ListenAddress: "${HOST_IP}"
 
 DefaultDestinationConfig:
   Replicas: 1
 
 MetadataConfig:
-  CassandraHosts: "127.0.0.1"
+  CassandraHosts: "${HOST_IP}"
 
 StorageConfig:
-  BaseDir: /tmp/cherami-store
+  BaseDir: /var/lib/cherami-store
   HostUUID: "11111111-1111-1111-1111-111111111111"
 
 logging:

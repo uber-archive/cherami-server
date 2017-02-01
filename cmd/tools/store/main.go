@@ -33,7 +33,7 @@ func main() {
 	app := cli.NewApp()
 	app.Name = "store-tool"
 	app.Usage = "A command-line tool for storage debugging"
-	app.Version = "1.0"
+	app.Version = "1.0.1"
 	app.Flags = []cli.Flag{
 		cli.BoolTFlag{
 			Name:  "hyperbahn",
@@ -46,8 +46,8 @@ func main() {
 		},
 		cli.StringFlag{
 			Name:  "env",
-			Value: "",
-			Usage: "env to connect. By default connects to prod, use \"staging\" to connect to staging",
+			Value: "staging",
+			Usage: "env to connect. By default connects to staging, use \"prod\" to connect to production",
 		},
 		cli.StringFlag{
 			Name:   "hyperbahn_bootstrap_file, hbfile",

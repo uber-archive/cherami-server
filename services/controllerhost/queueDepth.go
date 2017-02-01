@@ -32,7 +32,8 @@ import (
 	c "github.com/uber/cherami-thrift/.generated/go/controller"
 	"github.com/uber/cherami-thrift/.generated/go/metadata"
 	"github.com/uber/cherami-thrift/.generated/go/shared"
-	"github.com/uber/cherami-thrift/.generated/go/store"
+
+	storeGen "github.com/uber/cherami-thrift/.generated/go/store"
 
 	"github.com/uber-common/bark"
 	"github.com/uber/tchannel-go/thrift"
@@ -644,7 +645,7 @@ func (qdc *queueDepthCalculator) isCGExtentStalled(cge *metadata.ConsumerGroupEx
 		return false
 	}
 
-	msgsOut, err := context.loadMetrics.Get(hostID, extID, load.MsgsOutPerSec, load.FiveMinAvg)
+	msgsOut, err := context.loadMetrics.Get(hostID, extID, load.MsgsOutPerSec, load.FiveMinSum)
 	if err != nil {
 		return false
 	}
@@ -719,10 +720,10 @@ func (qdc *queueDepthCalculator) isTabulationRequested(cgDesc *shared.ConsumerGr
 // getAddressFromTimestampOnStores is a less-than-best-effort caller for GetAddressFromTimestamps. It does no retries.
 // NOTE: it should not be called for OPEN extents with a startFrom in the future. That situation requires a cache invalidation strategy that is not implemented.
 func getAddressFromTimestampOnStores(context *Context, cgDesc *shared.ConsumerGroupDescription, storeUUIDs []string, extentID string, timestamp int64) common.SequenceNumber {
-	var client store.TChanBStore
+	var client storeGen.TChanBStore
 	var err error
 	var ok bool
-	var res *store.GetAddressFromTimestampResult_
+	var res *storeGen.GetAddressFromTimestampResult_
 	var seqNo common.SequenceNumber
 	var storeUUID, storeAddr string
 	var trace int
@@ -732,7 +733,7 @@ func getAddressFromTimestampOnStores(context *Context, cgDesc *shared.ConsumerGr
 	}
 
 	// These have to go up here, since goto can't skip any declarations
-	req := store.NewGetAddressFromTimestampRequest()
+	req := storeGen.NewGetAddressFromTimestampRequest()
 	ctx, cancel := thrift.NewContext(gaftTimeout)
 	defer cancel()
 

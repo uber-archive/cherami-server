@@ -41,21 +41,16 @@ const (
 )
 
 const (
-	minOpenExtentsForDstPlain                    = 4
-	maxExtentsToConsumeForDstPlain               = 8
-	extentsToConsumePerRemoteZone                = 4
 	minOpenExtentsForDstDLQ                      = 1
 	maxExtentsToConsumeForDstDLQ                 = 2
 	minOpenExtentsForDstTimer                    = 2
+	defaultMinOpenPublishExtents                 = 2 // Only used if the extent configuration can't be retrieved
+	defaultRemoteExtents                         = 2
+	defaultMinConsumeExtents                     = defaultMinOpenPublishExtents * 2
 	maxExtentsToConsumeForDstTimer               = 64 // timer dst need to consume from all open extents
 	minExtentsToConsumeForSingleCGVisibleExtents = 1
 	replicatorCallTimeout                        = 20 * time.Second
 )
-
-// limit on how many new extents we make available
-// for consumption to a consumer group in a single
-// call to GetOutputHosts
-const maxNewExtentsForCGPerCall = 4
 
 var (
 	// ErrTooManyUnHealthy is returned when there are too many open but unhealthy extents for a destination
@@ -64,7 +59,7 @@ var (
 
 var (
 	// TTL after which the cache entry is due for refresh
-	// The entry won't be evicted immediately afte the TTL
+	// The entry won't be evicted immediately after the TTL
 	// We can keep serving stale entries for up to an hour,
 	// when we cannot refresh the cache (say, due to cassandra failure)
 	inputCacheTTL = int64(time.Second)
@@ -215,28 +210,41 @@ func getDstType(desc *shared.DestinationDescription) dstType {
 	dstType := desc.GetType()
 	switch dstType {
 	case shared.DestinationType_PLAIN:
-		return dstTypePlain
-	case shared.DestinationType_TIMER:
-		return dstTypeTimer
-	default:
 		if common.PathDLQRegex.MatchString(desc.GetPath()) {
 			return dstTypeDLQ
 		}
+		return dstTypePlain
+	case shared.DestinationType_TIMER:
+		return dstTypeTimer
 	}
 	return dstTypePlain
 }
 
-func minOpenExtentsForDstType(dstType dstType) int {
+func minOpenExtentsForDst(context *Context, dstPath string, dstType dstType) int {
 	switch dstType {
-	case dstTypePlain:
-		return minOpenExtentsForDstPlain
-	case dstTypeTimer:
+	case dstTypeTimer: // TODO: remove when timers are deprecated
 		return minOpenExtentsForDstTimer
 	case dstTypeDLQ:
 		return minOpenExtentsForDstDLQ
-	default:
-		return minOpenExtentsForDstPlain
 	}
+
+	logFn := func() bark.Logger {
+		return context.log.WithField(common.TagDst, dstPath).WithField(common.TagModule, `extentAssign`)
+	}
+
+	cfgIface, err := context.cfgMgr.Get(common.ControllerServiceName, `*`, `*`, `*`)
+	if err != nil {
+		logFn().WithField(common.TagErr, err).Error(`Couldn't get extent target configuration`)
+		return defaultMinOpenPublishExtents
+	}
+
+	cfg, ok := cfgIface.(ControllerDynamicConfig)
+	if !ok {
+		logFn().Error(`Couldn't cast cfg to ControllerDynamicConfig`)
+		return defaultMinOpenPublishExtents
+	}
+
+	return int(common.OverrideValueByPrefix(logFn, dstPath, cfg.NumPublisherExtentsByPath, defaultMinOpenPublishExtents, `NumPublisherExtentsByPath`))
 }
 
 func getInputAddrIfExtentIsWritable(context *Context, extent *shared.Extent, m3Scope int) (string, error) {
@@ -340,12 +348,12 @@ func refreshInputHostsForDst(context *Context, dstUUID string, now int64) ([]str
 		return nil, err
 	}
 
-	if err := validateDstStatus(dstDesc); err != nil {
+	if err = validateDstStatus(dstDesc); err != nil {
 		return nil, err
 	}
 
 	var dstType = getDstType(dstDesc)
-	var minOpenExtents = minOpenExtentsForDstType(dstType)
+	var minOpenExtents = minOpenExtentsForDst(context, dstDesc.GetPath(), dstType)
 	var isMultiZoneDest = dstDesc.GetIsMultiZone()
 
 	openExtentStats, err := findOpenExtents(context, dstUUID, m3Scope)
@@ -409,10 +417,11 @@ done:
 	expiry := now + ttl
 	uuids, addrs := hostInfoMapToSlice(inputHosts)
 	context.resultCache.write(dstUUID, resultCacheParams{
-		dstType:  dstType,
-		nExtents: nHealthy,
-		hostIDs:  uuids,
-		expiry:   expiry,
+		dstType:    dstType,
+		nExtents:   nHealthy,
+		maxExtents: minOpenExtents,
+		hostIDs:    uuids,
+		expiry:     expiry,
 	})
 
 	return addrs, nil

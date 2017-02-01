@@ -23,7 +23,6 @@ package integration
 import (
 	"fmt"
 	"io/ioutil"
-	"net"
 	"os"
 	"strconv"
 	"sync"
@@ -33,18 +32,19 @@ import (
 	"github.com/uber/cherami-server/clients/metadata"
 	"github.com/uber/cherami-server/common"
 	"github.com/uber/cherami-server/common/configure"
+	cassConfig "github.com/uber/cherami-server/common/dconfig"
 	dconfig "github.com/uber/cherami-server/common/dconfigclient"
 	"github.com/uber/cherami-server/services/controllerhost"
 	"github.com/uber/cherami-server/services/frontendhost"
 	"github.com/uber/cherami-server/services/inputhost"
 	"github.com/uber/cherami-server/services/outputhost"
 	"github.com/uber/cherami-server/services/storehost"
+	"github.com/uber/cherami-server/test"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/pborman/uuid"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
-	"github.com/uber/tchannel-go"
 )
 
 type (
@@ -63,31 +63,9 @@ type (
 	}
 )
 
-func findEphemeralPort(ip, serviceName string) int {
-	addr := ip + ":0"
-	conn, err := net.Listen("tcp", addr)
-	if err != nil {
-		log.Errorf(err.Error())
-		return 0
-	}
-	log.Debugf("serviceName: %#q addr:%v", serviceName, conn.Addr().String())
-	_, port, err := common.SplitHostPort(conn.Addr().String())
-	if err != nil {
-		conn.Close()
-		log.Errorf(err.Error())
-		return 0
-	}
-	conn.Close()
-	return port
-}
-
 func (tb *testBase) buildConfig(clusterSz map[string]int, numReplicas int) map[string][]*configure.AppConfig {
 
 	services := []string{common.StoreServiceName, common.InputServiceName, common.OutputServiceName, common.FrontendServiceName, common.ControllerServiceName}
-
-	ip, err := tchannel.ListenIP()
-	tb.Nil(err)
-	listenIP := ip.String()
 
 	appCfgMap := make(map[string][]*configure.AppConfig)
 
@@ -104,8 +82,11 @@ func (tb *testBase) buildConfig(clusterSz map[string]int, numReplicas int) map[s
 
 		for i := 0; i < nPorts; i++ {
 
-			port := findEphemeralPort(listenIP, common.StoreServiceName)
-			wsPort := findEphemeralPort(listenIP, common.StoreServiceName)
+			hostPort, listenIP, port, err := test.FindEphemeralPort()
+			tb.Nil(err)
+			_, _, wsPort, err := test.FindEphemeralPort()
+			tb.Nil(err)
+			log.Debugf("serviceName: %#q addr:%v", common.StoreServiceName, hostPort)
 
 			if ringHosts == "" {
 				ringHosts = fmt.Sprintf("%v:%d", listenIP, port)
@@ -119,6 +100,7 @@ func (tb *testBase) buildConfig(clusterSz map[string]int, numReplicas int) map[s
 				Port:          port,
 				WebsocketPort: wsPort,
 				RingHosts:     ringHosts,
+				ListenAddress: listenIP,
 			}
 
 			appCfg := cfg.(*configure.AppConfig)
@@ -180,6 +162,9 @@ func (tb *testBase) setupSuiteImpl(t *testing.T) {
 	controllerhost.IntervalBtwnScans = time.Second
 	storehost.ReportInterval = time.Second
 	storehost.ReportPause = common.Int32Ptr(0) // unpaused
+
+	// Make sure the cassandra config refresh interval is small
+	cassConfig.SetRefreshInterval(10 * time.Millisecond)
 }
 
 func (tb *testBase) TearDownSuite() {
@@ -192,9 +177,6 @@ func (tb *testBase) SetUp(clusterSz map[string]int, numReplicas int) {
 	tb.storageBaseDir, err = ioutil.TempDir("", "cherami_integration_test_")
 	tb.NoError(err)
 
-	ip, err := tchannel.ListenIP()
-	tb.Nil(err)
-	listenIP := ip.String()
 	tb.UUIDResolver = common.NewUUIDResolver(tb.mClient)
 	hwInfoReader := common.NewHostHardwareInfoReader(tb.mClient)
 
@@ -215,7 +197,7 @@ func (tb *testBase) SetUp(clusterSz map[string]int, numReplicas int) {
 		}
 
 		cfg := cfgMap[common.StoreServiceName][i].ServiceConfig[common.StoreServiceName]
-		reporter := common.NewMetricReporterWithHostname(configure.NewCommonServiceConfig())
+		reporter := common.NewTestMetricsReporter()
 		dClient := dconfig.NewDconfigClient(configure.NewCommonServiceConfig(), common.StoreServiceName)
 		sCommon := common.NewService(common.StoreServiceName, hostID, cfg, tb.UUIDResolver, hwInfoReader, reporter, dClient)
 		log.Infof("store ringHosts: %v", cfg.GetRingHosts())
@@ -223,7 +205,7 @@ func (tb *testBase) SetUp(clusterSz map[string]int, numReplicas int) {
 		sh.Start(tc)
 
 		// start websocket server
-		common.WSStart(listenIP, cfg.GetWebsocketPort(), sh)
+		common.WSStart(cfg.GetListenAddress().String(), cfg.GetWebsocketPort(), sh)
 
 		// set the websocket port of the store
 		// XXX: We use the environment variable of the format
@@ -239,14 +221,14 @@ func (tb *testBase) SetUp(clusterSz map[string]int, numReplicas int) {
 	for i := 0; i < clusterSz[common.InputServiceName]; i++ {
 		hostID := uuid.New()
 		cfg := cfgMap[common.InputServiceName][i].ServiceConfig[common.InputServiceName]
-		reporter := common.NewMetricReporterWithHostname(configure.NewCommonServiceConfig())
+		reporter := common.NewTestMetricsReporter()
 		dClient := dconfig.NewDconfigClient(configure.NewCommonServiceConfig(), common.InputServiceName)
 		sCommon := common.NewService(common.InputServiceName, hostID, cfg, tb.UUIDResolver, hwInfoReader, reporter, dClient)
 		log.Infof("input ringHosts: %v", cfg.GetRingHosts())
 		ih, tc := inputhost.NewInputHost(common.InputServiceName, sCommon, tb.mClient, nil)
 		ih.Start(tc)
 		// start websocket server
-		common.WSStart(listenIP, cfg.GetWebsocketPort(), ih)
+		common.WSStart(cfg.GetListenAddress().String(), cfg.GetWebsocketPort(), ih)
 		tb.InputHosts[hostID] = ih
 	}
 
@@ -254,7 +236,7 @@ func (tb *testBase) SetUp(clusterSz map[string]int, numReplicas int) {
 	for i := 0; i < clusterSz[common.FrontendServiceName]; i++ {
 		hostID := uuid.New()
 		cfg := cfgMap[common.FrontendServiceName][i].ServiceConfig[common.FrontendServiceName]
-		reporter := common.NewMetricReporterWithHostname(configure.NewCommonServiceConfig())
+		reporter := common.NewTestMetricsReporter()
 		dClient := dconfig.NewDconfigClient(configure.NewCommonServiceConfig(), common.FrontendServiceName)
 
 		sCommon := common.NewService(common.FrontendServiceName, hostID, cfg, tb.UUIDResolver, hwInfoReader, reporter, dClient)
@@ -268,14 +250,14 @@ func (tb *testBase) SetUp(clusterSz map[string]int, numReplicas int) {
 	for i := 0; i < clusterSz[common.OutputServiceName]; i++ {
 		hostID := uuid.New()
 		cfg := cfgMap[common.OutputServiceName][i].ServiceConfig[common.OutputServiceName]
-		reporter := common.NewMetricReporterWithHostname(configure.NewCommonServiceConfig())
+		reporter := common.NewTestMetricsReporter()
 		dClient := dconfig.NewDconfigClient(configure.NewCommonServiceConfig(), common.OutputServiceName)
 		sCommon := common.NewService(common.OutputServiceName, hostID, cfg, tb.UUIDResolver, hwInfoReader, reporter, dClient)
 		log.Infof("output ringHosts: %v", cfg.GetRingHosts())
 		oh, tc := outputhost.NewOutputHost(common.OutputServiceName, sCommon, tb.mClient, frontendForOut, nil)
 		oh.Start(tc)
 		// start websocket server
-		common.WSStart(listenIP, cfg.GetWebsocketPort(), oh)
+		common.WSStart(cfg.GetListenAddress().String(), cfg.GetWebsocketPort(), oh)
 
 		tb.OutputHosts[hostID] = oh
 	}
@@ -285,7 +267,7 @@ func (tb *testBase) SetUp(clusterSz map[string]int, numReplicas int) {
 		cfg := cfgMap[common.ControllerServiceName][i]
 		log.Infof("ctrlr ringHosts: %v", cfg.ServiceConfig[common.ControllerServiceName].RingHosts)
 		serviceName := common.ControllerServiceName
-		reporter := common.NewMetricReporterWithHostname(configure.NewCommonServiceConfig())
+		reporter := common.NewTestMetricsReporter()
 		dClient := dconfig.NewDconfigClient(configure.NewCommonServiceConfig(), common.ControllerServiceName)
 		sVice := common.NewService(serviceName, uuid.New(), cfg.ServiceConfig[serviceName], tb.UUIDResolver, hwInfoReader, reporter, dClient)
 		ch, tc := controllerhost.NewController(cfg, sVice, tb.mClient)

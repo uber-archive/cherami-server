@@ -179,10 +179,12 @@ func (r *Replicator) setAuthoritativeZone(zone string) {
 // This is called by remote replicator to start a replication request for a local extent
 // Internally the API will connect to local store to read the actual message
 func (r *Replicator) OpenReplicationReadStreamHandler(w http.ResponseWriter, req *http.Request) {
+	r.m3Client.IncCounter(metrics.OpenReplicationReadScope, metrics.ReplicatorRequests)
 	request, err := common.GetOpenReplicationReadStreamRequestHTTP(req.Header)
 	if err != nil {
 		r.logger.WithField(common.TagErr, err).Error("unable to parse all needed headers")
 		r.m3Client.IncCounter(metrics.OpenReplicationReadScope, metrics.ReplicatorBadRequest)
+		r.m3Client.IncCounter(metrics.OpenReplicationReadScope, metrics.ReplicatorFailures)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -191,7 +193,8 @@ func (r *Replicator) OpenReplicationReadStreamHandler(w http.ResponseWriter, req
 	inStream, err := r.GetWSConnector().AcceptReplicationReadStream(w, req)
 	if err != nil {
 		r.logger.WithField(common.TagErr, err).Error("unable to upgrade websocket connection")
-		r.m3Client.IncCounter(metrics.OpenReplicationReadScope, metrics.ReplicatorWsFailure)
+		r.m3Client.IncCounter(metrics.OpenReplicationReadScope, metrics.ReplicatorCreateInStreamFailure)
+		r.m3Client.IncCounter(metrics.OpenReplicationReadScope, metrics.ReplicatorFailures)
 		return
 	}
 
@@ -212,6 +215,8 @@ func (r *Replicator) OpenReplicationReadStreamHandler(w http.ResponseWriter, req
 			common.TagExt: common.FmtExt(*request.OpenReadStreamRequest.ExtentUUID),
 			common.TagDst: common.FmtDst(*request.OpenReadStreamRequest.DestinationUUID),
 		}).Error("Can't open store host read stream")
+		r.m3Client.IncCounter(metrics.OpenReplicationReadScope, metrics.ReplicatorCreateOutStreamFailure)
+		r.m3Client.IncCounter(metrics.OpenReplicationReadScope, metrics.ReplicatorFailures)
 		return
 	}
 	outConn := newOutConnection(extUUID, outStream, r.logger, r.m3Client, metrics.OpenReplicationReadScope)
@@ -231,10 +236,12 @@ func (r *Replicator) OpenReplicationReadStreamHandler(w http.ResponseWriter, req
 // This is called by local store host to initiate a replication request for a remote extent
 // Internally the API will connect to a remote replicator to read message
 func (r *Replicator) OpenReplicationRemoteReadStreamHandler(w http.ResponseWriter, req *http.Request) {
+	r.m3Client.IncCounter(metrics.OpenReplicationRemoteReadScope, metrics.ReplicatorRequests)
 	request, err := common.GetOpenReplicationRemoteReadStreamRequestHTTP(req.Header)
 	if err != nil {
 		r.logger.WithField(common.TagErr, err).Error("unable to parse all needed headers")
 		r.m3Client.IncCounter(metrics.OpenReplicationRemoteReadScope, metrics.ReplicatorBadRequest)
+		r.m3Client.IncCounter(metrics.OpenReplicationRemoteReadScope, metrics.ReplicatorFailures)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -243,7 +250,8 @@ func (r *Replicator) OpenReplicationRemoteReadStreamHandler(w http.ResponseWrite
 	inStream, err := r.GetWSConnector().AcceptReplicationRemoteReadStream(w, req)
 	if err != nil {
 		r.logger.WithField(common.TagErr, err).Error("unable to upgrade websocket connection")
-		r.m3Client.IncCounter(metrics.OpenReplicationRemoteReadScope, metrics.ReplicatorWsFailure)
+		r.m3Client.IncCounter(metrics.OpenReplicationRemoteReadScope, metrics.ReplicatorCreateInStreamFailure)
+		r.m3Client.IncCounter(metrics.OpenReplicationRemoteReadScope, metrics.ReplicatorFailures)
 		return
 	}
 
@@ -264,6 +272,8 @@ func (r *Replicator) OpenReplicationRemoteReadStreamHandler(w http.ResponseWrite
 			common.TagExt: common.FmtExt(*request.OpenReadStreamRequest.ExtentUUID),
 			common.TagDst: common.FmtDst(*request.OpenReadStreamRequest.DestinationUUID),
 		}).Error("Can't open remote replication read stream")
+		r.m3Client.IncCounter(metrics.OpenReplicationRemoteReadScope, metrics.ReplicatorCreateOutStreamFailure)
+		r.m3Client.IncCounter(metrics.OpenReplicationRemoteReadScope, metrics.ReplicatorFailures)
 		return
 	}
 	outConn := newOutConnection(extUUID, outStream, r.logger, r.m3Client, metrics.OpenReplicationRemoteReadScope)
