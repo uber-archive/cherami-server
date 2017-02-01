@@ -397,12 +397,15 @@ func (t *metadataDepImpl) GetAckLevel(destID destinationID, extID extentID, cgID
 	switch resp.GetExtent().GetStatus() {
 
 	case metadata.ConsumerGroupExtentStatus_OPEN:
+		// return the ack-level from metadata
 		ackLevel = resp.GetExtent().GetAckLevelOffset()
 
 	case metadata.ConsumerGroupExtentStatus_CONSUMED:
+		// 'ADDR_SEAL' indicates to the caller that this CG has fully consumed the extent
 		ackLevel = store.ADDR_SEAL
 
 	case metadata.ConsumerGroupExtentStatus_DELETED:
+		// set to 'ADDR_BEGIN' if cg-extent is deleted
 		ackLevel = store.ADDR_BEGIN
 
 	default:
