@@ -28,7 +28,6 @@ import (
 
 	"github.com/uber-common/bark"
 	"github.com/uber/cherami-server/common"
-	metadataMetrics "github.com/uber/cherami-server/common/metadata"
 	"github.com/uber/cherami-server/common/metrics"
 	"github.com/uber/cherami-thrift/.generated/go/metadata"
 	"github.com/uber/cherami-thrift/.generated/go/shared"
@@ -160,7 +159,6 @@ func New(opts *Options, metadata metadata.TChanMetadataService, clientFactory co
 	}
 
 	logger = logger.WithField(common.TagModule, `retMgr`)
-	metadata = metadataMetrics.NewMetadataMetricsMgr(metadata, m3Client, logger)
 
 	return &RetentionManager{
 		Options:             opts,

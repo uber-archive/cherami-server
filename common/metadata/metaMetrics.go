@@ -280,7 +280,9 @@ func (m *metadataMetricsMgr) ReadDestination(ctx thrift.Context, request *m.Read
 	result, err = m.meta.ReadDestination(ctx, request)
 
 	if err != nil {
-		m.m3.IncCounter(metrics.MetadataReadDestinationScope, metrics.MetadataFailures)
+		if _, ok := err.(*shared.EntityNotExistsError); !ok {
+			m.m3.IncCounter(metrics.MetadataReadDestinationScope, metrics.MetadataFailures)
+		}
 	}
 
 	return result, err

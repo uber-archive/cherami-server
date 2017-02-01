@@ -44,12 +44,12 @@ type perStoreReplicaStatsMap struct {
 type extentCoverMap map[extentID]bool
 type replicaStatsMRUCache struct {
 	cache map[extentID]*perStoreReplicaStatsMap
-	mm    common.MetadataMgr
+	mm    MetadataMgr
 	log   bark.Logger
 	count int64
 }
 
-func newReplicaStatsMRUCache(mm common.MetadataMgr,
+func newReplicaStatsMRUCache(mm MetadataMgr,
 	log bark.Logger) *replicaStatsMRUCache {
 	return &replicaStatsMRUCache{
 		mm:  mm,

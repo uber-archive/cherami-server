@@ -18,14 +18,16 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-package common
+package controllerhost
 
 import (
 	"time"
 
 	"github.com/uber-common/bark"
 
+	"github.com/uber/cherami-server/common"
 	"github.com/uber/cherami-server/common/metrics"
+
 	m "github.com/uber/cherami-thrift/.generated/go/metadata"
 	"github.com/uber/cherami-thrift/.generated/go/shared"
 )
@@ -84,7 +86,7 @@ type (
 		// SealExtent seals the extent if it was previously sealed
 		SealExtent(dstID string, extentID string) error
 		// UpdateDestinationDLQCursors updates the DLQCursor on a destination
-		UpdateDestinationDLQCursors(dstID string, mergeBefore UnixNanoTime, purgeBefore UnixNanoTime) error
+		UpdateDestinationDLQCursors(dstID string, mergeBefore common.UnixNanoTime, purgeBefore common.UnixNanoTime) error
 		// MoveExtent moves an extent
 		MoveExtent(fromDstID, toDstID, extentID, cgUUID string) error
 		// ReadConsumerGroup reads a consumer group
@@ -102,31 +104,24 @@ type (
 	}
 
 	metadataMgrImpl struct {
-		m3Client metrics.Client
-		mClient  m.TChanMetadataService
-		logger   bark.Logger
+		mClient m.TChanMetadataService
+		logger  bark.Logger
 	}
 )
 
 // NewMetadataMgr creates and returns a new instance of MetadataMgr
 func NewMetadataMgr(mClient m.TChanMetadataService, m3Client metrics.Client, logger bark.Logger) MetadataMgr {
 	return &metadataMgrImpl{
-		mClient:  mClient,
-		m3Client: m3Client,
-		logger:   logger,
+		mClient: mClient,
+		logger:  logger,
 	}
 }
 
 func (mm *metadataMgrImpl) ListDestinations() ([]*shared.DestinationDescription, error) {
 
-	mm.m3Client.IncCounter(metrics.MetadataListDestinationsScope, metrics.MetadataRequests)
-
-	sw := mm.m3Client.StartTimer(metrics.MetadataListDestinationsScope, metrics.MetadataLatency)
-	defer sw.Stop()
-
 	mReq := &shared.ListDestinationsRequest{
-		Prefix: StringPtr("/"),
-		Limit:  Int64Ptr(defaultPageSize),
+		Prefix: common.StringPtr("/"),
+		Limit:  common.Int64Ptr(defaultPageSize),
 	}
 
 	var result []*shared.DestinationDescription
@@ -134,7 +129,6 @@ func (mm *metadataMgrImpl) ListDestinations() ([]*shared.DestinationDescription,
 	for {
 		resp, err := mm.mClient.ListDestinations(nil, mReq)
 		if err != nil {
-			mm.m3Client.IncCounter(metrics.MetadataListDestinationsScope, metrics.MetadataFailures)
 			return nil, err
 		}
 
@@ -151,51 +145,27 @@ func (mm *metadataMgrImpl) ListDestinations() ([]*shared.DestinationDescription,
 }
 
 func (mm *metadataMgrImpl) ListDestinationsPage(mReq *shared.ListDestinationsRequest) (*shared.ListDestinationsResult_, error) {
-
-	mm.m3Client.IncCounter(metrics.MetadataListDestinationsScope, metrics.MetadataRequests)
-
-	sw := mm.m3Client.StartTimer(metrics.MetadataListDestinationsScope, metrics.MetadataLatency)
-	defer sw.Stop()
-
-	resp, err := mm.mClient.ListDestinations(nil, mReq)
-	if err != nil {
-		mm.m3Client.IncCounter(metrics.MetadataListDestinationsScope, metrics.MetadataFailures)
-		return nil, err
-	}
-
-	return resp, nil
+	return mm.mClient.ListDestinations(nil, mReq)
 }
 
 func (mm *metadataMgrImpl) ReadDestination(dstID string, dstPath string) (*shared.DestinationDescription, error) {
 
-	mm.m3Client.IncCounter(metrics.MetadataReadDestinationScope, metrics.MetadataRequests)
-
 	mReq := &m.ReadDestinationRequest{}
 
 	if len(dstID) > 0 {
-		mReq.DestinationUUID = StringPtr(dstID)
+		mReq.DestinationUUID = common.StringPtr(dstID)
 	}
 
 	if len(dstPath) > 0 {
-		mReq.Path = StringPtr(dstPath)
+		mReq.Path = common.StringPtr(dstPath)
 	}
 
-	sw := mm.m3Client.StartTimer(metrics.MetadataReadDestinationScope, metrics.MetadataLatency)
-	desc, err := mm.mClient.ReadDestination(nil, mReq)
-	sw.Stop()
-
-	if err != nil {
-		if _, ok := err.(*shared.EntityNotExistsError); !ok {
-			mm.m3Client.IncCounter(metrics.MetadataReadDestinationScope, metrics.MetadataFailures)
-		}
-	}
-
-	return desc, err
+	return mm.mClient.ReadDestination(nil, mReq)
 }
 
 func (mm *metadataMgrImpl) ListDestinationsByUUID() ([]*shared.DestinationDescription, error) {
 	mReq := &shared.ListDestinationsByUUIDRequest{
-		Limit: Int64Ptr(defaultPageSize),
+		Limit: common.Int64Ptr(defaultPageSize),
 	}
 
 	var result []*shared.DestinationDescription
@@ -220,16 +190,14 @@ func (mm *metadataMgrImpl) ListDestinationsByUUID() ([]*shared.DestinationDescri
 
 func (mm *metadataMgrImpl) ListExtentsByDstIDStatus(dstID string, filterByStatus []shared.ExtentStatus) ([]*shared.ExtentStats, error) {
 
-	mm.m3Client.IncCounter(metrics.MetadataListExtentsStatsScope, metrics.MetadataRequests)
-
 	listReq := &shared.ListExtentsStatsRequest{
-		DestinationUUID: StringPtr(dstID),
-		Limit:           Int64Ptr(defaultPageSize),
+		DestinationUUID: common.StringPtr(dstID),
+		Limit:           common.Int64Ptr(defaultPageSize),
 	}
 
 	filterLocally := len(filterByStatus) > 1
 	if len(filterByStatus) == 1 {
-		listReq.Status = MetadataExtentStatusPtr(filterByStatus[0])
+		listReq.Status = common.MetadataExtentStatusPtr(filterByStatus[0])
 	}
 
 	startTime := time.Now()
@@ -239,20 +207,17 @@ func (mm *metadataMgrImpl) ListExtentsByDstIDStatus(dstID string, filterByStatus
 
 		if elapsed >= time.Second {
 			mm.logger.WithFields(bark.Fields{
-				TagDst:          dstID,
+				common.TagDst:   dstID,
 				`filter`:        filterByStatus,
 				`latencyMillis`: float64(elapsed) / float64(time.Millisecond),
 			}).Info("listExtentsByDstID high latency")
 		}
-
-		mm.m3Client.RecordTimer(metrics.MetadataListExtentsStatsScope, metrics.MetadataLatency, elapsed)
 	}()
 
 	var result []*shared.ExtentStats
 	for {
 		listResp, err := mm.mClient.ListExtentsStats(nil, listReq)
 		if err != nil {
-			mm.m3Client.IncCounter(metrics.MetadataListExtentsStatsScope, metrics.MetadataFailures)
 			return nil, err
 		}
 
@@ -282,18 +247,13 @@ func (mm *metadataMgrImpl) ListExtentsByDstIDStatus(dstID string, filterByStatus
 
 func (mm *metadataMgrImpl) ListExtentsByInputIDStatus(inputID string, status *shared.ExtentStatus) ([]*shared.ExtentStats, error) {
 
-	mm.m3Client.IncCounter(metrics.MetadataListInputHostExtentsStatsScope, metrics.MetadataRequests)
-
 	listReq := &m.ListInputHostExtentsStatsRequest{
-		InputHostUUID: StringPtr(inputID),
+		InputHostUUID: common.StringPtr(inputID),
 		Status:        status,
 	}
 
-	sw := mm.m3Client.StartTimer(metrics.MetadataListInputHostExtentsStatsScope, metrics.MetadataLatency)
 	resp, err := mm.mClient.ListInputHostExtentsStats(nil, listReq)
-	sw.Stop()
 	if err != nil {
-		mm.m3Client.IncCounter(metrics.MetadataListInputHostExtentsStatsScope, metrics.MetadataFailures)
 		return nil, err
 	}
 
@@ -302,18 +262,13 @@ func (mm *metadataMgrImpl) ListExtentsByInputIDStatus(inputID string, status *sh
 
 func (mm *metadataMgrImpl) ListExtentsByStoreIDStatus(storeID string, status *shared.ExtentStatus) ([]*shared.ExtentStats, error) {
 
-	mm.m3Client.IncCounter(metrics.MetadataListStoreExtentsStatsScope, metrics.MetadataRequests)
-
 	listReq := &m.ListStoreExtentsStatsRequest{
-		StoreUUID: StringPtr(storeID),
+		StoreUUID: common.StringPtr(storeID),
 		Status:    status,
 	}
 
-	sw := mm.m3Client.StartTimer(metrics.MetadataListStoreExtentsStatsScope, metrics.MetadataLatency)
 	resp, err := mm.mClient.ListStoreExtentsStats(nil, listReq)
-	sw.Stop()
 	if err != nil {
-		mm.m3Client.IncCounter(metrics.MetadataListStoreExtentsStatsScope, metrics.MetadataFailures)
 		return nil, err
 	}
 
@@ -322,18 +277,13 @@ func (mm *metadataMgrImpl) ListExtentsByStoreIDStatus(storeID string, status *sh
 
 func (mm *metadataMgrImpl) ListExtentsByReplicationStatus(storeID string, status *shared.ExtentReplicaReplicationStatus) ([]*shared.ExtentStats, error) {
 
-	mm.m3Client.IncCounter(metrics.MetadataListStoreExtentsStatsScope, metrics.MetadataRequests)
-
 	listReq := &m.ListStoreExtentsStatsRequest{
-		StoreUUID:         StringPtr(storeID),
+		StoreUUID:         common.StringPtr(storeID),
 		ReplicationStatus: status,
 	}
 
-	sw := mm.m3Client.StartTimer(metrics.MetadataListStoreExtentsStatsScope, metrics.MetadataLatency)
 	resp, err := mm.mClient.ListStoreExtentsStats(nil, listReq)
-	sw.Stop()
 	if err != nil {
-		mm.m3Client.IncCounter(metrics.MetadataListStoreExtentsStatsScope, metrics.MetadataFailures)
 		return nil, err
 	}
 
@@ -342,27 +292,24 @@ func (mm *metadataMgrImpl) ListExtentsByReplicationStatus(storeID string, status
 
 func (mm *metadataMgrImpl) ListExtentsByConsumerGroup(dstID string, cgID string, filterByStatus []m.ConsumerGroupExtentStatus) ([]*m.ConsumerGroupExtent, error) {
 
-	mm.m3Client.IncCounter(metrics.MetadataReadConsumerGroupExtentScope, metrics.MetadataRequests)
-
 	mReq := &m.ReadConsumerGroupExtentsRequest{
-		DestinationUUID:   StringPtr(dstID),
-		ConsumerGroupUUID: StringPtr(cgID),
-		MaxResults:        Int32Ptr(defaultPageSize),
+		DestinationUUID:   common.StringPtr(dstID),
+		ConsumerGroupUUID: common.StringPtr(cgID),
+		MaxResults:        common.Int32Ptr(defaultPageSize),
 	}
 
 	filterLocally := len(filterByStatus) > 1
 	if len(filterByStatus) == 1 {
-		mReq.Status = MetadataConsumerGroupExtentStatusPtr(filterByStatus[0])
+		mReq.Status = common.MetadataConsumerGroupExtentStatusPtr(filterByStatus[0])
 	}
 
 	startTime := time.Now()
 	defer func() {
 		elapsed := time.Since(startTime)
-		mm.m3Client.RecordTimer(metrics.MetadataReadConsumerGroupExtentScope, metrics.MetadataLatency, elapsed)
 		if elapsed >= time.Second {
 			mm.logger.WithFields(bark.Fields{
-				TagDst:          dstID,
-				TagCnsm:         cgID,
+				common.TagDst:   dstID,
+				common.TagCnsm:  cgID,
 				`filter`:        filterByStatus,
 				`latencyMillis`: float64(elapsed) / float64(time.Millisecond),
 			}).Info("listExtentsByConsumerGroup high latency")
@@ -373,7 +320,6 @@ func (mm *metadataMgrImpl) ListExtentsByConsumerGroup(dstID string, cgID string,
 	for {
 		mResp, err := mm.mClient.ReadConsumerGroupExtents(nil, mReq)
 		if err != nil {
-			mm.m3Client.IncCounter(metrics.MetadataReadConsumerGroupExtentScope, metrics.MetadataFailures)
 			return nil, err
 		}
 
@@ -413,23 +359,18 @@ func (mm *metadataMgrImpl) CreateRemoteZoneExtent(dstID string, extentID string,
 
 func (mm *metadataMgrImpl) createExtentInternal(dstID string, extentID string, inhostID string, storeIDs []string, originZone string, remoteExtentPrimaryStore string) (*shared.CreateExtentResult_, error) {
 
-	mm.m3Client.IncCounter(metrics.MetadataCreateExtentScope, metrics.MetadataRequests)
-
 	extent := &shared.Extent{
-		ExtentUUID:               StringPtr(extentID),
-		DestinationUUID:          StringPtr(dstID),
-		InputHostUUID:            StringPtr(inhostID),
+		ExtentUUID:               common.StringPtr(extentID),
+		DestinationUUID:          common.StringPtr(dstID),
+		InputHostUUID:            common.StringPtr(inhostID),
 		StoreUUIDs:               storeIDs,
-		OriginZone:               StringPtr(originZone),
-		RemoteExtentPrimaryStore: StringPtr(remoteExtentPrimaryStore),
+		OriginZone:               common.StringPtr(originZone),
+		RemoteExtentPrimaryStore: common.StringPtr(remoteExtentPrimaryStore),
 	}
 	mReq := &shared.CreateExtentRequest{Extent: extent}
 
-	sw := mm.m3Client.StartTimer(metrics.MetadataCreateExtentScope, metrics.MetadataLatency)
 	res, err := mm.mClient.CreateExtent(nil, mReq)
-	sw.Stop()
 	if err != nil {
-		mm.m3Client.IncCounter(metrics.MetadataCreateExtentScope, metrics.MetadataFailures)
 		return nil, err
 	}
 
@@ -438,44 +379,29 @@ func (mm *metadataMgrImpl) createExtentInternal(dstID string, extentID string, i
 
 func (mm *metadataMgrImpl) AddExtentToConsumerGroup(dstID string, cgID string, extentID string, outHostID string, storeIDs []string) error {
 
-	mm.m3Client.IncCounter(metrics.MetadataCreateConsumerGroupExtentScope, metrics.MetadataRequests)
-
 	mReq := &m.CreateConsumerGroupExtentRequest{
-		DestinationUUID:   StringPtr(dstID),
-		ExtentUUID:        StringPtr(extentID),
-		ConsumerGroupUUID: StringPtr(cgID),
-		OutputHostUUID:    StringPtr(outHostID),
+		DestinationUUID:   common.StringPtr(dstID),
+		ExtentUUID:        common.StringPtr(extentID),
+		ConsumerGroupUUID: common.StringPtr(cgID),
+		OutputHostUUID:    common.StringPtr(outHostID),
 		StoreUUIDs:        storeIDs,
 	}
 
-	sw := mm.m3Client.StartTimer(metrics.MetadataCreateConsumerGroupExtentScope, metrics.MetadataLatency)
-	err := mm.mClient.CreateConsumerGroupExtent(nil, mReq)
-	sw.Stop()
-	if err != nil {
-		mm.m3Client.IncCounter(metrics.MetadataCreateConsumerGroupExtentScope, metrics.MetadataFailures)
-		return err
-	}
-
-	return err
+	return mm.mClient.CreateConsumerGroupExtent(nil, mReq)
 }
 
 func (mm *metadataMgrImpl) ListConsumerGroupsByDstID(dstID string) ([]*shared.ConsumerGroupDescription, error) {
 
-	mm.m3Client.IncCounter(metrics.MetadataListConsumerGroupsScope, metrics.MetadataRequests)
-
 	mReq := &m.ListConsumerGroupRequest{
-		DestinationUUID: StringPtr(dstID),
-		Limit:           Int64Ptr(defaultPageSize),
+		DestinationUUID: common.StringPtr(dstID),
+		Limit:           common.Int64Ptr(defaultPageSize),
 	}
 
 	var result []*shared.ConsumerGroupDescription
 
-	sw := mm.m3Client.StartTimer(metrics.MetadataListConsumerGroupsScope, metrics.MetadataLatency)
-	defer sw.Stop()
 	for {
 		resp, err := mm.mClient.ListConsumerGroups(nil, mReq)
 		if err != nil {
-			mm.m3Client.IncCounter(metrics.MetadataListConsumerGroupsScope, metrics.MetadataFailures)
 			return nil, err
 		}
 
@@ -492,57 +418,30 @@ func (mm *metadataMgrImpl) ListConsumerGroupsByDstID(dstID string) ([]*shared.Co
 }
 
 func (mm *metadataMgrImpl) ListConsumerGroupsPage(mReq *m.ListConsumerGroupRequest) (*m.ListConsumerGroupResult_, error) {
-
-	mm.m3Client.IncCounter(metrics.MetadataListConsumerGroupsScope, metrics.MetadataRequests)
-
-	sw := mm.m3Client.StartTimer(metrics.MetadataListConsumerGroupsScope, metrics.MetadataLatency)
-	defer sw.Stop()
-
-	resp, err := mm.mClient.ListConsumerGroups(nil, mReq)
-	if err != nil {
-		mm.m3Client.IncCounter(metrics.MetadataListConsumerGroupsScope, metrics.MetadataFailures)
-		return nil, err
-	}
-
-	return resp, nil
+	return mm.mClient.ListConsumerGroups(nil, mReq)
 }
 
 func (mm *metadataMgrImpl) UpdateOutHost(dstID string, cgID string, extentID string, outHostID string) error {
 
-	mm.m3Client.IncCounter(metrics.MetadataSetOutputHostScope, metrics.MetadataRequests)
-
 	mReq := &m.SetOutputHostRequest{
-		DestinationUUID:   StringPtr(dstID),
-		ExtentUUID:        StringPtr(extentID),
-		ConsumerGroupUUID: StringPtr(cgID),
-		OutputHostUUID:    StringPtr(outHostID),
+		DestinationUUID:   common.StringPtr(dstID),
+		ExtentUUID:        common.StringPtr(extentID),
+		ConsumerGroupUUID: common.StringPtr(cgID),
+		OutputHostUUID:    common.StringPtr(outHostID),
 	}
 
-	sw := mm.m3Client.StartTimer(metrics.MetadataSetOutputHostScope, metrics.MetadataLatency)
-	err := mm.mClient.SetOutputHost(nil, mReq)
-	sw.Stop()
-	if err != nil {
-		mm.m3Client.IncCounter(metrics.MetadataSetOutputHostScope, metrics.MetadataFailures)
-		return err
-	}
-
-	return err
+	return mm.mClient.SetOutputHost(nil, mReq)
 }
 
 func (mm *metadataMgrImpl) ReadExtentStats(dstID string, extentID string) (*shared.ExtentStats, error) {
 
-	mm.m3Client.IncCounter(metrics.MetadataReadExtentStatsScope, metrics.MetadataRequests)
-
 	mReq := &m.ReadExtentStatsRequest{
-		DestinationUUID: StringPtr(dstID),
-		ExtentUUID:      StringPtr(extentID),
+		DestinationUUID: common.StringPtr(dstID),
+		ExtentUUID:      common.StringPtr(extentID),
 	}
 
-	sw := mm.m3Client.StartTimer(metrics.MetadataReadExtentStatsScope, metrics.MetadataLatency)
 	result, err := mm.mClient.ReadExtentStats(nil, mReq)
-	sw.Stop()
 	if err != nil {
-		mm.m3Client.IncCounter(metrics.MetadataReadExtentStatsScope, metrics.MetadataFailures)
 		return nil, err
 	}
 
@@ -551,20 +450,14 @@ func (mm *metadataMgrImpl) ReadExtentStats(dstID string, extentID string) (*shar
 
 func (mm *metadataMgrImpl) ReadConsumerGroupExtent(dstID string, cgID string, extentID string) (*m.ConsumerGroupExtent, error) {
 
-	mm.m3Client.IncCounter(metrics.MetadataReadConsumerGroupExtentScope, metrics.MetadataRequests)
-
 	mReq := &m.ReadConsumerGroupExtentRequest{
-		DestinationUUID:   StringPtr(dstID),
-		ConsumerGroupUUID: StringPtr(cgID),
-		ExtentUUID:        StringPtr(extentID),
+		DestinationUUID:   common.StringPtr(dstID),
+		ConsumerGroupUUID: common.StringPtr(cgID),
+		ExtentUUID:        common.StringPtr(extentID),
 	}
 
-	sw := mm.m3Client.StartTimer(metrics.MetadataReadConsumerGroupExtentScope, metrics.MetadataLatency)
 	result, err := mm.mClient.ReadConsumerGroupExtent(nil, mReq)
-	sw.Stop()
-
 	if err != nil {
-		mm.m3Client.IncCounter(metrics.MetadataReadConsumerGroupExtentScope, metrics.MetadataFailures)
 		return nil, err
 	}
 
@@ -572,18 +465,13 @@ func (mm *metadataMgrImpl) ReadConsumerGroupExtent(dstID string, cgID string, ex
 }
 
 func (mm *metadataMgrImpl) ReadStoreExtentStats(extentID string, storeID string) (*shared.ExtentStats, error) {
-	mm.m3Client.IncCounter(metrics.MetadataReadStoreExtentReplicaStatsScope, metrics.MetadataRequests)
 	mReq := &m.ReadStoreExtentReplicaStatsRequest{
-		StoreUUID:  StringPtr(storeID),
-		ExtentUUID: StringPtr(extentID),
+		StoreUUID:  common.StringPtr(storeID),
+		ExtentUUID: common.StringPtr(extentID),
 	}
 
-	sw := mm.m3Client.StartTimer(metrics.MetadataReadStoreExtentReplicaStatsScope, metrics.MetadataLatency)
 	result, err := mm.mClient.ReadStoreExtentReplicaStats(nil, mReq)
-	sw.Stop()
-
 	if err != nil {
-		mm.m3Client.IncCounter(metrics.MetadataReadStoreExtentReplicaStatsScope, metrics.MetadataFailures)
 		return nil, err
 	}
 	return result.GetExtent(), nil
@@ -591,73 +479,45 @@ func (mm *metadataMgrImpl) ReadStoreExtentStats(extentID string, storeID string)
 
 func (mm *metadataMgrImpl) SealExtent(dstID string, extentID string) error {
 
-	mm.m3Client.IncCounter(metrics.MetadataSealExtentScope, metrics.MetadataRequests)
-
 	mReq := &m.SealExtentRequest{
-		DestinationUUID: StringPtr(dstID),
-		ExtentUUID:      StringPtr(extentID),
+		DestinationUUID: common.StringPtr(dstID),
+		ExtentUUID:      common.StringPtr(extentID),
 	}
 
-	sw := mm.m3Client.StartTimer(metrics.MetadataSealExtentScope, metrics.MetadataLatency)
-	err := mm.mClient.SealExtent(nil, mReq)
-	sw.Stop()
-
-	if err != nil {
-		mm.m3Client.IncCounter(metrics.MetadataSealExtentScope, metrics.MetadataFailures)
-		return err
-	}
-
-	return nil
+	return mm.mClient.SealExtent(nil, mReq)
 }
 
 func (mm *metadataMgrImpl) DeleteConsumerGroup(dstID string, cgName string) error {
 
-	mm.m3Client.IncCounter(metrics.MetadataDeleteConsumerGroupScope, metrics.MetadataRequests)
-
 	mReq := &shared.DeleteConsumerGroupRequest{
-		DestinationUUID:   StringPtr(dstID),
-		ConsumerGroupName: StringPtr(cgName),
+		DestinationUUID:   common.StringPtr(dstID),
+		ConsumerGroupName: common.StringPtr(cgName),
 	}
-	sw := mm.m3Client.StartTimer(metrics.MetadataDeleteConsumerGroupScope, metrics.MetadataLatency)
-	err := mm.mClient.DeleteConsumerGroup(nil, mReq)
-	sw.Stop()
-
-	if err != nil {
-		mm.m3Client.IncCounter(metrics.MetadataDeleteConsumerGroupScope, metrics.MetadataFailures)
-		return err
-	}
-
-	return nil
+	return mm.mClient.DeleteConsumerGroup(nil, mReq)
 }
 
 func (mm *metadataMgrImpl) ReadConsumerGroup(dstID, dstPath, cgUUID, cgName string) (cgDesc *shared.ConsumerGroupDescription, err error) {
 
-	mm.m3Client.IncCounter(metrics.MetadataReadConsumerGroupScope, metrics.MetadataRequests)
-
 	mReq := &m.ReadConsumerGroupRequest{}
 
 	if len(dstID) > 0 {
-		mReq.DestinationUUID = StringPtr(dstID)
+		mReq.DestinationUUID = common.StringPtr(dstID)
 	}
 
 	if len(dstPath) > 0 {
-		mReq.DestinationPath = StringPtr(dstPath)
+		mReq.DestinationPath = common.StringPtr(dstPath)
 	}
 
 	if len(cgUUID) > 0 {
-		mReq.ConsumerGroupUUID = StringPtr(cgUUID)
+		mReq.ConsumerGroupUUID = common.StringPtr(cgUUID)
 	}
 
 	if len(cgName) > 0 {
-		mReq.ConsumerGroupName = StringPtr(cgName)
+		mReq.ConsumerGroupName = common.StringPtr(cgName)
 	}
 
-	sw := mm.m3Client.StartTimer(metrics.MetadataReadConsumerGroupScope, metrics.MetadataLatency)
 	cgDesc, err = mm.mClient.ReadConsumerGroup(nil, mReq)
-	sw.Stop()
-
 	if err != nil {
-		mm.m3Client.IncCounter(metrics.MetadataReadConsumerGroupScope, metrics.MetadataFailures)
 		return nil, err
 	}
 
@@ -666,45 +526,33 @@ func (mm *metadataMgrImpl) ReadConsumerGroup(dstID, dstPath, cgUUID, cgName stri
 
 func (mm *metadataMgrImpl) ReadConsumerGroupByUUID(cgUUID string) (cgDesc *shared.ConsumerGroupDescription, err error) {
 
-	mm.m3Client.IncCounter(metrics.MetadataReadConsumerGroupByUUIDScope, metrics.MetadataRequests)
-
 	mReq := &m.ReadConsumerGroupRequest{
-		ConsumerGroupUUID: StringPtr(cgUUID),
+		ConsumerGroupUUID: common.StringPtr(cgUUID),
 	}
 
-	sw := mm.m3Client.StartTimer(metrics.MetadataReadConsumerGroupByUUIDScope, metrics.MetadataLatency)
 	cgDesc, err = mm.mClient.ReadConsumerGroupByUUID(nil, mReq)
-	sw.Stop()
-
 	if err != nil {
-		mm.m3Client.IncCounter(metrics.MetadataReadConsumerGroupByUUIDScope, metrics.MetadataFailures)
 		return nil, err
 	}
 
 	return cgDesc, nil
 }
 
-func (mm *metadataMgrImpl) UpdateDestinationDLQCursors(dstID string, mergeBefore UnixNanoTime, purgeBefore UnixNanoTime) error {
-
-	mm.m3Client.IncCounter(metrics.MetadataUpdateDestinationDLQCursorsScope, metrics.MetadataRequests)
+func (mm *metadataMgrImpl) UpdateDestinationDLQCursors(dstID string, mergeBefore common.UnixNanoTime, purgeBefore common.UnixNanoTime) error {
 
 	mReq := m.NewUpdateDestinationDLQCursorsRequest()
-	mReq.DestinationUUID = StringPtr(dstID)
+	mReq.DestinationUUID = common.StringPtr(dstID)
 
 	if mergeBefore >= 0 {
-		mReq.DLQMergeBefore = Int64Ptr(int64(mergeBefore))
+		mReq.DLQMergeBefore = common.Int64Ptr(int64(mergeBefore))
 	}
 
 	if purgeBefore >= 0 {
-		mReq.DLQPurgeBefore = Int64Ptr(int64(purgeBefore))
+		mReq.DLQPurgeBefore = common.Int64Ptr(int64(purgeBefore))
 	}
 
-	sw := mm.m3Client.StartTimer(metrics.MetadataUpdateDestinationDLQCursorsScope, metrics.MetadataLatency)
 	_, err := mm.mClient.UpdateDestinationDLQCursors(nil, mReq)
-	sw.Stop()
-
 	if err != nil {
-		mm.m3Client.IncCounter(metrics.MetadataUpdateDestinationDLQCursorsScope, metrics.MetadataFailures)
 		return err
 	}
 
@@ -713,114 +561,61 @@ func (mm *metadataMgrImpl) UpdateDestinationDLQCursors(dstID string, mergeBefore
 
 func (mm *metadataMgrImpl) MoveExtent(fromDstID, toDstID, extentID, cgUUID string) error {
 
-	mm.m3Client.IncCounter(metrics.MetadataMoveExtentScope, metrics.MetadataRequests)
-
 	mReq := &m.MoveExtentRequest{
-		DestinationUUID:             StringPtr(fromDstID),
-		NewDestinationUUID_:         StringPtr(toDstID),
-		ExtentUUID:                  StringPtr(extentID),
-		ConsumerGroupVisibilityUUID: StringPtr(cgUUID),
+		DestinationUUID:             common.StringPtr(fromDstID),
+		NewDestinationUUID_:         common.StringPtr(toDstID),
+		ExtentUUID:                  common.StringPtr(extentID),
+		ConsumerGroupVisibilityUUID: common.StringPtr(cgUUID),
 	}
 
-	sw := mm.m3Client.StartTimer(metrics.MetadataMoveExtentScope, metrics.MetadataLatency)
-	err := mm.mClient.MoveExtent(nil, mReq)
-	sw.Stop()
-
-	if err != nil {
-		mm.m3Client.IncCounter(metrics.MetadataMoveExtentScope, metrics.MetadataFailures)
-		return err
-	}
-
-	return nil
+	return mm.mClient.MoveExtent(nil, mReq)
 }
 
 func (mm *metadataMgrImpl) UpdateExtentStatus(dstID, extID string, status shared.ExtentStatus) error {
 
-	mm.m3Client.IncCounter(metrics.MetadataUpdateExtentStatsScope, metrics.MetadataRequests)
-
 	mReq := &m.UpdateExtentStatsRequest{
-		DestinationUUID: StringPtr(dstID),
-		ExtentUUID:      StringPtr(extID),
+		DestinationUUID: common.StringPtr(dstID),
+		ExtentUUID:      common.StringPtr(extID),
 		Status:          shared.ExtentStatusPtr(status),
 	}
 
-	sw := mm.m3Client.StartTimer(metrics.MetadataUpdateExtentStatsScope, metrics.MetadataLatency)
 	_, err := mm.mClient.UpdateExtentStats(nil, mReq)
-	sw.Stop()
-
 	if err != nil {
-		mm.m3Client.IncCounter(metrics.MetadataUpdateExtentStatsScope, metrics.MetadataFailures)
 		return err
 	}
-
 	return nil
 }
 
 func (mm *metadataMgrImpl) UpdateRemoteExtentPrimaryStore(dstID string, extentID string, remoteExtentPrimaryStore string) (*m.UpdateExtentStatsResult_, error) {
-	mm.m3Client.IncCounter(metrics.MetadataUpdateExtentStatsScope, metrics.MetadataRequests)
-
 	mReq := &m.UpdateExtentStatsRequest{
-		DestinationUUID:          StringPtr(dstID),
-		ExtentUUID:               StringPtr(extentID),
-		RemoteExtentPrimaryStore: StringPtr(remoteExtentPrimaryStore),
+		DestinationUUID:          common.StringPtr(dstID),
+		ExtentUUID:               common.StringPtr(extentID),
+		RemoteExtentPrimaryStore: common.StringPtr(remoteExtentPrimaryStore),
 	}
 
 	if len(remoteExtentPrimaryStore) == 0 {
-		mm.m3Client.IncCounter(metrics.MetadataUpdateExtentStatsScope, metrics.MetadataFailures)
 		return nil, &shared.BadRequestError{
 			Message: "remoteExtentPrimaryStore is empty",
 		}
 	}
 
-	sw := mm.m3Client.StartTimer(metrics.MetadataUpdateExtentStatsScope, metrics.MetadataLatency)
-	res, err := mm.mClient.UpdateExtentStats(nil, mReq)
-	sw.Stop()
-	if err != nil {
-		mm.m3Client.IncCounter(metrics.MetadataUpdateExtentStatsScope, metrics.MetadataFailures)
-		return nil, err
-	}
-
-	return res, err
+	return mm.mClient.UpdateExtentStats(nil, mReq)
 }
 
 func (mm *metadataMgrImpl) UpdateConsumerGroupExtentStatus(cgID, extID string, status m.ConsumerGroupExtentStatus) error {
 
-	mm.m3Client.IncCounter(metrics.MetadataUpdateConsumerGroupExtentStatusScope, metrics.MetadataRequests)
-
 	mReq := &m.UpdateConsumerGroupExtentStatusRequest{
-		ConsumerGroupUUID: StringPtr(cgID),
-		ExtentUUID:        StringPtr(extID),
+		ConsumerGroupUUID: common.StringPtr(cgID),
+		ExtentUUID:        common.StringPtr(extID),
 		Status:            m.ConsumerGroupExtentStatusPtr(status),
 	}
 
-	sw := mm.m3Client.StartTimer(metrics.MetadataUpdateConsumerGroupExtentStatusScope, metrics.MetadataLatency)
-	err := mm.mClient.UpdateConsumerGroupExtentStatus(nil, mReq)
-	sw.Stop()
-
-	if err != nil {
-		mm.m3Client.IncCounter(metrics.MetadataUpdateConsumerGroupExtentStatusScope, metrics.MetadataFailures)
-		return err
-	}
-
-	return nil
+	return mm.mClient.UpdateConsumerGroupExtentStatus(nil, mReq)
 }
 
 func (mm *metadataMgrImpl) DeleteDestination(dstID string) error {
-
-	mm.m3Client.IncCounter(metrics.MetadataDeleteDestinationUUIDScope, metrics.MetadataRequests)
-
 	mReq := &m.DeleteDestinationUUIDRequest{
-		UUID: StringPtr(dstID),
+		UUID: common.StringPtr(dstID),
 	}
-
-	sw := mm.m3Client.StartTimer(metrics.MetadataDeleteDestinationUUIDScope, metrics.MetadataLatency)
-	err := mm.mClient.DeleteDestinationUUID(nil, mReq)
-	sw.Stop()
-
-	if err != nil {
-		mm.m3Client.IncCounter(metrics.MetadataDeleteDestinationUUIDScope, metrics.MetadataFailures)
-		return err
-	}
-
-	return nil
+	return mm.mClient.DeleteDestinationUUID(nil, mReq)
 }

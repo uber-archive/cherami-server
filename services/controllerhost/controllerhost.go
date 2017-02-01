@@ -43,6 +43,7 @@ import (
 	"github.com/uber/cherami-server/common"
 	"github.com/uber/cherami-server/common/configure"
 	"github.com/uber/cherami-server/common/dconfig"
+	"github.com/uber/cherami-server/common/metadata"
 	"github.com/uber/cherami-server/common/metrics"
 	"github.com/uber/cherami-server/services/controllerhost/load"
 	a "github.com/uber/cherami-thrift/.generated/go/admin"
@@ -101,7 +102,7 @@ type (
 	Context struct {
 		hostID          string
 		localZone       string
-		mm              common.MetadataMgr
+		mm              MetadataMgr
 		rpm             common.RingpopMonitor
 		failureDetector Dfdd
 		log             bark.Logger
@@ -149,10 +150,8 @@ var _ c.TChanController = (*Mcp)(nil)
 func NewController(cfg configure.CommonAppConfig, sVice *common.Service, metadataClient m.TChanMetadataService) (*Mcp, []thrift.TChanServer) {
 	hostID := uuid.New()
 
-	instance := &Mcp{
-		Service: sVice,
-		mClient: metadataClient,
-	}
+	instance := new(Mcp)
+	instance.Service = sVice
 
 	// Get the deployment name for logger field
 	deploymentName := sVice.GetConfig().GetDeploymentName()
@@ -173,7 +172,8 @@ func NewController(cfg configure.CommonAppConfig, sVice *common.Service, metadat
 
 	context.dstLock = lockMgr
 	context.m3Client = metrics.NewClient(instance.Service.GetMetricsReporter(), metrics.Controller)
-	context.mm = common.NewMetadataMgr(metadataClient, context.m3Client, context.log)
+	instance.mClient = metadata.NewMetadataMetricsMgr(metadataClient, context.m3Client, context.log)
+	context.mm = NewMetadataMgr(instance.mClient, context.m3Client, context.log)
 	context.extentSeals.inProgress = common.NewShardedConcurrentMap(1024, common.UUIDHashCode)
 	context.extentSeals.failed = common.NewShardedConcurrentMap(1024, common.UUIDHashCode)
 	context.extentSeals.tokenBucket = common.NewTokenBucket(maxExtentSealsPerSecond, common.NewRealTimeSource())

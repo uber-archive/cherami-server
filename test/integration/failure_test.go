@@ -121,7 +121,7 @@ func (s *NodeFailureTestSuite) recvReceipts(doneCh chan *client.PublisherReceipt
 }
 
 func (s *NodeFailureTestSuite) listOpenExtents(dstUUID string) ([]*shared.ExtentStats, error) {
-	mm := common.NewMetadataMgr(s.mClient, &mockM3Metrics{}, common.GetDefaultLogger())
+	mm := controllerhost.NewMetadataMgr(s.mClient, &mockM3Metrics{}, common.GetDefaultLogger())
 	return mm.ListExtentsByDstIDStatus(dstUUID, []shared.ExtentStatus{shared.ExtentStatus_OPEN})
 }
 
@@ -268,7 +268,7 @@ func (s *NodeFailureTestSuite) testNodeFailure(serviceName string, nKill int) {
 
 	rcvdMsgs := make(map[int32]bool)
 
-	mm := common.NewMetadataMgr(s.mClient, &mockM3Metrics{}, common.GetDefaultLogger())
+	mm := controllerhost.NewMetadataMgr(s.mClient, &mockM3Metrics{}, common.GetDefaultLogger())
 
 	msgCount := 0
 	// Read the messages in a loop. We will exit the loop via a timeout
