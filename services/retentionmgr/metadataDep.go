@@ -394,12 +394,24 @@ func (t *metadataDepImpl) GetAckLevel(destID destinationID, extID extentID, cgID
 	// assert(resp.GetExtent().GetExtentUUID() == extID)
 	// assert(resp.GetExtent().GetConsumerGroupUUID() == cgID)
 
-	// check if the consumer-group has read to "sealed" point
-	if resp.GetExtent().GetStatus() != metadata.ConsumerGroupExtentStatus_OPEN {
-		ackLevel = store.ADDR_SEAL
-	} else {
+	switch resp.GetExtent().GetStatus() {
+
+	case metadata.ConsumerGroupExtentStatus_OPEN:
+		// return the ack-level from metadata
 		ackLevel = resp.GetExtent().GetAckLevelOffset()
-		// assert(ackLevel != cherami.ADDR_END
+
+	case metadata.ConsumerGroupExtentStatus_CONSUMED:
+		// 'ADDR_SEAL' indicates to the caller that this CG has fully consumed the extent
+		ackLevel = store.ADDR_SEAL
+
+	case metadata.ConsumerGroupExtentStatus_DELETED:
+		// set to 'ADDR_BEGIN' if cg-extent is deleted
+		ackLevel = store.ADDR_BEGIN
+
+	default:
+		ackLevel = store.ADDR_BEGIN
+		log.WithField(`ConsumerGroupExtentStatus`, resp.GetExtent().GetStatus()).
+			Error("GetAckLevel: Unknown ConsumerGroupExtentStatus")
 	}
 
 	log.WithField(`ackLevel`, ackLevel).Debug("GetAckLevel done")
