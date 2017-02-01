@@ -18,7 +18,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-package controllerhost
+package outputhost
 
 import (
 	"github.com/uber-common/bark"
@@ -28,32 +28,16 @@ import (
 )
 
 type (
-	// StorePlacementConfig contains the config
-	// parameters needed for store placement
-	StorePlacementConfig struct {
-		AdminStatus string `name:"adminStatus" default:"enabled"`
-		// MinFreeDiskSpaceBytes represents the min
-		// required free disk space on a store host
-		// to host an extent. The default value
-		// translates to 40GB which is 2 percent
-		// for a 2TB drive
-		MinFreeDiskSpaceBytes int64 `name:"minFreeDiskSpaceBytes" default:"40000000000"`
-	}
-	// InputPlacementConfig contains the config
-	// parameters needed for inputhost placement
-	InputPlacementConfig struct {
-		AdminStatus string `name:"adminStatus" default:"enabled"`
-	}
-	// OutputPlacementConfig contains the config
-	// parameters needed for outputhost placement
-	OutputPlacementConfig struct {
-		AdminStatus string `name:"adminStatus" default:"enabled"`
-	}
-
-	ControllerDynamicConfig struct {
-		NumPublisherExtentsByPath      []string `name:"numPublisherExtentsByPath" default:"/=4"`
-		NumConsumerExtentsByPath       []string `name:"numConsumerExtentsByPath" default:"/=8"`
-		NumRemoteConsumerExtentsByPath []string `name:"numRemoteConsumerExtentsByPath" default:"/=4"`
+	// OutputCgConfig is the per cg config used by the
+	// cassandra config manager
+	OutputCgConfig struct {
+		// MessageCacheSize is used to configure the per CG cache size.
+		// This is a string slice, where each entry is a tuple with the
+		// destination/CG_name=value.
+		// For example, we can ideally have two CGs for the same destination
+		// with different size config as follows:
+		// "/test/destination//test/cg_1=50,/test/destination//test/cg_2=100"
+		MessageCacheSize []string `name:"messagecachesize" default:"/=10000"`
 	}
 )
 
@@ -61,10 +45,7 @@ type (
 // of CassandraConfigManager.
 func newConfigManager(mClient m.TChanMetadataService, logger bark.Logger) dconfig.ConfigManager {
 	cfgTypes := map[string]interface{}{
-		common.InputServiceName:      InputPlacementConfig{},
-		common.OutputServiceName:     OutputPlacementConfig{},
-		common.StoreServiceName:      StorePlacementConfig{},
-		common.ControllerServiceName: ControllerDynamicConfig{},
+		common.OutputServiceName: OutputCgConfig{},
 	}
 	return dconfig.NewCassandraConfigManager(mClient, cfgTypes, logger)
 }

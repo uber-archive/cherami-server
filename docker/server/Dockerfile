@@ -18,19 +18,18 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 
-DefaultServiceConfig:
-  ListenAddress: "127.0.0.1"
+FROM golang:1.7.4
 
-DefaultDestinationConfig:
-  Replicas: 1
+# get and compile cherami-server
+ENV CHERAMI_HOME $GOPATH/src/github.com/uber/cherami-server
 
-MetadataConfig:
-  CassandraHosts: "127.0.0.1"
+RUN go get -u github.com/Masterminds/glide
+RUN git clone --depth=50 https://github.com/uber/cherami-server.git $CHERAMI_HOME
+RUN cd $CHERAMI_HOME; make bins
 
-StorageConfig:
-  BaseDir: /tmp/cherami-store
-  HostUUID: "11111111-1111-1111-1111-111111111111"
+EXPOSE 4922 4253 4240 4254 5425 6280 6189 6190 6191 6310
 
-logging:
-  level: debug
-  stdout: true
+WORKDIR $CHERAMI_HOME
+
+# Remember to mount host directories (config and data), and have CHERAMI_CONFIG_DIR properly point to config.
+CMD ["./cherami-server", "start", "all"]

@@ -533,7 +533,7 @@ func (t *StoreHost) OpenReadStream(ctx thrift.Context, call storeStream.BStoreOp
 		t.logger.WithField(common.TagErr, err).
 			Error("OpenReadStream: getReadStreamArgs error")
 
-		if e := call.Write(err); e != nil {
+		if e = call.Write(err); e != nil {
 			t.logger.WithField(common.TagErr, err).
 				Error("OpenReadStream: stream.Write error")
 		}

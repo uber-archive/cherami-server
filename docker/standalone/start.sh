@@ -1,3 +1,5 @@
+#!/bin/bash -x
+
 # Copyright (c) 2016 Uber Technologies, Inc.
 
 # Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -18,19 +20,19 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 
-DefaultServiceConfig:
-  ListenAddress: "127.0.0.1"
+# start up cassandra
+pushd /
+./docker-entrypoint.sh cassandra
+popd
+sleep 20
 
-DefaultDestinationConfig:
-  Replicas: 1
+export HOST_IP=`hostname --ip-address`
 
-MetadataConfig:
-  CassandraHosts: "127.0.0.1"
+# setup schema
+CQLSH_HOST=$HOST_IP RF=1 ./scripts/cherami-setup-schema
 
-StorageConfig:
-  BaseDir: /tmp/cherami-store
-  HostUUID: "11111111-1111-1111-1111-111111111111"
+# fix up config
+envsubst < config/docker_template.yaml > config/docker.yaml
 
-logging:
-  level: debug
-  stdout: true
+export CHERAMI_ENVIRONMENT=docker
+./cherami-server start all

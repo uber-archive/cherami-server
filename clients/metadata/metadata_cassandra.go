@@ -156,10 +156,15 @@ const (
 	columnReplicationStatus              = "replication_status"
 )
 
-const userOperationTTL = "31536000"
+const userOperationTTL = "2592000" // 30 days
 
 const cassandraProtoVersion = 4
 
+// Large TTLs for extents will in turn make the
+// listExtents() API expensive. Keep the extent
+// around just for a day after its deleted for
+// visibility
+const deleteExtentTTLSeconds = int64(time.Hour*24) / int64(time.Second)
 const defaultDeleteTTLSeconds = int64(time.Hour*24*30) / int64(time.Second)
 
 // CassandraMetadataService Implements TChanMetadataServiceClient interface
@@ -208,6 +213,11 @@ func NewCassandraMetadataService(cfg configure.CommonMetadataConfig) (*Cassandra
 	// will be local.
 	if filter, ok := cfg.GetDcFilter()[cms.clusterName]; ok {
 		cluster.HostFilter = gocql.DataCentreHostFilter(strings.TrimSpace(filter))
+	}
+
+	numConns := cfg.GetNumConns()
+	if numConns > 0 {
+		cluster.NumConns = numConns
 	}
 
 	// Highest consistency level applies to all sessions/queries derived from this cluster
@@ -443,7 +453,7 @@ func (s *CassandraMetadataService) CreateDestinationUUID(ctx thrift.Context, uui
 		if !applied {
 			// Record already exists
 			deleteOrphanRecord := `DELETE FROM ` + tableDestinations + ` WHERE ` + columnUUID + `=?`
-			if err := s.session.Query(deleteOrphanRecord, destinationUUID).Exec(); err != nil {
+			if err = s.session.Query(deleteOrphanRecord, destinationUUID).Exec(); err != nil {
 				// Just warn as orphaned records are not breaking correctness
 				log.WithFields(log.Fields{common.TagDst: common.FmtDst(destinationUUID), common.TagErr: err}).Warn(`CreateDestination failure deleting orphan record from destinations`)
 			}
@@ -677,19 +687,19 @@ func (s *CassandraMetadataService) UpdateDestination(ctx thrift.Context, updateR
 	}
 
 	// Note: if we add a new updatable property here, we also need to update the metadataReconciler in replicator to do reconcilation
-	if updateRequest.Status == nil {
+	if !updateRequest.IsSetStatus() {
 		updateRequest.Status = common.InternalDestinationStatusPtr(existing.GetStatus())
 	}
-	if updateRequest.ConsumedMessagesRetention == nil {
+	if !updateRequest.IsSetConsumedMessagesRetention() {
 		updateRequest.ConsumedMessagesRetention = common.Int32Ptr(existing.GetConsumedMessagesRetention())
 	}
-	if updateRequest.UnconsumedMessagesRetention == nil {
+	if !updateRequest.IsSetUnconsumedMessagesRetention() {
 		updateRequest.UnconsumedMessagesRetention = common.Int32Ptr(existing.GetUnconsumedMessagesRetention())
 	}
-	if updateRequest.OwnerEmail == nil {
+	if !updateRequest.IsSetOwnerEmail() {
 		updateRequest.OwnerEmail = common.StringPtr(existing.GetOwnerEmail())
 	}
-	if updateRequest.ChecksumOption == nil {
+	if !updateRequest.IsSetChecksumOption() {
 		updateRequest.ChecksumOption = common.InternalChecksumOptionPtr(existing.GetChecksumOption())
 	}
 	batch := s.session.NewBatch(gocql.LoggedBatch) // Consider switching to unlogged
@@ -723,7 +733,7 @@ func (s *CassandraMetadataService) UpdateDestination(ctx thrift.Context, updateR
 		existing.GetPath(),
 		directoryUUID)
 
-	if err := s.session.ExecuteBatch(batch); err != nil {
+	if err = s.session.ExecuteBatch(batch); err != nil {
 		return nil, &shared.InternalServiceError{
 			Message: "UpdateDestination: " + err.Error(),
 		}
@@ -745,11 +755,21 @@ func (s *CassandraMetadataService) UpdateDestination(ctx thrift.Context, updateR
 		time.Now(),
 		marshalRequest(updateRequest))
 
-	existing.Status = common.InternalDestinationStatusPtr(updateRequest.GetStatus())
-	existing.ConsumedMessagesRetention = common.Int32Ptr(updateRequest.GetConsumedMessagesRetention())
-	existing.UnconsumedMessagesRetention = common.Int32Ptr(updateRequest.GetUnconsumedMessagesRetention())
-	existing.OwnerEmail = common.StringPtr(updateRequest.GetOwnerEmail())
-	existing.ChecksumOption = common.InternalChecksumOptionPtr(updateRequest.GetChecksumOption())
+	if updateRequest.IsSetStatus() {
+		existing.Status = common.InternalDestinationStatusPtr(updateRequest.GetStatus())
+	}
+	if updateRequest.IsSetConsumedMessagesRetention() {
+		existing.ConsumedMessagesRetention = common.Int32Ptr(updateRequest.GetConsumedMessagesRetention())
+	}
+	if updateRequest.IsSetUnconsumedMessagesRetention() {
+		existing.UnconsumedMessagesRetention = common.Int32Ptr(updateRequest.GetUnconsumedMessagesRetention())
+	}
+	if updateRequest.IsSetOwnerEmail() {
+		existing.OwnerEmail = common.StringPtr(updateRequest.GetOwnerEmail())
+	}
+	if updateRequest.IsSetChecksumOption() {
+		existing.ChecksumOption = common.InternalChecksumOptionPtr(updateRequest.GetChecksumOption())
+	}
 	return existing, nil
 }
 
@@ -777,7 +797,7 @@ func (s *CassandraMetadataService) DeleteDestination(ctx thrift.Context, deleteR
 		marshalDstZoneConfigs(existing.GetZoneConfigs()),
 		existing.GetDestinationUUID())
 	batch.Query(sqlDeleteDst, directoryUUID, existing.GetPath())
-	if err := s.session.ExecuteBatch(batch); err != nil {
+	if err = s.session.ExecuteBatch(batch); err != nil {
 		return &shared.InternalServiceError{
 			Message: "DeleteDestination: " + err.Error(),
 		}
@@ -839,7 +859,7 @@ func (s *CassandraMetadataService) DeleteDestinationUUID(ctx thrift.Context, del
 		existing.DLQMergeBefore,       // May be nil
 		defaultDeleteTTLSeconds).Consistency(s.midConsLevel)
 
-	if err := query.Exec(); err != nil {
+	if err = query.Exec(); err != nil {
 		return &shared.InternalServiceError{
 			Message: fmt.Sprintf("DeleteDestinationUUID:%v (%v)", *existing.DLQConsumerGroupUUID, err),
 		}
@@ -1256,7 +1276,7 @@ func (s *CassandraMetadataService) CreateConsumerGroup(ctx thrift.Context, reque
 
 	applied, err := query.MapScanCAS(previous)
 	if !applied {
-		if err := s.session.Query(sqlDeleteCGByUUID, cgUUID).Exec(); err != nil {
+		if err = s.session.Query(sqlDeleteCGByUUID, cgUUID).Exec(); err != nil {
 			log.WithFields(log.Fields{common.TagCnsm: common.FmtCnsm(cgUUID), common.TagErr: err}).Warn(`CreateConsumerGroup - failed to delete orphan record after a failed CAS attempt, ,`)
 		}
 		return nil, &shared.EntityAlreadyExistsError{
@@ -1508,7 +1528,7 @@ func (s *CassandraMetadataService) UpdateConsumerGroup(ctx thrift.Context, reque
 		newCG.GetDestinationUUID(),
 		newCG.GetConsumerGroupName())
 
-	if err := s.session.ExecuteBatch(batch); err != nil {
+	if err = s.session.ExecuteBatch(batch); err != nil {
 		return nil, &shared.InternalServiceError{
 			Message: fmt.Sprintf("UpdateConsumerGroup - Batch operation failed, dst=%v cg=%v err=%v",
 				request.GetDestinationPath(), request.GetConsumerGroupName(), err),
@@ -2200,7 +2220,7 @@ func (s *CassandraMetadataService) deleteExtentImpl(extent *shared.Extent, exten
 		shared.ExtentStatus_DELETED,
 		extentStatsMap,
 		extentStats.ConsumerGroupVisibility,
-		defaultDeleteTTLSeconds,
+		deleteExtentTTLSeconds,
 	)
 
 	batch.Query(
@@ -2218,7 +2238,7 @@ func (s *CassandraMetadataService) deleteExtentImpl(extent *shared.Extent, exten
 		extent.GetRemoteExtentPrimaryStore(),
 		shared.ExtentStatus_DELETED,
 		extentStatsMap,
-		defaultDeleteTTLSeconds,
+		deleteExtentTTLSeconds,
 	)
 
 	if !forMove { // Shouldn't mark store extents as deleted for move extent
@@ -2238,7 +2258,7 @@ func (s *CassandraMetadataService) deleteExtentImpl(extent *shared.Extent, exten
 				extent.GetRemoteExtentPrimaryStore(),
 				shared.ExtentStatus_DELETED,
 				replicaStats,
-				defaultDeleteTTLSeconds,
+				deleteExtentTTLSeconds,
 			)
 		}
 	}
@@ -2665,7 +2685,7 @@ func (s *CassandraMetadataService) ListExtentsStats(ctx thrift.Context, request 
 	result.NextPageToken = make([]byte, len(nextPageToken))
 	copy(result.NextPageToken, nextPageToken)
 
-	if err := iter.Close(); err != nil {
+	if err = iter.Close(); err != nil {
 		return nil, &shared.InternalServiceError{
 			Message: err.Error(),
 		}
@@ -3324,11 +3344,11 @@ func (s *CassandraMetadataService) deleteConsumerGroupExtent(cgUUID string, exte
 		cge.GetReadLevelSeqNoRate(),
 		connectedStore,
 		cge.GetStoreUUIDs(),
-		defaultDeleteTTLSeconds)
+		deleteExtentTTLSeconds)
 
 	query.Consistency(s.midConsLevel)
 
-	if err := query.Exec(); err != nil {
+	if err = query.Exec(); err != nil {
 		return &shared.InternalServiceError{
 			Message: fmt.Sprintf("deleteConsumerGroupExtent - query failed, cg=%v ext=%v, err=%v", cgUUID, extentUUID, err),
 		}
@@ -3657,7 +3677,7 @@ func (s *CassandraMetadataService) ReadConsumerGroupExtents(ctx thrift.Context, 
 	nextPageToken := iter.PageState()
 	result.NextPageToken = make([]byte, len(nextPageToken))
 	copy(result.NextPageToken, nextPageToken)
-	if err := iter.Close(); err != nil {
+	if err = iter.Close(); err != nil {
 		return nil, &shared.InternalServiceError{
 			Message: err.Error(),
 		}

@@ -74,7 +74,10 @@ cherami-replicator-tool: $(DEPS)
 cherami-cassandra-tool: $(DEPS)
 	go build -i -o cherami-cassandra-tool cmd/tools/cassandra/main.go
 
-bins: cherami-server cherami-replicator-server cherami-cli cherami-admin cherami-replicator-tool cherami-cassandra-tool
+cherami-store-tool: $(DEPS)
+	go build -i $(EMBED) -o cherami-store-tool cmd/tools/store/main.go
+
+bins: cherami-server cherami-replicator-server cherami-cli cherami-admin cherami-replicator-tool cherami-cassandra-tool cherami-store-tool
 
 cover_profile: bins
 	@echo Testing packages:

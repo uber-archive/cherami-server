@@ -44,7 +44,9 @@ type (
 		ListHosts(request *m.ListHostsRequest) (*m.ListHostsResult_, error)
 		ListConsumerGroups(request *m.ListConsumerGroupRequest) (*m.ListConsumerGroupResult_, error)
 		ListAllConsumerGroups(request *m.ListConsumerGroupRequest) (*m.ListConsumerGroupResult_, error)
+		ReadServiceConfig(request *m.ReadServiceConfigRequest) (*m.ReadServiceConfigResult_, error)
 		UpdateServiceConfig(request *m.UpdateServiceConfigRequest) error
+		DeleteServiceConfig(request *m.DeleteServiceConfigRequest) error
 		ListEntityOps(request *m.ListEntityOpsRequest) (*m.ListEntityOpsResult_, error)
 	}
 )

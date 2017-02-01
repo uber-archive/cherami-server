@@ -223,10 +223,12 @@ func (s *NodeFailureTestSuite) testNodeFailure(serviceName string, nKill int) {
 		nInput, _ := clusterSzMap[common.InputServiceName]
 		nStores, _ := clusterSzMap[common.StoreServiceName]
 		if strings.Compare(serviceName, common.InputServiceName) == 0 {
-			hosts, err := ch.GetRingpopMonitor().GetHosts(common.InputServiceName)
+			var hosts []*common.HostInfo
+			hosts, err = ch.GetRingpopMonitor().GetHosts(common.InputServiceName)
 			return err == nil && len(hosts) == nInput-1
 		}
-		storeHosts, err := ch.GetRingpopMonitor().GetHosts(common.StoreServiceName)
+		var storeHosts []*common.HostInfo
+		storeHosts, err = ch.GetRingpopMonitor().GetHosts(common.StoreServiceName)
 		return err == nil && len(storeHosts) == nStores-nKill
 	}
 
@@ -275,7 +277,8 @@ ReadLoop:
 		timeout := time.NewTimer(time.Second * 30)
 		select {
 		case msg := <-delivery:
-			data, err := strconv.Atoi(string(msg.GetMessage().GetPayload().GetData()))
+			var data int
+			data, err = strconv.Atoi(string(msg.GetMessage().GetPayload().GetData()))
 			s.Nil(err)
 			rcvdMsgs[int32(data)] = true
 			log.Infof("Read message, msg:%v", data)

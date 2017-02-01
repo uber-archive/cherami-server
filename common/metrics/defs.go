@@ -624,9 +624,9 @@ const (
 	InputhostLatencyTimer
 	// InputhostWriteMessageLatency is the latency from receiving a message from stream to returning ack back to stream
 	InputhostWriteMessageLatency
-	// InputhostWriteMessageExcludeSocketLatency is the latency from receiving a message from stream to getting ack from replicas
-	// the only difference with InputhostWriteMessageLatency is this metrics excludes the latency for writing ack back to the socket
-	InputhostWriteMessageExcludeSocketLatency
+	// InputhostWriteMessageBeforeAckLatency is the latency from receiving a message from stream to getting ack from replicas
+	// the only difference with InputhostWriteMessageLatency is this metrics excludes the latency for writing ack back to the stream
+	InputhostWriteMessageBeforeAckLatency
 	// InputhostDestMessageReceived  indicates prefix name for destinations request counter
 	// append the destination path will be the actual name for the counter.
 	// each destination has a unique name tag
@@ -649,11 +649,11 @@ const (
 	// append the destination path will be the actual name for the counter.
 	// each destination has a unique name tag
 	InputhostDestMessageInternalFailures
-	// InputhostDestWriteMessageLatency is the latency from receiving a message from stream to getting ack from replicas
+	// InputhostDestWriteMessageLatency is the latency from receiving a message from stream to returning ack back to stream
 	InputhostDestWriteMessageLatency
-	// InputhostDestWriteMessageExcludeSocketLatency is the latency from receiving a message from stream to getting ack from replicas
-	// the only difference with InputhostDestWriteMessageLatency is this metrics excludes the latency for writing ack back to the socket
-	InputhostDestWriteMessageExcludeSocketLatency
+	// InputhostDestWriteMessageBeforeAckLatency is the latency from receiving a message from stream to getting ack from replicas
+	// the only difference with InputhostDestWriteMessageLatency is this metrics excludes the latency for returning ack back to the stream
+	InputhostDestWriteMessageBeforeAckLatency
 	// InputhostDestPubConnection is the gauge of active connections per destination
 	InputhostDestPubConnection
 
@@ -699,6 +699,8 @@ const (
 	OutputhostInternalFailures
 	// OutputhostConsConnection is the number of active connections
 	OutputhostConsConnection
+	// OutputhostCreditsAccumulated is a gauge to record credits that are accumulated locally
+	OutputhostCreditsAccumulated
 	// OutputhostLatencyTimer represents time taken by an operation
 	OutputhostLatencyTimer
 	// OutputhostCGMessageSent records the count of messages sent per consumer group
@@ -719,6 +721,8 @@ const (
 	OutputhostCGMessageSentNAck
 	// OutputhostCGMessagesThrottled records the count of messages throttled
 	OutputhostCGMessagesThrottled
+	// OutputhostCGAckMgrSeqNotFound is the gauge to track acks whose seq number is not found
+	OutputhostCGAckMgrSeqNotFound
 	// OutputhostCGMessageSentLatency is the latency to send a message
 	OutputhostCGMessageSentLatency
 	//OutputhostCGMessageCacheSize is the cashe size of consumer group message
@@ -743,6 +747,8 @@ const (
 	OutputhostCGAckMgrResetMsgError
 	// OutputhostCGSkippedMessages is the gauge to track skipped messages
 	OutputhostCGSkippedMessages
+	// OutputhostCGCreditsAccumulated is a gauge to record credits that are accumulated locally per consumer group
+	OutputhostCGCreditsAccumulated
 
 	// -- Frontend metrics -- //
 
@@ -794,10 +800,11 @@ const (
 	StorageLatencyTimer
 	// StorageWriteStoreLatency is the latency to write message to store
 	StorageWriteStoreLatency
-	// StorageWriteMessageLatency is the latency to write message to store and ack, but excludes time writing to socket
-	StorageWriteMessageExcludeSocketLatency
-	// StorageWriteMessageLatency is the latency to write message to store and ack
+	// StorageWriteMessageLatency is the latency from receiving a message from stream(input) to returning ack back to stream
 	StorageWriteMessageLatency
+	// StorageWriteMessageBeforeAckLatency is the latency from receiving a message from stream(input) to getting ack from store
+	// the only difference with StorageWriteMessageLatency is this metrics excludes the latency for returning ack back to the stream
+	StorageWriteMessageBeforeAckLatency
 	// StorageReadStoreLatency is the latency to read message from store
 	StorageReadStoreLatency
 	// StorageReadMessageLatency is the latency to read and send out a message
@@ -901,8 +908,10 @@ const (
 
 	// -- Replicator metrics -- //
 
-	// ReplicatorWsFailure indicates websocket failure
-	ReplicatorWsFailure
+	// ReplicatorCreateInStreamFailure indicates failure when creating in stream
+	ReplicatorCreateInStreamFailure
+	// ReplicatorCreateOutStreamFailure indicates failure when creating out stream
+	ReplicatorCreateOutStreamFailure
 	// ReplicatorRequests indicates non-messaging request count for replicator
 	ReplicatorRequests
 	// ReplicatorFailures indicates non-messaging failure count for replicator
@@ -914,11 +923,11 @@ const (
 	ReplicatorInConnCreditsReceived
 	// ReplicatorInConnMsgWritten indicates how many messages InConn writes to client
 	ReplicatorInConnMsgWritten
-
 	// ReplicatorOutConnCreditsSent indicates how many credits OutConn sent
 	ReplicatorOutConnCreditsSent
 	// ReplicatorOutConnMsgRead indicates how many messages OutConn read
 	ReplicatorOutConnMsgRead
+
 	// ReplicatorReconcileDestRun indicates the reconcile for dest runs
 	ReplicatorReconcileDestRun
 	// ReplicatorReconcileDestFail indicates the reconcile for dest fails
@@ -949,21 +958,21 @@ var metricDefs = map[ServiceIdx]map[int]metricDefinition{
 
 	// definitions for Inputhost metrics
 	Inputhost: {
-		InputhostRequests:                         {Counter, "inputhost.requests"},
-		InputhostFailures:                         {Counter, "inputhost.errors"},
-		InputhostMessageReceived:                  {Counter, "inputhost.message.received"},
-		InputhostMessageFailures:                  {Counter, "inputhost.message.errors"},
-		InputhostReconfClientRequests:             {Counter, "inputhost.reconfigure.client.request"},
-		InputhostMessageLimitThrottled:            {Counter, "inputhost.message.limit.throttled"},
-		InputhostMessageChannelFullThrottled:      {Counter, "inputhost.message.channel.throttled"},
-		InputhostUserFailures:                     {Counter, "inputhost.user-errors"},
-		InputhostInternalFailures:                 {Counter, "inputhost.internal-errors"},
-		InputhostMessageUserFailures:              {Counter, "inputhost.message.user-errors"},
-		InputhostMessageInternalFailures:          {Counter, "inputhost.message.internal-errors"},
-		InputhostPubConnection:                    {Gauge, "inputhost.pubconnection"},
-		InputhostLatencyTimer:                     {Timer, "inputhost.latency"},
-		InputhostWriteMessageLatency:              {Timer, "inputhost.message.write-latency"},
-		InputhostWriteMessageExcludeSocketLatency: {Timer, "inputhost.message.write-latency-exclude-socket"},
+		InputhostRequests:                     {Counter, "inputhost.requests"},
+		InputhostFailures:                     {Counter, "inputhost.errors"},
+		InputhostMessageReceived:              {Counter, "inputhost.message.received"},
+		InputhostMessageFailures:              {Counter, "inputhost.message.errors"},
+		InputhostReconfClientRequests:         {Counter, "inputhost.reconfigure.client.request"},
+		InputhostMessageLimitThrottled:        {Counter, "inputhost.message.limit.throttled"},
+		InputhostMessageChannelFullThrottled:  {Counter, "inputhost.message.channel.throttled"},
+		InputhostUserFailures:                 {Counter, "inputhost.user-errors"},
+		InputhostInternalFailures:             {Counter, "inputhost.internal-errors"},
+		InputhostMessageUserFailures:          {Counter, "inputhost.message.user-errors"},
+		InputhostMessageInternalFailures:      {Counter, "inputhost.message.internal-errors"},
+		InputhostPubConnection:                {Gauge, "inputhost.pubconnection"},
+		InputhostLatencyTimer:                 {Timer, "inputhost.latency"},
+		InputhostWriteMessageLatency:          {Timer, "inputhost.message.write-latency"},
+		InputhostWriteMessageBeforeAckLatency: {Timer, "inputhost.message.write-latency-before-ack"},
 	},
 
 	// definitions for Outputhost metrics
@@ -988,6 +997,7 @@ var metricDefs = map[ServiceIdx]map[int]metricDefinition{
 		OutputhostUserFailures:                          {Counter, "outputhost.user-errors"},
 		OutputhostInternalFailures:                      {Counter, "outputhost.internal-errors"},
 		OutputhostConsConnection:                        {Gauge, "outputhost.consconnection"},
+		OutputhostCreditsAccumulated:                    {Gauge, "outputhost.credit-accumulated"},
 		OutputhostLatencyTimer:                          {Timer, "outputhost.latency"},
 	},
 
@@ -1003,30 +1013,30 @@ var metricDefs = map[ServiceIdx]map[int]metricDefinition{
 
 	// definitions for Storehost metrics
 	Storage: {
-		StorageRequests:                         {Counter, "storage.requests"},
-		StorageFailures:                         {Counter, "storage.errors"},
-		StorageStoreFailures:                    {Counter, "storage.store-error"},
-		StorageMessageReceived:                  {Counter, "storage.message.received"},
-		StorageMessageSent:                      {Counter, "storage.message.sent"},
-		WatermarksReceived:                      {Counter, "storage.watermarks"},
-		StorageOpenExtents:                      {Gauge, "storage.open-extents"},
-		StorageWriteStreams:                     {Gauge, "storage.write.streams"},
-		StorageReadStreams:                      {Gauge, "storage.read.streams"},
-		StorageInMsgChanDepth:                   {Gauge, "storage.in.msgchan-depth"},
-		StorageInAckChanDepth:                   {Gauge, "storage.in.ackchan-depth"},
-		StorageOutMsgChanDepth:                  {Gauge, "storage.out.msgchan-depth"},
-		StorageDiskAvailableSpaceMB:             {Gauge, "storage.disk.availablespace.mb"},
-		StorageDiskAvailableSpacePcnt:           {Gauge, "storage.disk.availablespace.pcnt"},
-		StorageLatencyTimer:                     {Timer, "storage.latency"},
-		StorageWriteStoreLatency:                {Timer, "storage.write.store-latency"},
-		StorageWriteMessageExcludeSocketLatency: {Timer, "storage.write.message-latency-exclude-socket"},
-		StorageWriteMessageLatency:              {Timer, "storage.write.message-latency"},
-		StorageReadStoreLatency:                 {Timer, "storage.read.store-latency"},
-		StorageReadMessageLatency:               {Timer, "storage.read.message-latency"},
-		StorageInWriteTChannelLatency:           {Timer, "storage.in.write-tchannel-latency"},
-		StorageInFlushTChannelLatency:           {Timer, "storage.in.flush-tchannel-latency"},
-		StorageOutWriteTChannelLatency:          {Timer, "storage.out.write-tchannel-latency"},
-		StorageOutFlushTChannelLatency:          {Timer, "storage.out.flush-tchannel-latency"},
+		StorageRequests:                     {Counter, "storage.requests"},
+		StorageFailures:                     {Counter, "storage.errors"},
+		StorageStoreFailures:                {Counter, "storage.store-error"},
+		StorageMessageReceived:              {Counter, "storage.message.received"},
+		StorageMessageSent:                  {Counter, "storage.message.sent"},
+		WatermarksReceived:                  {Counter, "storage.watermarks"},
+		StorageOpenExtents:                  {Gauge, "storage.open-extents"},
+		StorageWriteStreams:                 {Gauge, "storage.write.streams"},
+		StorageReadStreams:                  {Gauge, "storage.read.streams"},
+		StorageInMsgChanDepth:               {Gauge, "storage.in.msgchan-depth"},
+		StorageInAckChanDepth:               {Gauge, "storage.in.ackchan-depth"},
+		StorageOutMsgChanDepth:              {Gauge, "storage.out.msgchan-depth"},
+		StorageDiskAvailableSpaceMB:         {Gauge, "storage.disk.availablespace.mb"},
+		StorageDiskAvailableSpacePcnt:       {Gauge, "storage.disk.availablespace.pcnt"},
+		StorageLatencyTimer:                 {Timer, "storage.latency"},
+		StorageWriteStoreLatency:            {Timer, "storage.write.store-latency"},
+		StorageWriteMessageLatency:          {Timer, "storage.write.message-latency"},
+		StorageWriteMessageBeforeAckLatency: {Timer, "storage.write.message-latency-before-ack"},
+		StorageReadStoreLatency:             {Timer, "storage.read.store-latency"},
+		StorageReadMessageLatency:           {Timer, "storage.read.message-latency"},
+		StorageInWriteTChannelLatency:       {Timer, "storage.in.write-tchannel-latency"},
+		StorageInFlushTChannelLatency:       {Timer, "storage.in.flush-tchannel-latency"},
+		StorageOutWriteTChannelLatency:      {Timer, "storage.out.write-tchannel-latency"},
+		StorageOutFlushTChannelLatency:      {Timer, "storage.out.flush-tchannel-latency"},
 	},
 
 	// definitions for Controller metrics
@@ -1069,7 +1079,8 @@ var metricDefs = map[ServiceIdx]map[int]metricDefinition{
 
 	// definitions for Replicator metrics
 	Replicator: {
-		ReplicatorWsFailure:                             {Counter, "replicator.websocket.failure"},
+		ReplicatorCreateInStreamFailure:                 {Counter, "replicator.create-in-stream.failure"},
+		ReplicatorCreateOutStreamFailure:                {Counter, "replicator.create-out-stream.failure"},
 		ReplicatorRequests:                              {Counter, "replicator.requests"},
 		ReplicatorFailures:                              {Counter, "replicator.errors"},
 		ReplicatorBadRequest:                            {Counter, "replicator.requests.bad"},
@@ -1077,28 +1088,28 @@ var metricDefs = map[ServiceIdx]map[int]metricDefinition{
 		ReplicatorInConnMsgWritten:                      {Counter, "replicator.inconn.msgwritten"},
 		ReplicatorOutConnCreditsSent:                    {Counter, "replicator.outconn.creditssent"},
 		ReplicatorOutConnMsgRead:                        {Counter, "replicator.outconn.msgread"},
-		ReplicatorReconcileDestRun:                      {Counter, "replicator.reconcile.dest.run"},
-		ReplicatorReconcileDestFail:                     {Counter, "replicator.reconcile.dest.fail"},
-		ReplicatorReconcileDestFoundMissing:             {Counter, "replicator.reconcile.dest.foundmissing"},
-		ReplicatorReconcileDestExtentRun:                {Counter, "replicator.reconcile.destextent.run"},
-		ReplicatorReconcileDestExtentFail:               {Counter, "replicator.reconcile.destextent.fail"},
-		ReplicatorReconcileDestExtentFoundMissing:       {Counter, "replicator.reconcile.destextent.foundmissing"},
-		ReplicatorReconcileDestExtentInconsistentStatus: {Counter, "replicator.reconcile.destextent.inconsistentstatus"},
+		ReplicatorReconcileDestRun:                      {Gauge, "replicator.reconcile.dest.run"},
+		ReplicatorReconcileDestFail:                     {Gauge, "replicator.reconcile.dest.fail"},
+		ReplicatorReconcileDestFoundMissing:             {Gauge, "replicator.reconcile.dest.foundmissing"},
+		ReplicatorReconcileDestExtentRun:                {Gauge, "replicator.reconcile.destextent.run"},
+		ReplicatorReconcileDestExtentFail:               {Gauge, "replicator.reconcile.destextent.fail"},
+		ReplicatorReconcileDestExtentFoundMissing:       {Gauge, "replicator.reconcile.destextent.foundmissing"},
+		ReplicatorReconcileDestExtentInconsistentStatus: {Gauge, "replicator.reconcile.destextent.inconsistentstatus"},
 	},
 }
 
 var dynamicMetricDefs = map[ServiceIdx]map[int]metricDefinition{
 	// definitions for Inputhost metrics
 	Inputhost: {
-		InputhostDestMessageReceived:                  {Counter, "inputhost.message.received.dest"},
-		InputhostDestMessageFailures:                  {Counter, "inputhost.message.errors.dest"},
-		InputhostDestMessageLimitThrottled:            {Counter, "inputhost.message.limit.throttled.dest"},
-		InputhostDestMessageChannelFullThrottled:      {Counter, "inputhost.message.channel.throttled.dest"},
-		InputhostDestMessageUserFailures:              {Counter, "inputhost.message.user-errors.dest"},
-		InputhostDestMessageInternalFailures:          {Counter, "inputhost.message.internal-errors.dest"},
-		InputhostDestWriteMessageLatency:              {Timer, "inputhost.message.write-latency.dest"},
-		InputhostDestWriteMessageExcludeSocketLatency: {Timer, "inputhost.message.write-latency-exclude-socket.dest"},
-		InputhostDestPubConnection:                    {Gauge, "inputhost.pubconnection.dest"},
+		InputhostDestMessageReceived:              {Counter, "inputhost.message.received.dest"},
+		InputhostDestMessageFailures:              {Counter, "inputhost.message.errors.dest"},
+		InputhostDestMessageLimitThrottled:        {Counter, "inputhost.message.limit.throttled.dest"},
+		InputhostDestMessageChannelFullThrottled:  {Counter, "inputhost.message.channel.throttled.dest"},
+		InputhostDestMessageUserFailures:          {Counter, "inputhost.message.user-errors.dest"},
+		InputhostDestMessageInternalFailures:      {Counter, "inputhost.message.internal-errors.dest"},
+		InputhostDestWriteMessageLatency:          {Timer, "inputhost.message.write-latency.dest"},
+		InputhostDestWriteMessageBeforeAckLatency: {Timer, "inputhost.message.write-latency-before-ack.dest"},
+		InputhostDestPubConnection:                {Gauge, "inputhost.pubconnection.dest"},
 	},
 
 	// definitions for Outputhost metrics
@@ -1112,6 +1123,7 @@ var dynamicMetricDefs = map[ServiceIdx]map[int]metricDefinition{
 		OutputhostCGMessageSentAck:        {Counter, "outputhost.message.sent-ack.cg"},
 		OutputhostCGMessageSentNAck:       {Counter, "outputhost.message.sent-nack.cg"},
 		OutputhostCGMessagesThrottled:     {Counter, "outputhost.message.throttled"},
+		OutputhostCGAckMgrSeqNotFound:     {Counter, "outputhost.ackmgr.seq-not-found.cg"},
 		OutputhostCGMessageSentLatency:    {Timer, "outputhost.message.sent-latency.cg"},
 		OutputhostCGMessageCacheSize:      {Gauge, "outputhost.message.cache.size.cg"},
 		OutputhostCGConsConnection:        {Gauge, "outputhost.consconnection.cg"},
@@ -1124,6 +1136,7 @@ var dynamicMetricDefs = map[ServiceIdx]map[int]metricDefinition{
 		OutputhostCGAckMgrResetMsg:        {Gauge, "outputhost.ackmgr.reset.message.cg"},
 		OutputhostCGAckMgrResetMsgError:   {Gauge, "outputhost.ackmgr.reset.message.error.cg"},
 		OutputhostCGSkippedMessages:       {Gauge, "outputhost.skipped.messages.cg"},
+		OutputhostCGCreditsAccumulated:    {Gauge, "outputhost.credit-accumulated.cg"},
 	},
 
 	// definitions for Controller metrics

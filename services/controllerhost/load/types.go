@@ -70,6 +70,10 @@ const (
 	// that does average of all data points
 	// across the past five minutes
 	FiveMinAvg
+	// FiveMinSum gives the sum of
+	// all data points over the
+	// past five minutes
+	FiveMinSum
 )
 
 const (

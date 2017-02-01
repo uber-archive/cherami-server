@@ -753,11 +753,11 @@ func (event *StartReplicationForRemoteZoneExtent) Handle(context *Context) error
 			return err
 		}
 
-		req := store.NewReplicateExtentRequest()
-		req.DestinationUUID = common.StringPtr(event.dstID)
-		req.ExtentUUID = common.StringPtr(event.extentID)
-		req.StoreUUID = common.StringPtr(event.remoteExtentPrimaryStore)
-		err = secondaryStoreClient.ReplicateExtent(ctx, req)
+		req2 := store.NewReplicateExtentRequest()
+		req2.DestinationUUID = common.StringPtr(event.dstID)
+		req2.ExtentUUID = common.StringPtr(event.extentID)
+		req2.StoreUUID = common.StringPtr(event.remoteExtentPrimaryStore)
+		err = secondaryStoreClient.ReplicateExtent(ctx, req2)
 		if err != nil {
 			context.log.WithFields(bark.Fields{
 				common.TagExt:   common.FmtExt(event.extentID),
@@ -976,10 +976,11 @@ func triggerCacheRefreshForCG(context *Context, cgID string) {
 	// overwrite the next refresh time to now
 	context.resultCache.write(cgID,
 		resultCacheParams{
-			dstType:  cacheEntry.dstType,
-			nExtents: cacheEntry.nExtents,
-			hostIDs:  cacheEntry.hostIDs,
-			expiry:   now,
+			dstType:    cacheEntry.dstType,
+			nExtents:   cacheEntry.nExtents,
+			maxExtents: cacheEntry.maxExtents,
+			hostIDs:    cacheEntry.hostIDs,
+			expiry:     now,
 		})
 }
 
@@ -1065,7 +1066,7 @@ func sealExtentOnStore(context *Context, storeUUID string, storeAddr string, ext
 	sealOp := func() error {
 		ctx, cancel := thrift.NewContext(timeout)
 		defer cancel()
-		err := client.SealExtent(ctx, req)
+		err = client.SealExtent(ctx, req)
 		if err != nil {
 			context.log.WithFields(bark.Fields{
 				common.TagExt:  common.FmtExt(extentID),

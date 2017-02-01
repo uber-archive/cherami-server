@@ -22,12 +22,15 @@ package outputhost
 
 import (
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/uber-common/bark"
 	"github.com/uber/tchannel-go/thrift"
 
 	"github.com/uber/cherami-server/common"
+	"github.com/uber/cherami-server/common/cache"
+	"github.com/uber/cherami-server/common/dconfig"
 	"github.com/uber/cherami-server/common/metrics"
 	"github.com/uber/cherami-server/services/outputhost/load"
 	"github.com/uber/cherami-thrift/.generated/go/cherami"
@@ -146,6 +149,12 @@ type (
 		// lastDisconnectTime is the time the last consumer got disconnected
 		lastDisconnectTime time.Time
 
+		// dlqMerging indicates whether any DLQ extent is presently being merged. ATOMIC OPERATIONS ONLY
+		dlqMerging int32
+
+		// checkSingleCGVisibleCache reduces ListExtentStats calls
+		checkSingleCGVisibleCache cache.Cache // Key is the extent UUID, value is whether it is single-CG-visible
+
 		// sessionID is the 16 bit session identifier for this host
 		sessionID uint16
 
@@ -168,8 +177,21 @@ type (
 
 		// hostMetrics represents the host level load metrics reported to controller
 		hostMetrics *load.HostMetrics
+
 		// cgMetrics represents consgroup level load metrics reported to controller
 		cgMetrics *load.CGMetrics
+
+		// unloadInProgress is used to indicate if an unload of this CG is in progress to prevent racing loads from happening
+		unloadInProgress bool
+
+		// connsWG is used to wait for all the connections (including ext) to go away before stopping the manage routine.
+		connsWG sync.WaitGroup
+
+		// manageMsgCacheWG is used to wait for the manage delivery cache routine to go away. This is needed to make sure we cleanup all the buffered channels appropriately.
+		manageMsgCacheWG sync.WaitGroup
+
+		// cfgMgr is the reference to the cassandra backed cfgMgr
+		cfgMgr dconfig.ConfigManager
 	}
 )
 
@@ -194,10 +216,13 @@ const defaultMaxResults = 500
 const consGroupLoadReportingInterval = 2 * time.Second
 
 // defaultNumOutstandingMsgs is the number of outstanding messages we can have for this CG
-var defaultNumOutstandingMsgs int32 = 10000
+const defaultNumOutstandingMsgs int32 = 10000
 
 // ErrCgUnloaded is returned when the cgCache is already unloaded
 var ErrCgUnloaded = &cherami.InternalServiceError{Message: "ConsumerGroup already unloaded"}
+
+// ErrConfigCast is returned when we are unable to cast to the CgConfig type
+var ErrConfigCast = &cherami.InternalServiceError{Message: "Unable to cast to OutputCgConfig"}
 
 // newConsumerGroupCache is used to get a new instance of the CG cache
 func newConsumerGroupCache(destPath string, cgDesc shared.ConsumerGroupDescription, cgLogger bark.Logger, h *OutputHost) *consumerGroupCache {
@@ -236,8 +261,10 @@ func newConsumerGroupCache(destPath string, cgDesc shared.ConsumerGroupDescripti
 		loadReporterFactory:      h.GetLoadReporterDaemonFactory(),
 		hostMetrics:              h.hostMetrics,
 		cgMetrics:                load.NewCGMetrics(),
+		cfgMgr:                   h.cfgMgr,
 	}
 
+	cgCache.checkSingleCGVisibleCache = cache.NewLRUWithInitialCapacity(1, 1<<6)
 	cgCache.consumerM3Client = metrics.NewClientWithTags(h.m3Client, metrics.Outputhost, cgCache.getConsumerGroupTags())
 	cgCache.loadReporter = cgCache.loadReporterFactory.CreateReporter(consGroupLoadReportingInterval, cgCache, cgLogger)
 	cgCache.loadReporter.Start()
@@ -269,28 +296,25 @@ func (cgCache *consumerGroupCache) getConsumerGroupTags() map[string]string {
 }
 
 // loadExtentCache loads the extent cache, if it doesn't already exist for this consumer group
-func (cgCache *consumerGroupCache) loadExtentCache(tClients common.ClientFactory,
-	metaClient metadata.TChanMetadataService, wsConnector common.WSConnector,
-	outputHostUUID string, destUUID string, destType shared.DestinationType,
-	cgUUID string, cge *metadata.ConsumerGroupExtent, startFrom int64) (err error) {
+func (cgCache *consumerGroupCache) loadExtentCache(destType shared.DestinationType, cge *metadata.ConsumerGroupExtent) {
 	extUUID := cge.GetExtentUUID()
 	extLogger := cgCache.logger.WithField(common.TagExt, extUUID)
 	if extCache, exists := cgCache.extentCache[extUUID]; !exists {
 		extCache = &extentCache{
-			cgUUID:               cgUUID,
+			cgUUID:               cgCache.cachedCGDesc.GetConsumerGroupUUID(),
 			extUUID:              extUUID,
-			destUUID:             destUUID,
+			destUUID:             cgCache.cachedCGDesc.GetDestinationUUID(),
 			destType:             destType,
 			storeUUIDs:           cge.StoreUUIDs,
-			startFrom:            startFrom,
+			startFrom:            cgCache.cachedCGDesc.GetStartFrom(),
 			notifyReplicaCloseCh: make(chan error, 5),
 			closeChannel:         make(chan struct{}),
 			waitConsumedCh:       make(chan bool, 1),
 			msgsCh:               cgCache.msgsCh,
 			connectionsClosedCh:  cgCache.notifyReplicaCloseCh,
-			shutdownWG:           cgCache.shutdownWG,
-			tClients:             tClients,
-			wsConnector:          wsConnector,
+			shutdownWG:           &cgCache.connsWG,
+			tClients:             cgCache.tClients,
+			wsConnector:          cgCache.wsConnector,
 			logger:               extLogger.WithField(common.TagModule, `extCache`),
 			creditNotifyCh:       cgCache.creditNotifyCh,
 			creditRequestCh:      cgCache.creditRequestCh,
@@ -302,15 +326,20 @@ func (cgCache *consumerGroupCache) loadExtentCache(tClients common.ClientFactory
 		cgCache.cgMetrics.Increment(load.CGMetricNumOpenExtents)
 		cgCache.hostMetrics.Increment(load.HostMetricNumOpenExtents)
 
+		// get the initial credits based on the message cache size
+		cfg, err := cgCache.getDynamicCgConfig()
+		if err == nil {
+			extCache.initialCredits = cgCache.getMessageCacheSize(cfg, defaultNumOutstandingMsgs)
+		}
 		// TODO: create a newAckManagerRequestArgs struct here
-		extCache.ackMgr = newAckManager(cgCache, cgCache.ackIDGen.GetNextAckID(), outputHostUUID, cgUUID, extCache.extUUID, &extCache.connectedStoreUUID, extCache.waitConsumedCh, cge, metaClient, extCache.logger)
+		extCache.ackMgr = newAckManager(cgCache, cgCache.ackIDGen.GetNextAckID(), cgCache.outputHostUUID, cgCache.cachedCGDesc.GetConsumerGroupUUID(), extCache.extUUID, &extCache.connectedStoreUUID, extCache.waitConsumedCh, cge, cgCache.metaClient, extCache.logger)
 		extCache.loadReporter = cgCache.loadReporterFactory.CreateReporter(extentLoadReportingInterval, extCache, extCache.logger)
 
 		// make sure we prevent shutdown from racing
 		extCache.shutdownWG.Add(1)
 
 		// if load fails we will unload it the usual way
-		go extCache.load(outputHostUUID, cgUUID, metaClient, cge)
+		go extCache.load(cgCache.outputHostUUID, cgCache.cachedCGDesc.GetConsumerGroupUUID(), cgCache.metaClient, cge)
 
 		// now notify the outputhost
 		cgCache.ackMgrLoadCh <- ackMgrLoadMsg{uint32(extCache.ackMgr.ackMgrID), extCache.ackMgr}
@@ -402,16 +431,37 @@ func (cgCache *consumerGroupCache) manageConsumerGroupCache() {
 			}
 			cgCache.extMutex.Unlock()
 		case <-cgCache.closeChannel:
-			cgCache.logger.Info("stopped")
 			// stop the delivery cache as well
 			cgCache.msgDeliveryCache.stop()
+			// wait for the manage routine to go away
+			cgCache.manageMsgCacheWG.Wait()
+			// at this point, the cg is completely unloaded, close all message channels
+			// to cleanup
+			cgCache.cleanupChannels()
+			cgCache.logger.Info("cg is stopped and all channels are cleanedup")
 			quit = true
 		}
 	}
 }
 
+// refreshCgCacheNoLock is a routine which is called without the extMutex held.
+// It takes the mutex and in turn refreshes the cg by contacting metadata to
+// get all the open extents and then loads them if needed
+func (cgCache *consumerGroupCache) refreshCgCacheNoLock(ctx thrift.Context) error {
+	cgCache.extMutex.Lock()
+	defer cgCache.extMutex.Unlock()
+
+	// Make sure we don't race with an unload
+	if cgCache.isClosed() || cgCache.unloadInProgress {
+		return ErrCgUnloaded
+	}
+
+	return cgCache.refreshCgCache(ctx)
+}
+
 // refreshCgCache contacts metadata to get all the open extents and then
 // loads them if needed
+// Note that this function is and must be run under the cgCache.extMutex lock
 func (cgCache *consumerGroupCache) refreshCgCache(ctx thrift.Context) error {
 
 	// First check any status changes to the destination or consumer group
@@ -463,7 +513,7 @@ func (cgCache *consumerGroupCache) refreshCgCache(ctx thrift.Context) error {
 		MaxResults:        common.Int32Ptr(defaultMaxResults),
 	}
 
-	var nExtents = 0
+	var nSingleCGExtents = 0
 
 	for {
 		cgRes, errRCGES := cgCache.metaClient.ReadConsumerGroupExtents(ctx, cgReq)
@@ -475,13 +525,10 @@ func (cgCache *consumerGroupCache) refreshCgCache(ctx thrift.Context) error {
 
 		// Now we have the cgCache. check and load extent for all extents
 		for _, cge := range cgRes.GetExtents() {
-			nExtents++
-			errR := cgCache.loadExtentCache(cgCache.tClients, cgCache.metaClient, cgCache.wsConnector,
-				cgCache.outputHostUUID, cgCache.cachedCGDesc.GetDestinationUUID(), dstDesc.GetType(),
-				cgCache.cachedCGDesc.GetConsumerGroupUUID(), cge, cgCache.cachedCGDesc.GetStartFrom())
-			if errR != nil {
-				return errR
+			if cgCache.checkSingleCGVisible(ctx, cge) {
+				nSingleCGExtents++
 			}
+			cgCache.loadExtentCache(dstDesc.GetType(), cge)
 		}
 
 		if len(cgRes.GetNextPageToken()) == 0 {
@@ -491,7 +538,77 @@ func (cgCache *consumerGroupCache) refreshCgCache(ctx thrift.Context) error {
 		}
 	}
 
+	// DEVNOTE: The term 'merging' here is a reference to the DLQ Merge feature/operation. These extents are
+	// 'served' just like any other, but they are visible to this one consumer group, hence 'SingleCG'
+	newDLQMerging := int32(nSingleCGExtents)
+	oldDLQMerging := atomic.SwapInt32(&cgCache.dlqMerging, newDLQMerging)
+	if oldDLQMerging != newDLQMerging {
+		if newDLQMerging > 0 {
+			cgCache.logger.WithField(`nSingleCGExtents`, nSingleCGExtents).Info("Merging DLQ Extent(s)")
+		} else {
+			cgCache.logger.Info("Done merging DLQ Extent(s)")
+		}
+	}
+
 	return nil
+}
+
+// checkSingleCGVisible determines if an extent under a certain destination is visible only to one consumer group. It is a cached call, so the
+// metadata client will only be invoked once per destination+extent
+func (cgCache *consumerGroupCache) checkSingleCGVisible(ctx thrift.Context, cge *metadata.ConsumerGroupExtent) (singleCgVisible bool) {
+	// Note that this same extent can be loaded by either a consumer group of the DLQ destination (i.e. for inspection,
+	// with consumer group visibility = nil), or as an extent being merged into the original consumer group (i.e. for DLQ
+	// merge, with consumer group visibility = this CG). This is why this cache isn't global
+	key := cge.GetExtentUUID()
+	val := cgCache.checkSingleCGVisibleCache.Get(key)
+	if val != nil {
+		return val.(bool)
+	}
+
+	req := &metadata.ReadExtentStatsRequest{
+		DestinationUUID: common.StringPtr(cgCache.cachedCGDesc.GetDestinationUUID()),
+		ExtentUUID:      common.StringPtr(cge.GetExtentUUID()),
+	}
+	ext, err := cgCache.metaClient.ReadExtentStats(ctx, req)
+	if err == nil {
+		if ext != nil && ext.GetExtentStats() != nil {
+			singleCgVisible = ext.GetExtentStats().GetConsumerGroupVisibility() != ``
+			if singleCgVisible {
+				cgCache.logger.WithFields(bark.Fields{common.TagExt: common.FmtExt(cge.GetExtentUUID())}).Info("Consuming single CG visible extent")
+			}
+		}
+		cgCache.checkSingleCGVisibleCache.Put(key, singleCgVisible)
+	} else { // Note that we don't cache val when we have an error
+		cgCache.logger.WithFields(bark.Fields{common.TagErr: err, common.TagExt: common.FmtExt(cge.GetExtentUUID())}).Error("ReadExtentStats failed on refresh")
+	}
+
+	return
+}
+
+// getDynamicCgConfig gets the configuration object for this host
+func (cgCache *consumerGroupCache) getDynamicCgConfig() (OutputCgConfig, error) {
+	dCfgIface, err := cgCache.cfgMgr.Get(common.OutputServiceName, `*`, `*`, `*`)
+	if err != nil {
+		cgCache.logger.WithFields(bark.Fields{common.TagErr: err}).Error(`Couldn't get the configuration object`)
+		return OutputCgConfig{}, err
+	}
+	cfg, ok := dCfgIface.(OutputCgConfig)
+	if !ok {
+		cgCache.logger.Error(`Couldn't cast cfg to OutputCgConfig`)
+		return OutputCgConfig{}, ErrConfigCast
+	}
+	return cfg, nil
+}
+
+// getMessageCacheSize gets the configured value for the message cache for this CG
+func (cgCache *consumerGroupCache) getMessageCacheSize(cfg OutputCgConfig, oldSize int32) (cacheSize int32) {
+	logFn := func() bark.Logger {
+		return cgCache.logger
+	}
+	ruleKey := cgCache.destPath + `/` + cgCache.cachedCGDesc.GetConsumerGroupName()
+	cacheSize = int32(common.OverrideValueByPrefix(logFn, ruleKey, cfg.MessageCacheSize, int64(oldSize), `messagecachesize`))
+
+	return cacheSize
 }
 
 // loadConsumerGroupCache loads everything on this cache including the extents and within the cache
@@ -500,7 +617,7 @@ func (cgCache *consumerGroupCache) loadConsumerGroupCache(ctx thrift.Context, ex
 	defer cgCache.extMutex.Unlock()
 
 	// Make sure we don't race with an unload
-	if cgCache.isClosed() {
+	if cgCache.isClosed() || cgCache.unloadInProgress {
 		return ErrCgUnloaded
 	}
 
@@ -515,15 +632,19 @@ func (cgCache *consumerGroupCache) loadConsumerGroupCache(ctx thrift.Context, ex
 			return err
 		}
 
-		cgCache.msgDeliveryCache = newMessageDeliveryCache(cgCache.msgsRedeliveryCh, cgCache.priorityMsgsRedeliveryCh, cgCache.msgCacheCh,
-			cgCache.msgCacheRedeliveredCh, cgCache.ackMsgCh,
-			cgCache.nackMsgCh, cgCache.cachedCGDesc, dlq, cgCache.logger, cgCache.m3Client, cgCache.consumerM3Client, cgCache.notifier, cgCache.creditNotifyCh, cgCache.creditRequestCh, defaultNumOutstandingMsgs, cgCache)
+		cgCache.msgDeliveryCache = newMessageDeliveryCache(dlq, defaultNumOutstandingMsgs, cgCache)
 		cgCache.shutdownWG.Add(1)
 		go cgCache.manageConsumerGroupCache() // Has cgCache.shutdownWG.Done()
+		cgCache.manageMsgCacheWG.Add(1)       // wait group for msgCache
 		go cgCache.msgDeliveryCache.start()   // Uses the dlq, so must be after it
+
+		// trigger a refresh the first time. If we already have the CG loaded,
+		// then the refresh loop will load and refresh extents as part of the
+		// event loop.
+		return cgCache.refreshCgCache(ctx)
 	}
 
-	return cgCache.refreshCgCache(ctx)
+	return nil
 }
 
 func (cgCache *consumerGroupCache) reconfigureClients(updateUUID string) {
@@ -621,12 +742,12 @@ func (cgCache *consumerGroupCache) updateLastDisconnectTime() {
 func (cgCache *consumerGroupCache) unloadConsumerGroupCache() {
 	cgCache.extMutex.Lock()
 
-	if cgCache.isClosed() {
+	if cgCache.isClosed() || cgCache.unloadInProgress {
 		cgCache.extMutex.Unlock()
 		return
 	}
 
-	close(cgCache.closeChannel)
+	cgCache.unloadInProgress = true
 	for _, conn := range cgCache.connections {
 		go conn.close()
 	}
@@ -644,6 +765,12 @@ func (cgCache *consumerGroupCache) unloadConsumerGroupCache() {
 	// before stopping the manageCgCache routine.
 	cgCache.notifyUnloadCh <- cgCache.cachedCGDesc.GetConsumerGroupUUID()
 
+	// wait for all the above connections to go away
+	cgCache.connsWG.Wait()
+
+	// now close the closeChannel which will stop the manage routine
+	close(cgCache.closeChannel)
+
 	cgCache.loadReporter.Stop()
 
 	// since the load reporter is stopped above make sure to mark the number of connections
@@ -652,10 +779,23 @@ func (cgCache *consumerGroupCache) unloadConsumerGroupCache() {
 	cgCache.consumerM3Client.UpdateGauge(metrics.ConsConnectionScope, metrics.OutputhostCGNumExtents, 0)
 }
 
-// this can be used to set the max outstanding messages for testing
-// XXX: this is not thread safe
-func setDefaultMaxOutstandingMessages(limit int32) int32 {
-	oldLimit := defaultNumOutstandingMsgs
-	defaultNumOutstandingMsgs = limit
-	return oldLimit
+// this is a utility routine which closes all message channels
+// to make sure we free up memory
+// this can be done outside of a mutex since this will happen only after we
+// closed everything.
+func (cgCache *consumerGroupCache) cleanupChannels() {
+	// close msgsCh
+	close(cgCache.msgsCh)
+	// close cacheCh
+	close(cgCache.msgCacheCh)
+	// redelivery channel
+	close(cgCache.msgsRedeliveryCh)
+	// priority redelivery channel
+	close(cgCache.priorityMsgsRedeliveryCh)
+	// redeliverd channel
+	close(cgCache.msgCacheRedeliveredCh)
+	// ackMsgsCh
+	close(cgCache.ackMsgCh)
+	// nackMsgsCh
+	close(cgCache.nackMsgCh)
 }
