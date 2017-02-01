@@ -483,6 +483,9 @@ func (t *RetentionManager) computeRetention(job *retentionJob, log bark.Logger) 
 		}
 	}
 
+	// isRemoteZoneExtent is set if the extent is a remote multi-zone extent
+	var isRemoteZoneExtent = dest.isMultiZone && !common.IsRemoteZoneExtent(ext.originZone, t.Options.LocalZone)
+
 	// -- step 1: take a snapshot of the current time and compute retention timestamps -- //
 
 	tNow := time.Now().UnixNano()
@@ -711,11 +714,11 @@ func (t *RetentionManager) computeRetention(job *retentionJob, log bark.Logger) 
 	// -- step 6: check to see if the extent status can be updated to 'consumed' -- //
 
 	// move the extent to 'consumed' if the extent is "sealed" _and_ either:
-	// A. all of the following are true:
+	// A.
 	// 	1. the extent was fully consumed by all of the consumer groups
-	// 	2. a period of 'soft retention period' has passed (in other words,
-	// 	   a consumer that is consuming along the soft retention time has
-	//	   "consumed" the extent)
+	// 	2. and, a period of 'soft retention period' has passed (in other
+	//         words, a consumer that is consuming along the soft retention
+	//         time has "consumed" the extent)
 	// B. or, the hard-retention has reached the end of the sealed extent,
 	// 	in which case we will force the extent to be "consumed"
 	// NB: if there was an error querying either the hard/soft retention addresses,
