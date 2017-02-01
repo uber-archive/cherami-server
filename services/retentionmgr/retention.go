@@ -483,6 +483,9 @@ func (t *RetentionManager) computeRetention(job *retentionJob, log bark.Logger) 
 		}
 	}
 
+	// isRemoteZoneExtent is set if the extent is a remote multi-zone extent
+	var isRemoteZoneExtent = dest.isMultiZone && !common.IsRemoteZoneExtent(ext.originZone, t.Options.LocalZone)
+
 	// -- step 1: take a snapshot of the current time and compute retention timestamps -- //
 
 	tNow := time.Now().UnixNano()
@@ -601,12 +604,15 @@ func (t *RetentionManager) computeRetention(job *retentionJob, log bark.Logger) 
 		}
 	}
 
-	// If this is a multi_zone destination and local extent, disable soft retention
-	// The reason is if soft retention is very short, we may delete messages before remote zone has a chance to replicate the messages
-	// Long term solution should create a fake consumer for the remote zone
+	// If this is a multi_zone destination and local extent, disable soft retention -- and fall
+	// back to using only hard-retention. The reason is if soft retention is very short, we may
+	// delete messages before remote zone has a chance to replicate the messages Long term solution
+	// should create a fake consumer for the remote zone.
+	// Note: we also move the extent to the "consumed" state only based on hard-retention.
 	if dest.isMultiZone && !common.IsRemoteZoneExtent(ext.originZone, t.Options.LocalZone) {
 		log.Info(`overridden: soft retention overridden for multi_zone extent`)
 		softRetentionAddr = int64(store.ADDR_BEGIN)
+		softRetentionConsumed = false
 	}
 
 	log.WithFields(bark.Fields{
@@ -668,10 +674,14 @@ func (t *RetentionManager) computeRetention(job *retentionJob, log bark.Logger) 
 		}
 	}
 
-	// if we were unable to find any consumer groups, set minAckAddr to ADDR_BEGIN
+	// if we were unable to find any consumer groups, set minAckAddr to
+	// ADDR_BEGIN, effectively disabling soft-retention. that said, hard
+	// retention could still be enforced.
 	if minAckAddr == store.ADDR_END {
+
 		log.Debug("could not compute ackLevel, using 'ADDR_BEGIN'")
 		minAckAddr = store.ADDR_BEGIN
+		allHaveConsumed = false
 	}
 
 	job.minAckAddr = minAckAddr // remember the minAckAddr for doing checks later
@@ -704,11 +714,11 @@ func (t *RetentionManager) computeRetention(job *retentionJob, log bark.Logger) 
 	// -- step 6: check to see if the extent status can be updated to 'consumed' -- //
 
 	// move the extent to 'consumed' if the extent is "sealed" _and_ either:
-	// A. all of the following are true:
+	// A.
 	// 	1. the extent was fully consumed by all of the consumer groups
-	// 	2. a period of 'soft retention period' has passed (in other words,
-	// 	   a consumer that is consuming along the soft retention time has
-	//	   "consumed" the extent)
+	// 	2. and, a period of 'soft retention period' has passed (in other
+	//         words, a consumer that is consuming along the soft retention
+	//         time has "consumed" the extent)
 	// B. or, the hard-retention has reached the end of the sealed extent,
 	// 	in which case we will force the extent to be "consumed"
 	// NB: if there was an error querying either the hard/soft retention addresses,
