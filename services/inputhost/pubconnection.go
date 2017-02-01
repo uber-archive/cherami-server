@@ -104,12 +104,6 @@ const failTimeout = 3 * time.Second
 // reconfigClientChSize is the size of the reconfigClientCh
 const reconfigClientChSize = 50
 
-// pubConnFlushThreshold flushes every 64 messages or every 10ms
-const (
-	pubConnFlushThreshold int           = 64
-	pubConnFlushTimeout   time.Duration = 10 * time.Millisecond
-)
-
 // perConnMsgsLimitPerSecond is the rate limit per connection
 const perConnMsgsLimitPerSecond = 10000
 
@@ -295,7 +289,7 @@ func (conn *pubConnection) writeAcksStream() {
 	inflightMessages := make(map[string]response)
 	defer conn.failInflightMessages(inflightMessages, earlyReplyAcks)
 
-	flushTicker := time.NewTicker(pubConnFlushTimeout) // start ticker to flush tchannel stream
+	flushTicker := time.NewTicker(common.FlushTimeout) // start ticker to flush tchannel stream
 	defer flushTicker.Stop()
 
 	unflushedWrites := 0
@@ -379,7 +373,7 @@ func (conn *pubConnection) writeAcksStream() {
 						}
 
 						unflushedWrites++
-						if unflushedWrites > pubConnFlushThreshold {
+						if unflushedWrites > common.FlushThreshold {
 							if err = conn.flushCmdToClient(unflushedWrites); err != nil {
 								// since flush failed, trigger a close of the connection which will fail inflight messages
 								go conn.close()

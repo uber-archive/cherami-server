@@ -405,7 +405,8 @@ func (pathCache *inPathCache) checkAndLoadReplicaStreams(conn *extHost, extUUID 
 
 			repl := newReplicaConnection(call, cancel,
 				conn.logger.
-					WithField(common.TagInReplicaHost, common.FmtInReplicaHost(replicas[i])))
+					WithField(common.TagInReplicaHost, common.FmtInReplicaHost(replicas[i])),
+				conn.flushTicker)
 			conn.setReplicaInfo(storeHostPort(replicas[i]), repl)
 			repl.open()
 		}

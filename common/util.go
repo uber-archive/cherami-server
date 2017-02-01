@@ -70,40 +70,6 @@ const (
 	storeHostClientChannelName = "storehost-client"
 )
 
-// some default values for the limits
-// TODO: this will be moved behind a separate "limits" interface
-const (
-	// MaxHostOverallConn is the maximam overall connection limit for this host
-	// TODO: Need to figure out the suitable values
-	MaxHostOverallConn = 100000
-	// HostOverallConnLimit is the overall connection limit for this host
-	HostOverallConnLimit = 10000
-
-	// MaxHostPerSecondConn is the maximam per second  rate limit for this host
-	// TODO: Need to figure out the suitable values
-	MaxHostPerSecondConn = 10000
-	// HostPerSecondConnLimit is the per second rate limit for this host
-	HostPerSecondConnLimit = 1000
-
-	//MaxHostPerConnMsgsLimitPerSecond is the maximam for per connection messages limit
-	// TODO: Need to figure out the suitable values
-	MaxHostPerConnMsgsLimitPerSecond = 800000
-	// HostPerConnMsgsLimitPerSecond is the per connection messages limit
-	HostPerConnMsgsLimitPerSecond = 80000
-
-	//MaxHostPerExtentMsgsLimitPerSecond is the maximam for per extent messages limit
-	// TODO: Need to figure out the suitable values
-	MaxHostPerExtentMsgsLimitPerSecond = 200000
-	// HostPerExtentMsgsLimitPerSecond is the per extent messages limit
-	HostPerExtentMsgsLimitPerSecond = 20000
-
-	// MaxHostMaxConnPerDestination is the maximam for max connections per destination
-	// TODO: Need to figure out the suitable values
-	MaxHostMaxConnPerDestination = 10000
-	// HostMaxConnPerDestination is the max connections per destination
-	HostMaxConnPerDestination = 1000
-)
-
 // Utlity routines for ringpop..
 func buildRingpopHosts(ipaddr string, port int) []string {
 	var ringpopHosts []string

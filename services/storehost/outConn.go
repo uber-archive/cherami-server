@@ -878,8 +878,8 @@ func (t *outConn) sendPump(msgC <-chan *outMessage, stream storeStream.BStoreOpe
 	defer t.wg.Done()   // drop ref on waitgroup
 	defer stream.Done() // close "out" stream
 
-	var unflushedWrites int                     // count of writes since the last flush (FIXME: make it "size" based?)
-	flushTicker := time.NewTicker(flushTimeout) // start ticker to flush tchannel stream
+	var unflushedWrites int                            // count of writes since the last flush (FIXME: make it "size" based?)
+	flushTicker := time.NewTicker(common.FlushTimeout) // start ticker to flush tchannel stream
 	defer flushTicker.Stop()
 
 	log := t.log // get "local" logger (that already contains extent info)
@@ -924,7 +924,7 @@ pump:
 				} // #perfdisable
 			}
 
-			if unflushedWrites++; unflushedWrites >= flushThreshold {
+			if unflushedWrites++; unflushedWrites >= common.FlushThreshold {
 
 				if err := stream.Flush(); err != nil {
 					log.WithField(common.TagErr, err).Error(`outConn.sendPump: <threshold> stream.Flush error`)
