@@ -123,6 +123,8 @@ const (
 	MetadataListDestinationsScope
 	// MetadataListDestinationsByUUIDScope defines scope for an operation on metadata
 	MetadataListDestinationsByUUIDScope
+	// MetadataListDestinationExtentsScope defines the scope for an operation on metadata
+	MetadataListDestinationExtentsScope
 	// MetadataListExtentsStatsScope defines scope for an operation on metadata
 	MetadataListExtentsStatsScope
 	// MetadataListHostsScope defines scope for an operation on metadata
@@ -139,6 +141,8 @@ const (
 	MetadataReadConsumerGroupExtentScope
 	// MetadataReadConsumerGroupExtentsScope defines scope for an operation on metadata
 	MetadataReadConsumerGroupExtentsScope
+	// MetadataReadConsumerGroupExtentsLiteScope defines scope for an operation on metadata
+	MetadataReadConsumerGroupExtentsLiteScope
 	// MetadataReadConsumerGroupExtentsByExtUUIDScope defines scope for an operation on metadata
 	MetadataReadConsumerGroupExtentsByExtUUIDScope
 	// MetadataReadDestinationScope defines scope for an operation on metadata
@@ -411,6 +415,7 @@ var scopeDefs = map[ServiceIdx]map[int]scopeDefinition{
 		MetadataListConsumerGroupsScope:                {operation: "MetadataListConsumerGroups"},
 		MetadataListDestinationsScope:                  {operation: "MetadataListDestinations"},
 		MetadataListDestinationsByUUIDScope:            {operation: "MetadataListDestinationsByUUID"},
+		MetadataListDestinationExtentsScope:            {operation: "MetadataListDestinationExtents"},
 		MetadataListExtentsStatsScope:                  {operation: "MetadataListExtentsStats"},
 		MetadataListHostsScope:                         {operation: "MetadataListHosts"},
 		MetadataListInputHostExtentsStatsScope:         {operation: "MetadataListInputHostExtentsStats"},
@@ -419,6 +424,7 @@ var scopeDefs = map[ServiceIdx]map[int]scopeDefinition{
 		MetadataReadConsumerGroupByUUIDScope:           {operation: "MetadataReadConsumerGroupByUUID"},
 		MetadataReadConsumerGroupExtentScope:           {operation: "MetadataReadConsumerGroupExtent"},
 		MetadataReadConsumerGroupExtentsScope:          {operation: "MetadataReadConsumerGroupExtents"},
+		MetadataReadConsumerGroupExtentsLiteScope:      {operation: "MetadataReadConsumerGroupExtentsLite"},
 		MetadataReadConsumerGroupExtentsByExtUUIDScope: {operation: "MetadataReadConsumerGroupExtentsByExtUUID"},
 		MetadataReadDestinationScope:                   {operation: "MetadataReadDestination"},
 		MetadataReadExtentStatsScope:                   {operation: "MetadataReadExtentStats"},

@@ -69,12 +69,6 @@ type (
 )
 
 const (
-	// flushThreshold is the number of messages to accumulate before flushing
-	flushThreshold int = 128
-
-	// flushTimeout is the duration to wait before we trigger a flush
-	flushTimeout time.Duration = 5 * time.Millisecond
-
 	// creditFlushTimeout is the time to flush accumulated credits to the write pump
 	creditFlushTimeout time.Duration = 5 * time.Second
 )
@@ -232,7 +226,7 @@ func (conn *consConnection) writeMsgsStream() {
 	defer conn.waitWG.Done()
 	var localCredits int32
 
-	flushTicker := time.NewTicker(flushTimeout) // start ticker to flush tchannel stream
+	flushTicker := time.NewTicker(common.FlushTimeout) // start ticker to flush tchannel stream
 	defer flushTicker.Stop()
 
 	unflushedWrites := 0
@@ -303,24 +297,24 @@ func (conn *consConnection) writeMsgsStream() {
 				conn.logger.WithField(common.TagAckID, common.FmtAckID(msg.GetAckId())).
 					WithField(common.TagSlowDownSeconds, common.FmtSlowDown(slowDown)).
 					Info("redelivering priority msg back to client")
-				conn.createMsgAndWriteToClientUtil(msg, &unflushedWrites, &localCredits, flushThreshold, conn.msgCacheRedeliveredCh)
+				conn.createMsgAndWriteToClientUtil(msg, &unflushedWrites, &localCredits, conn.msgCacheRedeliveredCh)
 				conn.reSentMsgs++
 			case msg := <-conn.msgsRedeliveryCh:
 				//conn.logger.WithField(common.TagAckID, common.FmtAckID(msg.GetAckId())).
 				//	WithField(`throttle`, float64(slowDown)/float64(time.Second)).
 				//	Info("consconnection: redelivering msg back to the client")
-				conn.createMsgAndWriteToClientUtil(msg, &unflushedWrites, &localCredits, flushThreshold, conn.msgCacheRedeliveredCh)
+				conn.createMsgAndWriteToClientUtil(msg, &unflushedWrites, &localCredits, conn.msgCacheRedeliveredCh)
 				conn.reSentMsgs++
 			case msg := <-conn.msgsCh:
-				conn.createMsgAndWriteToClientUtil(msg, &unflushedWrites, &localCredits, flushThreshold, conn.msgCacheCh)
+				conn.createMsgAndWriteToClientUtil(msg, &unflushedWrites, &localCredits, conn.msgCacheCh)
 			case f := <-flushTicker.C:
 				if unflushedWrites > 0 {
 					if err := conn.flushToClient(unflushedWrites); err == nil {
 						unflushedWrites = 0
 					}
 				}
-				
-				if f.Second() == 0 && f.Nanosecond() < int(flushTimeout*2) { // Record every minute or so
+
+				if f.Second() == 0 && f.Nanosecond() < int(common.FlushTimeout*2) { // Record every minute or so
 					conn.cgCache.consumerM3Client.UpdateGauge(metrics.ConsConnectionScope, metrics.OutputhostCGMessageCacheSize, int64(len(conn.msgsCh)))
 				}
 			case updateUUID := <-conn.reconfigureClientCh:
@@ -392,7 +386,7 @@ func (conn *consConnection) writeToClient(cmd *cherami.OutputHostCommand) error 
 	return nil
 }
 
-func (conn *consConnection) createMsgAndWriteToClientUtil(msg *cherami.ConsumerMessage, unflushedWrites *int, localCredits *int32, flushThreshold int, msgCacheCh chan<- cacheMsg) {
+func (conn *consConnection) createMsgAndWriteToClientUtil(msg *cherami.ConsumerMessage, unflushedWrites *int, localCredits *int32, msgCacheCh chan<- cacheMsg) {
 	cmd := createMsgCmd(msg)
 	if err := conn.writeToClient(cmd); err == nil {
 		*unflushedWrites++
@@ -408,7 +402,7 @@ func (conn *consConnection) createMsgAndWriteToClientUtil(msg *cherami.ConsumerM
 		}
 		*localCredits--
 		// flush if we have reached the threshold
-		if *unflushedWrites > flushThreshold {
+		if *unflushedWrites > common.FlushThreshold {
 			if err = conn.flushToClient(*unflushedWrites); err == nil {
 				*unflushedWrites = 0
 			}

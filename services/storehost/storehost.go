@@ -65,15 +65,6 @@ const (
 	storehostLoadReportingInterval = 2 * time.Second
 )
 
-// Flush stream thresholds; this is used by the "pumps" that wrap the tchannel-stream
-// and provide go-channel interface to read/write from the stream. the flush thresholds
-// below control how often we do a "Flush" on the tchannel-stream.
-// Currently configured for every 64 messages sent or every 10 milliseconds (whichever is sooner)
-const (
-	flushThreshold int           = 64
-	flushTimeout   time.Duration = 5 * time.Millisecond
-)
-
 // Buffer-sizes to use for the channels that wrap the read/write tchannel-streams
 const (
 	writeMsgChanBuf int = 4096 // msgC buffer to use for the write path

@@ -31,13 +31,13 @@ type TChanMetadataService struct {
 	mock.Mock
 }
 
-// CreateConsumerGroup provides a mock function with given fields: ctx, registerRequest
-func (_m *TChanMetadataService) CreateConsumerGroup(ctx thrift.Context, registerRequest *shared.CreateConsumerGroupRequest) (*shared.ConsumerGroupDescription, error) {
-	ret := _m.Called(ctx, registerRequest)
+// CreateConsumerGroup provides a mock function with given fields: ctx, createRequest
+func (_m *TChanMetadataService) CreateConsumerGroup(ctx thrift.Context, createRequest *shared.CreateConsumerGroupRequest) (*shared.ConsumerGroupDescription, error) {
+	ret := _m.Called(ctx, createRequest)
 
 	var r0 *shared.ConsumerGroupDescription
 	if rf, ok := ret.Get(0).(func(thrift.Context, *shared.CreateConsumerGroupRequest) *shared.ConsumerGroupDescription); ok {
-		r0 = rf(ctx, registerRequest)
+		r0 = rf(ctx, createRequest)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(*shared.ConsumerGroupDescription)
@@ -46,30 +46,7 @@ func (_m *TChanMetadataService) CreateConsumerGroup(ctx thrift.Context, register
 
 	var r1 error
 	if rf, ok := ret.Get(1).(func(thrift.Context, *shared.CreateConsumerGroupRequest) error); ok {
-		r1 = rf(ctx, registerRequest)
-	} else {
-		r1 = ret.Error(1)
-	}
-
-	return r0, r1
-}
-
-// ReadConsumerGroupByUUID provides a mock function with given fields: ctx, getRequest
-func (_m *TChanMetadataService) ReadConsumerGroupByUUID(ctx thrift.Context, getRequest *metadata.ReadConsumerGroupRequest) (*shared.ConsumerGroupDescription, error) {
-	ret := _m.Called(ctx, getRequest)
-
-	var r0 *shared.ConsumerGroupDescription
-	if rf, ok := ret.Get(0).(func(thrift.Context, *metadata.ReadConsumerGroupRequest) *shared.ConsumerGroupDescription); ok {
-		r0 = rf(ctx, getRequest)
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(*shared.ConsumerGroupDescription)
-		}
-	}
-
-	var r1 error
-	if rf, ok := ret.Get(1).(func(thrift.Context, *metadata.ReadConsumerGroupRequest) error); ok {
-		r1 = rf(ctx, getRequest)
+		r1 = rf(ctx, createRequest)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -160,6 +137,20 @@ func (_m *TChanMetadataService) CreateExtent(ctx thrift.Context, request *shared
 	return r0, r1
 }
 
+// CreateHostInfo provides a mock function with given fields: ctx, request
+func (_m *TChanMetadataService) CreateHostInfo(ctx thrift.Context, request *metadata.CreateHostInfoRequest) error {
+	ret := _m.Called(ctx, request)
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(thrift.Context, *metadata.CreateHostInfoRequest) error); ok {
+		r0 = rf(ctx, request)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
 // DeleteConsumerGroup provides a mock function with given fields: ctx, deleteRequest
 func (_m *TChanMetadataService) DeleteConsumerGroup(ctx thrift.Context, deleteRequest *shared.DeleteConsumerGroupRequest) error {
 	ret := _m.Called(ctx, deleteRequest)
@@ -195,6 +186,381 @@ func (_m *TChanMetadataService) DeleteDestinationUUID(ctx thrift.Context, delete
 	var r0 error
 	if rf, ok := ret.Get(0).(func(thrift.Context, *metadata.DeleteDestinationUUIDRequest) error); ok {
 		r0 = rf(ctx, deleteRequest)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// DeleteHostInfo provides a mock function with given fields: ctx, request
+func (_m *TChanMetadataService) DeleteHostInfo(ctx thrift.Context, request *metadata.DeleteHostInfoRequest) error {
+	ret := _m.Called(ctx, request)
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(thrift.Context, *metadata.DeleteHostInfoRequest) error); ok {
+		r0 = rf(ctx, request)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// ListDestinationExtents provides a mock function with given fields: ctx, request
+func (_m *TChanMetadataService) ListDestinationExtents(ctx thrift.Context, request *metadata.ListDestinationExtentsRequest) (*metadata.ListDestinationExtentsResult_, error) {
+	ret := _m.Called(ctx, request)
+
+	var r0 *metadata.ListDestinationExtentsResult_
+	if rf, ok := ret.Get(0).(func(thrift.Context, *metadata.ListDestinationExtentsRequest) *metadata.ListDestinationExtentsResult_); ok {
+		r0 = rf(ctx, request)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*metadata.ListDestinationExtentsResult_)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(thrift.Context, *metadata.ListDestinationExtentsRequest) error); ok {
+		r1 = rf(ctx, request)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MoveExtent provides a mock function with given fields: ctx, request
+func (_m *TChanMetadataService) MoveExtent(ctx thrift.Context, request *metadata.MoveExtentRequest) error {
+	ret := _m.Called(ctx, request)
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(thrift.Context, *metadata.MoveExtentRequest) error); ok {
+		r0 = rf(ctx, request)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// ReadConsumerGroupExtentsLite provides a mock function with given fields: ctx, request
+func (_m *TChanMetadataService) ReadConsumerGroupExtentsLite(ctx thrift.Context, request *metadata.ReadConsumerGroupExtentsLiteRequest) (*metadata.ReadConsumerGroupExtentsLiteResult_, error) {
+	ret := _m.Called(ctx, request)
+
+	var r0 *metadata.ReadConsumerGroupExtentsLiteResult_
+	if rf, ok := ret.Get(0).(func(thrift.Context, *metadata.ReadConsumerGroupExtentsLiteRequest) *metadata.ReadConsumerGroupExtentsLiteResult_); ok {
+		r0 = rf(ctx, request)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*metadata.ReadConsumerGroupExtentsLiteResult_)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(thrift.Context, *metadata.ReadConsumerGroupExtentsLiteRequest) error); ok {
+		r1 = rf(ctx, request)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// ReadHostInfo provides a mock function with given fields: ctx, request
+func (_m *TChanMetadataService) ReadHostInfo(ctx thrift.Context, request *metadata.ReadHostInfoRequest) (*metadata.ReadHostInfoResult_, error) {
+	ret := _m.Called(ctx, request)
+
+	var r0 *metadata.ReadHostInfoResult_
+	if rf, ok := ret.Get(0).(func(thrift.Context, *metadata.ReadHostInfoRequest) *metadata.ReadHostInfoResult_); ok {
+		r0 = rf(ctx, request)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*metadata.ReadHostInfoResult_)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(thrift.Context, *metadata.ReadHostInfoRequest) error); ok {
+		r1 = rf(ctx, request)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// ReadStoreExtentReplicaStats provides a mock function with given fields: ctx, request
+func (_m *TChanMetadataService) ReadStoreExtentReplicaStats(ctx thrift.Context, request *metadata.ReadStoreExtentReplicaStatsRequest) (*metadata.ReadStoreExtentReplicaStatsResult_, error) {
+	ret := _m.Called(ctx, request)
+
+	var r0 *metadata.ReadStoreExtentReplicaStatsResult_
+	if rf, ok := ret.Get(0).(func(thrift.Context, *metadata.ReadStoreExtentReplicaStatsRequest) *metadata.ReadStoreExtentReplicaStatsResult_); ok {
+		r0 = rf(ctx, request)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*metadata.ReadStoreExtentReplicaStatsResult_)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(thrift.Context, *metadata.ReadStoreExtentReplicaStatsRequest) error); ok {
+		r1 = rf(ctx, request)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// RegisterHostUUID provides a mock function with given fields: ctx, request
+func (_m *TChanMetadataService) RegisterHostUUID(ctx thrift.Context, request *metadata.RegisterHostUUIDRequest) error {
+	ret := _m.Called(ctx, request)
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(thrift.Context, *metadata.RegisterHostUUIDRequest) error); ok {
+		r0 = rf(ctx, request)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// SealExtent provides a mock function with given fields: ctx, request
+func (_m *TChanMetadataService) SealExtent(ctx thrift.Context, request *metadata.SealExtentRequest) error {
+	ret := _m.Called(ctx, request)
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(thrift.Context, *metadata.SealExtentRequest) error); ok {
+		r0 = rf(ctx, request)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// SetAckOffset provides a mock function with given fields: ctx, request
+func (_m *TChanMetadataService) SetAckOffset(ctx thrift.Context, request *metadata.SetAckOffsetRequest) error {
+	ret := _m.Called(ctx, request)
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(thrift.Context, *metadata.SetAckOffsetRequest) error); ok {
+		r0 = rf(ctx, request)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// SetOutputHost provides a mock function with given fields: ctx, request
+func (_m *TChanMetadataService) SetOutputHost(ctx thrift.Context, request *metadata.SetOutputHostRequest) error {
+	ret := _m.Called(ctx, request)
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(thrift.Context, *metadata.SetOutputHostRequest) error); ok {
+		r0 = rf(ctx, request)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// UpdateConsumerGroup provides a mock function with given fields: ctx, updateRequest
+func (_m *TChanMetadataService) UpdateConsumerGroup(ctx thrift.Context, updateRequest *shared.UpdateConsumerGroupRequest) (*shared.ConsumerGroupDescription, error) {
+	ret := _m.Called(ctx, updateRequest)
+
+	var r0 *shared.ConsumerGroupDescription
+	if rf, ok := ret.Get(0).(func(thrift.Context, *shared.UpdateConsumerGroupRequest) *shared.ConsumerGroupDescription); ok {
+		r0 = rf(ctx, updateRequest)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*shared.ConsumerGroupDescription)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(thrift.Context, *shared.UpdateConsumerGroupRequest) error); ok {
+		r1 = rf(ctx, updateRequest)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// UpdateConsumerGroupExtentStatus provides a mock function with given fields: ctx, request
+func (_m *TChanMetadataService) UpdateConsumerGroupExtentStatus(ctx thrift.Context, request *metadata.UpdateConsumerGroupExtentStatusRequest) error {
+	ret := _m.Called(ctx, request)
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(thrift.Context, *metadata.UpdateConsumerGroupExtentStatusRequest) error); ok {
+		r0 = rf(ctx, request)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// UpdateDestination provides a mock function with given fields: ctx, updateRequest
+func (_m *TChanMetadataService) UpdateDestination(ctx thrift.Context, updateRequest *shared.UpdateDestinationRequest) (*shared.DestinationDescription, error) {
+	ret := _m.Called(ctx, updateRequest)
+
+	var r0 *shared.DestinationDescription
+	if rf, ok := ret.Get(0).(func(thrift.Context, *shared.UpdateDestinationRequest) *shared.DestinationDescription); ok {
+		r0 = rf(ctx, updateRequest)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*shared.DestinationDescription)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(thrift.Context, *shared.UpdateDestinationRequest) error); ok {
+		r1 = rf(ctx, updateRequest)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// UpdateDestinationDLQCursors provides a mock function with given fields: ctx, updateRequest
+func (_m *TChanMetadataService) UpdateDestinationDLQCursors(ctx thrift.Context, updateRequest *metadata.UpdateDestinationDLQCursorsRequest) (*shared.DestinationDescription, error) {
+	ret := _m.Called(ctx, updateRequest)
+
+	var r0 *shared.DestinationDescription
+	if rf, ok := ret.Get(0).(func(thrift.Context, *metadata.UpdateDestinationDLQCursorsRequest) *shared.DestinationDescription); ok {
+		r0 = rf(ctx, updateRequest)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*shared.DestinationDescription)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(thrift.Context, *metadata.UpdateDestinationDLQCursorsRequest) error); ok {
+		r1 = rf(ctx, updateRequest)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// UpdateExtentReplicaStats provides a mock function with given fields: ctx, request
+func (_m *TChanMetadataService) UpdateExtentReplicaStats(ctx thrift.Context, request *metadata.UpdateExtentReplicaStatsRequest) error {
+	ret := _m.Called(ctx, request)
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(thrift.Context, *metadata.UpdateExtentReplicaStatsRequest) error); ok {
+		r0 = rf(ctx, request)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// UpdateExtentStats provides a mock function with given fields: ctx, request
+func (_m *TChanMetadataService) UpdateExtentStats(ctx thrift.Context, request *metadata.UpdateExtentStatsRequest) (*metadata.UpdateExtentStatsResult_, error) {
+	ret := _m.Called(ctx, request)
+
+	var r0 *metadata.UpdateExtentStatsResult_
+	if rf, ok := ret.Get(0).(func(thrift.Context, *metadata.UpdateExtentStatsRequest) *metadata.UpdateExtentStatsResult_); ok {
+		r0 = rf(ctx, request)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*metadata.UpdateExtentStatsResult_)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(thrift.Context, *metadata.UpdateExtentStatsRequest) error); ok {
+		r1 = rf(ctx, request)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// UpdateHostInfo provides a mock function with given fields: ctx, request
+func (_m *TChanMetadataService) UpdateHostInfo(ctx thrift.Context, request *metadata.UpdateHostInfoRequest) error {
+	ret := _m.Called(ctx, request)
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(thrift.Context, *metadata.UpdateHostInfoRequest) error); ok {
+		r0 = rf(ctx, request)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// UpdateStoreExtentReplicaStats provides a mock function with given fields: ctx, request
+func (_m *TChanMetadataService) UpdateStoreExtentReplicaStats(ctx thrift.Context, request *metadata.UpdateStoreExtentReplicaStatsRequest) error {
+	ret := _m.Called(ctx, request)
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(thrift.Context, *metadata.UpdateStoreExtentReplicaStatsRequest) error); ok {
+		r0 = rf(ctx, request)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// ListEntityOps provides a mock function with given fields: ctx, listRequest
+func (_m *TChanMetadataService) ListEntityOps(ctx thrift.Context, listRequest *metadata.ListEntityOpsRequest) (*metadata.ListEntityOpsResult_, error) {
+	ret := _m.Called(ctx, listRequest)
+
+	var r0 *metadata.ListEntityOpsResult_
+	if rf, ok := ret.Get(0).(func(thrift.Context, *metadata.ListEntityOpsRequest) *metadata.ListEntityOpsResult_); ok {
+		r0 = rf(ctx, listRequest)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*metadata.ListEntityOpsResult_)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(thrift.Context, *metadata.ListEntityOpsRequest) error); ok {
+		r1 = rf(ctx, listRequest)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// CreateServiceConfig provides a mock function with given fields: ctx, request
+func (_m *TChanMetadataService) CreateServiceConfig(ctx thrift.Context, request *metadata.CreateServiceConfigRequest) error {
+	ret := _m.Called(ctx, request)
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(thrift.Context, *metadata.CreateServiceConfigRequest) error); ok {
+		r0 = rf(ctx, request)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// DeleteServiceConfig provides a mock function with given fields: ctx, request
+func (_m *TChanMetadataService) DeleteServiceConfig(ctx thrift.Context, request *metadata.DeleteServiceConfigRequest) error {
+	ret := _m.Called(ctx, request)
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(thrift.Context, *metadata.DeleteServiceConfigRequest) error); ok {
+		r0 = rf(ctx, request)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -238,29 +604,6 @@ func (_m *TChanMetadataService) ListAllConsumerGroups(ctx thrift.Context, listRe
 
 	var r1 error
 	if rf, ok := ret.Get(1).(func(thrift.Context, *metadata.ListConsumerGroupRequest) error); ok {
-		r1 = rf(ctx, listRequest)
-	} else {
-		r1 = ret.Error(1)
-	}
-
-	return r0, r1
-}
-
-// ListAllConsumerGroups provides a mock function with given fields: ctx, listRequest
-func (_m *TChanMetadataService) ListEntityOps(ctx thrift.Context, listRequest *metadata.ListEntityOpsRequest) (*metadata.ListEntityOpsResult_, error) {
-	ret := _m.Called(ctx, listRequest)
-
-	var r0 *metadata.ListEntityOpsResult_
-	if rf, ok := ret.Get(0).(func(thrift.Context, *metadata.ListEntityOpsRequest) *metadata.ListEntityOpsResult_); ok {
-		r0 = rf(ctx, listRequest)
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(*metadata.ListEntityOpsResult_)
-		}
-	}
-
-	var r1 error
-	if rf, ok := ret.Get(1).(func(thrift.Context, *metadata.ListEntityOpsRequest) error); ok {
 		r1 = rf(ctx, listRequest)
 	} else {
 		r1 = ret.Error(1)
@@ -430,20 +773,6 @@ func (_m *TChanMetadataService) ListStoreExtentsStats(ctx thrift.Context, reques
 	return r0, r1
 }
 
-// MoveExtent provides a mock function with given fields: ctx, request
-func (_m *TChanMetadataService) MoveExtent(ctx thrift.Context, request *metadata.MoveExtentRequest) error {
-	ret := _m.Called(ctx, request)
-
-	var r0 error
-	if rf, ok := ret.Get(0).(func(thrift.Context, *metadata.MoveExtentRequest) error); ok {
-		r0 = rf(ctx, request)
-	} else {
-		r0 = ret.Error(0)
-	}
-
-	return r0
-}
-
 // ReadConsumerGroup provides a mock function with given fields: ctx, getRequest
 func (_m *TChanMetadataService) ReadConsumerGroup(ctx thrift.Context, getRequest *metadata.ReadConsumerGroupRequest) (*shared.ConsumerGroupDescription, error) {
 	ret := _m.Called(ctx, getRequest)
@@ -460,6 +789,29 @@ func (_m *TChanMetadataService) ReadConsumerGroup(ctx thrift.Context, getRequest
 	var r1 error
 	if rf, ok := ret.Get(1).(func(thrift.Context, *metadata.ReadConsumerGroupRequest) error); ok {
 		r1 = rf(ctx, getRequest)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// ReadConsumerGroupByUUID provides a mock function with given fields: ctx, request
+func (_m *TChanMetadataService) ReadConsumerGroupByUUID(ctx thrift.Context, request *metadata.ReadConsumerGroupRequest) (*shared.ConsumerGroupDescription, error) {
+	ret := _m.Called(ctx, request)
+
+	var r0 *shared.ConsumerGroupDescription
+	if rf, ok := ret.Get(0).(func(thrift.Context, *metadata.ReadConsumerGroupRequest) *shared.ConsumerGroupDescription); ok {
+		r0 = rf(ctx, request)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*shared.ConsumerGroupDescription)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(thrift.Context, *metadata.ReadConsumerGroupRequest) error); ok {
+		r1 = rf(ctx, request)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -582,333 +934,6 @@ func (_m *TChanMetadataService) ReadExtentStats(ctx thrift.Context, request *met
 	return r0, r1
 }
 
-// ReadStoreExtentReplicaStats provides a mock function with given fields: ctx, request
-func (_m *TChanMetadataService) ReadStoreExtentReplicaStats(ctx thrift.Context, request *metadata.ReadStoreExtentReplicaStatsRequest) (*metadata.ReadStoreExtentReplicaStatsResult_, error) {
-	ret := _m.Called(ctx, request)
-
-	var r0 *metadata.ReadStoreExtentReplicaStatsResult_
-	if rf, ok := ret.Get(0).(func(thrift.Context, *metadata.ReadStoreExtentReplicaStatsRequest) *metadata.ReadStoreExtentReplicaStatsResult_); ok {
-		r0 = rf(ctx, request)
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(*metadata.ReadStoreExtentReplicaStatsResult_)
-		}
-	}
-
-	var r1 error
-	if rf, ok := ret.Get(1).(func(thrift.Context, *metadata.ReadStoreExtentReplicaStatsRequest) error); ok {
-		r1 = rf(ctx, request)
-	} else {
-		r1 = ret.Error(1)
-	}
-
-	return r0, r1
-}
-
-// RegisterHostUUID provides a mock function with given fields: ctx, request
-func (_m *TChanMetadataService) RegisterHostUUID(ctx thrift.Context, request *metadata.RegisterHostUUIDRequest) error {
-	ret := _m.Called(ctx, request)
-
-	var r0 error
-	if rf, ok := ret.Get(0).(func(thrift.Context, *metadata.RegisterHostUUIDRequest) error); ok {
-		r0 = rf(ctx, request)
-	} else {
-		r0 = ret.Error(0)
-	}
-
-	return r0
-}
-
-// SealExtent provides a mock function with given fields: ctx, request
-func (_m *TChanMetadataService) SealExtent(ctx thrift.Context, request *metadata.SealExtentRequest) error {
-	ret := _m.Called(ctx, request)
-
-	var r0 error
-	if rf, ok := ret.Get(0).(func(thrift.Context, *metadata.SealExtentRequest) error); ok {
-		r0 = rf(ctx, request)
-	} else {
-		r0 = ret.Error(0)
-	}
-
-	return r0
-}
-
-// SetAckOffset provides a mock function with given fields: ctx, request
-func (_m *TChanMetadataService) SetAckOffset(ctx thrift.Context, request *metadata.SetAckOffsetRequest) error {
-	ret := _m.Called(ctx, request)
-
-	var r0 error
-	if rf, ok := ret.Get(0).(func(thrift.Context, *metadata.SetAckOffsetRequest) error); ok {
-		r0 = rf(ctx, request)
-	} else {
-		r0 = ret.Error(0)
-	}
-
-	return r0
-}
-
-// SetOutputHost provides a mock function with given fields: ctx, request
-func (_m *TChanMetadataService) SetOutputHost(ctx thrift.Context, request *metadata.SetOutputHostRequest) error {
-	ret := _m.Called(ctx, request)
-
-	var r0 error
-	if rf, ok := ret.Get(0).(func(thrift.Context, *metadata.SetOutputHostRequest) error); ok {
-		r0 = rf(ctx, request)
-	} else {
-		r0 = ret.Error(0)
-	}
-
-	return r0
-}
-
-// UUIDToHostAddr provides a mock function with given fields: ctx, hostUUID
-func (_m *TChanMetadataService) UUIDToHostAddr(ctx thrift.Context, hostUUID string) (string, error) {
-	ret := _m.Called(ctx, hostUUID)
-
-	var r0 string
-	if rf, ok := ret.Get(0).(func(thrift.Context, string) string); ok {
-		r0 = rf(ctx, hostUUID)
-	} else {
-		r0 = ret.Get(0).(string)
-	}
-
-	var r1 error
-	if rf, ok := ret.Get(1).(func(thrift.Context, string) error); ok {
-		r1 = rf(ctx, hostUUID)
-	} else {
-		r1 = ret.Error(1)
-	}
-
-	return r0, r1
-}
-
-// UpdateConsumerGroup provides a mock function with given fields: ctx, updateRequest
-func (_m *TChanMetadataService) UpdateConsumerGroup(ctx thrift.Context, updateRequest *shared.UpdateConsumerGroupRequest) (*shared.ConsumerGroupDescription, error) {
-	ret := _m.Called(ctx, updateRequest)
-
-	var r0 *shared.ConsumerGroupDescription
-	if rf, ok := ret.Get(0).(func(thrift.Context, *shared.UpdateConsumerGroupRequest) *shared.ConsumerGroupDescription); ok {
-		r0 = rf(ctx, updateRequest)
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(*shared.ConsumerGroupDescription)
-		}
-	}
-
-	var r1 error
-	if rf, ok := ret.Get(1).(func(thrift.Context, *shared.UpdateConsumerGroupRequest) error); ok {
-		r1 = rf(ctx, updateRequest)
-	} else {
-		r1 = ret.Error(1)
-	}
-
-	return r0, r1
-}
-
-// UpdateConsumerGroupExtentStatus provides a mock function with given fields: ctx, request
-func (_m *TChanMetadataService) UpdateConsumerGroupExtentStatus(ctx thrift.Context, request *metadata.UpdateConsumerGroupExtentStatusRequest) error {
-	ret := _m.Called(ctx, request)
-
-	var r0 error
-	if rf, ok := ret.Get(0).(func(thrift.Context, *metadata.UpdateConsumerGroupExtentStatusRequest) error); ok {
-		r0 = rf(ctx, request)
-	} else {
-		r0 = ret.Error(0)
-	}
-
-	return r0
-}
-
-// UpdateDestination provides a mock function with given fields: ctx, updateRequest
-func (_m *TChanMetadataService) UpdateDestination(ctx thrift.Context, updateRequest *shared.UpdateDestinationRequest) (*shared.DestinationDescription, error) {
-	ret := _m.Called(ctx, updateRequest)
-
-	var r0 *shared.DestinationDescription
-	if rf, ok := ret.Get(0).(func(thrift.Context, *shared.UpdateDestinationRequest) *shared.DestinationDescription); ok {
-		r0 = rf(ctx, updateRequest)
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(*shared.DestinationDescription)
-		}
-	}
-
-	var r1 error
-	if rf, ok := ret.Get(1).(func(thrift.Context, *shared.UpdateDestinationRequest) error); ok {
-		r1 = rf(ctx, updateRequest)
-	} else {
-		r1 = ret.Error(1)
-	}
-
-	return r0, r1
-}
-
-// UpdateDestinationDLQCursors provides a mock function with given fields: ctx, updateRequest
-func (_m *TChanMetadataService) UpdateDestinationDLQCursors(ctx thrift.Context, updateRequest *metadata.UpdateDestinationDLQCursorsRequest) (*shared.DestinationDescription, error) {
-	ret := _m.Called(ctx, updateRequest)
-
-	var r0 *shared.DestinationDescription
-	if rf, ok := ret.Get(0).(func(thrift.Context, *metadata.UpdateDestinationDLQCursorsRequest) *shared.DestinationDescription); ok {
-		r0 = rf(ctx, updateRequest)
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(*shared.DestinationDescription)
-		}
-	}
-
-	var r1 error
-	if rf, ok := ret.Get(1).(func(thrift.Context, *metadata.UpdateDestinationDLQCursorsRequest) error); ok {
-		r1 = rf(ctx, updateRequest)
-	} else {
-		r1 = ret.Error(1)
-	}
-
-	return r0, r1
-}
-
-// UpdateExtentReplicaStats provides a mock function with given fields: ctx, request
-func (_m *TChanMetadataService) UpdateExtentReplicaStats(ctx thrift.Context, request *metadata.UpdateExtentReplicaStatsRequest) error {
-	ret := _m.Called(ctx, request)
-
-	var r0 error
-	if rf, ok := ret.Get(0).(func(thrift.Context, *metadata.UpdateExtentReplicaStatsRequest) error); ok {
-		r0 = rf(ctx, request)
-	} else {
-		r0 = ret.Error(0)
-	}
-
-	return r0
-}
-
-// UpdateExtentStats provides a mock function with given fields: ctx, request
-func (_m *TChanMetadataService) UpdateExtentStats(ctx thrift.Context, request *metadata.UpdateExtentStatsRequest) (*metadata.UpdateExtentStatsResult_, error) {
-	ret := _m.Called(ctx, request)
-
-	var r0 *metadata.UpdateExtentStatsResult_
-	if rf, ok := ret.Get(0).(func(thrift.Context, *metadata.UpdateExtentStatsRequest) *metadata.UpdateExtentStatsResult_); ok {
-		r0 = rf(ctx, request)
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(*metadata.UpdateExtentStatsResult_)
-		}
-	}
-
-	var r1 error
-	if rf, ok := ret.Get(1).(func(thrift.Context, *metadata.UpdateExtentStatsRequest) error); ok {
-		r1 = rf(ctx, request)
-	} else {
-		r1 = ret.Error(1)
-	}
-
-	return r0, r1
-}
-
-// UpdateStoreExtentReplicaStats provides a mock function with given fields: ctx, request
-func (_m *TChanMetadataService) UpdateStoreExtentReplicaStats(ctx thrift.Context, request *metadata.UpdateStoreExtentReplicaStatsRequest) error {
-	ret := _m.Called(ctx, request)
-
-	var r0 error
-	if rf, ok := ret.Get(0).(func(thrift.Context, *metadata.UpdateStoreExtentReplicaStatsRequest) error); ok {
-		r0 = rf(ctx, request)
-	} else {
-		r0 = ret.Error(0)
-	}
-
-	return r0
-}
-
-// CreateHostInfo provides a mock function with given fields: ctx, request
-func (_m *TChanMetadataService) CreateHostInfo(ctx thrift.Context, request *metadata.CreateHostInfoRequest) error {
-	ret := _m.Called(ctx, request)
-
-	var r0 error
-	if rf, ok := ret.Get(0).(func(thrift.Context, *metadata.CreateHostInfoRequest) error); ok {
-		r0 = rf(ctx, request)
-	} else {
-		r0 = ret.Error(0)
-	}
-
-	return r0
-}
-
-// DeleteHostInfo provides a mock function with given fields: ctx, request
-func (_m *TChanMetadataService) DeleteHostInfo(ctx thrift.Context, request *metadata.DeleteHostInfoRequest) error {
-	ret := _m.Called(ctx, request)
-
-	var r0 error
-	if rf, ok := ret.Get(0).(func(thrift.Context, *metadata.DeleteHostInfoRequest) error); ok {
-		r0 = rf(ctx, request)
-	} else {
-		r0 = ret.Error(0)
-	}
-
-	return r0
-}
-
-// ReadHostInfo provides a mock function with given fields: ctx, request
-func (_m *TChanMetadataService) ReadHostInfo(ctx thrift.Context, request *metadata.ReadHostInfoRequest) (*metadata.ReadHostInfoResult_, error) {
-	ret := _m.Called(ctx, request)
-
-	var r0 *metadata.ReadHostInfoResult_
-	if rf, ok := ret.Get(0).(func(thrift.Context, *metadata.ReadHostInfoRequest) *metadata.ReadHostInfoResult_); ok {
-		r0 = rf(ctx, request)
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(*metadata.ReadHostInfoResult_)
-		}
-	}
-
-	var r1 error
-	if rf, ok := ret.Get(1).(func(thrift.Context, *metadata.ReadHostInfoRequest) error); ok {
-		r1 = rf(ctx, request)
-	} else {
-		r1 = ret.Error(1)
-	}
-
-	return r0, r1
-}
-
-// UpdateHostInfo provides a mock function with given fields: ctx, request
-func (_m *TChanMetadataService) UpdateHostInfo(ctx thrift.Context, request *metadata.UpdateHostInfoRequest) error {
-	ret := _m.Called(ctx, request)
-
-	var r0 error
-	if rf, ok := ret.Get(0).(func(thrift.Context, *metadata.UpdateHostInfoRequest) error); ok {
-		r0 = rf(ctx, request)
-	} else {
-		r0 = ret.Error(0)
-	}
-
-	return r0
-}
-
-// CreateServiceConfig provides a mock function with given fields: ctx, request
-func (_m *TChanMetadataService) CreateServiceConfig(ctx thrift.Context, request *metadata.CreateServiceConfigRequest) error {
-	ret := _m.Called(ctx, request)
-
-	var r0 error
-	if rf, ok := ret.Get(0).(func(thrift.Context, *metadata.CreateServiceConfigRequest) error); ok {
-		r0 = rf(ctx, request)
-	} else {
-		r0 = ret.Error(0)
-	}
-
-	return r0
-}
-
-// DeleteServiceConfig provides a mock function with given fields: ctx, request
-func (_m *TChanMetadataService) DeleteServiceConfig(ctx thrift.Context, request *metadata.DeleteServiceConfigRequest) error {
-	ret := _m.Called(ctx, request)
-
-	var r0 error
-	if rf, ok := ret.Get(0).(func(thrift.Context, *metadata.DeleteServiceConfigRequest) error); ok {
-		r0 = rf(ctx, request)
-	} else {
-		r0 = ret.Error(0)
-	}
-
-	return r0
-}
-
 // ReadServiceConfig provides a mock function with given fields: ctx, request
 func (_m *TChanMetadataService) ReadServiceConfig(ctx thrift.Context, request *metadata.ReadServiceConfigRequest) (*metadata.ReadServiceConfigResult_, error) {
 	ret := _m.Called(ctx, request)
@@ -925,6 +950,27 @@ func (_m *TChanMetadataService) ReadServiceConfig(ctx thrift.Context, request *m
 	var r1 error
 	if rf, ok := ret.Get(1).(func(thrift.Context, *metadata.ReadServiceConfigRequest) error); ok {
 		r1 = rf(ctx, request)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// UUIDToHostAddr provides a mock function with given fields: ctx, hostUUID
+func (_m *TChanMetadataService) UUIDToHostAddr(ctx thrift.Context, hostUUID string) (string, error) {
+	ret := _m.Called(ctx, hostUUID)
+
+	var r0 string
+	if rf, ok := ret.Get(0).(func(thrift.Context, string) string); ok {
+		r0 = rf(ctx, hostUUID)
+	} else {
+		r0 = ret.Get(0).(string)
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(thrift.Context, string) error); ok {
+		r1 = rf(ctx, hostUUID)
 	} else {
 		r1 = ret.Error(1)
 	}

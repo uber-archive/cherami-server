@@ -1270,7 +1270,6 @@ func (s *NetIntegrationSuiteParallelD) TestSmartRetryDisableDuringDLQMerge() {
 		DLQMessageStart            = 10
 		DLQMessageSpacing          = 6
 		mergeAssumedCompleteTime   = cgLockTimeout * (cgMaxDeliveryCount + 1) * 2 * time.Second * 2 // +1 for initial delivery, *2 for dlqInhibit, *2 for fudge
-		testTimeout                = time.Second * 180
 	)
 
 	const (
@@ -1471,7 +1470,6 @@ func (s *NetIntegrationSuiteParallelD) TestSmartRetryDisableDuringDLQMerge() {
 	s.NoError(err)
 
 	beforeMergeDLQDeliveryCount := -1
-	testStartTime := time.Now()
 
 	// Read the messages in a loop.
 readLoop:
@@ -1500,17 +1498,11 @@ readLoop:
 				common.UnixNanoTime(time.Since(getDLQDeliveryTime())).ToSecondsFmt(),
 				getCurrentHealth())
 
-			if time.Since(testStartTime) > testTimeout {
-				s.Fail("This test should complete quickly")
-				break
-			}
-
 			switch phase {
 			case produceDLQ: // Normal consumption with some selected 'poison' message. This is dilute poison going to DLQ
 				if !poison {
 					ack = true
 				}
-				s.NotEqual(getCurrentHealth(), stateStalled)
 				if getDLQDeliveryCount() >= DLQMergeMessageTargetCount { // Produced enough DLQ, move on
 					phase++
 				}

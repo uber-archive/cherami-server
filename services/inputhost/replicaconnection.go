@@ -69,14 +69,6 @@ type (
 	}
 )
 
-// Flush stream thresholds control how often we do a "Flush" on the tchannel-stream.
-// Currently configured for every 1000 messages sent or every 10 milliseconds (whichever is sooner)
-// TODO: Make this a config knob
-const (
-	flushThreshold int           = 1000
-	flushTimeout   time.Duration = 5 * time.Millisecond
-)
-
 func newReplicaConnection(stream storeStream.BStoreOpenAppendStreamOutCall, cancel context.CancelFunc, logger bark.Logger) *replicaConnection {
 	conn := &replicaConnection{
 		call:          stream,
@@ -131,7 +123,7 @@ func (conn *replicaConnection) writeMessagesPump() {
 	}
 
 	unflushedWrites := 0
-	flushTicker := time.NewTicker(flushTimeout) // start ticker to flush tchannel stream
+	flushTicker := time.NewTicker(common.FlushTimeout) // start ticker to flush websocket  stream
 	defer flushTicker.Stop()
 
 	for {
@@ -152,7 +144,7 @@ func (conn *replicaConnection) writeMessagesPump() {
 			conn.sentMsgs++
 
 			unflushedWrites++
-			if unflushedWrites >= flushThreshold {
+			if unflushedWrites >= common.FlushThreshold {
 				if err := conn.call.Flush(); err != nil {
 					conn.logger.WithFields(bark.Fields{common.TagErr: err, `unflushedWrites`: unflushedWrites, `putMessagesChLength`: len(conn.putMessagesCh), `replyChLength`: len(conn.replyCh)}).Error(`inputhost: error flushing messages to replica stream`)
 					// since flush failed, trigger a close of the connection which will fail inflight messages
