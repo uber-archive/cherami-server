@@ -42,7 +42,6 @@ type (
 		closeChannel  chan struct{}
 		putMessagesCh chan *replicaPutMsg
 		waitWG        sync.WaitGroup
-		flushTicker   *time.Ticker
 
 		sentMsgs   int64
 		recvAcks   int64
@@ -70,7 +69,7 @@ type (
 	}
 )
 
-func newReplicaConnection(stream storeStream.BStoreOpenAppendStreamOutCall, cancel context.CancelFunc, logger bark.Logger, flushTicker *time.Ticker) *replicaConnection {
+func newReplicaConnection(stream storeStream.BStoreOpenAppendStreamOutCall, cancel context.CancelFunc, logger bark.Logger) *replicaConnection {
 	conn := &replicaConnection{
 		call:          stream,
 		cancel:        cancel,
@@ -78,7 +77,6 @@ func newReplicaConnection(stream storeStream.BStoreOpenAppendStreamOutCall, canc
 		replyCh:       make(chan prepAck, defaultBufferSize),
 		closeChannel:  make(chan struct{}),
 		putMessagesCh: make(chan *replicaPutMsg, defaultBufferSize),
-		flushTicker:   flushTicker,
 	}
 
 	return conn
@@ -125,6 +123,8 @@ func (conn *replicaConnection) writeMessagesPump() {
 	}
 
 	unflushedWrites := 0
+	flushTicker := time.NewTicker(common.FlushTimeout) // start ticker to flush websocket  stream
+	defer flushTicker.Stop()
 
 	for {
 		select {
@@ -158,7 +158,7 @@ func (conn *replicaConnection) writeMessagesPump() {
 				// prepare inflight map
 				conn.replyCh <- prepAck{msg.appendMsg.GetSequenceNumber(), msg.appendMsgAckCh}
 			}
-		case <-conn.flushTicker.C:
+		case <-flushTicker.C:
 			if unflushedWrites > 0 {
 				if err := conn.call.Flush(); err != nil {
 					conn.logger.WithFields(bark.Fields{common.TagErr: err, `unflushedWrites`: unflushedWrites, `putMessagesChLength`: len(conn.putMessagesCh), `replyChLength`: len(conn.replyCh)}).Error(`inputhost: error flushing messages to replica stream`)

@@ -107,8 +107,6 @@ type (
 		lastExtLoadReportedTime int64 // unix nanos when the last extent metrics were reported
 
 		minimumAllowedMessageDelaySeconds int32 // min delay on messages
-
-		flushTicker *time.Ticker // flush ticker for all replicas
 	}
 
 	// Holds a particular extent for use by multiple publisher connections.
@@ -204,7 +202,6 @@ func newExtConnection(destUUID string, pathCache *inPathCache, extUUID string, n
 		dstMetrics:              pathCache.dstMetrics,
 		hostMetrics:             pathCache.hostMetrics,
 		lastExtLoadReportedTime: time.Now().UnixNano(),
-		flushTicker:             time.NewTicker(common.FlushTimeout),
 	}
 	if pathCache.destType == shared.DestinationType_LOG {
 		conn.lastSuccessSeqNoCh = make(chan int64, 1)
@@ -333,7 +330,6 @@ func (conn *extHost) close() {
 	// now notify the pathCache to unload the extent
 	conn.notifyExtCacheUnloadCh <- conn.extUUID
 
-	conn.flushTicker.Stop()
 	conn.loadReporter.Stop()
 	conn.shutdownWG.Done()
 }
