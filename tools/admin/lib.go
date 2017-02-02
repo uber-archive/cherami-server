@@ -188,13 +188,14 @@ type topKExtJSONOUtputFields struct {
 }
 
 type extentAllJSONOutputFields struct {
-	DestinationUUID string                           `json:"destination_uuid"`
-	ExtentUUID      string                           `json:"extent_uuid"`
-	Status          shared.ExtentStatus              `json:"status"`
-	InputHost       string                           `json:"inputhost,omitempty"`
-	StoreHosts      []string                         `json:"storehosts,omitempty"`
-	CreatedTime     time.Time                        `json:"createdTime,omitempty"`
-	ReplicaExtents  []*replicaExtentJSONOutputFields `json:"replica_extents"`
+	DestinationUUID   string                           `json:"destination_uuid"`
+	ExtentUUID        string                           `json:"extent_uuid"`
+	Status            shared.ExtentStatus              `json:"status"`
+	InputHost         string                           `json:"inputhost,omitempty"`
+	StoreHosts        []string                         `json:"storehosts,omitempty"`
+	CreatedTime       time.Time                        `json:"created_time,omitempty"`
+	ReplicaExtents    []*replicaExtentJSONOutputFields `json:"replica_extents"`
+	StatusUpdatedTime time.Time                        `json:"status_updated_time"`
 }
 
 type replicaExtentJSONOutputFields struct {
@@ -383,13 +384,14 @@ func ReadExtent(c *cli.Context) {
 		}
 	}
 	output := &extentAllJSONOutputFields{
-		DestinationUUID: extent.GetDestinationUUID(),
-		ExtentUUID:      uuidStr,
-		Status:          extentStats.GetStatus(),
-		CreatedTime:     time.Unix(0, *(extentStats.CreatedTimeMillis)*1000000),
-		InputHost:       inputHostAddr,
-		StoreHosts:      storeHosts,
-		ReplicaExtents:  replicaExtents,
+		DestinationUUID:   extent.GetDestinationUUID(),
+		ExtentUUID:        uuidStr,
+		Status:            extentStats.GetStatus(),
+		CreatedTime:       time.Unix(0, *(extentStats.CreatedTimeMillis)*1000000),
+		StatusUpdatedTime: time.Unix(0, *(extentStats.StatusUpdatedTimeMillis)*1000000),
+		InputHost:         inputHostAddr,
+		StoreHosts:        storeHosts,
+		ReplicaExtents:    replicaExtents,
 	}
 
 	outputStr, _ := json.Marshal(output)
@@ -552,11 +554,12 @@ func ReadDestQueue(c *cli.Context) {
 				}
 			}
 			output := &extentAllJSONOutputFields{
-				DestinationUUID: extent.GetDestinationUUID(),
-				ExtentUUID:      extent.GetExtentUUID(),
-				Status:          stats.GetStatus(),
-				CreatedTime:     time.Unix(0, *(stats.CreatedTimeMillis)*1000000),
-				ReplicaExtents:  replicaExtents,
+				DestinationUUID:   extent.GetDestinationUUID(),
+				ExtentUUID:        extent.GetExtentUUID(),
+				Status:            stats.GetStatus(),
+				CreatedTime:       time.Unix(0, *(stats.CreatedTimeMillis)*1000000),
+				StatusUpdatedTime: time.Unix(0, *(stats.StatusUpdatedTimeMillis)*1000000),
+				ReplicaExtents:    replicaExtents,
 			}
 
 			outputStr, _ := json.Marshal(output)
@@ -602,7 +605,7 @@ type destAllJSONOutputFields struct {
 	OpenExts                    int                      `json:"open"`
 	SealedExts                  int                      `json:"sealed"`
 	ConsumedExts                int                      `json:"consumed"`
-	DeletedExts                 int                      `json:"Deleted"`
+	DeletedExts                 int                      `json:"deleted"`
 	ConsumedMessagesRetention   int32                    `json:"consumed_messages_retention"`
 	UnconsumedMessagesRetention int32                    `json:"unconsumed_messages_retention"`
 }
@@ -689,12 +692,13 @@ func ListAllDestinations(c *cli.Context) {
 }
 
 type extentJSONOutputFields struct {
-	DestinationUUID *string             `json:"destination_uuid"`
-	ExtentUUID      string              `json:"extent_uuid"`
-	Status          shared.ExtentStatus `json:"status"`
-	InputHost       string              `json:"inputhost"`
-	StoreHosts      []string            `json:"storehosts"`
-	CreatedTime     time.Time           `json:"createdTime,omitempty"`
+	DestinationUUID   *string             `json:"destination_uuid"`
+	ExtentUUID        string              `json:"extent_uuid"`
+	Status            shared.ExtentStatus `json:"status"`
+	InputHost         string              `json:"inputhost"`
+	StoreHosts        []string            `json:"storehosts"`
+	CreatedTime       time.Time           `json:"created_time,omitempty"`
+	StatusUpdatedTime time.Time           `json:"status_updated_time"`
 }
 
 type cgExtentJSONOutputFields struct {
@@ -702,16 +706,16 @@ type cgExtentJSONOutputFields struct {
 	CGName             string                             `json:"consumer_group_name"`
 	CGUUID             string                             `json:"consumer_group_uuid"`
 	CGEmail            string                             `json:"owner_email"`
-	CGDlq              string                             `json:"dlqUUID"`
-	OutputHostAddr     string                             `json:"outputhostAddr"`
-	OutputHostUUID     string                             `json:"outputhostUUID"`
+	CGDlq              string                             `json:"dlq_uuid"`
+	OutputHostAddr     string                             `json:"outputhost_addr"`
+	OutputHostUUID     string                             `json:"outputhost_uuid"`
 	Status             metadata.ConsumerGroupExtentStatus `json:"status"`
-	AckLevelOffset     int64                              `json:"ackLevelOffset"`
-	AckLevelSeqNo      int64                              `json:"ackLevelSeqNo"`
-	AckLeverSeqNoRate  float64                            `json:"ackLevelSeqNoRate"`
-	ReadLevelOffset    int64                              `json:"readLevelOffset"`
-	ReadLevelSeqNo     int64                              `json:"readLevelSeqNo"`
-	ReadLevelSeqNoRate float64                            `json:"readLevelSeqNoRate"`
+	AckLevelOffset     int64                              `json:"ack_level_offset"`
+	AckLevelSeqNo      int64                              `json:"ack_level_seq_no"`
+	AckLeverSeqNoRate  float64                            `json:"ack_level_seq_no_rate"`
+	ReadLevelOffset    int64                              `json:"read_level_offset"`
+	ReadLevelSeqNo     int64                              `json:"read_level_seq_no"`
+	ReadLevelSeqNoRate float64                            `json:"read_level_seq_no_rate"`
 }
 
 // ListExtents lists all the extents of a destination
@@ -765,11 +769,15 @@ func ListExtents(c *cli.Context) {
 			}
 
 			output := &extentJSONOutputFields{
-				DestinationUUID: desc.DestinationUUID,
-				ExtentUUID:      extentUUID,
-				Status:          stats.GetStatus(),
-				InputHost:       inputHostAddr,
-				StoreHosts:      storeHosts}
+				DestinationUUID:   desc.DestinationUUID,
+				ExtentUUID:        extentUUID,
+				Status:            stats.GetStatus(),
+				InputHost:         inputHostAddr,
+				StoreHosts:        storeHosts,
+				CreatedTime:       time.Unix(0, *(stats.CreatedTimeMillis)*1000000),
+				StatusUpdatedTime: time.Unix(0, *(stats.StatusUpdatedTimeMillis)*1000000),
+			}
+
 			outputStr, _ := json.Marshal(output)
 			fmt.Fprintln(os.Stdout, string(outputStr))
 		}
