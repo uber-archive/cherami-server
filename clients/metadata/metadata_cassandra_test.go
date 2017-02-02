@@ -1162,6 +1162,17 @@ func (s *CassandraSuite) TestListExtents() {
 			} else {
 				s.True(stats.Extent.GetInputHostUUID() == inputHost1 || stats.Extent.GetInputHostUUID() == inputHost2)
 			}
+
+			storesMap := make(map[string]struct{})
+			for _, id := range storeIds {
+				storesMap[id] = struct{}{}
+			}
+
+			for _, id := range stats.Extent.GetStoreUUIDs() {
+				_, ok := storesMap[id]
+				s.True(ok, "ListExtentsStats() returned invalid store host")
+				delete(storesMap, id)
+			}
 		}
 
 		// verify filtering on local extents can work
@@ -1188,6 +1199,53 @@ func (s *CassandraSuite) TestListExtents() {
 		}
 	}
 
+	lDstExts := func(dest *shared.DestinationDescription, three bool) {
+		req := &m.ListDestinationExtentsRequest{
+			DestinationUUID: dest.DestinationUUID,
+			Limit:           common.Int64Ptr(testPageSize),
+		}
+
+		var dstExtents []*m.DestinationExtent
+
+		for {
+			resp, errf := s.client.ListDestinationExtents(nil, req)
+			s.Nil(errf)
+			dstExtents = append(dstExtents, resp.GetExtents()...)
+
+			if len(resp.GetNextPageToken()) == 0 {
+				break
+			} else {
+				req.PageToken = resp.GetNextPageToken()
+			}
+		}
+
+		s.Equal(90, len(dstExtents))
+		for _, de := range dstExtents {
+			s.InDelta(
+				int64(common.Now())/int64(time.Millisecond),
+				de.GetCreatedTimeMillis(),
+				float64(int64(5*time.Minute/time.Millisecond)), // Verify Create time was set properly, within 5 minutes of 'now'
+			)
+
+			if three {
+				s.True(de.GetInputHostUUID() == inputHost1 || de.GetInputHostUUID() == inputHost2 || de.GetInputHostUUID() == inputHost3)
+			} else {
+				s.True(de.GetInputHostUUID() == inputHost1 || de.GetInputHostUUID() == inputHost2)
+			}
+
+			storesMap := make(map[string]struct{})
+			for _, id := range storeIds {
+				storesMap[id] = struct{}{}
+			}
+
+			for _, id := range de.GetStoreUUIDs() {
+				_, ok := storesMap[id]
+				s.True(ok, "ListDestinationExtents() returned invalid store host")
+				delete(storesMap, id)
+			}
+		}
+	}
+
 	lExtInSts := func(dest *shared.DestinationDescription, inho *string) {
 		listExtentsStats := &m.ListInputHostExtentsStatsRequest{DestinationUUID: dest.DestinationUUID, InputHostUUID: inho, Status: common.MetadataExtentStatusPtr(shared.ExtentStatus_OPEN)}
 		listExtentStatsResult, errff := s.client.ListInputHostExtentsStats(nil, listExtentsStats)
@@ -1208,8 +1266,10 @@ func (s *CassandraSuite) TestListExtents() {
 	}
 
 	lExtSts(destination2, false)
+	lDstExts(destination2, false)
 	lExtInSts(destination2, &inputHost1)
 	lExtSts(destination1, true)
+	lDstExts(destination1, true)
 	lExtInSts(destination1, &inputHost2)
 
 	// List store extents
@@ -2062,9 +2122,12 @@ func (s *CassandraSuite) TestGetConsumerGroupExtents() {
 		ConsumerGroupUUID: common.StringPtr(uuid.New()),
 	}
 
+	storesMap := make(map[string]struct{})
 	req.StoreUUIDs = make([]string, 0, 3)
 	for i := 0; i < 3; i++ {
-		req.StoreUUIDs = append(req.StoreUUIDs, uuid.New())
+		id := uuid.New()
+		req.StoreUUIDs = append(req.StoreUUIDs, id)
+		storesMap[id] = struct{}{}
 	}
 
 	const nExtentsPerOutputHost = 10
@@ -2088,43 +2151,111 @@ func (s *CassandraSuite) TestGetConsumerGroupExtents() {
 		}
 	}
 
-	readReq := &m.ReadConsumerGroupExtentsRequest{
-		DestinationUUID:   common.StringPtr(req.GetDestinationUUID()),
-		ConsumerGroupUUID: common.StringPtr(req.GetConsumerGroupUUID()),
-		MaxResults:        common.Int32Ptr(nExtentsPerOutputHost),
-	}
+	readCGExts := func() {
 
-	for i := 0; i < nOutputHosts; i++ {
-		readReq.OutputHostUUID = common.StringPtr(outputhosts[i])
-		readReq.PageToken = nil
+		readReq := &m.ReadConsumerGroupExtentsRequest{
+			DestinationUUID:   common.StringPtr(req.GetDestinationUUID()),
+			ConsumerGroupUUID: common.StringPtr(req.GetConsumerGroupUUID()),
+			MaxResults:        common.Int32Ptr(nExtentsPerOutputHost),
+		}
 
-		var cgExtents []*m.ConsumerGroupExtent
-		for {
-			ans, err := s.client.ReadConsumerGroupExtents(nil, readReq)
-			assert.Nil(err, "ReadConsumerGroupExtents failed")
-			cgExtents = append(cgExtents, ans.Extents...)
+		validExts := make(map[string]bool)
+		for item := range extents {
+			validExts[item] = true
+		}
 
-			if len(ans.GetNextPageToken()) == 0 {
-				break
-			} else {
-				readReq.PageToken = ans.GetNextPageToken()
+		for i := 0; i < nOutputHosts; i++ {
+			readReq.OutputHostUUID = common.StringPtr(outputhosts[i])
+			readReq.PageToken = nil
+
+			var cgExtents []*m.ConsumerGroupExtent
+			for {
+				ans, err := s.client.ReadConsumerGroupExtents(nil, readReq)
+				assert.Nil(err, "ReadConsumerGroupExtents failed")
+				cgExtents = append(cgExtents, ans.Extents...)
+
+				if len(ans.GetNextPageToken()) == 0 {
+					break
+				} else {
+					readReq.PageToken = ans.GetNextPageToken()
+				}
+			}
+
+			assert.Equal(nExtentsPerOutputHost, len(cgExtents), "Wrong number of extents for outputhost")
+			for n := 0; n < nExtentsPerOutputHost; n++ {
+				_, ok := validExts[cgExtents[n].GetExtentUUID()]
+				assert.True(ok, "Unknown extent returned for out host")
+				delete(validExts, cgExtents[n].GetExtentUUID())
+				storesCopy := make(map[string]struct{})
+				for id := range storesMap {
+					storesCopy[id] = struct{}{}
+				}
+				for _, id := range cgExtents[n].GetStoreUUIDs() {
+					_, ok := storesCopy[id]
+					s.True(ok, "ReadConsumerGroupExtentsLite() returned unknown store host")
+					delete(storesCopy, id)
+				}
 			}
 		}
 
-		assert.Equal(nExtentsPerOutputHost, len(cgExtents), "Wrong number of extents for outputhost")
-		for n := 0; n < nExtentsPerOutputHost; n++ {
-			_, ok := extents[cgExtents[n].GetExtentUUID()]
-			assert.True(ok, "Unknown extent returned for out host")
-			delete(extents, cgExtents[n].GetExtentUUID())
-		}
+		assert.Equal(0, len(validExts), "Not all extents were returned by ReadConsumerGroupExtents")
+		// try reading an unknown consumer group
+		readReq.ConsumerGroupUUID = common.StringPtr(uuid.New())
+		ans, _ := s.client.ReadConsumerGroupExtents(nil, readReq)
+		assert.Equal(0, len(ans.Extents), "ReadConsumerGroupExtents must return no results, but it did")
 	}
 
-	assert.Equal(0, len(extents), "Not all extents were returned by ReadConsumerGroupExtents")
+	readCGExtsLite := func() {
 
-	// try reading an unknown consumer group
-	readReq.ConsumerGroupUUID = common.StringPtr(uuid.New())
-	ans, _ := s.client.ReadConsumerGroupExtents(nil, readReq)
-	assert.Equal(0, len(ans.Extents), "ReadConsumerGroupExtents must return no results, but it did")
+		readReq := &m.ReadConsumerGroupExtentsLiteRequest{
+			DestinationUUID:   common.StringPtr(req.GetDestinationUUID()),
+			ConsumerGroupUUID: common.StringPtr(req.GetConsumerGroupUUID()),
+			MaxResults:        common.Int32Ptr(nExtentsPerOutputHost),
+		}
+
+		for i := 0; i < nOutputHosts; i++ {
+			readReq.OutputHostUUID = common.StringPtr(outputhosts[i])
+			readReq.PageToken = nil
+
+			var cgExtents []*m.ConsumerGroupExtentLite
+			for {
+				ans, err := s.client.ReadConsumerGroupExtentsLite(nil, readReq)
+				assert.Nil(err, "ReadConsumerGroupExtents failed")
+				cgExtents = append(cgExtents, ans.Extents...)
+
+				if len(ans.GetNextPageToken()) == 0 {
+					break
+				} else {
+					readReq.PageToken = ans.GetNextPageToken()
+				}
+			}
+
+			assert.Equal(nExtentsPerOutputHost, len(cgExtents), "Wrong number of extents for outputhost")
+			for n := 0; n < nExtentsPerOutputHost; n++ {
+				_, ok := extents[cgExtents[n].GetExtentUUID()]
+				assert.True(ok, "Unknown extent returned for out host")
+				delete(extents, cgExtents[n].GetExtentUUID())
+				storesCopy := make(map[string]struct{})
+				for id := range storesMap {
+					storesCopy[id] = struct{}{}
+				}
+				for _, id := range cgExtents[n].GetStoreUUIDs() {
+					_, ok := storesCopy[id]
+					s.True(ok, "ReadConsumerGroupExtentsLite() returned unknown store host")
+					delete(storesCopy, id)
+				}
+			}
+		}
+
+		assert.Equal(0, len(extents), "Not all extents were returned by ReadConsumerGroupExtentsLite")
+		// try reading an unknown consumer group
+		readReq.ConsumerGroupUUID = common.StringPtr(uuid.New())
+		ans, _ := s.client.ReadConsumerGroupExtentsLite(nil, readReq)
+		assert.Equal(0, len(ans.Extents), "ReadConsumerGroupExtentsLite must return no results, but it did")
+	}
+
+	readCGExts()
+	readCGExtsLite()
 }
 
 func (s *CassandraSuite) TestUpdateConsumerGroupExtentStatus() {

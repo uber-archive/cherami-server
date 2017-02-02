@@ -136,6 +136,21 @@ func (m *metadataMetricsMgr) ListDestinationsByUUID(ctx thrift.Context, request 
 	return result, err
 }
 
+func (m *metadataMetricsMgr) ListDestinationExtents(ctx thrift.Context, request *m.ListDestinationExtentsRequest) (result *m.ListDestinationExtentsResult_, err error) {
+
+	m.m3.IncCounter(metrics.MetadataListDestinationExtentsScope, metrics.MetadataRequests)
+	sw := m.m3.StartTimer(metrics.MetadataListDestinationExtentsScope, metrics.MetadataLatency)
+	defer sw.Stop()
+
+	result, err = m.meta.ListDestinationExtents(ctx, request)
+
+	if err != nil {
+		m.m3.IncCounter(metrics.MetadataListDestinationExtentsScope, metrics.MetadataFailures)
+	}
+
+	return result, err
+}
+
 func (m *metadataMetricsMgr) ListExtentsStats(ctx thrift.Context, request *shared.ListExtentsStatsRequest) (result *shared.ListExtentsStatsResult_, err error) {
 
 	m.m3.IncCounter(metrics.MetadataListExtentsStatsScope, metrics.MetadataRequests)
@@ -251,6 +266,21 @@ func (m *metadataMetricsMgr) ReadConsumerGroupExtents(ctx thrift.Context, reques
 
 	if err != nil {
 		m.m3.IncCounter(metrics.MetadataReadConsumerGroupExtentsScope, metrics.MetadataFailures)
+	}
+
+	return result, err
+}
+
+func (m *metadataMetricsMgr) ReadConsumerGroupExtentsLite(ctx thrift.Context, request *m.ReadConsumerGroupExtentsLiteRequest) (result *m.ReadConsumerGroupExtentsLiteResult_, err error) {
+
+	m.m3.IncCounter(metrics.MetadataReadConsumerGroupExtentsLiteScope, metrics.MetadataRequests)
+	sw := m.m3.StartTimer(metrics.MetadataReadConsumerGroupExtentsLiteScope, metrics.MetadataLatency)
+	defer sw.Stop()
+
+	result, err = m.meta.ReadConsumerGroupExtentsLite(ctx, request)
+
+	if err != nil {
+		m.m3.IncCounter(metrics.MetadataReadConsumerGroupExtentsLiteScope, metrics.MetadataFailures)
 	}
 
 	return result, err

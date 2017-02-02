@@ -2038,7 +2038,16 @@ const (
 		columnReplicaStats + `, ` +
 		`writeTime( ` + columnReplicaStats + `)` +
 		` FROM ` + tableStoreExtents + ` WHERE ` + columnStoreUUID + ` =? AND ` + columnExtentUUID + ` =? LIMIT 1`
+
+	sqlListDstExtents = `SELECT ` + columnExtentUUID + `, ` + columnStatus + `, ` + columnCreatedTime + `, ` +
+		columnStatusUpdatedTime + `, ` + columnConsumerGroupVisibility + `, ` + columnOriginZone +
+		`, extent.` + columnInputHostUUID + `, extent.` + columnStoreUUIDS +
+		` FROM ` + tableDestinationExtents +
+		` WHERE ` + columnDestinationUUID + `=?`
 )
+
+var errDstUUIDNil = &shared.BadRequestError{Message: "DestinationUUID is nil"}
+var errPageLimitOutOfRange = &shared.BadRequestError{Message: "PageLimit out of range, must be > 0"}
 
 // CreateExtent implements the corresponding TChanMetadataServiceClient API
 // TODO Have a storage background job to reconcile store view of extents with the metadata
@@ -2718,6 +2727,84 @@ func (s *CassandraMetadataService) listExtentsStatsHelper(request *shared.ListEx
 	return query.Iter(), nil
 }
 
+// ListDestinationExtents lists all the extents mapped to a given destination
+func (s *CassandraMetadataService) ListDestinationExtents(ctx thrift.Context, request *m.ListDestinationExtentsRequest) (*m.ListDestinationExtentsResult_, error) {
+
+	if len(request.GetDestinationUUID()) == 0 {
+		return nil, errDstUUIDNil
+	}
+
+	if request.GetLimit() <= 0 {
+		return nil, errPageLimitOutOfRange
+	}
+
+	filterLocally := false
+	if request.IsSetStatus() && request.GetStatus() != shared.ExtentStatus_OPEN {
+		filterLocally = true
+	}
+
+	sql := sqlListDstExtents
+	if !filterLocally && request.IsSetStatus() {
+		sql = fmt.Sprintf("%s AND %s=%d", sqlListDstExtents, columnStatus, request.GetStatus())
+	}
+
+	qry := s.session.Query(sql).Consistency(s.lowConsLevel).Bind(request.GetDestinationUUID())
+	qry = qry.PageSize(int(request.GetLimit())).PageState(request.GetPageToken())
+
+	iter := qry.Iter()
+
+	allocSize := iter.NumRows()
+	if filterLocally {
+		allocSize = common.MinInt(allocSize, 8)
+	}
+
+	allocSize = common.MaxInt(allocSize, 1)
+
+	result := m.NewListDestinationExtentsResult_()
+	result.Extents = make([]*m.DestinationExtent, 0, allocSize)
+	extents := make([]m.DestinationExtent, allocSize)
+
+	var cnt int
+	var createdTime time.Time
+	var statusUpdatedTime time.Time
+
+	for iter.Scan(&extents[cnt].ExtentUUID,
+		&extents[cnt].Status,
+		&createdTime,
+		&statusUpdatedTime,
+		&extents[cnt].ConsumerGroupVisibility,
+		&extents[cnt].OriginZone,
+		&extents[cnt].InputHostUUID,
+		&extents[cnt].StoreUUIDs) {
+
+		if filterLocally && request.GetStatus() != extents[cnt].GetStatus() {
+			continue
+		}
+
+		extents[cnt].CreatedTimeMillis = common.Int64Ptr(timeToMilliseconds(createdTime))
+		extents[cnt].StatusUpdatedTimeMillis = common.Int64Ptr(timeToMilliseconds(statusUpdatedTime))
+		result.Extents = append(result.Extents, &extents[cnt])
+
+		cnt++
+		if cnt == len(extents) {
+			cnt = 0
+			extents = make([]m.DestinationExtent, allocSize)
+		}
+	}
+
+	nextPageToken := iter.PageState()
+	result.NextPageToken = make([]byte, len(nextPageToken))
+	copy(result.NextPageToken, nextPageToken)
+
+	if err := iter.Close(); err != nil {
+		return nil, &shared.InternalServiceError{
+			Message: err.Error(),
+		}
+	}
+
+	return result, nil
+}
+
 // ListInputHostExtentsStats returns a list of extent stats for the given DstID/InputHostID
 // If the destinationID is not specified, this method will return all extent stats matching
 // the given input host id
@@ -3252,6 +3339,14 @@ const (
 		` FROM ` + tableConsumerGroupExtents +
 		` WHERE ` + columnConsumerGroupUUID + `=?`
 
+	sqlCGGetAllExtentsLite = `SELECT ` +
+		columnStatus + `, ` +
+		columnExtentUUID + `, ` +
+		columnOutputHostUUID + `, ` +
+		columnStoreUUIDS +
+		` FROM ` + tableConsumerGroupExtents +
+		` WHERE ` + columnConsumerGroupUUID + `=?`
+
 	sqlExtGetAllExtents = `SELECT ` +
 		columnConsumerGroupUUID + `, ` +
 		columnOutputHostUUID + `, ` +
@@ -3701,6 +3796,79 @@ func (s *CassandraMetadataService) readConsumerGroupExtentsHelper(request *m.Rea
 		query = query.PageSize(int(request.GetMaxResults())).PageState(request.GetPageToken())
 	}
 	return query.Iter(), nil
+}
+
+// ReadConsumerGroupExtentsLite returns the list all extents mapped to
+// the given consumer group. This API only returns a few interesting
+// columns for each extent in the result. For detailed info about
+// extents, see ReadConsumerGroupExtents
+func (s *CassandraMetadataService) ReadConsumerGroupExtentsLite(ctx thrift.Context, request *m.ReadConsumerGroupExtentsLiteRequest) (*m.ReadConsumerGroupExtentsLiteResult_, error) {
+
+	if request.GetMaxResults() <= 0 {
+		return nil, errPageLimitOutOfRange
+	}
+
+	filterLocally := false
+	if request.IsSetStatus() && request.GetStatus() != m.ConsumerGroupExtentStatus_OPEN {
+		filterLocally = true
+	}
+
+	sql := sqlCGGetAllExtentsLite
+	if !filterLocally && request.IsSetStatus() {
+		sql += fmt.Sprintf(" AND %s=%d", columnStatus, request.GetStatus())
+	}
+
+	qry := s.session.Query(sql).Consistency(s.lowConsLevel).Bind(request.GetConsumerGroupUUID())
+	qry = qry.PageSize(int(request.GetMaxResults())).PageState(request.GetPageToken())
+
+	iter := qry.Iter()
+	allocSize := iter.NumRows()
+	if filterLocally {
+		allocSize = common.MinInt(8, allocSize)
+	}
+
+	allocSize = common.MaxInt(allocSize, 1)
+
+	result := m.NewReadConsumerGroupExtentsLiteResult_()
+	result.Extents = make([]*m.ConsumerGroupExtentLite, 0, allocSize)
+	extents := make([]m.ConsumerGroupExtentLite, allocSize)
+
+	cnt := 0
+
+	for iter.Scan(
+		&extents[cnt].Status,
+		&extents[cnt].ExtentUUID,
+		&extents[cnt].OutputHostUUID,
+		&extents[cnt].StoreUUIDs) {
+
+		if filterLocally && extents[cnt].GetStatus() != request.GetStatus() {
+			continue
+		}
+
+		if request.IsSetOutputHostUUID() &&
+			strings.Compare(extents[cnt].GetOutputHostUUID(), request.GetOutputHostUUID()) != 0 {
+			continue
+		}
+
+		result.Extents = append(result.Extents, &extents[cnt])
+
+		cnt++
+		if cnt == len(extents) {
+			cnt = 0
+			extents = make([]m.ConsumerGroupExtentLite, allocSize)
+		}
+	}
+
+	nextPageToken := iter.PageState()
+	result.NextPageToken = make([]byte, len(nextPageToken))
+	copy(result.NextPageToken, nextPageToken)
+	if err := iter.Close(); err != nil {
+		return nil, &shared.InternalServiceError{
+			Message: err.Error(),
+		}
+	}
+
+	return result, nil
 }
 
 // CQL commands for UUIDToHostAddr and HostAddrToUUID CRUD go here
