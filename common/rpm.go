@@ -22,6 +22,7 @@ package common
 
 import (
 	"errors"
+	"hash/fnv"
 	"math/rand"
 	"net"
 	"sort"
@@ -245,27 +246,33 @@ func (rpm *ringpopMonitorImpl) FindHostForAddr(service string, addr string) (*Ho
 
 // FindHostForKey finds and returns the host responsible for handling the given key
 func (rpm *ringpopMonitorImpl) FindHostForKey(service string, key string) (*HostInfo, error) {
-	// Note: we don't have Lookup(key, predicate..)
-	// so just get all reachable hosts return the first instance
+
+	// this function should be consistent in picking and returning the
+	// same node for a given key on a specific 'set' of hosts. the list
+	// of hosts returned by rpm.GetHosts is guaranteed to be sorted by
+	// ip-address (it is re-sorted on every 'refresh');, so we simply
+	// hash the key and use it to pick the host from the list.
+
+	// compute FNV-1a hash of the key
+	fnv1a := fnv.New32a()
+	fnv1a.Write([]byte(key))
+	hash := int(fnv1a.Sum32())
+
+	// get list of hosts that for the given service
 	members, err := rpm.GetHosts(service)
-	if err != nil || members == nil || len(members) == 0 {
+	if err != nil {
+		return nil, err
+	}
+
+	if members == nil || len(members) == 0 {
 		return nil, ErrUnknownService
 	}
 
-	// We need to make sure we always return the same node
-	// So sort members by IP and return the lowest.
-	var ipAddrs []string
-	tempMap := make(map[string]int, len(members))
-	for k, member := range members {
-		ipAddrs = append(ipAddrs, member.Addr)
-		// maintain the reverse mapping to have the index
-		tempMap[member.Addr] = k
-	}
-	// sort the ip addresses
-	sort.Strings(ipAddrs)
-	// get the key of the lowest
-	lowestIndex := tempMap[ipAddrs[0]]
-	return members[lowestIndex], nil
+	// pick the host corresponding to the hash and get a pointer to
+	// a copy of the HostInfo, since it is treated as immutable.
+	var host = *members[hash%len(members)]
+
+	return &host, nil
 }
 
 // IsHostHealthy returns true if the given host is healthy and false otherwise
@@ -404,6 +411,21 @@ func (rpm *ringpopMonitorImpl) refreshAll() {
 	}
 }
 
+// sort.Interface methods to help sort HostInfo by IP-address
+type hostInfoByAddr []*HostInfo
+
+func (t hostInfoByAddr) Len() int {
+	return len(t)
+}
+
+func (t hostInfoByAddr) Swap(i, j int) {
+	t[i], t[j] = t[j], t[i]
+}
+
+func (t hostInfoByAddr) Less(i, j int) bool {
+	return t[i].Addr < t[j].Addr
+}
+
 func (rpm *ringpopMonitorImpl) refresh(service string, currInfo *membershipInfo) (added, removed, updated []*HostInfo, newInfo *membershipInfo) {
 
 	added = make([]*HostInfo, 0, 2)
@@ -500,6 +522,11 @@ func (rpm *ringpopMonitorImpl) refresh(service string, currInfo *membershipInfo)
 		newInfo.asList[i] = v
 		i++
 	}
+
+	// Whenever the list changes, keep the list sorted by ip-address, so
+	// functions like FindHostForKey don't need to sort them every time.
+	sort.Sort(hostInfoByAddr(newInfo.asList))
+
 	return
 }
 
