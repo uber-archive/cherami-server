@@ -72,6 +72,9 @@ type extentCache struct {
 	// connectedStoreUUID is the currently connected replica
 	connectedStoreUUID string
 
+	// singleCGVisible tells if this is a single CG Visible (i.e. merged DLQ) extent
+	singleCGVisible bool
+
 	// pickedIndex is the current replica index for the storeUUIDs slice to which we are connected
 	pickedIndex int
 

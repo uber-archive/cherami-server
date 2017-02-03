@@ -29,7 +29,6 @@ import (
 	"github.com/uber/tchannel-go/thrift"
 
 	"github.com/uber/cherami-server/common"
-	"github.com/uber/cherami-server/common/cache"
 	"github.com/uber/cherami-server/common/dconfig"
 	"github.com/uber/cherami-server/common/metrics"
 	"github.com/uber/cherami-server/services/outputhost/load"
@@ -152,9 +151,6 @@ type (
 		// dlqMerging indicates whether any DLQ extent is presently being merged. ATOMIC OPERATIONS ONLY
 		dlqMerging int32
 
-		// checkSingleCGVisibleCache reduces ListExtentStats calls
-		checkSingleCGVisibleCache cache.Cache // Key is the extent UUID, value is whether it is single-CG-visible
-
 		// sessionID is the 16 bit session identifier for this host
 		sessionID uint16
 
@@ -264,7 +260,6 @@ func newConsumerGroupCache(destPath string, cgDesc shared.ConsumerGroupDescripti
 		cfgMgr:                   h.cfgMgr,
 	}
 
-	cgCache.checkSingleCGVisibleCache = cache.NewLRUWithInitialCapacity(1, 1<<6)
 	cgCache.consumerM3Client = metrics.NewClientWithTags(h.m3Client, metrics.Outputhost, cgCache.getConsumerGroupTags())
 	cgCache.loadReporter = cgCache.loadReporterFactory.CreateReporter(consGroupLoadReportingInterval, cgCache, cgLogger)
 	cgCache.loadReporter.Start()
@@ -296,9 +291,8 @@ func (cgCache *consumerGroupCache) getConsumerGroupTags() map[string]string {
 }
 
 // loadExtentCache loads the extent cache, if it doesn't already exist for this consumer group
-func (cgCache *consumerGroupCache) loadExtentCache(destType shared.DestinationType, cge *metadata.ConsumerGroupExtent) {
+func (cgCache *consumerGroupCache) loadExtentCache(ctx thrift.Context, destType shared.DestinationType, cge *metadata.ConsumerGroupExtent) {
 	extUUID := cge.GetExtentUUID()
-	extLogger := cgCache.logger.WithField(common.TagExt, extUUID)
 	if extCache, exists := cgCache.extentCache[extUUID]; !exists {
 		extCache = &extentCache{
 			cgUUID:               cgCache.cachedCGDesc.GetConsumerGroupUUID(),
@@ -315,7 +309,7 @@ func (cgCache *consumerGroupCache) loadExtentCache(destType shared.DestinationTy
 			shutdownWG:           &cgCache.connsWG,
 			tClients:             cgCache.tClients,
 			wsConnector:          cgCache.wsConnector,
-			logger:               extLogger.WithField(common.TagModule, `extCache`),
+			logger:               cgCache.logger.WithFields(bark.Fields{common.TagExt: extUUID, common.TagModule: `extCache`}),
 			creditNotifyCh:       cgCache.creditNotifyCh,
 			creditRequestCh:      cgCache.creditRequestCh,
 			initialCredits:       defaultNumOutstandingMsgs,
@@ -325,6 +319,14 @@ func (cgCache *consumerGroupCache) loadExtentCache(destType shared.DestinationTy
 		cgCache.extentCache[extUUID] = extCache
 		cgCache.cgMetrics.Increment(load.CGMetricNumOpenExtents)
 		cgCache.hostMetrics.Increment(load.HostMetricNumOpenExtents)
+
+		// DEVNOTE: The term 'merging' here is a reference to the DLQ Merge feature/operation. These extents are
+		// 'served' just like any other, but they are visible to this one consumer group, hence 'SingleCG'
+		extCache.singleCGVisible = cgCache.checkSingleCGVisible(ctx, cge)
+		if extCache.singleCGVisible {
+			nDLQMergingExtents := atomic.AddInt32(&cgCache.dlqMerging, 1)
+			extCache.logger.WithField(`nDLQMergingExtents`, nDLQMergingExtents).Info("Merging DLQ Extent(s)")
+		}
 
 		// get the initial credits based on the message cache size
 		cfg, err := cgCache.getDynamicCgConfig()
@@ -343,6 +345,26 @@ func (cgCache *consumerGroupCache) loadExtentCache(destType shared.DestinationTy
 
 		// now notify the outputhost
 		cgCache.ackMgrLoadCh <- ackMgrLoadMsg{uint32(extCache.ackMgr.ackMgrID), extCache.ackMgr}
+	}
+	return
+}
+
+// unloadExtentCache unloads an extent from the extentCache
+func (cgCache *consumerGroupCache) unloadExtentCache(extUUID string) (ackMgrUnloadID uint32) {
+	if extCache, ok := cgCache.extentCache[extUUID]; ok {
+		extCache.logger.Info("removing extent")
+		ackMgrUnloadID = uint32(extCache.ackMgr.ackMgrID)
+		cgCache.cgMetrics.Decrement(load.CGMetricNumOpenExtents)
+		cgCache.hostMetrics.Decrement(load.HostMetricNumOpenExtents)
+		if extCache.singleCGVisible {
+			dlqMerging := atomic.AddInt32(&cgCache.dlqMerging, -1)
+			if dlqMerging <= 0 { // Note: this should never be less than 0; writing it like this for diagnosis
+				cgCache.logger.Info("done merging DLQ extent(s)")
+			}
+		}
+		delete(cgCache.extentCache, extUUID)
+	} else {
+		cgCache.logger.WithField(common.TagExt, extUUID).Warn("tried to unload not-loaded extent")
 	}
 	return
 }
@@ -389,14 +411,7 @@ func (cgCache *consumerGroupCache) manageConsumerGroupCache() {
 		case extUUID := <-cgCache.notifyReplicaCloseCh:
 			// this means we are done with this extent. remove it from the cache
 			cgCache.extMutex.Lock()
-			if extCache, ok := cgCache.extentCache[extUUID]; ok {
-				cgCache.logger.WithField(common.TagExt, extUUID).Info("removing extent")
-				// get the ackMgrID and unload it as well
-				ackMgrUnloadID = uint32(extCache.ackMgr.ackMgrID)
-				delete(cgCache.extentCache, extUUID)
-				cgCache.cgMetrics.Decrement(load.CGMetricNumOpenExtents)
-				cgCache.hostMetrics.Decrement(load.HostMetricNumOpenExtents)
-			}
+			ackMgrUnloadID = cgCache.unloadExtentCache(extUUID)
 			if len(cgCache.extentCache) == 0 {
 				// this means all the extents are closed
 				// no point in keeping the streams to the client open
@@ -513,8 +528,6 @@ func (cgCache *consumerGroupCache) refreshCgCache(ctx thrift.Context) error {
 		MaxResults:        common.Int32Ptr(defaultMaxResults),
 	}
 
-	var nSingleCGExtents = 0
-
 	for {
 		cgRes, errRCGES := cgCache.metaClient.ReadConsumerGroupExtents(ctx, cgReq)
 
@@ -525,10 +538,7 @@ func (cgCache *consumerGroupCache) refreshCgCache(ctx thrift.Context) error {
 
 		// Now we have the cgCache. check and load extent for all extents
 		for _, cge := range cgRes.GetExtents() {
-			if cgCache.checkSingleCGVisible(ctx, cge) {
-				nSingleCGExtents++
-			}
-			cgCache.loadExtentCache(dstDesc.GetType(), cge)
+			cgCache.loadExtentCache(ctx, dstDesc.GetType(), cge)
 		}
 
 		if len(cgRes.GetNextPageToken()) == 0 {
@@ -537,19 +547,6 @@ func (cgCache *consumerGroupCache) refreshCgCache(ctx thrift.Context) error {
 			cgReq.PageToken = cgRes.GetNextPageToken()
 		}
 	}
-
-	// DEVNOTE: The term 'merging' here is a reference to the DLQ Merge feature/operation. These extents are
-	// 'served' just like any other, but they are visible to this one consumer group, hence 'SingleCG'
-	newDLQMerging := int32(nSingleCGExtents)
-	oldDLQMerging := atomic.SwapInt32(&cgCache.dlqMerging, newDLQMerging)
-	if oldDLQMerging != newDLQMerging {
-		if newDLQMerging > 0 {
-			cgCache.logger.WithField(`nSingleCGExtents`, nSingleCGExtents).Info("Merging DLQ Extent(s)")
-		} else {
-			cgCache.logger.Info("Done merging DLQ Extent(s)")
-		}
-	}
-
 	return nil
 }
 
@@ -558,13 +555,7 @@ func (cgCache *consumerGroupCache) refreshCgCache(ctx thrift.Context) error {
 func (cgCache *consumerGroupCache) checkSingleCGVisible(ctx thrift.Context, cge *metadata.ConsumerGroupExtent) (singleCgVisible bool) {
 	// Note that this same extent can be loaded by either a consumer group of the DLQ destination (i.e. for inspection,
 	// with consumer group visibility = nil), or as an extent being merged into the original consumer group (i.e. for DLQ
-	// merge, with consumer group visibility = this CG). This is why this cache isn't global
-	key := cge.GetExtentUUID()
-	val := cgCache.checkSingleCGVisibleCache.Get(key)
-	if val != nil {
-		return val.(bool)
-	}
-
+	// merge, with consumer group visibility = this CG).
 	req := &metadata.ReadExtentStatsRequest{
 		DestinationUUID: common.StringPtr(cgCache.cachedCGDesc.GetDestinationUUID()),
 		ExtentUUID:      common.StringPtr(cge.GetExtentUUID()),
@@ -577,9 +568,10 @@ func (cgCache *consumerGroupCache) checkSingleCGVisible(ctx thrift.Context, cge 
 				cgCache.logger.WithFields(bark.Fields{common.TagExt: common.FmtExt(cge.GetExtentUUID())}).Info("Consuming single CG visible extent")
 			}
 		}
-		cgCache.checkSingleCGVisibleCache.Put(key, singleCgVisible)
-	} else { // Note that we don't cache val when we have an error
-		cgCache.logger.WithFields(bark.Fields{common.TagErr: err, common.TagExt: common.FmtExt(cge.GetExtentUUID())}).Error("ReadExtentStats failed on refresh")
+	} else {
+		// DEVNOTE: Unhandled error case; we would ideally retry; we may consider returning true for this case,
+		// but DLQ merge is quite rare compared with the normal Smart Retry scenarios
+		cgCache.logger.WithFields(bark.Fields{common.TagErr: err, common.TagExt: common.FmtExt(cge.GetExtentUUID())}).Error("ReadExtentStats failed during extent load")
 	}
 
 	return
