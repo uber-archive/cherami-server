@@ -59,6 +59,10 @@ type (
 		ListDestinationsPage(mReq *shared.ListDestinationsRequest) (*shared.ListDestinationsResult_, error)
 		// ListDestinationsByUUID returns an iterator to the destinations
 		ListDestinationsByUUID() ([]*shared.DestinationDescription, error)
+		// ListDestinationExtentsByStatus lists extents by dstID/status
+		// The returned type is a list of DestinationExtent objects as
+		// opposed to list of Extent objects
+		ListDestinationExtentsByStatus(dstID string, filterByStatus []shared.ExtentStatus) ([]*m.DestinationExtent, error)
 		// ListExtentsByDstIDStatus lists extents dstID/Status
 		ListExtentsByDstIDStatus(dstID string, filterByStatus []shared.ExtentStatus) ([]*shared.ExtentStats, error)
 		// ListExtentsByInputIDStatus lists extents for dstID/InputUUID/Status
@@ -69,6 +73,10 @@ type (
 		ListExtentsByReplicationStatus(storeID string, status *shared.ExtentReplicaReplicationStatus) ([]*shared.ExtentStats, error)
 		// ListExtentsByConsumerGroup lists all extents for the given destination / consumer group
 		ListExtentsByConsumerGroup(dstID string, cgID string, filterByStatus []m.ConsumerGroupExtentStatus) ([]*m.ConsumerGroupExtent, error)
+		// ListExtentsByConsumerGroupLite lists all extents for the given destination / consumer group
+		// this api only returns a few interesting columns for each consumer group extent in the
+		// result. For detailed info, see ListExtentsByConsumerGroup
+		ListExtentsByConsumerGroupLite(dstID string, cgID string, filterByStatus []m.ConsumerGroupExtentStatus) ([]*m.ConsumerGroupExtentLite, error)
 		// CreateExtent creates a new extent for the given destination and marks the status as OPEN
 		CreateExtent(dstID string, extentID string, inhostID string, storeIDs []string) (*shared.CreateExtentResult_, error)
 		// CreateRemoteZoneExtent creates a new remote zone extent for the given destination and marks the status as OPEN
@@ -188,6 +196,63 @@ func (mm *metadataMgrImpl) ListDestinationsByUUID() ([]*shared.DestinationDescri
 	return result, nil
 }
 
+func (mm *metadataMgrImpl) ListDestinationExtentsByStatus(dstID string, filterByStatus []shared.ExtentStatus) ([]*m.DestinationExtent, error) {
+
+	listReq := &m.ListDestinationExtentsRequest{
+		DestinationUUID: common.StringPtr(dstID),
+		Limit:           common.Int64Ptr(defaultPageSize),
+	}
+
+	filterLocally := len(filterByStatus) > 1
+	if len(filterByStatus) == 1 {
+		listReq.Status = common.MetadataExtentStatusPtr(filterByStatus[0])
+	}
+
+	startTime := time.Now()
+	defer func() {
+
+		elapsed := time.Since(startTime)
+
+		if elapsed >= time.Second {
+			mm.logger.WithFields(bark.Fields{
+				common.TagDst:   dstID,
+				`filter`:        filterByStatus,
+				`latencyMillis`: float64(elapsed) / float64(time.Millisecond),
+			}).Info("listDestinationExtentsByStatus high latency")
+		}
+	}()
+
+	var result []*m.DestinationExtent
+	for {
+		listResp, err := mm.mClient.ListDestinationExtents(nil, listReq)
+		if err != nil {
+			return nil, err
+		}
+
+		if filterLocally {
+			for _, ext := range listResp.GetExtents() {
+			statusLoop:
+				for _, status := range filterByStatus {
+					if ext.GetStatus() == status {
+						result = append(result, ext)
+						break statusLoop
+					}
+				}
+			}
+		} else {
+			result = append(result, listResp.GetExtents()...)
+		}
+
+		if len(listResp.GetNextPageToken()) == 0 {
+			break
+		} else {
+			listReq.PageToken = listResp.GetNextPageToken()
+		}
+	}
+
+	return result, nil
+}
+
 func (mm *metadataMgrImpl) ListExtentsByDstIDStatus(dstID string, filterByStatus []shared.ExtentStatus) ([]*shared.ExtentStats, error) {
 
 	listReq := &shared.ListExtentsStatsRequest{
@@ -288,6 +353,63 @@ func (mm *metadataMgrImpl) ListExtentsByReplicationStatus(storeID string, status
 	}
 
 	return resp.GetExtentStatsList(), nil
+}
+
+func (mm *metadataMgrImpl) ListExtentsByConsumerGroupLite(dstID string, cgID string, filterByStatus []m.ConsumerGroupExtentStatus) ([]*m.ConsumerGroupExtentLite, error) {
+
+	mReq := &m.ReadConsumerGroupExtentsLiteRequest{
+		DestinationUUID:   common.StringPtr(dstID),
+		ConsumerGroupUUID: common.StringPtr(cgID),
+		MaxResults:        common.Int32Ptr(defaultPageSize),
+	}
+
+	filterLocally := len(filterByStatus) > 1
+	if len(filterByStatus) == 1 {
+		mReq.Status = common.MetadataConsumerGroupExtentStatusPtr(filterByStatus[0])
+	}
+
+	startTime := time.Now()
+	defer func() {
+		elapsed := time.Since(startTime)
+		if elapsed >= time.Second {
+			mm.logger.WithFields(bark.Fields{
+				common.TagDst:   dstID,
+				common.TagCnsm:  cgID,
+				`filter`:        filterByStatus,
+				`latencyMillis`: float64(elapsed) / float64(time.Millisecond),
+			}).Info("listExtentsByConsumerGroupLite high latency")
+		}
+	}()
+
+	var result []*m.ConsumerGroupExtentLite
+	for {
+		mResp, err := mm.mClient.ReadConsumerGroupExtentsLite(nil, mReq)
+		if err != nil {
+			return nil, err
+		}
+
+		if filterLocally {
+			for _, ext := range mResp.GetExtents() {
+			statusLoop:
+				for _, status := range filterByStatus {
+					if ext.GetStatus() == status {
+						result = append(result, ext)
+						break statusLoop
+					}
+				}
+			}
+		} else {
+			result = append(result, mResp.GetExtents()...)
+		}
+
+		if len(mResp.GetNextPageToken()) == 0 {
+			break
+		} else {
+			mReq.PageToken = mResp.GetNextPageToken()
+		}
+	}
+
+	return result, nil
 }
 
 func (mm *metadataMgrImpl) ListExtentsByConsumerGroup(dstID string, cgID string, filterByStatus []m.ConsumerGroupExtentStatus) ([]*m.ConsumerGroupExtent, error) {

@@ -243,7 +243,7 @@ func (monitor *extentStateMonitor) processDestination(dstDesc *shared.Destinatio
 
 	var err error
 	var context = monitor.context
-	var stats []*shared.ExtentStats
+	var extents []*metadata.DestinationExtent
 
 	monitor.mi.publishEvent(eExtentIterStart, nil)
 
@@ -255,23 +255,22 @@ extentIter:
 		shared.ExtentStatus_OPEN,
 		shared.ExtentStatus_SEALED,
 		shared.ExtentStatus_CONSUMED,
-		shared.ExtentStatus_DELETED,
 	} {
 		filterBy := []shared.ExtentStatus{status}
-		stats, err = context.mm.ListExtentsByDstIDStatus(dstDesc.GetDestinationUUID(), filterBy)
+		extents, err = context.mm.ListDestinationExtentsByStatus(dstDesc.GetDestinationUUID(), filterBy)
 		if err != nil {
 			monitor.ll.WithFields(bark.Fields{
 				common.TagDst:  dstDesc.GetDestinationUUID(),
 				common.TagErr:  err,
 				`filterStatus`: status}).
-				Error(`ListExtentsByDstIDStatus failed`)
+				Error(`ListDestinationExtentsByStatus failed`)
 			if monitor.sleep(intervalBtwnRetries) {
 				break extentIter
 			}
 			continue extentIter
 		}
 
-		monitor.processExtents(dstDesc, stats)
+		monitor.processExtents(dstDesc, extents)
 	}
 
 	monitor.mi.publishEvent(eExtentIterEnd, nil)
@@ -288,19 +287,15 @@ extentIter:
 		monitor.context.resultCache.Delete(dstDesc.GetDestinationUUID()) // clear the cache that gives out publish endpoints
 		monitor.deleteConsumerGroups(dstDesc)
 	}
-
-	monitor.publishConsumerGroups(dstDesc)
 }
 
-func (monitor *extentStateMonitor) processExtents(dstDesc *shared.DestinationDescription, stats []*shared.ExtentStats) {
+func (monitor *extentStateMonitor) processExtents(dstDesc *shared.DestinationDescription, extents []*metadata.DestinationExtent) {
 
-	for _, stat := range stats {
+	for _, extent := range extents {
 
-		extent := stat.GetExtent()
+		monitor.mi.publishEvent(eExtent, extent)
 
-		monitor.mi.publishEvent(eExtent, stat)
-
-		switch stat.GetStatus() {
+		switch extent.GetStatus() {
 		case shared.ExtentStatus_OPEN:
 			if !common.IsRemoteZoneExtent(extent.GetOriginZone(), monitor.context.localZone) && (dstDesc.GetStatus() == shared.DestinationStatus_DELETING || !monitor.isExtentHealthy(dstDesc, extent)) {
 				// rate limit extent seals to limit the
@@ -309,7 +304,7 @@ func (monitor *extentStateMonitor) processExtents(dstDesc *shared.DestinationDes
 				if !monitor.rateLimiter.Consume(1, 2*time.Second) {
 					continue
 				}
-				addExtentDownEvent(monitor.context, 0, extent.GetDestinationUUID(), extent.GetExtentUUID())
+				addExtentDownEvent(monitor.context, 0, dstDesc.GetDestinationUUID(), extent.GetExtentUUID())
 			}
 		default:
 			// from a store perspective, an extent is either sealed or
@@ -318,7 +313,7 @@ func (monitor *extentStateMonitor) processExtents(dstDesc *shared.DestinationDes
 			// if not, fix the out of sync ones. Do this check only
 			// after some minimum time since the last status update
 			// to allow for everything to catch up.
-			lastUpdateTime := time.Unix(0, stat.GetStatusUpdatedTimeMillis()*int64(time.Millisecond))
+			lastUpdateTime := time.Unix(0, extent.GetStatusUpdatedTimeMillis()*int64(time.Millisecond))
 			if time.Since(lastUpdateTime) > 2*extentCacheTTL {
 				monitor.fixOutOfSyncStoreExtents(dstDesc.GetDestinationUUID(), extent)
 			}
@@ -332,7 +327,7 @@ func (monitor *extentStateMonitor) processExtents(dstDesc *shared.DestinationDes
 // For a remote zone extent, store will mark a store extent as sealed
 // only after it gets the sealed marker from replication
 // So we don't need to sync the status for remote zone extent
-func (monitor *extentStateMonitor) fixOutOfSyncStoreExtents(dstID string, extent *shared.Extent) {
+func (monitor *extentStateMonitor) fixOutOfSyncStoreExtents(dstID string, extent *metadata.DestinationExtent) {
 	if common.IsRemoteZoneExtent(extent.GetOriginZone(), monitor.context.localZone) {
 		return
 	}
@@ -395,14 +390,14 @@ func (monitor *extentStateMonitor) deleteConsumerGroups(dstDesc *shared.Destinat
 		cgID := cg.GetConsumerGroupUUID()
 
 		filterBy := []metadata.ConsumerGroupExtentStatus{metadata.ConsumerGroupExtentStatus_OPEN}
-		extents, e := context.mm.ListExtentsByConsumerGroup(dstID, cgID, filterBy)
+		extents, e := context.mm.ListExtentsByConsumerGroupLite(dstID, cgID, filterBy)
 		if e != nil {
 			monitor.ll.WithFields(bark.Fields{
 				common.TagErr:  e,
 				common.TagDst:  dstID,
 				common.TagCnsm: cgID,
 				`statusFilter`: filterBy[0],
-			}).Error(`ListExtentsByConsumerGroup failed`)
+			}).Error(`ListExtentsByConsumerGroupLite failed`)
 			// if we cannot list extents, we wont be
 			// able to find the output hosts to notify.
 			// lets try next time
@@ -492,7 +487,7 @@ nextConsGroup:
 			//metadata.ConsumerGroupExtentStatus_DELETED,
 		} {
 			filterBy := []metadata.ConsumerGroupExtentStatus{status}
-			extents, e := monitor.context.mm.ListExtentsByConsumerGroup(dstID, cgID, filterBy)
+			extents, e := monitor.context.mm.ListExtentsByConsumerGroupLite(dstID, cgID, filterBy)
 			if e == nil {
 			nextExtent:
 				for _, ext := range extents {
@@ -507,7 +502,7 @@ nextConsGroup:
 					common.TagDst:  dstID,
 					common.TagCnsm: cgID,
 					`statusFilter`: status,
-				}).Error(`ListExtentsByConsumerGroup failed`)
+				}).Error(`ListExtentsByConsumerGroupLite failed`)
 			}
 		}
 		monitor.mi.publishEvent(eCnsmExtentIterEnd, nil)
@@ -608,7 +603,7 @@ func (monitor *extentStateMonitor) listConsumerGroups(dstID string) ([]*shared.C
 	return cgdSlice, err
 }
 
-func (monitor *extentStateMonitor) isExtentHealthy(dstDesc *shared.DestinationDescription, extent *shared.Extent) bool {
+func (monitor *extentStateMonitor) isExtentHealthy(dstDesc *shared.DestinationDescription, extent *metadata.DestinationExtent) bool {
 
 	context := monitor.context
 	dstID := dstDesc.GetDestinationUUID()

@@ -144,15 +144,12 @@ func (s *ExtentStateMonitorSuite) TestStoreExtentStatusOutOfSync() {
 	s.mcp.context.extentMonitor.mi.publishEvent(eIterStart, nil)
 	s.mcp.context.extentMonitor.mi.publishEvent(eDestStart, desc)
 	s.mcp.context.extentMonitor.mi.publishEvent(eExtentIterStart, nil)
-	s.mcp.context.extentMonitor.processExtents(desc, []*shared.ExtentStats{
+	s.mcp.context.extentMonitor.processExtents(desc, []*m.DestinationExtent{
 		{
-			Status: common.MetadataExtentStatusPtr(shared.ExtentStatus_SEALED),
-			Extent: &shared.Extent{
-				DestinationUUID: common.StringPtr(desc.GetDestinationUUID()),
-				ExtentUUID:      common.StringPtr(extentID),
-				InputHostUUID:   common.StringPtr(inHostID),
-				StoreUUIDs:      storeIDs,
-			},
+			Status:        common.MetadataExtentStatusPtr(shared.ExtentStatus_SEALED),
+			ExtentUUID:    common.StringPtr(extentID),
+			InputHostUUID: common.StringPtr(inHostID),
+			StoreUUIDs:    storeIDs,
 		},
 	})
 	s.mcp.context.extentMonitor.mi.publishEvent(eExtentIterEnd, nil)

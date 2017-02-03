@@ -43,6 +43,7 @@ type (
 		dirty bool // Detects when an extent seal or move was performed during a sweep
 		op
 		operationTime common.UnixNanoTime
+		dstID         string
 	}
 )
 
@@ -101,8 +102,8 @@ func (m *dlqMonitor) handleEvent(e *mIteratorEvent) {
 		}
 		if e.extent != nil {
 			l = l.WithFields(bark.Fields{
-				common.TagExt: common.FmtExt(e.extent.GetExtent().GetExtentUUID()),
-				common.TagDst: common.FmtDst(e.extent.GetExtent().GetDestinationUUID()),
+				common.TagExt: common.FmtExt(e.extent.GetExtentUUID()),
+				common.TagDst: common.FmtDst(m.dstID),
 			})
 		}
 		l = l.WithField(`event`, fmt.Sprintf(`%v`, e.t))
@@ -155,6 +156,8 @@ func (m *dlqMonitor) handleEvent(e *mIteratorEvent) {
 			m.destinationFlags = destinationFlags{}
 			return
 		}
+
+		m.dstID = e.dest.GetDestinationUUID()
 	case eExtent:
 		if m.operationTime == 0 {
 			return
@@ -225,8 +228,8 @@ func (m *dlqMonitor) merge(e *mIteratorEvent) (err error) {
 	defer func() {
 		if err != nil {
 			m.Context.log.WithFields(bark.Fields{
-				common.TagExt:    common.FmtExt(e.extent.GetExtent().GetExtentUUID()),
-				common.TagDst:    common.FmtDst(e.extent.GetExtent().GetDestinationUUID()),
+				common.TagExt:    common.FmtExt(e.extent.GetExtentUUID()),
+				common.TagDst:    common.FmtDst(m.dstID),
 				common.TagErr:    err,
 				`op`:             fmt.Sprintf("%v", mergeOp),
 				common.TagModule: `dlqMonitor`,
@@ -241,14 +244,14 @@ func (m *dlqMonitor) merge(e *mIteratorEvent) (err error) {
 	}
 
 	ll := m.Context.log.WithFields(bark.Fields{
-		common.TagExt:    common.FmtExt(e.extent.GetExtent().GetExtentUUID()),
-		common.TagDst:    common.FmtDst(e.extent.GetExtent().GetDestinationUUID()),
+		common.TagExt:    common.FmtExt(e.extent.GetExtentUUID()),
+		common.TagDst:    common.FmtDst(m.dstID),
 		`op`:             fmt.Sprintf("%v", mergeOp),
 		common.TagModule: `dlqMonitor`,
 	})
 
 	cnsm := e.dest.GetDLQConsumerGroupUUID()
-	ext := e.extent.GetExtent().GetExtentUUID()
+	ext := e.extent.GetExtentUUID()
 
 	if len(cnsm) == 0 {
 		ll.Warn(`DLQ Destination metadata not pointing to CG; needs fixing`)
@@ -280,8 +283,8 @@ func (m *dlqMonitor) purge(e *mIteratorEvent) (err error) {
 	defer func() {
 		if err != nil {
 			m.Context.log.WithFields(bark.Fields{
-				common.TagExt:    common.FmtExt(e.extent.GetExtent().GetExtentUUID()),
-				common.TagDst:    common.FmtDst(e.extent.GetExtent().GetDestinationUUID()),
+				common.TagExt:    common.FmtExt(e.extent.GetExtentUUID()),
+				common.TagDst:    common.FmtDst(m.dstID),
 				common.TagErr:    err,
 				`op`:             fmt.Sprintf("%v", purgeOp),
 				common.TagModule: `dlqMonitor`,
@@ -296,13 +299,13 @@ func (m *dlqMonitor) purge(e *mIteratorEvent) (err error) {
 	}
 
 	ll := m.Context.log.WithFields(bark.Fields{
-		common.TagExt:    common.FmtExt(e.extent.GetExtent().GetExtentUUID()),
-		common.TagDst:    common.FmtDst(e.extent.GetExtent().GetDestinationUUID()),
+		common.TagExt:    common.FmtExt(e.extent.GetExtentUUID()),
+		common.TagDst:    common.FmtDst(m.dstID),
 		`op`:             fmt.Sprintf("%v", purgeOp),
 		common.TagModule: `dlqMonitor`,
 	})
 
-	ext := e.extent.GetExtent().GetExtentUUID()
+	ext := e.extent.GetExtentUUID()
 	dst := e.dest.GetDestinationUUID()
 
 	ll.Info(`purging extent`)
@@ -318,19 +321,19 @@ func (m *dlqMonitor) purge(e *mIteratorEvent) (err error) {
 
 func (m *dlqMonitor) seal(e *mIteratorEvent, op op) {
 	// no need to seal remote zone extent
-	if common.IsRemoteZoneExtent(e.extent.GetExtent().GetOriginZone(), m.Context.localZone) {
+	if common.IsRemoteZoneExtent(e.extent.GetOriginZone(), m.Context.localZone) {
 		return
 	}
 
-	if e.extent.GetStatus() == shared.ExtentStatus_OPEN && !isExtentBeingSealed(m.Context, e.extent.GetExtent().GetExtentUUID()) {
+	if e.extent.GetStatus() == shared.ExtentStatus_OPEN && !isExtentBeingSealed(m.Context, e.extent.GetExtentUUID()) {
 		m.Context.log.WithFields(bark.Fields{
-			common.TagExt:    common.FmtExt(e.extent.GetExtent().GetExtentUUID()),
-			common.TagDst:    common.FmtDst(e.extent.GetExtent().GetDestinationUUID()),
+			common.TagExt:    common.FmtExt(e.extent.GetExtentUUID()),
+			common.TagDst:    common.FmtDst(m.dstID),
 			`op`:             fmt.Sprintf("%v", op),
 			common.TagModule: `dlqMonitor`,
 		}).Info(`Sealing DLQ extent for operation`)
 
-		addExtentDownEvent(m.Context, 0, e.extent.GetExtent().GetDestinationUUID(), e.extent.GetExtent().GetExtentUUID())
+		addExtentDownEvent(m.Context, 0, m.dstID, e.extent.GetExtentUUID())
 	}
 }
 

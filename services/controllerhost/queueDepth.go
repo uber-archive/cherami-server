@@ -107,7 +107,7 @@ func newQueueDepthCalculator(m *extentStateMonitor) *queueDepthCalculator {
 
 func (qdc *queueDepthCalculator) processDestination(dstDesc *shared.DestinationDescription, dlqCache bool) {
 	var err error
-	var stats []*shared.ExtentStats
+	var extents []*metadata.DestinationExtent
 	var context = qdc.context
 
 	// We don't process metrics for DLQ destinations directly. They are processed only as part of the parent consumer group
@@ -123,18 +123,18 @@ func (qdc *queueDepthCalculator) processDestination(dstDesc *shared.DestinationD
 	cache.clear()
 
 	filter := []shared.ExtentStatus{shared.ExtentStatus_OPEN, shared.ExtentStatus_SEALED} // CONSUMED should be ignorable for queue depth
-	stats, err = context.mm.ListExtentsByDstIDStatus(dstDesc.GetDestinationUUID(), filter)
+	extents, err = context.mm.ListDestinationExtentsByStatus(dstDesc.GetDestinationUUID(), filter)
 	if err != nil {
-		qdc.ll.WithField(common.TagErr, err).WithField(common.TagDst, dstDesc.GetDestinationUUID()).Error(`QueueDepth: ListExtentsByDstIDStatus failed`)
+		qdc.ll.WithField(common.TagErr, err).WithField(common.TagDst, dstDesc.GetDestinationUUID()).Error(`QueueDepth: ListDestinationExtentsByStatus failed`)
 		qdc.sleep(intervalBtwnRetries) // We can ignore the return value, since we are returning anyway.
 		return
 	}
 
-	for _, stat := range stats {
-		extent := extentID(stat.GetExtent().GetExtentUUID())
-		cache.putSingleCGVisibility(extent, stat.GetConsumerGroupVisibility())
-		for _, store := range stat.Extent.GetStoreUUIDs() {
-			cache.put(extent, storeID(store), nil) // Add a placeholder so that a store extent may be found if no consumer group extent exists for it
+	for _, ext := range extents {
+		extID := extentID(ext.GetExtentUUID())
+		cache.putSingleCGVisibility(extID, ext.GetConsumerGroupVisibility())
+		for _, store := range ext.GetStoreUUIDs() {
+			cache.put(extID, storeID(store), nil) // Add a placeholder so that a store extent may be found if no consumer group extent exists for it
 		}
 	}
 

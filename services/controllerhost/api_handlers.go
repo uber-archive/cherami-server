@@ -80,7 +80,7 @@ func isUUIDLengthValid(uuid string) bool {
 	return len(uuid) == common.UUIDStringLength
 }
 
-func isInputHealthy(context *Context, extent *shared.Extent) bool {
+func isInputHealthy(context *Context, extent *m.DestinationExtent) bool {
 	return context.rpm.IsHostHealthy(common.InputServiceName, extent.GetInputHostUUID())
 }
 
@@ -104,7 +104,7 @@ func isAnyStoreHealthy(context *Context, storeIDs []string) bool {
 	return false
 }
 
-func areExtentStoresHealthy(context *Context, extent *shared.Extent) bool {
+func areExtentStoresHealthy(context *Context, extent *m.DestinationExtent) bool {
 	for _, h := range extent.GetStoreUUIDs() {
 		if !context.rpm.IsHostHealthy(common.StoreServiceName, h) {
 			context.log.WithFields(bark.Fields{
@@ -165,8 +165,8 @@ func validateDstStatus(dstDesc *shared.DestinationDescription) error {
 	}
 }
 
-func listConsumerGroupExtents(context *Context, dstUUID string, cgUUID string, m3Scope int, filterByStatus []m.ConsumerGroupExtentStatus) ([]*m.ConsumerGroupExtent, error) {
-	cgExtents, err := context.mm.ListExtentsByConsumerGroup(dstUUID, cgUUID, filterByStatus)
+func listConsumerGroupExtents(context *Context, dstUUID string, cgUUID string, m3Scope int, filterByStatus []m.ConsumerGroupExtentStatus) ([]*m.ConsumerGroupExtentLite, error) {
+	cgExtents, err := context.mm.ListExtentsByConsumerGroupLite(dstUUID, cgUUID, filterByStatus)
 	if err != nil {
 		context.m3Client.IncCounter(m3Scope, metrics.ControllerErrMetadataReadCounter)
 	}
@@ -196,14 +196,14 @@ func readDestination(context *Context, dstID string, m3Scope int) (*shared.Desti
 	return dstDesc, err
 }
 
-func findOpenExtents(context *Context, dstID string, m3Scope int) ([]*shared.ExtentStats, error) {
+func findOpenExtents(context *Context, dstID string, m3Scope int) ([]*m.DestinationExtent, error) {
 	filterBy := []shared.ExtentStatus{shared.ExtentStatus_OPEN}
-	extentStats, err := context.mm.ListExtentsByDstIDStatus(dstID, filterBy)
+	extents, err := context.mm.ListDestinationExtentsByStatus(dstID, filterBy)
 	if err != nil {
 		context.m3Client.IncCounter(m3Scope, metrics.ControllerErrMetadataReadCounter)
 		return nil, err
 	}
-	return extentStats, err
+	return extents, err
 }
 
 func getDstType(desc *shared.DestinationDescription) dstType {
@@ -247,7 +247,7 @@ func minOpenExtentsForDst(context *Context, dstPath string, dstType dstType) int
 	return int(common.OverrideValueByPrefix(logFn, dstPath, cfg.NumPublisherExtentsByPath, defaultMinOpenPublishExtents, `NumPublisherExtentsByPath`))
 }
 
-func getInputAddrIfExtentIsWritable(context *Context, extent *shared.Extent, m3Scope int) (string, error) {
+func getInputAddrIfExtentIsWritable(context *Context, extent *m.DestinationExtent, m3Scope int) (string, error) {
 	inputhost, err := context.rpm.ResolveUUID(common.InputServiceName, extent.GetInputHostUUID())
 	if err != nil {
 		context.log.
@@ -356,7 +356,7 @@ func refreshInputHostsForDst(context *Context, dstUUID string, now int64) ([]str
 	var minOpenExtents = minOpenExtentsForDst(context, dstDesc.GetPath(), dstType)
 	var isMultiZoneDest = dstDesc.GetIsMultiZone()
 
-	openExtentStats, err := findOpenExtents(context, dstUUID, m3Scope)
+	openExtents, err := findOpenExtents(context, dstUUID, m3Scope)
 	if err != nil {
 		// we can't get the metadata, let's
 		// continue to use the cached result
@@ -368,10 +368,9 @@ func refreshInputHostsForDst(context *Context, dstUUID string, now int64) ([]str
 	}
 
 	var nHealthy = 0
-	var inputHosts = make(map[string]*common.HostInfo, len(openExtentStats))
+	var inputHosts = make(map[string]*common.HostInfo, len(openExtents))
 
-	for _, stat := range openExtentStats {
-		ext := stat.GetExtent()
+	for _, ext := range openExtents {
 
 		// skip remote zone extent(read only)
 		if common.IsRemoteZoneExtent(ext.GetOriginZone(), context.localZone) {

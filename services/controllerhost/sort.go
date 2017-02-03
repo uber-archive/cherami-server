@@ -23,39 +23,39 @@ package controllerhost
 import (
 	"sort"
 
-	"github.com/uber/cherami-thrift/.generated/go/shared"
+	"github.com/uber/cherami-thrift/.generated/go/metadata"
 )
 
 type extentStatsSorter struct {
-	stats   []*shared.ExtentStats
-	cmpFunc func(a, b *shared.ExtentStats) bool
+	extents []*metadata.DestinationExtent
+	cmpFunc func(a, b *metadata.DestinationExtent) bool
 }
 
 // Len implements sort.Interace
 func (s *extentStatsSorter) Len() int {
-	return len(s.stats)
+	return len(s.extents)
 }
 
 // Swap implements sort.Interface.
 func (s *extentStatsSorter) Swap(i, j int) {
-	s.stats[i], s.stats[j] = s.stats[j], s.stats[i]
+	s.extents[i], s.extents[j] = s.extents[j], s.extents[i]
 }
 
 // Less implements sort.Interface
 func (s *extentStatsSorter) Less(i, j int) bool {
-	return s.cmpFunc(s.stats[i], s.stats[j])
+	return s.cmpFunc(s.extents[i], s.extents[j])
 }
 
 // cmpExtentStatsByTime compares two extent stats
 // by createdTime and returns true, if a is less
 // than by
-func cmpExtentStatsByTime(a, b *shared.ExtentStats) bool {
+func cmpExtentStatsByTime(a, b *metadata.DestinationExtent) bool {
 	return a.GetCreatedTimeMillis() < b.GetCreatedTimeMillis()
 }
 
-func sortExtentStatsByTime(stats []*shared.ExtentStats) {
+func sortExtentStatsByTime(extents []*metadata.DestinationExtent) {
 	sorter := &extentStatsSorter{
-		stats:   stats,
+		extents: extents,
 		cmpFunc: cmpExtentStatsByTime,
 	}
 	sort.Sort(sorter)

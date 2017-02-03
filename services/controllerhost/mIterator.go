@@ -76,9 +76,9 @@ type mIterator struct {
 type mIteratorEvent struct {
 	t          mIteratorEventType
 	dest       *shared.DestinationDescription
-	extent     *shared.ExtentStats
+	extent     *metadata.DestinationExtent
 	cnsm       *shared.ConsumerGroupDescription
-	cnsmExtent *metadata.ConsumerGroupExtent
+	cnsmExtent *metadata.ConsumerGroupExtentLite
 }
 
 type mIteratorHandler interface {
@@ -206,11 +206,11 @@ func (i *mIterator) publishEvent(t mIteratorEventType, obj interface{}) {
 	case eDestStart:
 		i.current.dest = obj.(*shared.DestinationDescription)
 	case eExtent:
-		i.current.extent = obj.(*shared.ExtentStats)
+		i.current.extent = obj.(*metadata.DestinationExtent)
 	case eCnsmStart:
 		i.current.cnsm = obj.(*shared.ConsumerGroupDescription)
 	case eCnsmExtent:
-		i.current.cnsmExtent = obj.(*metadata.ConsumerGroupExtent)
+		i.current.cnsmExtent = obj.(*metadata.ConsumerGroupExtentLite)
 	case eIterStart:
 	case eIterEnd:
 	case eDestEnd:

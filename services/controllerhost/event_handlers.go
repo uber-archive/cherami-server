@@ -274,10 +274,10 @@ func (event *ExtentCreatedEvent) Handle(context *Context) error {
 	inHostIDs[event.inHostID] = true
 	// Notify all in hosts handling open extents for this destination
 	filterBy := []shared.ExtentStatus{shared.ExtentStatus_OPEN}
-	stats, err := mm.ListExtentsByDstIDStatus(event.dstID, filterBy)
+	extents, err := mm.ListDestinationExtentsByStatus(event.dstID, filterBy)
 	if err == nil {
-		for _, stat := range stats {
-			inHostIDs[stat.GetExtent().GetInputHostUUID()] = true
+		for _, ext := range extents {
+			inHostIDs[ext.GetInputHostUUID()] = true
 		}
 	} else {
 		context.m3Client.IncCounter(metrics.ExtentCreatedEventScope, metrics.ControllerErrMetadataReadCounter)
@@ -328,7 +328,7 @@ func (event *ConsGroupUpdatedEvent) Handle(context *Context) error {
 	outHostIDs[event.outputHostID] = true
 
 	filterBy := []m.ConsumerGroupExtentStatus{m.ConsumerGroupExtentStatus_OPEN}
-	cgExtents, err := mm.ListExtentsByConsumerGroup(event.dstID, event.consGroupID, filterBy)
+	cgExtents, err := mm.ListExtentsByConsumerGroupLite(event.dstID, event.consGroupID, filterBy)
 	if err == nil {
 		for _, cge := range cgExtents {
 			outHostIDs[cge.GetOutputHostUUID()] = true
@@ -1003,7 +1003,7 @@ func reconfigureAllConsumers(context *Context, dstID, extentID, reason, reasonCo
 		}
 
 		filterBy := []m.ConsumerGroupExtentStatus{m.ConsumerGroupExtentStatus_OPEN}
-		extents, err := context.mm.ListExtentsByConsumerGroup(dstID, cgd.GetConsumerGroupUUID(), filterBy)
+		extents, err := context.mm.ListExtentsByConsumerGroupLite(dstID, cgd.GetConsumerGroupUUID(), filterBy)
 		if err != nil {
 			continue
 		}
