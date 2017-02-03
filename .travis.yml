@@ -29,13 +29,13 @@ install:
   - go get golang.org/x/tools/cmd/cover
   - ccm create test -v 2.2.8 -n 1 -s
   - sudo ln -sf /home/travis/.local/bin/cqlsh /usr/local/bin/cqlsh
-  - wget https://github.com/uber/cherami-server/releases/download/rocksdb-4.11.2-trusty/librocksdb.so.4.11.2
-  - ln -s librocksdb.so.4.11.2 librocksdb.so.4.11
-  - ln -s librocksdb.so.4.11.2 librocksdb.so.4
-  - ln -s librocksdb.so.4.11.2 librocksdb.so
+  - glide install && touch vendor/glide.updated
+  - pushd vendor/github.com/cockroachdb/c-rocksdb/internal
+  - travis_wait 20 make shared_lib
+  - popd
   - export CGO_CFLAGS="$CGO_FLAGS -I`pwd`/vendor/github.com/cockroachdb/c-rocksdb/internal/include"
-  - export CGO_LDFLAGS="$CGO_LDFLAGS -L`pwd` -lrocksdb"
-  - export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:`pwd`"
+  - export CGO_LDFLAGS="$CGO_LDFLAGS -L`pwd`/vendor/github.com/cockroachdb/c-rocksdb/internal -lrocksdb"
+  - export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:`pwd`/vendor/github.com/cockroachdb/c-rocksdb/internal"
 
 script:
   - EMBEDROCKSDB=0 make cover_ci
