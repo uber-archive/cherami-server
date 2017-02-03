@@ -260,12 +260,19 @@ func (rpm *ringpopMonitorImpl) FindHostForKey(service string, key string) (*Host
 
 	// get list of hosts that for the given service
 	members, err := rpm.GetHosts(service)
-	if err != nil || members == nil || len(members) == 0 {
+	if err != nil {
+		return nil, err
+	}
+
+	if members == nil || len(members) == 0 {
 		return nil, ErrUnknownService
 	}
 
-	// pick the host corresponding to the hash
-	return members[hash%len(members)], nil
+	// pick the host corresponding to the hash and get a pointer to
+	// a copy of the HostInfo, since it is treated as immutable.
+	var host = *members[hash%len(members)]
+
+	return &host, nil
 }
 
 // IsHostHealthy returns true if the given host is healthy and false otherwise
