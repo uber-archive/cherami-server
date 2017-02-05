@@ -444,6 +444,29 @@ func (_m *TChanMetadataServiceClient) MoveExtent(ctx thrift.Context, request *me
 	return r0
 }
 
+// ReadConsumerGroupExtentsLite provides a mock function with given fields: ctx, request
+func (_m *TChanMetadataServiceClient) ReadConsumerGroupExtentsLite(ctx thrift.Context, request *metadata.ReadConsumerGroupExtentsLiteRequest) (*metadata.ReadConsumerGroupExtentsLiteResult_, error) {
+	ret := _m.Called(ctx, request)
+
+	var r0 *metadata.ReadConsumerGroupExtentsLiteResult_
+	if rf, ok := ret.Get(0).(func(thrift.Context, *metadata.ReadConsumerGroupExtentsLiteRequest) *metadata.ReadConsumerGroupExtentsLiteResult_); ok {
+		r0 = rf(ctx, request)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*metadata.ReadConsumerGroupExtentsLiteResult_)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(thrift.Context, *metadata.ReadConsumerGroupExtentsLiteRequest) error); ok {
+		r1 = rf(ctx, request)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
 // ReadConsumerGroup provides a mock function with given fields: ctx, getRequest
 func (_m *TChanMetadataServiceClient) ReadConsumerGroup(ctx thrift.Context, getRequest *metadata.ReadConsumerGroupRequest) (*shared.ConsumerGroupDescription, error) {
 	ret := _m.Called(ctx, getRequest)
@@ -842,6 +865,29 @@ func (_m *TChanMetadataServiceClient) DeleteHostInfo(ctx thrift.Context, request
 	}
 
 	return r0
+}
+
+// ListDestinationExtents provides a mock function with given fields: ctx, request
+func (_m *TChanMetadataServiceClient) ListDestinationExtents(ctx thrift.Context, request *metadata.ListDestinationExtentsRequest) (*metadata.ListDestinationExtentsResult_, error) {
+	ret := _m.Called(ctx, request)
+
+	var r0 *metadata.ListDestinationExtentsResult_
+	if rf, ok := ret.Get(0).(func(thrift.Context, *metadata.ListDestinationExtentsRequest) *metadata.ListDestinationExtentsResult_); ok {
+		r0 = rf(ctx, request)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*metadata.ListDestinationExtentsResult_)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(thrift.Context, *metadata.ListDestinationExtentsRequest) error); ok {
+		r1 = rf(ctx, request)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
 }
 
 // ReadHostInfo provides a mock function with given fields: ctx, request
