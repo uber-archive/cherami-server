@@ -21,6 +21,7 @@
 package common
 
 import (
+	"math/rand"
 	"strings"
 	"sync"
 )
@@ -103,6 +104,17 @@ func (rpm *MockRingpopMonitor) FindHostForKey(service string, key string) (*Host
 
 	if hosts, ok := rpm.serviceHosts[service]; ok && len(hosts) > 0 {
 		return hosts[0], nil
+	}
+	return &HostInfo{}, ErrInsufficientHosts
+}
+
+// FindRandomHost finds and returns a random host responsible for handling the given key
+func (rpm *MockRingpopMonitor) FindRandomHost(service string) (*HostInfo, error) {
+	rpm.RLock()
+	defer rpm.RUnlock()
+
+	if hosts, ok := rpm.serviceHosts[service]; ok && len(hosts) > 0 {
+		return hosts[rand.Intn(len(hosts))], nil
 	}
 	return &HostInfo{}, ErrInsufficientHosts
 }

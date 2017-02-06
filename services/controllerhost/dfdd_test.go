@@ -211,6 +211,11 @@ func (rpm *testRpmImpl) FindHostForKey(service string, key string) (*common.Host
 	return nil, common.ErrUUIDLookupFailed
 }
 
+// FindRandomHost finds and returns a random host responsible for handling the given service
+func (rpm *testRpmImpl) FindRandomHost(service string) (*common.HostInfo, error) {
+	return nil, common.ErrUUIDLookupFailed
+}
+
 // IsHostHealthy returns true if the given (service, host) is healthy
 func (rpm *testRpmImpl) IsHostHealthy(service string, uuid string) bool { return false }
 
