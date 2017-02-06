@@ -95,8 +95,11 @@ type queueDepthCalculator struct {
 	*extentStateMonitor
 	ll                      bark.Logger
 	destinationExtentsCache replicaStatsMRUCache // MRU cache of extent replica stats
-	dstCoverMap             extentCoverMap
-	dlqCoverMap             extentCoverMap
+
+	// Cover maps are used to find 'dangling' extents (destination extents with no corresponding consumer group extent)
+	// Each of these extents may also contribute to backlog, often the majority of backlog, depending on the startFrom time
+	dstCoverMap extentCoverMap // Map containing all of the extent UUIDs for the destination
+	dlqCoverMap extentCoverMap // Map containing all of the extent UUIDs for the DLQ destination, as applicable
 }
 
 func newQueueDepthCalculator(m *extentStateMonitor) *queueDepthCalculator {
@@ -232,9 +235,19 @@ func (qdc *queueDepthCalculator) calculateAndReportMetrics(dstDesc *shared.Desti
 	var extent extentID
 	var store storeID
 	var coverMap extentCoverMap
+	var debugLog bark.Logger
 
 	isTabulationRequested := qdc.isTabulationRequested(cgDesc, dstDesc)
 	extrapolatedTime := common.Now() - common.UnixNanoTime(IntervalBtwnScans/2) // Do interpolation by looking back in time for half a reporting period
+	if isTabulationRequested {
+		debugLog = qdc.ll.WithFields(bark.Fields{
+			`time`:           extrapolatedTime,
+			common.TagDst:    common.FmtDst(dstDesc.GetDestinationUUID()),
+			common.TagDstPth: dstDesc.GetPath(),
+			common.TagCnsm:   cgDesc.GetConsumerGroupUUID(),
+			common.TagCnsPth: cgDesc.GetConsumerGroupName(),
+		})
+	}
 
 	// This allows extrapolation up to 1 reporting period in either direction, meaning that missing a report shouldn't cause a blip
 	maxExtrapolation := common.Seconds(float64(IntervalBtwnScans) / float64(time.Second))
@@ -280,7 +293,7 @@ func (qdc *queueDepthCalculator) calculateAndReportMetrics(dstDesc *shared.Desti
 
 		// Calculations requiring store extent
 		delete(coverMap, extent) // mark this extent as done
-		storeExtent = qdc.destinationExtentsCache.get(extent, store)
+		storeExtent = qdc.destinationExtentsCache.get(extent, store, debugLog)
 
 		// This happens pretty commonly when extents are churning. There are races where a
 		// consumer group extent exists, but hasn't been updated with the connected store id.
@@ -429,7 +442,7 @@ skipConsumerGroupExtent:
 	store = ``
 dangling:
 	for extent = range coverMap {
-		storeExtent = qdc.destinationExtentsCache.get(extent, store)
+		storeExtent = qdc.destinationExtentsCache.get(extent, store, debugLog)
 		if storeExtent == nil {
 			qdc.ll.WithFields(bark.Fields{
 				`time`:           extrapolatedTime,
@@ -480,7 +493,7 @@ dlqExtents:
 	for extent = range coverMap {
 		consumerGroupExtent = &metadata.ConsumerGroupExtent{}
 		store = ``
-		storeExtent = qdc.destinationExtentsCache.get(extent, store)
+		storeExtent = qdc.destinationExtentsCache.get(extent, store, debugLog)
 
 		if storeExtent == nil {
 			qdc.ll.WithFields(bark.Fields{
