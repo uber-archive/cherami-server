@@ -1123,3 +1123,39 @@ func DeleteServiceConfig(c *cli.Context) {
 	err = mClient.DeleteServiceConfig(req)
 	toolscommon.ExitIfError(err)
 }
+
+// SealConsistencyCheck iterates through every sealed extent for every destination
+// and checks to see if the corresponding replicas have been sealed.
+func SealConsistencyCheck(c *cli.Context) {
+
+	mClient := toolscommon.GetMClient(c, adminToolService)
+	toolscommon.SealConsistencyCheck(c, mClient)
+}
+
+// StoreSealExtent sends a SealExtent command to the specified store.
+func StoreSealExtent(c *cli.Context) {
+
+	mClient := toolscommon.GetMClient(c, adminToolService)
+	toolscommon.StoreSealExtent(c, mClient)
+}
+
+// StoreIsExtentSealed checks if an extent is sealed on the specified store
+func StoreIsExtentSealed(c *cli.Context) {
+
+	mClient := toolscommon.GetMClient(c, adminToolService)
+	toolscommon.StoreIsExtentSealed(c, mClient)
+}
+
+// StoreGetAddressFromTimestamp sends a GetAddressFromTimestamp command to the specified store.
+func StoreGetAddressFromTimestamp(c *cli.Context) {
+
+	mClient := toolscommon.GetMClient(c, adminToolService)
+	toolscommon.StoreGetAddressFromTimestamp(c, mClient)
+}
+
+// StorePurgeMessages sends a purge command for an extent to the specified store.
+func StorePurgeMessages(c *cli.Context) {
+
+	mClient := toolscommon.GetMClient(c, adminToolService)
+	toolscommon.StorePurgeMessages(c, mClient)
+}
