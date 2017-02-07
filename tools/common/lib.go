@@ -25,6 +25,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"math/rand"
 	"os"
 	"regexp"
@@ -767,7 +768,7 @@ func ReadMessage(c *cli.Context, mClient mcli.Client) {
 		req.StartAddressInclusive = common.BoolPtr(true)
 		req.NumMessages = common.Int32Ptr(1)
 
-		// query storage to find address of the message with the given timestamp
+		// read messages from replica
 		resp, err4 := sClient.ReadMessages(req)
 		ExitIfError(err4)
 
@@ -1078,4 +1079,400 @@ func getIfSetString(c *cli.Context, p string, setCount *int) (r *string) {
 		return &v
 	}
 	return
+}
+
+type storeClientCache struct {
+	mClient mcli.Client
+	cache   map[string]*storehost.StoreClientImpl
+}
+
+func newStoreClientCache(mClient mcli.Client) *storeClientCache {
+	return &storeClientCache{
+		mClient: mClient,
+		cache:   make(map[string]*storehost.StoreClientImpl),
+	}
+}
+
+func (t *storeClientCache) get(storeUUID string) (*storehost.StoreClientImpl, error) {
+
+	client, ok := t.cache[storeUUID]
+
+	if !ok {
+		hostAddr, err := t.mClient.UUIDToHostAddr(storeUUID)
+		if err != nil {
+			hostAddr = storeUUID + UnknownUUID
+		}
+
+		client, err = storehost.NewClient(storeUUID, hostAddr)
+
+		if err != nil {
+			return nil, err
+		}
+
+		t.cache[storeUUID] = client
+	}
+
+	return client, nil
+}
+
+func (t *storeClientCache) close() {
+	for _, client := range t.cache {
+		client.Close()
+	}
+}
+
+type sealcheckJSONOutputFields struct {
+	DestinationUUID string `json:"destination_uuid"`
+	ExtentUUID      string `json:"extent_uuid"`
+	StoreUUID       string `json:"store_uuid"`
+	IsSealed        bool   `json:"is_sealed"`
+	IsMissing       bool   `json:"is_missing"`
+	IsEmpty         bool   `json:"is_empty"`
+}
+
+// SealConsistencyCheck implement for show msg command line
+func SealConsistencyCheck(c *cli.Context, mClient mcli.Client) {
+
+	prefix := c.String("prefix")
+	seal := c.Bool("seal")
+	verbose := c.Bool("verbose")
+	veryVerbose := c.Bool("veryverbose")
+
+	storeClients := newStoreClientCache(mClient)
+	defer storeClients.close()
+
+	const (
+		seqNumBits       = 26
+		seqNumBitmask    = (int64(1) << seqNumBits) - 1
+		timestampBitmask = math.MaxInt64 &^ seqNumBitmask
+		sealKeyTimestamp = math.MaxInt64 & timestampBitmask
+	)
+
+	reqListDest := &shared.ListDestinationsRequest{
+		Prefix: common.StringPtr(prefix),
+		Limit:  common.Int64Ptr(DefaultPageSize),
+	}
+
+iterate_listdestinations_pages:
+	for {
+		if veryVerbose {
+			fmt.Printf("querying metadata: ListDestinations(prefix=\"%s\")\n", prefix)
+		}
+
+		respListDest, err := mClient.ListDestinations(reqListDest)
+
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "ListDestinations error: %v\n", err)
+			break iterate_listdestinations_pages
+		}
+
+		for _, desc := range respListDest.GetDestinations() {
+
+			destUUID := desc.GetDestinationUUID()
+
+			listExtentsStats := &shared.ListExtentsStatsRequest{
+				DestinationUUID:  common.StringPtr(string(destUUID)),
+				Status:           shared.ExtentStatusPtr(shared.ExtentStatus_SEALED),
+				LocalExtentsOnly: common.BoolPtr(true), // FIXME: make arg
+				Limit:            common.Int64Ptr(DefaultPageSize),
+			}
+
+		iterate_listextents_pages:
+			for {
+				if veryVerbose {
+					fmt.Printf("querying metadata: ListExtentsStats(dest=%v status=%v localextentsonly=%v)\n",
+						listExtentsStats, shared.ExtentStatus_SEALED)
+				}
+
+				listExtentStatsResult, err1 := mClient.ListExtentsStats(listExtentsStats)
+
+				if err1 != nil {
+					fmt.Fprintf(os.Stderr, "ListExtentsStats(dest=%v) error: %v\n", destUUID, err)
+					break iterate_listextents_pages
+				}
+
+				for _, stats := range listExtentStatsResult.ExtentStatsList {
+
+					extent := stats.GetExtent()
+					extentUUID := extent.GetExtentUUID()
+					storeUUIDs := extent.GetStoreUUIDs()
+
+				iterate_stores:
+					for _, storeUUID := range storeUUIDs {
+
+						storeClient, err1 := storeClients.get(storeUUID)
+
+						if err1 != nil {
+							fmt.Fprintf(os.Stderr, "error getting store client (store=%v): %v\n", storeUUID, err)
+							continue iterate_stores
+						}
+
+						req := store.NewGetAddressFromTimestampRequest()
+						req.ExtentUUID = common.StringPtr(string(extentUUID))
+						req.Timestamp = common.Int64Ptr(sealKeyTimestamp)
+
+						// query storage to find address of the message with the given timestamp
+						resp, err1 := storeClient.GetAddressFromTimestamp(req)
+
+						var extentNotFound bool
+
+						if err1 != nil {
+							_, extentNotFound = err1.(*store.ExtentNotFoundError)
+
+							if !extentNotFound {
+								fmt.Fprintf(os.Stderr, "dest=%v extent=%v store=%v: GetAddressFromTimestamp error: %v\n",
+									destUUID, extentUUID, storeUUID, err1)
+								continue iterate_stores
+							}
+						}
+
+						switch {
+						case extentNotFound || !resp.GetSealed(): // handle un-sealed extent
+
+							output := &sealcheckJSONOutputFields{
+								DestinationUUID: destUUID,
+								ExtentUUID:      extentUUID,
+								StoreUUID:       storeUUID,
+								IsSealed:        false,
+								IsMissing:       extentNotFound,
+								IsEmpty:         extentNotFound || resp.GetAddress() == store.ADDR_BEGIN,
+							}
+
+							outputStr, _ := json.Marshal(output)
+							fmt.Fprintln(os.Stdout, string(outputStr))
+
+							// now seal the extent
+							if seal {
+
+								fmt.Printf("sealing extent on replica: ", destUUID, extentUUID, storeUUID)
+
+								req := store.NewSealExtentRequest()
+								req.ExtentUUID = common.StringPtr(string(extentUUID))
+								req.SequenceNumber = nil // seal at 'unspecified' seqnum
+
+								// seal the extent on the store
+								err2 := storeClient.SealExtent(req)
+
+								if err2 != nil {
+									fmt.Fprintf(os.Stderr, "dest=%v extent=%v store=%v: GetAddressFromTimestamp error: %v\n",
+										destUUID, extentUUID, storeUUID, err1)
+									continue iterate_stores
+								}
+							}
+
+						default:
+
+							if verbose {
+
+								output := &sealcheckJSONOutputFields{
+									DestinationUUID: destUUID,
+									ExtentUUID:      extentUUID,
+									StoreUUID:       storeUUID,
+									IsSealed:        resp.GetSealed(),
+									IsMissing:       extentNotFound,
+									IsEmpty:         extentNotFound || resp.GetAddress() == store.ADDR_BEGIN,
+								}
+
+								outputStr, _ := json.Marshal(output)
+								fmt.Fprintln(os.Stdout, string(outputStr))
+							}
+						}
+					}
+
+				}
+
+				if len(listExtentStatsResult.GetNextPageToken()) == 0 {
+					break iterate_listextents_pages
+				}
+
+				listExtentsStats.PageToken = listExtentStatsResult.GetNextPageToken()
+			}
+		}
+
+		if len(respListDest.GetNextPageToken()) == 0 {
+			break iterate_listdestinations_pages
+		}
+
+		reqListDest.PageToken = respListDest.GetNextPageToken()
+	}
+}
+
+type sealextentJSONOutputFields struct {
+	StoreUUID  string `json:"store_uuid"`
+	ExtentUUID string `json:"extent_uuid"`
+	IsSealed   bool   `json:"is_sealed"`
+}
+
+// StoreSealExtent sends a SealExtent request for an extent on a storehost
+func StoreSealExtent(c *cli.Context, mClient mcli.Client) {
+
+	if len(c.Args()) < 2 {
+		ExitIfError(errors.New(strNotEnoughArgs))
+	}
+
+	storeUUID, extentUUID := c.Args()[0], c.Args()[1]
+
+	hostAddr, err := mClient.UUIDToHostAddr(storeUUID)
+	if err != nil {
+		hostAddr = storeUUID + UnknownUUID
+	}
+
+	storeClient, err := storehost.NewClient(storeUUID, hostAddr)
+
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error resolving host (%v): %v\n", storeUUID, err)
+		return
+	}
+
+	req := store.NewSealExtentRequest()
+	req.ExtentUUID = common.StringPtr(string(extentUUID))
+	req.SequenceNumber = nil // seal at 'unspecified' seqnum
+
+	// send a seal-extent request to store
+	err = storeClient.SealExtent(req)
+
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "SealExtent error: %v\n", err)
+		return
+	}
+
+	output := &sealextentJSONOutputFields{
+		StoreUUID:  storeUUID,
+		ExtentUUID: extentUUID,
+		IsSealed:   true,
+	}
+
+	outputStr, _ := json.Marshal(output)
+	fmt.Fprintln(os.Stdout, string(outputStr))
+}
+
+type isextentsealedJSONOutputFields struct {
+	StoreUUID  string `json:"store_uuid"`
+	ExtentUUID string `json:"extent_uuid"`
+	IsSealed   bool   `json:"is_sealed"`
+	IsMissing  bool   `json:"is_missing"`
+}
+
+// StoreIsExtentSealed checks if an extent is sealed on the specified store
+func StoreIsExtentSealed(c *cli.Context, mClient mcli.Client) {
+
+	const (
+		seqNumBits       = 26
+		seqNumBitmask    = (int64(1) << seqNumBits) - 1
+		timestampBitmask = math.MaxInt64 &^ seqNumBitmask
+		sealKeyTimestamp = math.MaxInt64 & timestampBitmask
+	)
+
+	if len(c.Args()) < 2 {
+		ExitIfError(errors.New(strNotEnoughArgs))
+	}
+
+	storeUUID, extentUUID := c.Args()[0], c.Args()[1]
+
+	hostAddr, err := mClient.UUIDToHostAddr(storeUUID)
+	if err != nil {
+		hostAddr = storeUUID + UnknownUUID
+	}
+
+	storeClient, err := storehost.NewClient(storeUUID, hostAddr)
+
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error resolving host (%v): %v\n", storeUUID, err)
+		return
+	}
+
+	req := store.NewGetAddressFromTimestampRequest()
+	req.ExtentUUID = common.StringPtr(string(extentUUID))
+	req.Timestamp = common.Int64Ptr(sealKeyTimestamp)
+
+	// query storage to find address of the message with the given timestamp
+	resp, err := storeClient.GetAddressFromTimestamp(req)
+
+	var extentNotFound bool
+
+	if err != nil {
+
+		_, extentNotFound = err.(*store.ExtentNotFoundError)
+
+		if !extentNotFound {
+			fmt.Fprintf(os.Stderr, "GetAddressFromTimestamp error: %v\n", err)
+			return
+		}
+	}
+
+	output := &isextentsealedJSONOutputFields{
+		StoreUUID:  storeUUID,
+		ExtentUUID: extentUUID,
+		IsMissing:  extentNotFound,
+		IsSealed:   (err == nil) && resp.GetSealed(),
+	}
+
+	outputStr, _ := json.Marshal(output)
+	fmt.Fprintln(os.Stdout, string(outputStr))
+}
+
+// StoreGetAddressFromTimestamp sends a GetAddressFromTimestamp request to the specified store
+func StoreGetAddressFromTimestamp(c *cli.Context, mClient mcli.Client) {
+
+	// TODO //
+}
+
+type purgeJSONOutputFields struct {
+	StoreUUID  string `json:"store_uuid"`
+	ExtentUUID string `json:"extent_uuid"`
+	Address    int64  `json:"first_available_address"`
+}
+
+// StorePurgeMessages sends a purge command for an extent to the specified store.
+func StorePurgeMessages(c *cli.Context, mClient mcli.Client) {
+
+	if len(c.Args()) < 2 {
+		ExitIfError(errors.New(strNotEnoughArgs))
+	}
+
+	storeUUID, extentUUID := c.Args()[0], c.Args()[1]
+
+	deleteExtent := c.Bool("entirely")
+	purgeAddr := c.Int64("address")
+
+	if !deleteExtent && purgeAddr == 0 {
+		ExitIfError(errors.New(strNotEnoughArgs))
+	}
+
+	if deleteExtent {
+		purgeAddr = store.ADDR_SEAL
+	}
+
+	hostAddr, err := mClient.UUIDToHostAddr(storeUUID)
+	if err != nil {
+		hostAddr = storeUUID + UnknownUUID
+	}
+
+	storeClient, err := storehost.NewClient(storeUUID, hostAddr)
+
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error resolving host (%v): %v\n", storeUUID, err)
+		return
+	}
+
+	req := store.NewPurgeMessagesRequest()
+	req.ExtentUUID = common.StringPtr(string(extentUUID))
+	req.Address = common.Int64Ptr(purgeAddr)
+
+	// send a purge-messages request
+	resp, err := storeClient.PurgeMessages(req)
+
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "PurgeMessages error: %v\n", err)
+		return
+	}
+
+	output := &purgeJSONOutputFields{
+		StoreUUID:  storeUUID,
+		ExtentUUID: extentUUID,
+		Address:    resp.GetAddress(),
+	}
+
+	outputStr, _ := json.Marshal(output)
+	fmt.Fprintln(os.Stdout, string(outputStr))
 }
