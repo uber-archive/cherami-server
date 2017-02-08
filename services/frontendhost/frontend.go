@@ -1296,7 +1296,8 @@ func (h *Frontend) MergeDLQForConsumerGroup(ctx thrift.Context, mergeRequest *c.
 
 // GetQueueDepthInfo return queue depth info based on the key provided
 func (h *Frontend) GetQueueDepthInfo(ctx thrift.Context, queueRequest *c.GetQueueDepthInfoRequest) (result *c.GetQueueDepthInfoResult_, err error) {
-	defer func() { h.epilog(-1, result, &err) }()
+	sw := h.m3Client.StartTimer(metrics.GetQueueDepthInfoScope, metrics.FrontendLatencyTimer)
+	defer func() { sw.Stop(); h.epilog(metrics.GetQueueDepthInfoScope, result, &err) }()
 	if _, err = h.prolog(ctx, queueRequest); err != nil {
 		return
 	}

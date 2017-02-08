@@ -352,6 +352,8 @@ const (
 	PurgeDLQForConsumerGroupScope
 	// MergeDLQForConsumerGroupScope represents MergeDLQForConsumerGroup API in frontend
 	MergeDLQForConsumerGroupScope
+	// GetQueueDepthInfoScope
+	GetQueueDepthInfoScope
 
 	// -- Operation scopes for StoreHost --
 
@@ -479,6 +481,7 @@ var scopeDefs = map[ServiceIdx]map[int]scopeDefinition{
 		CompleteMessageBatchScope:     {operation: "CompleteMessageBatch"},
 		PurgeDLQForConsumerGroupScope: {operation: "PurgeDLQForConsumerGroup"},
 		MergeDLQForConsumerGroupScope: {operation: "MergeDLQForConsumerGroup"},
+		GetQueueDepthInfoScope:        {operation: "GetQueueDepthInfo"},
 	},
 
 	// Inputhost operation tag values as seen by the Metrics backend
