@@ -1224,3 +1224,43 @@ func (s *FrontendHostSuite) TestFrontendHostDLQMergePurge() {
 	err = frontendHost.PurgeDLQForConsumerGroup(ctx, reqP)
 	s.NoError(err)
 }
+
+// TestFrontendHostGetQueueDepthInfoNil tests that a nil request fails with BadRequestError
+func (s *FrontendHostSuite) TestFrontendHostGetQueueDepthInfoNil() {
+	frontendHost, ctx := s.utilGetContextAndFrontend()
+	info, err := frontendHost.GetQueueDepthInfo(ctx, nil)
+	s.Error(err)
+	s.Nil(info)
+	assert.IsType(s.T(), &c.BadRequestError{}, err)
+}
+
+// TestFrontendHostGetQueueDepthInfoBad tests that a bad request fails with BadRequestError
+func (s *FrontendHostSuite) TestFrontendHostGetQueueDepthInfoBad() {
+	frontendHost, ctx := s.utilGetContextAndFrontend()
+	r := c.NewGetQueueDepthInfoRequest()
+
+	for _, k := range []string{``, `/foo/bar`, `foo`, `7851377b-4eb3-430b-ae46-513bc1df503` /*short by one*/} {
+		r.Key = common.StringPtr(k) // Only UUID is allowed
+		info, err := frontendHost.GetQueueDepthInfo(ctx, r)
+		s.Error(err)
+		s.Nil(info)
+		assert.IsType(s.T(), &c.BadRequestError{}, err)
+		s.True(strings.Contains(err.Error(), `UUID`), err.Error())
+	}
+}
+
+// TestFrontendHostGetQueueDepthInfoGood tests that a good request succeeds
+func (s *FrontendHostSuite) TestFrontendHostGetQueueDepthInfoGood() {
+	frontendHost, ctx := s.utilGetContextAndFrontend()
+	r := c.NewGetQueueDepthInfoRequest()
+	r.Key = common.StringPtr(`7851377b-4eb3-430b-ae46-513bc1df503c`)
+	s.mockController.On(`GetQueueDepthInfo`, mock.Anything, mock.Anything).Return(
+		&controller.GetQueueDepthInfoResult_{
+			Value: common.StringPtr(`foo`),
+		},
+		nil)
+	info, err := frontendHost.GetQueueDepthInfo(ctx, r)
+	s.NoError(err)
+	s.NotNil(info)
+	s.Equal(info.GetValue(), `foo`)
+}
