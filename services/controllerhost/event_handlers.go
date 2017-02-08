@@ -1049,11 +1049,12 @@ func sealExtentOnStore(context *Context, storeUUID string, storeAddr string, ext
 
 	defer context.clientFactory.ReleaseThriftStoreClient(storeUUID)
 
+	// Avoid specifying a seal sequence
+	// number for now. Input host can issue
+	// a seal-request asynchronously while its
+	// still accepting new messages.
 	req := store.NewSealExtentRequest()
 	req.ExtentUUID = common.StringPtr(extentID)
-	if seq > 0 {
-		req.SequenceNumber = common.Int64Ptr(seq)
-	}
 
 	var timeout = sealExtentInitialCallTimeout
 	var retryPolicy = sealExtentInitialRetryPolicy()
