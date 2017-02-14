@@ -1239,13 +1239,29 @@ func (s *FrontendHostSuite) TestFrontendHostGetQueueDepthInfoBad() {
 	frontendHost, ctx := s.utilGetContextAndFrontend()
 	r := c.NewGetQueueDepthInfoRequest()
 
-	for _, k := range []string{``, `/foo/bar`, `foo`, `7851377b-4eb3-430b-ae46-513bc1df503` /*short by one*/} {
-		r.Key = common.StringPtr(k) // Only UUID is allowed
+	t := []string{``, `/foo/bar`, `foo`, `7851377b-4eb3-430b-ae46-513bc1df503` /*short by one*/}
+
+	for _, k := range t {
+		r.ConsumerGroupName = common.StringPtr(k) // Only UUID is allowed
 		info, err := frontendHost.GetQueueDepthInfo(ctx, r)
 		s.Error(err)
 		s.Nil(info)
 		assert.IsType(s.T(), &c.BadRequestError{}, err)
 		s.True(strings.Contains(err.Error(), `UUID`), err.Error())
+	}
+
+	u := []*string{common.StringPtr(`7851377b-4eb3-430b-ae46-513bc1df503c`), common.StringPtr(`/foo/bar`)}
+	v := []*string{common.StringPtr(`7851377b-4eb3-430b-ae46-513bc1df503c`), common.StringPtr(`/foo/bar/`), common.StringPtr(``), nil}
+
+	for _, l := range u {
+		for _, m := range v {
+			r.ConsumerGroupName = m
+			r.DestinationPath = l
+			info, err := frontendHost.GetQueueDepthInfo(ctx, r)
+			s.Error(err)
+			s.Nil(info)
+			assert.IsType(s.T(), &c.BadRequestError{}, err)
+		}
 	}
 }
 
@@ -1253,13 +1269,33 @@ func (s *FrontendHostSuite) TestFrontendHostGetQueueDepthInfoBad() {
 func (s *FrontendHostSuite) TestFrontendHostGetQueueDepthInfoGood() {
 	frontendHost, ctx := s.utilGetContextAndFrontend()
 	r := c.NewGetQueueDepthInfoRequest()
-	r.Key = common.StringPtr(`7851377b-4eb3-430b-ae46-513bc1df503c`)
+	r.ConsumerGroupName = common.StringPtr(`7851377b-4eb3-430b-ae46-513bc1df503c`)
 	s.mockController.On(`GetQueueDepthInfo`, mock.Anything, mock.Anything).Return(
 		&controller.GetQueueDepthInfoResult_{
 			Value: common.StringPtr(`foo`),
 		},
-		nil)
+		nil).Twice()
+	s.mockMeta.On(`ReadConsumerGroup`, mock.Anything, mock.Anything).Return(
+		&shared.ConsumerGroupDescription{
+			ConsumerGroupUUID: common.StringPtr(`foo`),
+		},
+		nil).Once()
+	s.mockMeta.On(`ReadDestination`, mock.Anything, mock.Anything).Return(
+		&shared.DestinationDescription{
+			Path: common.StringPtr(`bar`),
+		},
+		nil,
+	).Once()
+
 	info, err := frontendHost.GetQueueDepthInfo(ctx, r)
+	s.NoError(err)
+	s.NotNil(info)
+	s.Equal(info.GetValue(), `foo`)
+
+	r.ConsumerGroupName = common.StringPtr(`/foo/bar_cg`)
+	r.DestinationPath = common.StringPtr(`/foo/bar`)
+
+	info, err = frontendHost.GetQueueDepthInfo(ctx, r)
 	s.NoError(err)
 	s.NotNil(info)
 	s.Equal(info.GetValue(), `foo`)

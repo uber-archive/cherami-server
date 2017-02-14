@@ -76,6 +76,7 @@ const (
 
 const (
 	strNotEnoughArgs               = "Not enough arguments. Try \"--help\""
+	strTooManyArgs                 = "Too many arguments. Try \"--help\""
 	strNoChange                    = "Update must update something. Try \"--help\""
 	strCGSpecIncorrectArgs         = "Incorrect consumer group specification. Use \"<cg_uuid>\" or \"<dest_path> <cg_name>\""
 	strDestStatus                  = "Destination status must be \"enabled\", \"disabled\", \"sendonly\", or \"recvonly\""
@@ -546,20 +547,32 @@ func ReadDlq(c *cli.Context, mClient mcli.Client) {
 
 // ReadCgBacklog reads the CG back log
 func ReadCgBacklog(c *cli.Context, cClient ccli.Client) {
+	var cg, dst string
+	var dstPtr *string
 	if len(c.Args()) < 1 {
 		ExitIfError(errors.New(strNotEnoughArgs))
+	} else if len(c.Args()) > 2 {
+		ExitIfError(errors.New(strTooManyArgs))
 	}
 
-	cgUUID := c.Args()[0]
-
-	if !uuidRegex.MatchString(cgUUID) {
-		ExitIfError(errors.New("specify a valid cg UUID"))
+	switch len(c.Args()) {
+	case 1:
+		cg = c.Args()[0]
+	default:
+		cg = c.Args()[1]
+		dst = c.Args()[0]
 	}
+
+	if dst != `` {
+		dstPtr = &dst
+	}
+
 	backlog, err := cClient.GetQueueDepthInfo(&cherami.GetQueueDepthInfoRequest{
-		Key: &cgUUID,
+		ConsumerGroupName: &cg,
+		DestinationPath:   dstPtr,
 	})
 	if err != nil {
-		fmt.Printf("Cannot get backlog for %s. Please check the dashboard.", cgUUID)
+		fmt.Printf("Cannot get backlog. Please check the dashboard.")
 		os.Exit(1)
 	}
 

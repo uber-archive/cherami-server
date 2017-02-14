@@ -98,7 +98,7 @@ imports:
   - require
   - suite
 - name: github.com/tecbot/gorocksdb
-  version: 17991d3138a879b166adebf86f7c84da3c1517a7
+  version: 17991d3138a879b166adebf86f7c84da3c1517a7 
 - name: github.com/uber-common/bark
   version: 8841a0f8e7ca869284ccb29c08a14cf3f4310f46
 - name: github.com/uber-go/atomic
@@ -113,7 +113,7 @@ imports:
   - common/websocket
   - stream
 - name: github.com/uber/cherami-thrift
-  version: 0f0585c53937209f08a57c6ae51d8a7fd281e100
+  version: a80cedb0790594d2f09211c99842205b1474a32d 
   subpackages:
   - .generated/go/admin
   - .generated/go/cherami

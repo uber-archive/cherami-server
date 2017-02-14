@@ -213,7 +213,7 @@ func main() {
 				{
 					Name:    "cgBacklog",
 					Aliases: []string{"cgb", "cb"},
-					Usage:   "show cgBacklog <consumer_group_uuid>",
+					Usage:   "show cgBacklog (<consumer_group_uuid> | <destination_path> <consumer_group_name>)",
 					Action: func(c *cli.Context) {
 						lib.ReadCgBacklog(c)
 					},
