@@ -7,6 +7,12 @@ directories:
 go:
   - 1.7
 
+env:
+  global:
+    - COMMIT=${TRAVIS_COMMIT::8}
+    - secure: PxV+ljvtJLjWP3ekkvBPoNhPeU4yGr1Ca3vjqUmmFRsVmbk3OnZ27HTQF00mYlkF9T1m8iHWGIlWF5LwxFWozjqnqoJTqOkBQvH4sUXTqkAVlDFz6YdzsMmwY83qONF8BYVRQKb0dTaT8gqmHjTbJOyF2VkFbweq4lwhFfC4muER4QBk3uWUCHN9/Ra/amWMBXfB64EXBhGQfgwrRhrJQ2kEGOwOul9Kk815sWGC50DSgrTnhKWwAqQoOqqxRImUFlYOHPiVDgU+s+i/qfExT7gFv/zGLUnzx+qI3zJonZwL4kmRDdebpuis3DrNIbrR4is68kCF5+Y4SY7fRZFgjgoEGKEWSd7dwImk4sGQ9iAC/63VaD4rq2Mlu7wmqhfFsmITk/kL5hPBNNmbvYxiYEgKkFQaO0O8IwMDTtHVc+nXOXEzFUt+Gm1uoKGkujV1G2QUcmMgN2WqbX3jEtx8HDPg6edrvYsB3gQ95dZBX95qOz81iQ7TTnt5I3zAAWVs5bYNk198pnGfvRwxMCPI9nBKMac2xNxGpRu2kqcLJxg47GZfmnEouGizthTDw/vhr9WvylFitreeo9js5v6+nNNIXE+6n3BtsC0wPPQJF5P1+Uk89VvzA9Br2ns5kRqa+YCzDXAjtfKG9z7JY1YXH+gNUVEIjKGEdux7Py9truA=
+    - secure: aniIO/lIDp9cFiqj5Ph+/NqAqgD6cW5SamnF+AvruJEHPuFxR+AlyjItdWEeeq7LcB82CVu1buUxeqlTmiTgCh1t3gr5r3W5INKHm4SfuJ/TPIXd61G6R+mqdVCfypVhtMmeFCvO+KcF8nFcEaWVlBGmXYjj2FY9vsZKbSaBLkEq9S6tPjkZTL7wOTSQQw4mHZ84McgKWZ2KpXr19BNvZUTnTikjQo5mvdanrZ9ylQpnRW3ysA38JbBJGu9buSoArGC8Mb99oOIPmGbKK7/3X+vncKmfmgqvNGvnr7cqItpn6mScr2ot5ABmnO4C9pM6C5nGYq2vyTMnq4f4KBu0iz2/EA/RpwVcAmpuxJtBqYio3No2usLhqCBIX4i2ZhGTsthS2FmqOhYIoYvkVoFzW3wZLTZUXu2iSTXFX/IpxoJRTsgzmHhjfriFXzOu0NfXybxAVYUzZkwyfx7jw8/fxAnU7dC3HnZg0zXC7uq4p7UJmwORbWgx/XDF4J8ywI2oOvpUBYsMIl/qKqpj+yaUtDWvUL8rIBxreSrH7wRBPrXO5TpVtFste+hG0eqQUaxRhBepAUWmr5EZYYaCKJANQMDqNHO4kIGpfedZQOngRdS1Cm8gdpRyaliu87ZygU2lvDd0uNX071i/eqj4Olx/B7SKrk29nY7IyLlMa0Gn4Pc=
+
 addons:
   apt:
     packages:
@@ -39,3 +45,16 @@ install:
 
 script:
   - EMBEDROCKSDB=0 make cover_ci
+
+after_success:
+  - export BRANCH=$(if [ "$TRAVIS_PULL_REQUEST" == "false" ]; then echo $TRAVIS_BRANCH; else echo $TRAVIS_PULL_REQUEST_BRANCH; fi)
+  - 'if [ "$BRANCH" == "master" ]; then
+        export REPO=ubercherami/cherami-server-standalone;
+        export TAG=latest;
+        echo "TRAVIS_BRANCH=$TRAVIS_BRANCH, REPO=$REPO, PR=$PR, BRANCH=$BRANCH, TAG=$TAG";
+        docker login -u $DOCKER_USER -p $DOCKER_PASS;
+        docker build -f docker/standalone/Dockerfile -t $REPO:$COMMIT docker/standalone/;
+        docker tag $REPO:$COMMIT $REPO:$TAG;
+        docker tag $REPO:$COMMIT $REPO:travis-$TRAVIS_BUILD_NUMBER;
+        docker push $REPO;
+    fi'

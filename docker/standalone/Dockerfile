@@ -56,8 +56,12 @@ VOLUME /var/lib/cherami-store
 EXPOSE 4922 4253 4240 4254 5425 6280 6189 6190 6191 6310
 
 COPY ./start.sh $CHERAMI_HOME/start.sh
+COPY ./healthcheck.sh $CHERAMI_HOME/healthcheck.sh
 COPY ./docker_template.yaml $CHERAMI_HOME/config/docker_template.yaml
 RUN chmod a+x $CHERAMI_HOME/start.sh
+RUN chmod a+x $CHERAMI_HOME/healthcheck.sh
 
 WORKDIR $CHERAMI_HOME
 CMD ./start.sh
+
+HEALTHCHECK --interval=1s --timeout=1s --retries=120 CMD ./healthcheck.sh
