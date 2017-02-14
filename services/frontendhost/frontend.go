@@ -1301,12 +1301,24 @@ func (h *Frontend) GetQueueDepthInfo(ctx thrift.Context, queueRequest *c.GetQueu
 	if _, err = h.prolog(ctx, queueRequest); err != nil {
 		return
 	}
+	var cgDesc *c.ConsumerGroupDescription
+	var cgUUID string
 
-	cgUUID := queueRequest.GetKey()
-
-	if !common.UUIDRegex.MatchString(cgUUID) { // Special handling to ensure only a UUID is allowed
-		err = &c.BadRequestError{Message: fmt.Sprintf("Consumer group must be given as UUID, not \"%v\"", cgUUID)}
-		return
+	if queueRequest.GetDestinationPath() != `` { // Normal path+cg-name specification
+		rcgReq := &c.ReadConsumerGroupRequest{
+			ConsumerGroupName: common.StringPtr(queueRequest.GetConsumerGroupName()),
+			DestinationPath:   common.StringPtr(queueRequest.GetDestinationPath()),
+		}
+		cgDesc, err = h.ReadConsumerGroup(ctx, rcgReq)
+		if err != nil {
+			return
+		}
+		cgUUID = cgDesc.GetConsumerGroupUUID()
+	} else { // No destination path, therefore consumer group specified by UUID
+		cgUUID = queueRequest.GetConsumerGroupName()
+		if !common.UUIDRegex.MatchString(cgUUID) {
+			return nil, &c.BadRequestError{Message: `if destination path not specified, consumer group must be supplied as UUID`}
+		}
 	}
 
 	// Request to the extent controller
@@ -1464,7 +1476,8 @@ func (h *Frontend) prolog(ctx thrift.Context, request interface{}) (allowMutate 
 	case *c.DeleteDestinationRequest:
 		allowMutate, eD = h.validateName(v.Path, destinationName, validateDisallowUUID, validateDisallowEmpty)
 	case *c.GetQueueDepthInfoRequest:
-		_, eC = h.validateName(v.Key, consumerGroupName, validateAllowUUID, validateDisallowEmpty)
+		_, eC = h.validateName(v.ConsumerGroupName, consumerGroupName, validateAllowUUID, validateDisallowEmpty)
+		_, eC = h.validateName(v.DestinationPath, destinationName, validateDisallowUUID, validateAllowEmpty)
 	case *c.ListConsumerGroupRequest:
 		_, eD = h.validateName(v.DestinationPath, destinationName, validateDisallowUUID, validateDisallowEmpty)
 		_, eC = h.validateName(v.ConsumerGroupName, consumerGroupName, validateDisallowUUID, validateAllowEmpty)

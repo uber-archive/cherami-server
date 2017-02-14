@@ -813,6 +813,72 @@ func (h *OutputHost) UnloadConsumerGroups(ctx thrift.Context, request *admin.Unl
 	return err
 }
 
+// ListLoadedConsumerGroups is the API used to unload consumer groups to clear the cache
+func (h *OutputHost) ListLoadedConsumerGroups(ctx thrift.Context) (result *admin.ListConsumerGroupsResult_, err error) {
+	defer atomic.AddInt32(&h.loadShutdownRef, -1)
+	//sw := h.m3Client.StartTimer(metrics.ListLoadedConsumerGroupsScope, metrics.OutputhostLatencyTimer)
+	//defer sw.Stop()
+	//h.m3Client.IncCounter(metrics.ListLoadedConsumerGroupsScope, metrics.OutputhostRequests)
+	// If we are already shutting down, no need to do anything here
+	if atomic.AddInt32(&h.loadShutdownRef, 1) <= 0 {
+		h.logger.Error("not unloading the CG cache outputHost already shutdown")
+		//h.m3Client.IncCounter(metrics.ListLoadedConsumerGroupsScope, metrics.OutputhostFailures)
+		return nil, ErrHostShutdown
+	}
+
+	result = admin.NewListConsumerGroupsResult_()
+	result.Cgs = make([]*admin.ConsumerGroups, 0)
+	h.cgMutex.RLock()
+	for cgUUID, cg := range h.cgCache {
+		cgRes := admin.NewConsumerGroups()
+		cgRes.CgUUID = common.StringPtr(cgUUID)
+		cgRes.CgName = common.StringPtr(cg.cachedCGDesc.GetConsumerGroupName())
+		cgRes.DestPath = common.StringPtr(cg.destPath)
+
+		result.Cgs = append(result.Cgs, cgRes)
+	}
+	h.cgMutex.RUnlock()
+
+	return result, err
+}
+
+//ReadCgState is the API used to get the cg state
+func (h *OutputHost) ReadCgState(ctx thrift.Context, req *admin.ReadConsumerGroupStateRequest) (result *admin.ReadConsumerGroupStateResult_, err error) {
+	defer atomic.AddInt32(&h.loadShutdownRef, -1)
+	//sw := h.m3Client.StartTimer(metrics.ListLoadedConsumerGroupsScope, metrics.OutputhostLatencyTimer)
+	//defer sw.Stop()
+	//h.m3Client.IncCounter(metrics.ListLoadedConsumerGroupsScope, metrics.OutputhostRequests)
+	// If we are already shutting down, no need to do anything here
+	if atomic.AddInt32(&h.loadShutdownRef, 1) <= 0 {
+		h.logger.Error("not unloading the CG cache outputHost already shutdown")
+		//h.m3Client.IncCounter(metrics.ListLoadedConsumerGroupsScope, metrics.OutputhostFailures)
+		return nil, ErrHostShutdown
+	}
+
+	result = admin.NewReadConsumerGroupStateResult_()
+
+	result.SessionID = common.Int16Ptr(int16(h.sessionID))
+	result.CgState = make([]*admin.ConsumerGroupState, 0)
+
+	// Now populate all cg state
+	h.cgMutex.RLock()
+	for _, cgUUID := range req.CgUUIDs {
+		cg, ok := h.cgCache[cgUUID]
+		if ok {
+			cgState := cg.getCgState(cgUUID)
+			result.CgState = append(result.CgState, cgState)
+		} else {
+			h.logger.WithField(common.TagCnsm, common.FmtCnsm(cgUUID)).
+				Error("consumer group is not cached at all")
+			err = ErrCgAlreadyUnloaded
+			//h.m3Client.IncCounter(metrics.UnloadConsumerGroupsScope, metrics.OutputhostFailures)
+		}
+	}
+	h.cgMutex.RUnlock()
+
+	return result, err
+}
+
 // UtilGetPickedStore is used by the integration test to figure out which store host
 // we are currently connected to
 // XXX: This should not be used anywhere else other than the test.

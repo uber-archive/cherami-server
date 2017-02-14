@@ -37,6 +37,7 @@ import (
 	"github.com/uber/cherami-server/common"
 	"github.com/uber/cherami-server/services/outputhost/load"
 	serverStream "github.com/uber/cherami-server/stream"
+	"github.com/uber/cherami-thrift/.generated/go/admin"
 	"github.com/uber/cherami-thrift/.generated/go/cherami"
 	"github.com/uber/cherami-thrift/.generated/go/controller"
 	"github.com/uber/cherami-thrift/.generated/go/metadata"
@@ -413,4 +414,16 @@ func (extCache *extentCache) unload() {
 	extCache.cacheMutex.Lock()
 	close(extCache.closeChannel)
 	extCache.cacheMutex.Unlock()
+}
+
+func (extCache *extentCache) getState() *admin.OutputCgExtent {
+	cge := admin.NewOutputCgExtent()
+	cge.ExtentUUID = common.StringPtr(extCache.extUUID)
+	cge.ConnectedStoreUUID = common.StringPtr(extCache.connectedStoreUUID)
+	cge.NumCreditsSentToStore = common.Int32Ptr(int32(extCache.connection.sentCreds))
+	cge.NumMsgsReadFromStore = common.Int32Ptr(int32(extCache.connection.recvMsgs))
+	cge.StartSequence = common.Int64Ptr(int64(extCache.connection.startingSequence))
+	cge.AckMgrState = extCache.ackMgr.getAckMgrState()
+
+	return cge
 }

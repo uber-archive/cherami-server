@@ -76,6 +76,7 @@ const (
 
 const (
 	strNotEnoughArgs               = "Not enough arguments. Try \"--help\""
+	strTooManyArgs                 = "Too many arguments. Try \"--help\""
 	strNoChange                    = "Update must update something. Try \"--help\""
 	strCGSpecIncorrectArgs         = "Incorrect consumer group specification. Use \"<cg_uuid>\" or \"<dest_path> <cg_name>\""
 	strDestStatus                  = "Destination status must be \"enabled\", \"disabled\", \"sendonly\", or \"recvonly\""
@@ -428,6 +429,85 @@ func UnloadConsumerGroup(c *cli.Context, mClient mcli.Client) {
 	ExitIfError(err)
 }
 
+// ListAllConsumerGroups lists all loaded CGs in memory of the outputhost
+func ListAllConsumerGroups(c *cli.Context) {
+	if len(c.Args()) < 1 {
+		ExitIfError(errors.New(strNotEnoughArgs))
+	}
+
+	hostPort := c.Args()[0]
+
+	// generate a random instance id to be used to create a client tchannel
+	instanceID := rand.Intn(50000)
+	outputClient, err := outputhost.NewClient(instanceID, hostPort)
+	ExitIfError(err)
+	defer outputClient.Close()
+
+	listCgResult, err := outputClient.ListLoadedConsumerGroups()
+	ExitIfError(err)
+
+	if listCgResult != nil {
+		for _, cg := range listCgResult.Cgs {
+			fmt.Printf("%v\n", Jsonify(cg))
+		}
+	}
+}
+
+// GetConsumerGroupState unloads the CG based on cli.Context
+func GetConsumerGroupState(c *cli.Context) {
+	if len(c.Args()) < 1 {
+		ExitIfError(errors.New(strNotEnoughArgs))
+	}
+
+	hostPort := c.Args()[0]
+	cgUUID := c.String("cg_uuid")
+
+	if !uuidRegex.MatchString(cgUUID) {
+		ExitIfError(errors.New("specify a valid cg UUID"))
+	}
+
+	// generate a random instance id to be used to create a client tchannel
+	instanceID := rand.Intn(50000)
+	outputClient, err := outputhost.NewClient(instanceID, hostPort)
+	ExitIfError(err)
+	defer outputClient.Close()
+
+	cgStateReq := admin.NewReadConsumerGroupStateRequest()
+	cgStateReq.CgUUIDs = []string{cgUUID}
+
+	readcgStateRes, err1 := outputClient.ReadCgState(cgStateReq)
+	ExitIfError(err1)
+
+	fmt.Printf("sessionID: %v\n", readcgStateRes.GetSessionID())
+
+	for _, cg := range readcgStateRes.CgState {
+		printCgState(cg)
+		for _, ext := range cg.CgExtents {
+			fmt.Printf("\t%v\n", Jsonify(ext))
+		}
+	}
+}
+
+type cgStateJSONOutput struct {
+	CgUUID             string `json""cgUUID"`
+	NumOutstandingMsgs int32  `json:"numOutstandingMsgs"`
+	MsgChSize          int64  `json:"msgChSize"`
+	MsgCacheChSize     int64  `json:"msgCacheChSize"`
+	NumConnections     int64  `json:"numConnections"`
+}
+
+func printCgState(cgState *admin.ConsumerGroupState) {
+	output := &cgStateJSONOutput{
+		CgUUID:             cgState.GetCgUUID(),
+		NumOutstandingMsgs: cgState.GetNumOutstandingMsgs(),
+		MsgChSize:          cgState.GetMsgChSize(),
+		MsgCacheChSize:     cgState.GetMsgCacheChSize(),
+		NumConnections:     cgState.GetNumConnections(),
+	}
+	outputStr, _ := json.Marshal(output)
+	fmt.Fprintln(os.Stdout, string(outputStr))
+}
+
 type destDescJSONOutputFields struct {
 	Path                        string                          `json:"path"`
 	UUID                        string                          `json:"uuid"`
@@ -546,20 +626,32 @@ func ReadDlq(c *cli.Context, mClient mcli.Client) {
 
 // ReadCgBacklog reads the CG back log
 func ReadCgBacklog(c *cli.Context, cClient ccli.Client) {
+	var cg, dst string
+	var dstPtr *string
 	if len(c.Args()) < 1 {
 		ExitIfError(errors.New(strNotEnoughArgs))
+	} else if len(c.Args()) > 2 {
+		ExitIfError(errors.New(strTooManyArgs))
 	}
 
-	cgUUID := c.Args()[0]
-
-	if !uuidRegex.MatchString(cgUUID) {
-		ExitIfError(errors.New("specify a valid cg UUID"))
+	switch len(c.Args()) {
+	case 1:
+		cg = c.Args()[0]
+	default:
+		cg = c.Args()[1]
+		dst = c.Args()[0]
 	}
+
+	if dst != `` {
+		dstPtr = &dst
+	}
+
 	backlog, err := cClient.GetQueueDepthInfo(&cherami.GetQueueDepthInfoRequest{
-		Key: &cgUUID,
+		ConsumerGroupName: &cg,
+		DestinationPath:   dstPtr,
 	})
 	if err != nil {
-		fmt.Printf("Cannot get backlog for %s. Please check the dashboard.", cgUUID)
+		fmt.Printf("Cannot get backlog. Please check the dashboard.")
 		os.Exit(1)
 	}
 

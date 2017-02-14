@@ -30,6 +30,7 @@ import (
 
 	"github.com/uber/cherami-server/common"
 	"github.com/uber/cherami-server/common/metrics"
+	"github.com/uber/cherami-thrift/.generated/go/admin"
 	"github.com/uber/cherami-thrift/.generated/go/metadata"
 )
 
@@ -53,6 +54,7 @@ type (
 		readLevelRate float64               // Rate of change in receivedTo, seconds⁽⁻¹⁾
 		ackLevelAddr  storeHostAddress      // Storehost address corresponding to ackLevel, -1 = nothing acked
 		readLevelAddr storeHostAddress      // Storehost address corresponding to recievedLevel, -1 = nothing read
+		lastAckedSeq  common.SequenceNumber // the latest sequence which is acked
 	}
 
 	// ackManager is held per CG extent and it holds the addresses that we get from the store.
@@ -379,6 +381,10 @@ func (ackMgr *ackManager) acknowledgeMessage(ackID AckID, seqNum uint32, address
 			}
 			if !isNack {
 				addrs.acked = true // This is the only place that this field of addrs is changed. It was initially set under a write lock elsewhere, hence we can have a read lock
+				// update the last acked sequence, if this is the most recent ack
+				if ackMgr.lastAckedSeq < common.SequenceNumber(seqNum) {
+					ackMgr.lastAckedSeq = common.SequenceNumber(seqNum)
+				}
 			}
 		}
 	} else {
@@ -415,4 +421,45 @@ func (ackMgr *ackManager) manageAckLevel() {
 			return
 		}
 	}
+}
+
+// get the number of acked and unacked messages from the last ack level
+func (ackMgr *ackManager) getNumAckedAndUnackedMessages() (*int64, *int64) {
+	stop := ackMgr.ackLevel + common.SequenceNumber(int64(len(ackMgr.addrs)))
+
+	var acked int64
+	var unacked int64
+	// We go through the map here and see if the messages are acked,
+	for curr := ackMgr.ackLevel + 1; curr <= stop; curr++ {
+		if addrs, ok := ackMgr.addrs[curr]; ok {
+			if addrs.acked {
+				acked++
+			} else {
+				unacked++
+			}
+		} else {
+			ackMgr.logger.WithFields(bark.Fields{
+				common.TagSeq: curr,
+			}).Error(`sequence number not found in the ack mgr`)
+		}
+	}
+
+	return common.Int64Ptr(acked), common.Int64Ptr(unacked)
+}
+
+func (ackMgr *ackManager) getAckMgrState() *admin.AckMgrState {
+	ackMgrState := admin.NewAckMgrState()
+	ackMgr.lk.RLock()
+	defer ackMgr.lk.RUnlock()
+	ackMgrState.AckMgrID = common.Int16Ptr(int16(ackMgr.ackMgrID))
+	ackMgrState.IsSealed = common.BoolPtr(ackMgr.sealed)
+	ackMgrState.ReadLevelSeq = common.Int64Ptr(int64(ackMgr.readLevel))
+	ackMgrState.AckLevelSeq = common.Int64Ptr(int64(ackMgr.ackLevel))
+	ackMgrState.ReadLevelOffset = common.Int64Ptr(int64(ackMgr.readLevelAddr))
+	ackMgrState.AckLevelOffset = common.Int64Ptr(int64(ackMgr.ackLevelAddr))
+	ackMgrState.LastAckLevelUpdateTime = common.Int64Ptr(int64(ackMgr.asOf))
+	ackMgrState.LastAckedSeq = common.Int64Ptr(int64(ackMgr.lastAckedSeq))
+	ackMgrState.NumAckedMsgs, ackMgrState.NumUnackedMsgs = ackMgr.getNumAckedAndUnackedMessages()
+
+	return ackMgrState
 }

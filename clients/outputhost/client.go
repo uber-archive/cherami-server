@@ -67,3 +67,19 @@ func (s *OutClientImpl) UnloadConsumerGroups(req *admin.UnloadConsumerGroupsRequ
 
 	return s.client.UnloadConsumerGroups(ctx, req)
 }
+
+// ListLoadedConsumerGroups lists all the loaded cgs from the outputhost
+func (s *OutClientImpl) ListLoadedConsumerGroups() (*admin.ListConsumerGroupsResult_, error) {
+	ctx, cancel := tcthrift.NewContext(15 * time.Second)
+	defer cancel()
+
+	return s.client.ListLoadedConsumerGroups(ctx)
+}
+
+// ReadCgState
+func (s *OutClientImpl) ReadCgState(req *admin.ReadConsumerGroupStateRequest) (*admin.ReadConsumerGroupStateResult_, error) {
+	ctx, cancel := tcthrift.NewContext(15 * time.Second)
+	defer cancel()
+
+	return s.client.ReadCgState(ctx, req)
+}

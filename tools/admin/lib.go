@@ -134,6 +134,16 @@ func UnloadConsumerGroup(c *cli.Context) {
 	toolscommon.UnloadConsumerGroup(c, mClient)
 }
 
+// ListAllCgs unloads the CG on the given outputhost
+func ListAllCgs(c *cli.Context) {
+	toolscommon.ListAllConsumerGroups(c)
+}
+
+// GetCgState gets the cg state on the given outputhost
+func GetCgState(c *cli.Context) {
+	toolscommon.GetConsumerGroupState(c)
+}
+
 // ReadCgBacklog reads cg backlog
 func ReadCgBacklog(c *cli.Context) {
 	cClient := toolscommon.GetCClient(c, adminToolService)

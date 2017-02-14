@@ -715,3 +715,11 @@ func (service *MockInputOutputService) GetUpdatedCount(key string) int {
 func (service *MockInputOutputService) UnloadConsumerGroups(ctx thrift.Context, request *admin.UnloadConsumerGroupsRequest) error {
 	return fmt.Errorf("mock not implemented")
 }
+
+func (service *MockInputOutputService) ListLoadedConsumerGroups(ctx thrift.Context) (*admin.ListConsumerGroupsResult_, error) {
+	return nil, fmt.Errorf("mock not implemented")
+}
+
+func (service *MockInputOutputService) ReadCgState(ctx thrift.Context, req *admin.ReadConsumerGroupStateRequest) (*admin.ReadConsumerGroupStateResult_, error) {
+	return nil, fmt.Errorf("mock not implemented")
+}
