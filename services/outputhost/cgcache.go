@@ -32,6 +32,7 @@ import (
 	"github.com/uber/cherami-server/common/dconfig"
 	"github.com/uber/cherami-server/common/metrics"
 	"github.com/uber/cherami-server/services/outputhost/load"
+	"github.com/uber/cherami-thrift/.generated/go/admin"
 	"github.com/uber/cherami-thrift/.generated/go/cherami"
 	"github.com/uber/cherami-thrift/.generated/go/controller"
 	"github.com/uber/cherami-thrift/.generated/go/metadata"
@@ -769,6 +770,25 @@ func (cgCache *consumerGroupCache) unloadConsumerGroupCache() {
 	// as 0 explicitly, since we close the connections in an asynchronous fashion
 	cgCache.consumerM3Client.UpdateGauge(metrics.ConsConnectionScope, metrics.OutputhostCGConsConnection, 0)
 	cgCache.consumerM3Client.UpdateGauge(metrics.ConsConnectionScope, metrics.OutputhostCGNumExtents, 0)
+}
+
+func (cgCache *consumerGroupCache) getCgState(cgUUID string) *admin.ConsumerGroupState {
+	cgCache.extMutex.RLock()
+	defer cgCache.extMutex.RUnlock()
+	cgState := admin.NewConsumerGroupState()
+	cgState.CgUUID = common.StringPtr(cgUUID)
+	cgState.NumOutstandingMsgs = common.Int32Ptr(cgCache.msgDeliveryCache.getOutstandingMsgs())
+	cgState.MsgChSize = common.Int64Ptr(int64(len(cgCache.msgsCh)))
+	cgState.NumConnections = common.Int64Ptr(int64(cgCache.getNumOpenConns()))
+
+	cgState.CgExtents = make([]*admin.OutputCgExtent, 0)
+	// get all extent state now
+	for _, extCache := range cgCache.extentCache {
+		extState := extCache.getState()
+		cgState.CgExtents = append(cgState.CgExtents, extState)
+	}
+
+	return cgState
 }
 
 // this is a utility routine which closes all message channels

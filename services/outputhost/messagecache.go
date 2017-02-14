@@ -21,10 +21,10 @@
 package outputhost
 
 import (
-	"sync/atomic"
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/uber-common/bark"
@@ -754,7 +754,7 @@ func (msgCache *cgMsgCache) manageMessageDeliveryCache() {
 			msgCache.logMessageCacheHealth()
 		}
 
-		numOutstandingMsgs := int32(msgCache.countStateDelivered + msgCache.countStateEarlyNACK) // TODO: make this limit the distance from the lowest un-acked message as well
+		numOutstandingMsgs := msgCache.getOutstandingMsgs()
 
 		if msgCache.numAcks > creditBatchSize && numOutstandingMsgs < msgCache.maxOutstandingMsgs {
 			// now we can send credits to the extents, so that they can renew them
@@ -846,6 +846,11 @@ func (msgCache *cgMsgCache) reinjectlastAckMsg() bool {
 	// Don't need to do anything if the message is already in the delivered state, since we will redeliver endlessly until an Ack adjusts the lastAckTime
 	msgCache.lclLg.WithField(common.TagAckID, common.FmtAckID(ackID)).Warn(`Waiting to clear known good message`)
 	return false
+}
+
+func (msgCache *cgMsgCache) getOutstandingMsgs() int32 {
+	// TODO: make this limit the distance from the lowest un-acked message as well
+	return int32(msgCache.countStateDelivered + msgCache.countStateEarlyNACK)
 }
 
 func (msgCache *cgMsgCache) handleAck(ackID timestampedAckID, lclLg bark.Logger, badConns map[int]int) {
@@ -1078,7 +1083,7 @@ func (msgCache *cgMsgCache) isStalled() bool {
 	if atomic.LoadInt32(&msgCache.cgCache.dlqMerging) > 0 || strings.Contains(msgCache.GetOwnerEmail(), SmartRetryDisableString) {
 		smartRetryDisabled = true
 	}
-	
+
 	now := common.Now()
 
 	// Determines that no progress has been made in the recent past; this is half the lock timeout to be

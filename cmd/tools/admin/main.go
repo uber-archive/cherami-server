@@ -569,28 +569,6 @@ func main() {
 			},
 		},
 		{
-			Name:    "unload",
-			Aliases: []string{"ul"},
-			Usage:   "unload (consumergroup)",
-			Subcommands: []cli.Command{
-				{
-					Name:    "consumergroup",
-					Aliases: []string{"c", "cg"},
-					Usage:   "unload consumergroup <hostport> [options]",
-					Flags: []cli.Flag{
-						cli.StringFlag{
-							Name:  "cg_uuid, u",
-							Value: "",
-							Usage: "The consumergroup UUID which should be unloaded",
-						},
-					},
-					Action: func(c *cli.Context) {
-						admin.UnloadConsumerGroup(c)
-					},
-				},
-			},
-		},
-		{
 			Name:    "serviceconfig",
 			Aliases: []string{"cfg"},
 			Usage:   "serviceconfig (get|set|delete)",
@@ -624,6 +602,51 @@ func main() {
 					Usage:   "serviceconfig delete <service-name.version.sku.hostname.config-key>",
 					Action: func(c *cli.Context) {
 						admin.DeleteServiceConfig(c)
+					},
+				},
+			},
+		},
+		{
+			Name:    "outputhost",
+			Aliases: []string{"oh"},
+			Usage:   "outputhost (cgstate|listAllCgs|unloadcg)",
+			Subcommands: []cli.Command{
+				{
+					Name:    "cgstate",
+					Aliases: []string{"cgs"},
+					Usage:   "outputhost cgstate <hostport> [options]",
+					Flags: []cli.Flag{
+						cli.StringFlag{
+							Name:  "cg_uuid, cg",
+							Value: "",
+							Usage: "The UUID of the consumer group whose state will be dumped",
+						},
+					},
+					Action: func(c *cli.Context) {
+						admin.GetCgState(c)
+					},
+				},
+				{
+					Name:    "listAllCgs",
+					Aliases: []string{"ls"},
+					Usage:   "outputhost listAllCgs <hostport>",
+					Action: func(c *cli.Context) {
+						admin.ListAllCgs(c)
+					},
+				},
+				{
+					Name:    "unloadcg",
+					Aliases: []string{"uc"},
+					Usage:   "outputhost unloadcg <hostport> [options]",
+					Flags: []cli.Flag{
+						cli.StringFlag{
+							Name:  "cg_uuid, cg",
+							Value: "",
+							Usage: "The consumergroup UUID which should be unloaded",
+						},
+					},
+					Action: func(c *cli.Context) {
+						admin.UnloadConsumerGroup(c)
 					},
 				},
 			},
