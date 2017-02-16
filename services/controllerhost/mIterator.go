@@ -21,17 +21,55 @@
 package controllerhost
 
 import (
-	"fmt"
-
 	"github.com/uber/cherami-thrift/.generated/go/metadata"
 	"github.com/uber/cherami-thrift/.generated/go/shared"
 
 	"github.com/uber-common/bark"
+
+	"strconv"
 )
 
 // Metadata iterator - mIterator
 
-type mIteratorEventType uint8
+type (
+	mIteratorEventType uint8
+	level              uint8
+	movement           uint8
+
+	levelCheck struct {
+		level
+		movement
+	}
+
+	mIterator struct {
+		level
+		*Context
+		lclLg         bark.Logger
+		current       mIteratorEvent
+		pubCh         chan *mIteratorEvent
+		eventHandlers []mIteratorHandler
+	}
+
+	mIteratorEvent struct {
+		t          mIteratorEventType
+		dest       *shared.DestinationDescription
+		extent     *metadata.DestinationExtent
+		cnsm       *shared.ConsumerGroupDescription
+		cnsmExtent *metadata.ConsumerGroupExtent
+	}
+
+	mIteratorHandler interface {
+		handleEvent(*mIteratorEvent)
+	}
+)
+
+const maxLevel = 5
+
+const (
+	up movement = 242 + iota
+	down
+	stay
+)
 
 const (
 	eIterStart mIteratorEventType = 42 + iota
@@ -50,43 +88,22 @@ const (
 	eCnsmExtent
 )
 
-type level uint8
-type movement uint8
-
-const (
-	up movement = 242 + iota
-	down
-	stay
-)
-
-type levelCheck struct {
-	level
-	movement
+var iteratorEventNames = map[mIteratorEventType]string{
+	eIterStart:           "eIterStart",
+	eIterEnd:             "eIterEnd",
+	eDestStart:           "eDestStart",
+	eDestEnd:             "eDestEnd",
+	eExtentIterStart:     "eExtentIterStart",
+	eExtentIterEnd:       "eExtentIterEnd",
+	eExtent:              "eExtent",
+	eCnsmIterStart:       "eCnsmIterStart",
+	eCnsmIterEnd:         "eCnsmIterEnd",
+	eCnsmStart:           "eCnsmStart",
+	eCnsmEnd:             "eCnsmEnd",
+	eCnsmExtentIterStart: "eCnsmExtentIterStart",
+	eCnsmExtentIterEnd:   "eCnsmExtentIterEnd",
+	eCnsmExtent:          "eCnsmExtent",
 }
-
-type mIterator struct {
-	level
-	*Context
-	lclLg         bark.Logger
-	current       mIteratorEvent
-	pubCh         chan *mIteratorEvent
-	eventHandlers []mIteratorHandler
-}
-
-type mIteratorEvent struct {
-	t          mIteratorEventType
-	dest       *shared.DestinationDescription
-	extent     *metadata.DestinationExtent
-	cnsm       *shared.ConsumerGroupDescription
-	cnsmExtent *metadata.ConsumerGroupExtentLite
-}
-
-type mIteratorHandler interface {
-	handleEvent(*mIteratorEvent)
-	initialize(*Context)
-}
-
-const maxLevel = 5
 
 // This map is used to check that the events are being emitted at the proper level of the iteration. up increases the level, and down reduces it
 var eventLevelCheckMap = map[mIteratorEventType]levelCheck{
@@ -109,40 +126,10 @@ var eventLevelCheckMap = map[mIteratorEventType]levelCheck{
 type eventHandlerName string
 
 func (e mIteratorEventType) String() string {
-	switch e {
-	case eIterStart:
-		return `eIterStart`
-	case eIterEnd:
-		return `eIterEnd`
-	case eDestStart:
-		return `eDestStart`
-	case eDestEnd:
-		return `eDestEnd`
-	case eExtentIterStart:
-		return `eExtentIterStart`
-	case eExtentIterEnd:
-		return `eExtentIterEnd`
-	case eExtent:
-		return `eExtent`
-	case eCnsmIterStart:
-		return `eCnsmIterStart`
-	case eCnsmIterEnd:
-		return `eCnsmIterEnd`
-	case eCnsmStart:
-		return `eCnsmStart`
-	case eCnsmEnd:
-		return `eCnsmEnd`
-	case eCnsmExtentIterStart:
-		return `eCnsmExtentIterStart`
-	case eCnsmExtentIterEnd:
-		return `eCnsmExtentIterEnd`
-	case eCnsmExtent:
-		return `eCnsmExtent`
-	case 0:
-		return `nil`
-	default:
-		return `INVALID` + fmt.Sprintf(`%d`, e)
+	if name, ok := iteratorEventNames[e]; ok {
+		return name
 	}
+	return "invalid event " + strconv.Itoa(int(e))
 }
 
 func (i *mIterator) newMIteratorEvent(t mIteratorEventType) *mIteratorEvent {
@@ -151,20 +138,13 @@ func (i *mIterator) newMIteratorEvent(t mIteratorEventType) *mIteratorEvent {
 	return &mIteratorEventVal
 }
 
-func newMIterator(c *Context) *mIterator {
+func newMIterator(c *Context, handlers ...mIteratorHandler) *mIterator {
 	mi := &mIterator{
-		level:   0,
-		lclLg:   c.log,
-		Context: c,
-		pubCh:   make(chan *mIteratorEvent, 1),
-		eventHandlers: []mIteratorHandler{
-			&dlqMonitor{},
-		},
-	}
-
-	// Initialize all event handlers with the context
-	for _, h := range mi.eventHandlers {
-		h.initialize(c)
+		level:         0,
+		lclLg:         c.log,
+		Context:       c,
+		pubCh:         make(chan *mIteratorEvent, 1),
+		eventHandlers: handlers,
 	}
 
 	go mi.handleEvents()
@@ -172,18 +152,11 @@ func newMIterator(c *Context) *mIterator {
 	return mi
 }
 
-func (i *mIterator) publishEvent(t mIteratorEventType, obj interface{}) {
-	// Evalulate the WithFields only if we actually log
-	lg := func() bark.Logger { return i.lclLg.WithFields(bark.Fields{`mIteratorEventType`: t, `object`: obj}) }
-
-	// TODO: instead of panicing, on production, we should immediately end the iteration by sending some end
-	// events to unravel the stack, and then ignore new publishes until we get an iter start event
-
+func (i *mIterator) validateNextEvent(t mIteratorEventType, lg func() bark.Logger) {
 	lc, lcOK := eventLevelCheckMap[t]
 	if !lcOK {
 		lg().Panic(`Bad event type`)
 	}
-
 	// Check level movements and panic if something wrong happens
 	if lc.movement == down {
 		if i.level == 0 {
@@ -200,6 +173,13 @@ func (i *mIterator) publishEvent(t mIteratorEventType, obj interface{}) {
 		}
 		i.level++
 	}
+}
+
+func (i *mIterator) publishEvent(t mIteratorEventType, obj interface{}) {
+	// Evalulate the WithFields only if we actually log
+	lg := func() bark.Logger { return i.lclLg.WithFields(bark.Fields{`mIteratorEventType`: t, `object`: obj}) }
+
+	i.validateNextEvent(t, lg)
 
 	// This adds parts of the current state as needed
 	switch t {
@@ -210,19 +190,7 @@ func (i *mIterator) publishEvent(t mIteratorEventType, obj interface{}) {
 	case eCnsmStart:
 		i.current.cnsm = obj.(*shared.ConsumerGroupDescription)
 	case eCnsmExtent:
-		i.current.cnsmExtent = obj.(*metadata.ConsumerGroupExtentLite)
-	case eIterStart:
-	case eIterEnd:
-	case eDestEnd:
-	case eExtentIterStart:
-	case eExtentIterEnd:
-	case eCnsmEnd:
-	case eCnsmIterEnd:
-	case eCnsmIterStart:
-	case eCnsmExtentIterEnd:
-	case eCnsmExtentIterStart:
-	default:
-		lg().Panic(`unimplemented`)
+		i.current.cnsmExtent = obj.(*metadata.ConsumerGroupExtent)
 	}
 
 	// Publish a copy of the current event
@@ -240,17 +208,6 @@ func (i *mIterator) publishEvent(t mIteratorEventType, obj interface{}) {
 		i.current.cnsm = nil
 	case eCnsmExtentIterEnd:
 		i.current.cnsmExtent = nil
-	case eCnsmExtent:
-	case eIterStart:
-	case eDestStart:
-	case eExtentIterStart:
-	case eExtent:
-	case eCnsmStart:
-	case eCnsmExtentIterStart:
-	case eCnsmIterEnd:
-	case eCnsmIterStart:
-	default:
-		lg().Panic(`unimplemented`)
 	}
 }
 

@@ -427,15 +427,13 @@ func (mcp *Mcp) GetQueueDepthInfo(ctx thrift.Context, inReq *c.GetQueueDepthInfo
 		return nil, ErrMalformedUUID
 	}
 
-	queueInfo, err := GetQueueDepthResult(cgUUID)
+	queueInfo, err := mcp.context.extentMonitor.queueDepth.GetQueueDepthResult(cgUUID)
 	if err == nil {
 		output := &QueueDepthCacheJSONFields{
-
-			CacheTime:          queueInfo.Time,
-			BacklogAvailable:   queueInfo.BacklogAvailable,
-			BacklogUnavailable: queueInfo.BacklogUnavailable,
-			BacklogInflight:    queueInfo.BacklogInflight,
-			BacklogDLQ:         queueInfo.BacklogDLQ,
+			CacheTime:        queueInfo.Time,
+			BacklogAvailable: queueInfo.BacklogAvailable,
+			BacklogInflight:  queueInfo.BacklogInflight,
+			BacklogDLQ:       queueInfo.BacklogDLQ,
 		}
 		queueInfo, _ := json.Marshal(output)
 		queueInfoStr := string(queueInfo)

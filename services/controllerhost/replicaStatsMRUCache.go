@@ -189,8 +189,8 @@ func (c *replicaStatsMRUCache) put(extent extentID, store storeID, val *shared.E
 
 func (c *replicaStatsMRUCache) getExtentCoverMap() extentCoverMap {
 	m := make(extentCoverMap)
-	for store := range c.cache {
-		m[store] = true
+	for extID := range c.cache {
+		m[extID] = true
 	}
 	return m
 }

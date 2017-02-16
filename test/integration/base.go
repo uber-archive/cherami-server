@@ -348,6 +348,13 @@ func (tb *testBase) GetOutput() *outputhost.OutputHost {
 	return nil
 }
 
+func (tb *testBase) GetController() *controllerhost.Mcp {
+	for _, ch := range tb.Controllers {
+		return ch
+	}
+	return nil
+}
+
 func toLevelPtr(level log.Level) *log.Level {
 	return &level
 }

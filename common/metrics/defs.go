@@ -914,6 +914,16 @@ const (
 	ControllerCGBacklogDLQ
 	// ControllerCGBacklogProgress is an indication of progress made on the backlog
 	ControllerCGBacklogProgress
+	// ControllerNumOpenExtents represents the count of open extents
+	ControllerNumOpenExtents
+	// ControllerNumSealedExtents represents the count of sealed extents
+	ControllerNumSealedExtents
+	// ControllerNumConsumedExtents represents the count of open extents
+	ControllerNumConsumedExtents
+	// ControllerNumOpenCGExtents represents the count of open cg extents
+	ControllerNumOpenCGExtents
+	// ControllerNumConsumedCGExtents represents the count of consumed cg extents
+	ControllerNumConsumedCGExtents
 
 	// -- Replicator metrics -- //
 
@@ -1086,6 +1096,11 @@ var metricDefs = map[ServiceIdx]map[int]metricDefinition{
 		ControllerGetAddressFailedCounter:          {Counter, "controller.retentionmgr.getaddress.failed"},
 		ControllerGetAddressCompletedCounter:       {Counter, "controller.retentionmgr.getaddress.completed"},
 		ControllerPurgeMessagesRequestCounter:      {Counter, "controller.retentionmgr.purgemessagesrequest"},
+		ControllerNumOpenExtents:                   {Counter, "controller.dstextents.open"},
+		ControllerNumSealedExtents:                 {Counter, "controller.dstextents.sealed"},
+		ControllerNumConsumedExtents:               {Counter, "controller.dstextents.consumed"},
+		ControllerNumOpenCGExtents:                 {Counter, "controller.cgextents.open"},
+		ControllerNumConsumedCGExtents:             {Counter, "controller.cgextents.consumed"},
 		ControllerLatencyTimer:                     {Timer, "controller.latency"},
 		ControllerRetentionJobDuration:             {Timer, "controller.retentionmgr.jobduration"},
 		ControllerGetAddressLatency:                {Timer, "controller.retentionmgr.getaddresslatency"},
