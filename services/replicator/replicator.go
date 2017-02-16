@@ -60,7 +60,8 @@ type (
 		authoritativeZone         string
 		tenancy                   string
 		defaultAuthoritativeZone  string
-		clientFactory             ClientFactory
+		replicatorclientFactory   ClientFactory
+		clientFactory             common.ClientFactory
 		remoteReplicatorConn      map[string]*outConnection
 		remoteReplicatorConnMutex sync.RWMutex
 		storehostConn             map[string]*outConnection
@@ -101,7 +102,7 @@ func getAllZones(replicatorHosts map[string]string) map[string][]string {
 }
 
 // NewReplicator is the constructor for Replicator
-func NewReplicator(serviceName string, sVice common.SCommon, metadataClient metadata.TChanMetadataService, clientFactory ClientFactory, config configure.CommonAppConfig) (*Replicator, []thrift.TChanServer) {
+func NewReplicator(serviceName string, sVice common.SCommon, metadataClient metadata.TChanMetadataService, replicatorClientFactory ClientFactory, config configure.CommonAppConfig) (*Replicator, []thrift.TChanServer) {
 	deployment := strings.ToLower(sVice.GetConfig().GetDeploymentName())
 	zone, tenancy := common.GetLocalClusterInfo(deployment)
 	allZones := getAllZones(config.GetReplicatorConfig().GetReplicatorHosts())
@@ -121,7 +122,8 @@ func NewReplicator(serviceName string, sVice common.SCommon, metadataClient meta
 		localZone:                zone,
 		defaultAuthoritativeZone: config.GetReplicatorConfig().GetDefaultAuthoritativeZone(),
 		tenancy:                  tenancy,
-		clientFactory:            clientFactory,
+		replicatorclientFactory:  replicatorClientFactory,
+		clientFactory:            sVice.GetClientFactory(),
 		remoteReplicatorConn:     make(map[string]*outConnection),
 		storehostConn:            make(map[string]*outConnection),
 	}
@@ -139,7 +141,7 @@ func (r *Replicator) Start(thriftService []thrift.TChanServer) {
 	r.SCommon.Start(thriftService)
 	r.hostIDHeartbeater = common.NewHostIDHeartbeater(r.metaClient, r.GetHostUUID(), r.GetHostPort(), r.GetHostName(), r.logger)
 	r.hostIDHeartbeater.Start()
-	r.clientFactory.SetTChannel(r.GetTChannel())
+	r.replicatorclientFactory.SetTChannel(r.GetTChannel())
 
 	r.metadataReconciler = NewMetadataReconciler(r.metaClient, r, r.localZone, r.logger, r.m3Client)
 	r.metadataReconciler.Start()
@@ -366,7 +368,7 @@ func (r *Replicator) CreateRemoteDestinationUUID(ctx thrift.Context, createReque
 
 func (r *Replicator) createDestinationRemoteCall(zone string, logger bark.Logger, createRequest *shared.CreateDestinationUUIDRequest) error {
 	// acquire remote zone replicator thrift client
-	client, err := r.clientFactory.GetReplicatorClient(zone)
+	client, err := r.replicatorclientFactory.GetReplicatorClient(zone)
 	if err != nil {
 		r.m3Client.IncCounter(metrics.ReplicatorCreateRmtDestUUIDScope, metrics.ReplicatorFailures)
 		logger.WithFields(bark.Fields{
@@ -458,7 +460,7 @@ func (r *Replicator) UpdateRemoteDestination(ctx thrift.Context, updateRequest *
 
 func (r *Replicator) updateDestinationRemoteCall(zone string, logger bark.Logger, updateRequest *shared.UpdateDestinationRequest) error {
 	// acquire remote zone replicator thrift client
-	client, err := r.clientFactory.GetReplicatorClient(zone)
+	client, err := r.replicatorclientFactory.GetReplicatorClient(zone)
 	if err != nil {
 		r.m3Client.IncCounter(metrics.ReplicatorUpdateRmtDestScope, metrics.ReplicatorFailures)
 		logger.WithFields(bark.Fields{
@@ -540,7 +542,7 @@ func (r *Replicator) DeleteRemoteDestination(ctx thrift.Context, deleteRequest *
 
 func (r *Replicator) deleteDestinationRemoteCall(zone string, logger bark.Logger, deleteRequest *shared.DeleteDestinationRequest) error {
 	// acquire remote zone replicator thrift client
-	client, err := r.clientFactory.GetReplicatorClient(zone)
+	client, err := r.replicatorclientFactory.GetReplicatorClient(zone)
 	if err != nil {
 		r.m3Client.IncCounter(metrics.ReplicatorDeleteRmtDestScope, metrics.ReplicatorFailures)
 		logger.WithFields(bark.Fields{
@@ -700,7 +702,7 @@ func (r *Replicator) ListExtentsStats(ctx thrift.Context, listRequest *shared.Li
 
 func (r *Replicator) createExtentRemoteCall(zone string, logger bark.Logger, createRequest *shared.CreateExtentRequest) error {
 	// acquire remote zone replicator thrift client
-	client, err := r.clientFactory.GetReplicatorClient(zone)
+	client, err := r.replicatorclientFactory.GetReplicatorClient(zone)
 	if err != nil {
 		r.m3Client.IncCounter(metrics.ReplicatorCreateRmtExtentScope, metrics.ReplicatorFailures)
 		logger.WithField(common.TagErr, err).Error(`Get remote replicator client failed`)

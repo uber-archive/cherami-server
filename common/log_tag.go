@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/uber/cherami-thrift/.generated/go/admin"
+	"github.com/uber/cherami-thrift/.generated/go/shared"
 )
 
 // TagErr is the tag for error object message
@@ -151,6 +152,9 @@ const TagEvent = `event`
 
 // TagState is for "state" in event handlers
 const TagState = `state`
+
+// TagExtentStatus is for extent status
+const TagExtentStatus = `extStatus`
 
 // TagSeq is for sequence number
 const TagSeq = `seq`
@@ -355,4 +359,9 @@ func FmtCnsmID(s int) string {
 // FmtAddr formats an int64 to be used with TagAddr
 func FmtAddr(i int64) string {
 	return fmt.Sprintf("%v", i)
+}
+
+// FmtExtentStatus formats ExtentStatus to be used with TagExtentStatus
+func FmtExtentStatus(status shared.ExtentStatus) string {
+	return fmt.Sprintf("%v", status.String())
 }

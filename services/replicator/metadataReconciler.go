@@ -21,6 +21,7 @@
 package replicator
 
 import (
+	"errors"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -32,6 +33,7 @@ import (
 	"github.com/uber/cherami-server/common/metrics"
 	"github.com/uber/cherami-thrift/.generated/go/metadata"
 	"github.com/uber/cherami-thrift/.generated/go/shared"
+	"github.com/uber/cherami-thrift/.generated/go/store"
 )
 
 type (
@@ -44,8 +46,9 @@ type (
 
 	// metadataReconciler is an implementation of MetadataReconciler.
 	metadataReconciler struct {
-		replicator *Replicator
-		localZone  string
+		replicator            *Replicator
+		localZone             string
+		suspectMissingExtents map[string]missingExtentInfo
 
 		mClient  metadata.TChanMetadataService
 		logger   bark.Logger
@@ -56,24 +59,32 @@ type (
 		ticker  *time.Ticker
 		running int64
 	}
+
+	missingExtentInfo struct {
+		missingSince time.Time
+		destUUID     string
+	}
 )
 
 const (
 	// runInterval determines how often the reconciler will run
-	runInterval                 = time.Duration(10 * time.Minute)
-	metadataListRequestPageSize = 50
+	runInterval                    = time.Duration(10 * time.Minute)
+	metadataListRequestPageSize    = 50
+	storeCallTimeout               = 10 * time.Second
+	extentMissingDurationThreshold = time.Duration(24 * time.Hour)
 )
 
 // NewMetadataReconciler returns an instance of MetadataReconciler
 func NewMetadataReconciler(mClient metadata.TChanMetadataService, replicator *Replicator, localZone string, logger bark.Logger, m3client metrics.Client) MetadataReconciler {
 	return &metadataReconciler{
-		replicator: replicator,
-		localZone:  localZone,
-		mClient:    mClient,
-		logger:     logger,
-		m3Client:   m3client,
-		ticker:     time.NewTicker(runInterval),
-		running:    0,
+		replicator:            replicator,
+		localZone:             localZone,
+		suspectMissingExtents: make(map[string]missingExtentInfo),
+		mClient:               mClient,
+		logger:                logger,
+		m3Client:              m3client,
+		ticker:                time.NewTicker(runInterval),
+		running:               0,
 	}
 }
 
@@ -281,7 +292,7 @@ func (r *metadataReconciler) getAllMultiZoneDestInLocalZone() ([]*shared.Destina
 func (r *metadataReconciler) getAllMultiZoneDestInAuthoritativeZone() ([]*shared.DestinationDescription, error) {
 	var err error
 	authoritativeZone := r.replicator.getAuthoritativeZone()
-	remoteReplicator, err := r.replicator.clientFactory.GetReplicatorClient(authoritativeZone)
+	remoteReplicator, err := r.replicator.replicatorclientFactory.GetReplicatorClient(authoritativeZone)
 	if err != nil {
 		r.logger.WithFields(bark.Fields{
 			common.TagErr:      err,
@@ -352,7 +363,7 @@ func (r *metadataReconciler) reconcileDestExtentMetadata() error {
 
 func (r *metadataReconciler) getAllDestExtentInRemoteZone(zone string, destUUID string) (map[string]shared.ExtentStatus, error) {
 	var err error
-	remoteReplicator, err := r.replicator.clientFactory.GetReplicatorClient(zone)
+	remoteReplicator, err := r.replicator.replicatorclientFactory.GetReplicatorClient(zone)
 	if err != nil {
 		r.logger.WithFields(bark.Fields{
 			common.TagErr:      err,
@@ -423,10 +434,22 @@ func (r *metadataReconciler) reconcileDestExtent(destUUID string, localExtents m
 		localExtentStatus, ok := localExtents[remoteExtentUUID]
 		if !ok {
 			r.logger.WithFields(bark.Fields{
-				common.TagDst:      common.FmtDst(destUUID),
-				common.TagExt:      common.FmtExt(remoteExtentUUID),
-				common.TagZoneName: common.FmtZoneName(remoteZone),
+				common.TagDst:          common.FmtDst(destUUID),
+				common.TagExt:          common.FmtExt(remoteExtentUUID),
+				common.TagZoneName:     common.FmtZoneName(remoteZone),
+				common.TagExtentStatus: common.FmtExtentStatus(remoteExtentStatus),
 			}).Warn(`Found missing extent from remote!`)
+
+			// if the extent is already in consumed/deleted state on remote side, don't bother to create the extent locally because all data is gone on remote side already
+			if remoteExtentStatus == shared.ExtentStatus_CONSUMED {
+				r.m3Client.UpdateGauge(metrics.ReplicatorReconcileScope, metrics.ReplicatorReconcileDestExtentRemoteConsumedLocalMissing, 1)
+				continue
+			}
+			if remoteExtentStatus == shared.ExtentStatus_DELETED {
+				r.m3Client.UpdateGauge(metrics.ReplicatorReconcileScope, metrics.ReplicatorReconcileDestExtentRemoteDeletedLocalMissing, 1)
+				continue
+			}
+
 			r.m3Client.UpdateGauge(metrics.ReplicatorReconcileScope, metrics.ReplicatorReconcileDestExtentFoundMissing, 1)
 
 			createRequest := &shared.CreateExtentRequest{
@@ -451,36 +474,178 @@ func (r *metadataReconciler) reconcileDestExtent(destUUID string, localExtents m
 				continue
 			}
 		} else {
-			if remoteExtentStatus != shared.ExtentStatus_OPEN && localExtentStatus == shared.ExtentStatus_OPEN {
-				r.logger.WithFields(bark.Fields{
-					common.TagDst:      common.FmtDst(destUUID),
-					common.TagExt:      common.FmtExt(remoteExtentUUID),
-					common.TagZoneName: common.FmtZoneName(remoteZone),
-				}).Info(`Inconsistent extent status`)
-				r.m3Client.UpdateGauge(metrics.ReplicatorReconcileScope, metrics.ReplicatorReconcileDestExtentInconsistentStatus, 1)
-
-				updateRequest := &metadata.UpdateExtentStatsRequest{
-					ExtentUUID:      common.StringPtr(remoteExtentUUID),
-					DestinationUUID: common.StringPtr(destUUID),
-					Status:          common.MetadataExtentStatusPtr(shared.ExtentStatus_SEALED),
-				}
-				_, err := r.mClient.UpdateExtentStats(nil, updateRequest)
-				if err != nil {
-					r.logger.WithFields(bark.Fields{
-						common.TagErr: err,
-						common.TagDst: common.FmtDst(destUUID),
-						common.TagExt: common.FmtExt(remoteExtentUUID),
-					}).Error(`Failed to update extent status to sealed`)
-					continue
-				}
-
-				r.logger.WithFields(bark.Fields{
-					common.TagDst: common.FmtDst(destUUID),
-					common.TagExt: common.FmtExt(remoteExtentUUID),
-				}).Info(`Extent SEALED`)
-
+			if (remoteExtentStatus == shared.ExtentStatus_SEALED || remoteExtentStatus == shared.ExtentStatus_CONSUMED) && localExtentStatus == shared.ExtentStatus_OPEN {
+				r.sealExtentInMetadata(destUUID, remoteExtentUUID)
+			}
+			if remoteExtentStatus == shared.ExtentStatus_DELETED {
+				r.handleExtentDeletedOrMissingInRemote(destUUID, remoteExtentUUID, localExtentStatus)
 			}
 		}
+	}
+
+	// now try to find all the orphaned extents(extent already gone in remote zone but not in local zone), and try to seal them
+
+	// note we're not 100% sure if the extent is really gone even if cassandra doesn't return that extent because of
+	// the eventual consistency nature of cassandra
+	// so we maintain a timestamp to track how long the extent has been missing
+	// we act on it only after it has been missing for a certain period of time
+
+	remoteMissingExtents := make(map[string]struct{})
+	for localExtentUUID, localExtentStatus := range localExtents {
+		// we're going to delete this extent soon locally so no need to act on it
+		if localExtentStatus == shared.ExtentStatus_CONSUMED || localExtentStatus == shared.ExtentStatus_DELETED {
+			continue
+		}
+		if _, ok := remoteExtents[localExtentUUID]; !ok {
+			// extent exists in local but not in remote
+			remoteMissingExtents[localExtentUUID] = struct{}{}
+		}
+	}
+
+	for suspectExtent, suspectExtentInfo := range r.suspectMissingExtents {
+		if suspectExtentInfo.destUUID != destUUID {
+			continue
+		}
+		if _, ok := remoteMissingExtents[suspectExtent]; !ok {
+			// re-appeared in remote, remove it from suspect list
+			delete(r.suspectMissingExtents, suspectExtent)
+		} else {
+			if time.Since(suspectExtentInfo.missingSince) > extentMissingDurationThreshold {
+				localStatus, ok := localExtents[suspectExtent];
+				if !ok {
+					r.logger.WithFields(bark.Fields{
+						common.TagDst:      common.FmtDst(suspectExtentInfo.destUUID),
+						common.TagExt:      common.FmtExt(suspectExtent),
+					}).Error(`code bug!! suspect extent should in local extent map!!`)
+					continue
+				}
+				r.handleExtentDeletedOrMissingInRemote(suspectExtentInfo.destUUID, suspectExtent, localStatus)
+			}
+		}
+	}
+
+	// now add new suspect if there's any
+	for missingExtent, _ := range remoteMissingExtents {
+		if _, ok := r.suspectMissingExtents[missingExtent]; !ok {
+			r.suspectMissingExtents[missingExtent] = missingExtentInfo{
+				destUUID:     destUUID,
+				missingSince: time.Now(),
+			}
+		}
+	}
+
+	r.m3Client.UpdateGauge(metrics.ReplicatorReconcileScope, metrics.ReplicatorReconcileDestExtentSuspectMissingExtents, int64(len(r.suspectMissingExtents)))
+	return nil
+}
+
+func (r *metadataReconciler) handleExtentDeletedOrMissingInRemote(destUUID string, extentUUID string, localStatus shared.ExtentStatus) {
+	// lifecycle for extent in local zone(origin of the extent is remote):
+	// open->sealed: after extent becomes sealed in remote(origin) zone
+	// sealed->consumed: decided by local retention manager
+	// consumed->deleted: decided by local retention manager
+
+	// we're going to delete this extent soon locally so no need to act on it
+	if localStatus == shared.ExtentStatus_CONSUMED || localStatus == shared.ExtentStatus_DELETED {
+		return
+	}
+
+	r.m3Client.UpdateGauge(metrics.ReplicatorReconcileScope, metrics.ReplicatorReconcileDestExtentRemoteDeletedLocalNot, 1)
+
+	// if extent is still open in metadata, seal the extent in metadata
+	if localStatus == shared.ExtentStatus_OPEN {
+		r.sealExtentInMetadata(destUUID, extentUUID)
+	}
+
+	// also seal the extent in store as there's no message available on remote side at this point
+	// this is not absolutely needed in most cases as local store should have already been sealed after reading the seal marker.
+	// However in some corner cases(or software bugs), store may not see the seal marker before extent is deleted on remote side.
+	// If that happens, this call becomes necessary to move the extent to consumed state(extent won't
+	// be moved to consumed state if it's not sealed on store)
+	err := r.sealExtentInStore(destUUID, extentUUID)
+	if err != nil {
+		r.logger.WithFields(bark.Fields{
+			common.TagErr: err,
+			common.TagDst: common.FmtDst(destUUID),
+			common.TagExt: common.FmtExt(extentUUID),
+		}).Error(`Failed to seal extent in store`)
+	} else {
+		r.logger.WithFields(bark.Fields{
+			common.TagErr: err,
+			common.TagDst: common.FmtDst(destUUID),
+			common.TagExt: common.FmtExt(extentUUID),
+		}).Info(`Extent sealed in store`)
+	}
+}
+
+func (r *metadataReconciler) sealExtentInMetadata(destUUID string, extentUUID string) {
+	updateRequest := &metadata.UpdateExtentStatsRequest{
+		ExtentUUID:      common.StringPtr(extentUUID),
+		DestinationUUID: common.StringPtr(destUUID),
+		Status:          common.MetadataExtentStatusPtr(shared.ExtentStatus_SEALED),
+	}
+	_, err := r.mClient.UpdateExtentStats(nil, updateRequest)
+	if err != nil {
+		r.logger.WithFields(bark.Fields{
+			common.TagErr: err,
+			common.TagDst: common.FmtDst(destUUID),
+			common.TagExt: common.FmtExt(extentUUID),
+		}).Error(`Failed to seal extent in metadata`)
+	} else {
+		r.logger.WithFields(bark.Fields{
+			common.TagDst: common.FmtDst(destUUID),
+			common.TagExt: common.FmtExt(extentUUID),
+		}).Info(`Extent sealed in metadata`)
+	}
+}
+
+func (r *metadataReconciler) sealExtentInStore(destUUID string, extentUUID string) error {
+	readExtentRequest := &metadata.ReadExtentStatsRequest{
+		DestinationUUID: common.StringPtr(destUUID),
+		ExtentUUID:      common.StringPtr(extentUUID),
+	}
+
+	lclLg := r.logger.WithFields(bark.Fields{
+		common.TagDst: common.FmtDst(destUUID),
+		common.TagExt: common.FmtExt(extentUUID),
+	})
+
+	readExtentResult, err := r.mClient.ReadExtentStats(nil, readExtentRequest)
+	if err != nil {
+		lclLg.WithField(common.TagErr, err).Error(`Metadata call ReadExtentStats failed`)
+		return err
+	}
+
+	sealReq := &store.SealExtentRequest{
+		ExtentUUID: common.StringPtr(extentUUID),
+	}
+
+	var errorOccured bool
+	for _, store := range readExtentResult.GetExtentStats().GetExtent().GetStoreUUIDs() {
+		storeClient, _, err := r.replicator.clientFactory.GetThriftStoreClientUUID(store, destUUID)
+		if err != nil {
+			lclLg.WithFields(bark.Fields{
+				common.TagErr:  err,
+				common.TagStor: common.FmtStor(store),
+			}).Error(`Failed to get store client`)
+			errorOccured = true
+			continue
+		}
+
+		ctx, cancel := thrift.NewContext(storeCallTimeout)
+		defer cancel()
+		err = storeClient.SealExtent(ctx, sealReq)
+		if err != nil {
+			lclLg.WithFields(bark.Fields{
+				common.TagErr:  err,
+				common.TagStor: common.FmtStor(store),
+			}).Error(`Failed to seal extent on store`)
+			errorOccured = true
+			continue
+		}
+	}
+
+	if errorOccured {
+		return errors.New(`seal extent on store failed for at least one replica`)
 	}
 	return nil
 }

@@ -97,7 +97,7 @@ type (
 	// storeClient is the existing store client object
 	storeClient struct {
 		lk sync.Mutex // mutex protecting this object
-		// map of host address to the client object
+		// map of uuid(could be destination uuid or a context uuid specified by GetThriftStoreClientUUID) to the client object
 		currentCh map[string]*chInfo
 	}
 

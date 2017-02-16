@@ -35,6 +35,7 @@ import (
 	mockcontroller "github.com/uber/cherami-server/test/mocks/controllerhost"
 	mockmeta "github.com/uber/cherami-server/test/mocks/metadata"
 	mockreplicator "github.com/uber/cherami-server/test/mocks/replicator"
+	mockStore "github.com/uber/cherami-server/test/mocks/storehost"
 	"github.com/uber/cherami-thrift/.generated/go/cherami"
 	"github.com/uber/cherami-thrift/.generated/go/metadata"
 	"github.com/uber/cherami-thrift/.generated/go/shared"
@@ -58,6 +59,7 @@ type ReplicatorSuite struct {
 	mockService                 *common.MockService
 	mockReplicatorClientFactory *mockreplicator.MockReplicatorClientFactory
 	mockControllerClient        *mockcontroller.MockControllerHost
+	mockStoreClient             *mockStore.MockStoreHost
 	mockClientFactory           *mockcommon.MockClientFactory
 	mockWSConnector             *mockcommon.MockWSConnector
 	mockHTTPResponse            *mockcommon.MockHTTPResponseWriter
@@ -71,9 +73,11 @@ func (s *ReplicatorSuite) SetupCommonMock() {
 	s.mockInStream = new(mockreplicator.MockBStoreOpenReadStreamInCallForReplicator)
 	s.mockOutStream = new(mockreplicator.MockBStoreOpenReadStreamOutCallForReplicator)
 	s.mockReplicatorClientFactory = new(mockreplicator.MockReplicatorClientFactory)
+	s.mockStoreClient = new(mockStore.MockStoreHost)
 	s.mockControllerClient = new(mockcontroller.MockControllerHost)
 	s.mockClientFactory = new(mockcommon.MockClientFactory)
 	s.mockClientFactory.On("GetControllerClient").Return(s.mockControllerClient, nil)
+	s.mockClientFactory.On("GetThriftStoreClientUUID", mock.Anything, mock.Anything).Return(s.mockStoreClient, "hostport", nil)
 
 	s.mockWSConnector = new(mockcommon.MockWSConnector)
 	s.mockWSConnector.On("AcceptReplicationReadStream", mock.Anything, mock.Anything).Return(s.mockInStream, nil)
@@ -764,6 +768,24 @@ func (s *ReplicatorSuite) TestDestExtentMetadataReconcileLocalMissing() {
 	s.mockControllerClient.AssertExpectations(s.T())
 }
 
+// local zone is missing one destination extent compared to remote but remote is consumed. Expect no action
+func (s *ReplicatorSuite) TestDestExtentMetadataReconcileLocalMissingConsumedExtent() {
+	localZone := `zone2`
+	remoteZone := `zone1`
+	missingExtent := uuid.New()
+	dest := uuid.New()
+
+	repliator, _ := NewReplicator("replicator-test", s.mockService, s.mockMeta, s.mockReplicatorClientFactory, s.cfg)
+	reconciler, _ := NewMetadataReconciler(repliator.metaClient, repliator, localZone, repliator.logger, repliator.m3Client).(*metadataReconciler)
+
+	localExtents := make(map[string]shared.ExtentStatus)
+	remoteExtents := make(map[string]shared.ExtentStatus)
+	remoteExtents[missingExtent] = shared.ExtentStatus_CONSUMED
+	err := reconciler.reconcileDestExtent(dest, localExtents, remoteExtents, remoteZone)
+	s.NoError(err)
+	s.mockControllerClient.AssertExpectations(s.T())
+}
+
 // both local and remote zone has no destination extent. Expect no creation request is generated
 func (s *ReplicatorSuite) TestDestExtentMetadataReconcileLocalAndRemoteEmpty() {
 	localZone := `zone2`
@@ -775,25 +797,6 @@ func (s *ReplicatorSuite) TestDestExtentMetadataReconcileLocalAndRemoteEmpty() {
 
 	localExtents := make(map[string]shared.ExtentStatus)
 	remoteExtents := make(map[string]shared.ExtentStatus)
-	err := reconciler.reconcileDestExtent(dest, localExtents, remoteExtents, remoteZone)
-	s.NoError(err)
-	s.mockControllerClient.AssertExpectations(s.T())
-}
-
-// local zone has more destination extent than remote zone. Expect no creation request is generated
-func (s *ReplicatorSuite) TestDestExtentMetadataReconcileRemoteMissing() {
-	localZone := `zone2`
-	remoteZone := `zone1`
-	missingExtent := uuid.New()
-	dest := uuid.New()
-
-	repliator, _ := NewReplicator("replicator-test", s.mockService, s.mockMeta, s.mockReplicatorClientFactory, s.cfg)
-	reconciler, _ := NewMetadataReconciler(repliator.metaClient, repliator, localZone, repliator.logger, repliator.m3Client).(*metadataReconciler)
-
-	localExtents := make(map[string]shared.ExtentStatus)
-	localExtents[missingExtent] = shared.ExtentStatus_OPEN
-	remoteExtents := make(map[string]shared.ExtentStatus)
-
 	err := reconciler.reconcileDestExtent(dest, localExtents, remoteExtents, remoteZone)
 	s.NoError(err)
 	s.mockControllerClient.AssertExpectations(s.T())
@@ -824,4 +827,138 @@ func (s *ReplicatorSuite) TestDestExtentMetadataReconcileInconsistentStatus() {
 	err := reconciler.reconcileDestExtent(dest, localExtents, remoteExtents, remoteZone)
 	s.NoError(err)
 	s.mockMeta.AssertExpectations(s.T())
+}
+
+// Extent deleted in remote but not in local. Expect a update request to update the status, and a seal extent call per store
+func (s *ReplicatorSuite) TestDestExtentMetadataReconcileRemoteDeletedLocalNot() {
+	localZone := `zone2`
+	remoteZone := `zone1`
+	extent := uuid.New()
+	dest := uuid.New()
+	stores := []string{uuid.New(), uuid.New()}
+
+	repliator, _ := NewReplicator("replicator-test", s.mockService, s.mockMeta, s.mockReplicatorClientFactory, s.cfg)
+	reconciler, _ := NewMetadataReconciler(repliator.metaClient, repliator, localZone, repliator.logger, repliator.m3Client).(*metadataReconciler)
+
+	// setup mock
+	s.mockMeta.On("UpdateExtentStats", mock.Anything, mock.Anything).Return(nil, nil).Run(func(args mock.Arguments) {
+		req := args.Get(1).(*metadata.UpdateExtentStatsRequest)
+		s.Equal(dest, req.GetDestinationUUID())
+		s.Equal(extent, req.GetExtentUUID())
+		s.Equal(shared.ExtentStatus_SEALED, req.GetStatus())
+	})
+	s.mockMeta.On("ReadExtentStats", mock.Anything, mock.Anything).Return(&metadata.ReadExtentStatsResult_{
+		ExtentStats: &shared.ExtentStats{
+			Extent: &shared.Extent{
+				StoreUUIDs: stores,
+			},
+		},
+	}, nil).Run(func(args mock.Arguments) {
+		req := args.Get(1).(*metadata.ReadExtentStatsRequest)
+		s.Equal(dest, req.GetDestinationUUID())
+		s.Equal(extent, req.GetExtentUUID())
+	})
+	s.mockStoreClient.On("SealExtent", mock.Anything, mock.Anything).Return(nil).Times(len(stores)).Run(func(args mock.Arguments) {
+		req := args.Get(1).(*store.SealExtentRequest)
+		s.Equal(extent, req.GetExtentUUID())
+	})
+
+	localExtents := make(map[string]shared.ExtentStatus)
+	remoteExtents := make(map[string]shared.ExtentStatus)
+	remoteExtents[extent] = shared.ExtentStatus_DELETED
+	localExtents[extent] = shared.ExtentStatus_OPEN
+	err := reconciler.reconcileDestExtent(dest, localExtents, remoteExtents, remoteZone)
+	s.NoError(err)
+	s.mockMeta.AssertExpectations(s.T())
+	s.mockStoreClient.AssertExpectations(s.T())
+}
+
+// Extent gone in remote but not in local.
+func (s *ReplicatorSuite) TestDestExtentMetadataReconcileRemoteGoneLocalNot() {
+	localZone := `zone2`
+	remoteZone := `zone1`
+	extent := uuid.New()
+	dest := uuid.New()
+	stores := []string{uuid.New(), uuid.New()}
+
+	repliator, _ := NewReplicator("replicator-test", s.mockService, s.mockMeta, s.mockReplicatorClientFactory, s.cfg)
+	reconciler, _ := NewMetadataReconciler(repliator.metaClient, repliator, localZone, repliator.logger, repliator.m3Client).(*metadataReconciler)
+
+	// step1: found extent missing from remote. No action expected, only added to suspect list
+	localExtents := make(map[string]shared.ExtentStatus)
+	remoteExtents := make(map[string]shared.ExtentStatus)
+	localExtents[extent] = shared.ExtentStatus_OPEN
+	err := reconciler.reconcileDestExtent(dest, localExtents, remoteExtents, remoteZone)
+	s.NoError(err)
+	s.mockMeta.AssertExpectations(s.T())
+	s.mockStoreClient.AssertExpectations(s.T())
+	s.Equal(1, len(reconciler.suspectMissingExtents))
+
+	// step2: override the missing time. Expect to seal in metadata and store
+	reconciler.suspectMissingExtents[extent] = missingExtentInfo{
+		destUUID:     reconciler.suspectMissingExtents[extent].destUUID,
+		missingSince: time.Now().AddDate(0, -1, 0),
+	}
+	s.mockMeta.On("UpdateExtentStats", mock.Anything, mock.Anything).Return(nil, nil).Once().Run(func(args mock.Arguments) {
+		req := args.Get(1).(*metadata.UpdateExtentStatsRequest)
+		s.Equal(dest, req.GetDestinationUUID())
+		s.Equal(extent, req.GetExtentUUID())
+		s.Equal(shared.ExtentStatus_SEALED, req.GetStatus())
+	})
+	s.mockMeta.On("ReadExtentStats", mock.Anything, mock.Anything).Return(&metadata.ReadExtentStatsResult_{
+		ExtentStats: &shared.ExtentStats{
+			Extent: &shared.Extent{
+				StoreUUIDs: stores,
+			},
+		},
+	}, nil).Once().Run(func(args mock.Arguments) {
+		req := args.Get(1).(*metadata.ReadExtentStatsRequest)
+		s.Equal(dest, req.GetDestinationUUID())
+		s.Equal(extent, req.GetExtentUUID())
+	})
+	s.mockStoreClient.On("SealExtent", mock.Anything, mock.Anything).Return(nil).Times(len(stores)).Run(func(args mock.Arguments) {
+		req := args.Get(1).(*store.SealExtentRequest)
+		s.Equal(extent, req.GetExtentUUID())
+	})
+	err = reconciler.reconcileDestExtent(dest, localExtents, remoteExtents, remoteZone)
+	s.NoError(err)
+	s.mockMeta.AssertExpectations(s.T())
+	s.mockStoreClient.AssertExpectations(s.T())
+	s.Equal(1, len(reconciler.suspectMissingExtents))
+
+	// step3: run reconcile again, expect the same as step2
+	s.mockMeta.On("UpdateExtentStats", mock.Anything, mock.Anything).Return(nil, nil).Once().Run(func(args mock.Arguments) {
+		req := args.Get(1).(*metadata.UpdateExtentStatsRequest)
+		s.Equal(dest, req.GetDestinationUUID())
+		s.Equal(extent, req.GetExtentUUID())
+		s.Equal(shared.ExtentStatus_SEALED, req.GetStatus())
+	})
+	s.mockMeta.On("ReadExtentStats", mock.Anything, mock.Anything).Return(&metadata.ReadExtentStatsResult_{
+		ExtentStats: &shared.ExtentStats{
+			Extent: &shared.Extent{
+				StoreUUIDs: stores,
+			},
+		},
+	}, nil).Once().Run(func(args mock.Arguments) {
+		req := args.Get(1).(*metadata.ReadExtentStatsRequest)
+		s.Equal(dest, req.GetDestinationUUID())
+		s.Equal(extent, req.GetExtentUUID())
+	})
+	s.mockStoreClient.On("SealExtent", mock.Anything, mock.Anything).Return(nil).Times(len(stores)).Run(func(args mock.Arguments) {
+		req := args.Get(1).(*store.SealExtentRequest)
+		s.Equal(extent, req.GetExtentUUID())
+	})
+	err = reconciler.reconcileDestExtent(dest, localExtents, remoteExtents, remoteZone)
+	s.NoError(err)
+	s.mockMeta.AssertExpectations(s.T())
+	s.mockStoreClient.AssertExpectations(s.T())
+	s.Equal(1, len(reconciler.suspectMissingExtents))
+
+	// step4: add the extent in remote zone, expect no action, and extent removed from suspect list
+	remoteExtents[extent] = shared.ExtentStatus_OPEN
+	err = reconciler.reconcileDestExtent(dest, localExtents, remoteExtents, remoteZone)
+	s.NoError(err)
+	s.mockMeta.AssertExpectations(s.T())
+	s.mockStoreClient.AssertExpectations(s.T())
+	s.Equal(0, len(reconciler.suspectMissingExtents))
 }
