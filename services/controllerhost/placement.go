@@ -283,8 +283,9 @@ func (p *DistancePlacement) roundRobinCull(in []*common.HostInfo, count int, not
 		}
 	}
 	
-	for i := range ranked[:count] {
-		out = append(out, ranked[i].h)
+	ranked = ranked[:count]
+	for _, hi := range ranked {
+		out = append(out, hi.h)
 	}
 
 	var s string
