@@ -23,9 +23,10 @@ package controllerhost
 import (
 	"errors"
 	"fmt"
-	"math/rand"
+	"math"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/uber-common/bark"
 	"github.com/uber/cherami-server/common"
@@ -131,8 +132,9 @@ func (p *DistancePlacement) pickHostsWithFallback(service string, minDistance, m
 				return h[0], nil
 			}
 		}
-		if cnt := len(hosts); cnt >= 1 {
-			return hosts[rand.Intn(cnt)], nil
+		culledHosts := p.roundRobinCull(hosts, 1, service)
+		if len(culledHosts) == 1 {
+			return culledHosts[0], nil
 		}
 	}
 	return &common.HostInfo{}, errNoHosts
@@ -199,15 +201,10 @@ func (p *DistancePlacement) PickStoreHosts(count int) ([]*common.HostInfo, error
 				return hosts, nil
 			}
 		}
-		if cnt := len(storeHosts); cnt >= count {
-			start := rand.Intn(cnt)
-			end := start + count
-			if end > cnt {
-				end = cnt
-			}
-			hosts := append([]*common.HostInfo{}, storeHosts[start:end]...)
-			hosts = append(hosts, storeHosts[:count-len(hosts)]...)
-			return hosts, nil
+		
+		culledStoreHosts := p.roundRobinCull(storeHosts, count, `PickStoreHosts`)
+		if len(culledStoreHosts) == count {
+			return culledStoreHosts, nil
 		}
 	}
 
@@ -276,4 +273,76 @@ func (p *DistancePlacement) findEligibleStoreHosts() ([]*common.HostInfo, error)
 	}
 
 	return result, nil
+}
+
+var rrMap = map[string]int{}
+var rrMapMutex sync.Mutex
+
+func (p *DistancePlacement) roundRobinCull(in []*common.HostInfo, count int, note string) (out []*common.HostInfo) {
+	var hi *common.HostInfo
+	var min, i int
+	out = make([]*common.HostInfo, 0, count)
+
+	ll := func() bark.Logger {
+		return p.context.log.WithField(`stressModule`, `roundRobin`).WithField(`note`, note)
+	}
+
+	defer rrMapMutex.Unlock()
+	rrMapMutex.Lock()
+
+findNextMinimum:
+	for {
+		min = int(math.MaxInt32)
+
+	findCurrentMinimum:
+		for _, hi = range in {
+			if hi == nil {
+				continue findCurrentMinimum
+			}
+			if min > rrMap[hi.UUID] {
+				min = rrMap[hi.UUID]
+			}
+			if min == 0 {
+				break findCurrentMinimum
+			}
+		}
+
+	addMinimums:
+		for i, hi = range in {
+			if hi == nil {
+				continue addMinimums
+			}
+			if rrMap[hi.UUID] == min {
+				out = append(out, hi)
+				in[i] = nil // Clear this entry so that we can't select it again
+				if len(out) == count {
+					break addMinimums
+				}
+			}
+		}
+
+		if len(out) == count || min == int(math.MaxInt32) {
+			break findNextMinimum
+		}
+	}
+
+	if len(out) != count {
+		ll().
+			WithField(`count`, count).
+			WithField(`actualCount`, len(out)).
+			Error(`failed to build placement team`)
+		return make([]*common.HostInfo, 0)
+	}
+
+	var s string
+	for _, hi = range out {
+		s += fmt.Sprintf("%s:%d, ", hi.Name, rrMap[hi.UUID])
+		rrMap[hi.UUID]++
+	}
+
+	ll().
+		WithField(`placement`, s).
+		Info(`successfully culled`)
+
+	return out
 }
