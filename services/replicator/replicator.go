@@ -61,7 +61,6 @@ type (
 		tenancy                   string
 		defaultAuthoritativeZone  string
 		replicatorclientFactory   ClientFactory
-		clientFactory             common.ClientFactory
 		remoteReplicatorConn      map[string]*outConnection
 		remoteReplicatorConnMutex sync.RWMutex
 		storehostConn             map[string]*outConnection
@@ -123,7 +122,6 @@ func NewReplicator(serviceName string, sVice common.SCommon, metadataClient meta
 		defaultAuthoritativeZone: config.GetReplicatorConfig().GetDefaultAuthoritativeZone(),
 		tenancy:                  tenancy,
 		replicatorclientFactory:  replicatorClientFactory,
-		clientFactory:            sVice.GetClientFactory(),
 		remoteReplicatorConn:     make(map[string]*outConnection),
 		storehostConn:            make(map[string]*outConnection),
 	}
