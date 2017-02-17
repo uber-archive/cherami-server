@@ -248,10 +248,10 @@ func (p *DistancePlacement) roundRobinCull(in []*common.HostInfo, count int, not
 		return p.context.log.WithField(`stressModule`, `roundRobin`).WithField(`note`, note)
 	}
 
-	if len(in) != count {
+	if len(in) < count {
 		ll().
 			WithField(`count`, count).
-			WithField(`actualCount`, len(out)).
+			WithField(`actualCount`, len(in)).
 			Error(`failed to build placement team`)
 		return make([]*common.HostInfo, 0)
 	}
