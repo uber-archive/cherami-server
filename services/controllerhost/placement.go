@@ -256,7 +256,7 @@ func (p *DistancePlacement) roundRobinCull(in []*common.HostInfo, count int, not
 		r int
 	}
 
-	ranked := make([]rank, len(in))
+	ranked := make([]rank, 0)
 	for _, hi = range in {
 		if hi != nil {
 			ranked = append(ranked, rank{h: hi, r: rrMap[hi.UUID]})
@@ -284,8 +284,8 @@ func (p *DistancePlacement) roundRobinCull(in []*common.HostInfo, count int, not
 	}
 	
 	ranked = ranked[:count]
-	for _, hi := range ranked {
-		out = append(out, hi.h)
+	for _, rnk := range ranked {
+		out = append(out, rnk.h)
 	}
 
 	var s string
