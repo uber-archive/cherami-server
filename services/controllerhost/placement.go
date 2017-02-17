@@ -23,7 +23,6 @@ package controllerhost
 import (
 	"errors"
 	"fmt"
-	"math"
 	"strconv"
 	"strings"
 	"sync"
@@ -161,36 +160,10 @@ func (p *DistancePlacement) PickOutputHost(storeHosts []*common.HostInfo) (*comm
 func (p *DistancePlacement) PickStoreHosts(count int) ([]*common.HostInfo, error) {
 
 	if storeHosts, err := p.findEligibleStoreHosts(); err == nil {
-
 		if len(storeHosts) < count {
 			return nil, errNoHosts
 		}
 
-		minDistance := p.context.appConfig.GetControllerConfig().GetMinStoreToStoreDistance()
-		maxDistance := p.context.appConfig.GetControllerConfig().GetMaxStoreToStoreDistance()
-		if minDistance <= distance.ZeroDistance {
-			minDistance = distance.ZeroDistance + 1
-		}
-		if maxDistance <= minDistance {
-			maxDistance = distance.InfiniteDistance
-		}
-		if hosts, e := p.pickHosts(common.StoreServiceName, storeHosts, nil, count, minDistance, maxDistance); e == nil {
-			return hosts, nil
-		}
-		minFallback := p.context.appConfig.GetControllerConfig().GetMinStoreToStoreFallbackDistance()
-		maxFallback := p.context.appConfig.GetControllerConfig().GetMaxStoreToStoreFallbackDistance()
-		if minFallback < minDistance || maxFallback > maxDistance {
-			if minFallback <= distance.ZeroDistance {
-				minFallback = distance.ZeroDistance + 1
-			}
-			if maxFallback <= minFallback {
-				maxFallback = distance.InfiniteDistance
-			}
-			if hosts, e := p.pickHosts(common.StoreServiceName, storeHosts, nil, count, minFallback, maxFallback); e == nil {
-				return hosts, nil
-			}
-		}
-		
 		culledStoreHosts := p.roundRobinCull(storeHosts, count, `PickStoreHosts`)
 		if len(culledStoreHosts) == count {
 			return culledStoreHosts, nil
@@ -269,53 +242,13 @@ var rrMapMutex sync.Mutex
 
 func (p *DistancePlacement) roundRobinCull(in []*common.HostInfo, count int, note string) (out []*common.HostInfo) {
 	var hi *common.HostInfo
-	var min, i int
 	out = make([]*common.HostInfo, 0, count)
 
 	ll := func() bark.Logger {
 		return p.context.log.WithField(`stressModule`, `roundRobin`).WithField(`note`, note)
 	}
 
-	defer rrMapMutex.Unlock()
-	rrMapMutex.Lock()
-
-findNextMinimum:
-	for {
-		min = int(math.MaxInt32)
-
-	findCurrentMinimum:
-		for _, hi = range in {
-			if hi == nil {
-				continue findCurrentMinimum
-			}
-			if min > rrMap[hi.UUID] {
-				min = rrMap[hi.UUID]
-			}
-			if min == 0 {
-				break findCurrentMinimum
-			}
-		}
-
-	addMinimums:
-		for i, hi = range in {
-			if hi == nil {
-				continue addMinimums
-			}
-			if rrMap[hi.UUID] == min {
-				out = append(out, hi)
-				in[i] = nil // Clear this entry so that we can't select it again
-				if len(out) == count {
-					break addMinimums
-				}
-			}
-		}
-
-		if len(out) == count || min == int(math.MaxInt32) {
-			break findNextMinimum
-		}
-	}
-
-	if len(out) != count {
+	if len(in) != count {
 		ll().
 			WithField(`count`, count).
 			WithField(`actualCount`, len(out)).
@@ -323,9 +256,38 @@ findNextMinimum:
 		return make([]*common.HostInfo, 0)
 	}
 
+	defer rrMapMutex.Unlock()
+	rrMapMutex.Lock()
+
+	type rank struct {
+		h *common.HostInfo
+		r int
+	}
+
+	ranked := make([]rank, len(in))
+	for _, hi = range in {
+		ranked = append(ranked, rank{h: hi, r: rrMap[hi.UUID]})
+	}
+		
+	// sort.Slice only available in go 1.8
+
+	for range ranked {
+		for i := range ranked {
+			if i != 0 {
+				if ranked[i].r < ranked[i-1].r {
+					ranked[i], ranked[i-1] = ranked[i-1], ranked[i]
+				}
+			}
+		}
+	}
+	
+	for i := range ranked[:count] {
+		out = append(out, ranked[i].h)
+	}
+
 	var s string
 	for _, hi = range out {
-		s += fmt.Sprintf("%s:%d, ", hi.Name, rrMap[hi.UUID])
+		s += fmt.Sprintf("%s:%d, ", strings.Split(hi.Name, `.`)[0], rrMap[hi.UUID])
 		rrMap[hi.UUID]++
 	}
 
