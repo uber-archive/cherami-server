@@ -242,18 +242,10 @@ var rrMapMutex sync.Mutex
 
 func (p *DistancePlacement) roundRobinCull(in []*common.HostInfo, count int, note string) (out []*common.HostInfo) {
 	var hi *common.HostInfo
-	out = make([]*common.HostInfo, 0, count)
+	out = make([]*common.HostInfo, 0)
 
 	ll := func() bark.Logger {
 		return p.context.log.WithField(`stressModule`, `roundRobin`).WithField(`note`, note)
-	}
-
-	if len(in) < count {
-		ll().
-			WithField(`count`, count).
-			WithField(`actualCount`, len(in)).
-			Error(`failed to build placement team`)
-		return make([]*common.HostInfo, 0)
 	}
 
 	defer rrMapMutex.Unlock()
@@ -266,7 +258,17 @@ func (p *DistancePlacement) roundRobinCull(in []*common.HostInfo, count int, not
 
 	ranked := make([]rank, len(in))
 	for _, hi = range in {
-		ranked = append(ranked, rank{h: hi, r: rrMap[hi.UUID]})
+		if hi != nil {
+			ranked = append(ranked, rank{h: hi, r: rrMap[hi.UUID]})
+		}
+	}
+
+	if len(ranked) < count {
+		ll().
+			WithField(`count`, count).
+			WithField(`actualCount`, len(ranked)).
+			Error(`failed to build placement team`)
+		return make([]*common.HostInfo, 0)
 	}
 		
 	// sort.Slice only available in go 1.8
