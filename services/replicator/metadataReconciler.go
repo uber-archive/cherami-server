@@ -71,7 +71,7 @@ const (
 	runInterval                    = time.Duration(10 * time.Minute)
 	metadataListRequestPageSize    = 50
 	storeCallTimeout               = 10 * time.Second
-	extentMissingDurationThreshold = time.Duration(24 * time.Hour)
+	extentMissingDurationThreshold = time.Duration(1 * time.Hour)
 )
 
 // NewMetadataReconciler returns an instance of MetadataReconciler
@@ -621,7 +621,7 @@ func (r *metadataReconciler) sealExtentInStore(destUUID string, extentUUID strin
 
 	var errorOccured bool
 	for _, store := range readExtentResult.GetExtentStats().GetExtent().GetStoreUUIDs() {
-		storeClient, _, err := r.replicator.clientFactory.GetThriftStoreClientUUID(store, destUUID)
+		storeClient, _, err := r.replicator.GetClientFactory().GetThriftStoreClientUUID(store, destUUID)
 		if err != nil {
 			lclLg.WithFields(bark.Fields{
 				common.TagErr:  err,
