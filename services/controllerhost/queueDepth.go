@@ -22,8 +22,8 @@ package controllerhost
 
 import (
 	"fmt"
+	"math/rand"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/uber/cherami-server/common"
@@ -60,53 +60,28 @@ const (
 )
 
 var (
-	queueDepthCacheLimit = 1 << 20
-	gaftCache            = make(map[gaftKey]common.SequenceNumber)
+	gaftCache = make(map[gaftKey]common.SequenceNumber)
 	// This allows extrapolation up to 1 reporting period in either direction, meaning that missing a report shouldn't cause a blip
 	maxExtrapolation = common.Seconds(float64(IntervalBtwnScans) / float64(time.Second))
 )
 
 type (
-	QueueDepthCache struct {
-		sync.RWMutex
-		entries  map[string]QueueDepthCacheEntry
-		capacity int
-	}
-
-	// QueueDepthCacheEntry is a cache structure for testing queue depth
-	QueueDepthCacheEntry struct {
-		// Time is the cache entry time
-		Time common.UnixNanoTime
-		// BacklogAvailable is the available backlog
-		BacklogAvailable int64
-		// BacklogUnavailable is the unavailable backlog (only useful for timer queues)
-		BacklogUnavailable int64
-		// BacklogInflight is the in flight message count
-		BacklogInflight int64
-		// BacklogDLQ is the number of messages in DLQ
-		BacklogDLQ int64
-	}
-
-	// QueueDepthCacheJSONFields is the json fields for QueueDepthCacheEntry
-	QueueDepthCacheJSONFields struct {
-		CacheTime        common.UnixNanoTime `json:"cache_time,omitempty"`
-		BacklogAvailable int64               `json:"backlog_available"`
-		BacklogInflight  int64               `json:"backlog_inflight"`
-		BacklogDLQ       int64               `json:"backlog_dlq"`
-	}
+	extentID string
+	storeID  string
 
 	queueDepthCalculator struct {
-		context                 *Context
-		ll                      bark.Logger
-		destinationExtentsCache replicaStatsMRUCache // MRU cache of extent replica stats
-		queueDepthCache         *QueueDepthCache
+		context         *Context
+		ll              bark.Logger
+		queueDepthCache *QueueDepthCache
 
 		// iter represents the state during a
 		// single iteration of a destination and/or
 		// consumer group
 		iter struct {
-			isDLQ   bool // is the current destination a DLQ
-			dstDesc *shared.DestinationDescription
+			isDLQ                    bool // is the current destination a DLQ
+			dstDesc                  *shared.DestinationDescription
+			dstExtents               map[extentID]*metadata.DestinationExtent // set of extents for the current dst
+			storeExtentMetadataCache *storeExtentMetadataCache
 
 			cg struct {
 				backlogAvailable      int64
@@ -114,7 +89,7 @@ type (
 				nOpenExtents          int64 // stat for stallness check
 				nStalledExtents       int64 // stat for stallness check
 				desc                  *shared.ConsumerGroupDescription
-				coverMap              extentCoverMap // list of extents that account towards backlog
+				coverMap              map[extentID]struct{} // list of extents that account towards backlog
 				extrapolatedTime      common.UnixNanoTime
 				isTabulationRequested bool
 			}
@@ -129,10 +104,9 @@ type (
 
 func newQueueDepthCalculator(context *Context) *queueDepthCalculator {
 	return &queueDepthCalculator{
-		context:                 context,
-		destinationExtentsCache: *newReplicaStatsMRUCache(context.mm, context.log.WithField(`module`, `ReplicaStatsMRUCache`)),
-		queueDepthCache:         newQueueDepthCache(),
-		ll:                      context.log.WithField(`module`, `queueDepth`),
+		context:         context,
+		queueDepthCache: newQueueDepthCache(),
+		ll:              context.log.WithField(`module`, `queueDepth`),
 	}
 }
 
@@ -150,8 +124,7 @@ func (qdc *queueDepthCalculator) handleEvent(e *mIteratorEvent) {
 	case eDestStart:
 		qdc.handleDestinationStart(e.dest)
 	case eDestEnd:
-		qdc.iter.dstDesc = nil
-		qdc.iter.isDLQ = false
+		qdc.handleDestinationEnd(e.dest)
 	case eExtent:
 		qdc.handleDestinationExtent(e.dest, e.extent)
 	case eCnsmStart:
@@ -167,7 +140,15 @@ func (qdc *queueDepthCalculator) handleEvent(e *mIteratorEvent) {
 func (qdc *queueDepthCalculator) handleDestinationStart(dstDesc *shared.DestinationDescription) {
 	qdc.iter.dstDesc = dstDesc
 	qdc.iter.isDLQ = common.IsDLQDestination(dstDesc)
-	qdc.destinationExtentsCache.clear()
+	qdc.iter.dstExtents = make(map[extentID]*metadata.DestinationExtent, 16)
+	qdc.iter.storeExtentMetadataCache = newStoreExtentMetadataCache(qdc.context.mm, qdc.ll)
+}
+
+func (qdc *queueDepthCalculator) handleDestinationEnd(dstDesc *shared.DestinationDescription) {
+	qdc.iter.dstDesc = nil
+	qdc.iter.isDLQ = false
+	qdc.iter.storeExtentMetadataCache = nil
+	qdc.iter.dstExtents = nil
 }
 
 func (qdc *queueDepthCalculator) handleConsumerGroupStart(dstDesc *shared.DestinationDescription, cgDesc *shared.ConsumerGroupDescription) {
@@ -186,7 +167,7 @@ func (qdc *queueDepthCalculator) handleConsumerGroupStart(dstDesc *shared.Destin
 		return
 	}
 
-	iter.cg.coverMap = qdc.destinationExtentsCache.getExtentCoverMap()
+	iter.cg.coverMap = qdc.getExtentCoverMap()
 	iter.cg.extrapolatedTime = common.Now() - common.UnixNanoTime(IntervalBtwnScans/2) // Do interpolation by looking back in time for half a reporting period
 
 	if iter.cg.isTabulationRequested {
@@ -207,12 +188,18 @@ func (qdc *queueDepthCalculator) handleConsumerGroupEnd(dstDesc *shared.Destinat
 	// to the consumer group yet and account them towards
 	// total backlog
 	for extent := range iter.cg.coverMap {
-		cge := &metadata.ConsumerGroupExtent{
-			ConsumerGroupUUID: common.StringPtr(cgDesc.GetConsumerGroupUUID()),
-			ExtentUUID:        common.StringPtr(string(extent)),
-			OutputHostUUID:    common.StringPtr(zeroUUID),
+		dstExtent, _ := iter.dstExtents[extent] // if lookup fails, code is broken
+		storeUUIDs := dstExtent.GetStoreUUIDs()
+		if len(storeUUIDs) == 0 {
+			continue // should never happen
 		}
-		qdc.addExtentBacklog(dstDesc, cgDesc, cge, qdc.makeCGExtentLogger(dstDesc, cgDesc, cge))
+		cge := &metadata.ConsumerGroupExtent{
+			ConsumerGroupUUID:  common.StringPtr(cgDesc.GetConsumerGroupUUID()),
+			ExtentUUID:         common.StringPtr(string(extent)),
+			OutputHostUUID:     common.StringPtr(zeroUUID),
+			ConnectedStoreUUID: common.StringPtr(storeUUIDs[rand.Intn(len(storeUUIDs))]), // pick a random store for backlog computation
+		}
+		qdc.addExtentBacklog(dstDesc, cgDesc, dstExtent, cge, qdc.makeCGExtentLogger(dstDesc, cgDesc, cge))
 	}
 
 	// stallness check, can be performed only after processing all extents
@@ -241,12 +228,7 @@ func (qdc *queueDepthCalculator) handleDestinationExtent(dstDesc *shared.Destina
 	if extent.GetStatus() > shared.ExtentStatus_SEALED {
 		return
 	}
-	cache := &qdc.destinationExtentsCache
-	extID := extentID(extent.GetExtentUUID())
-	cache.putSingleCGVisibility(extID, extent.GetConsumerGroupVisibility())
-	for _, store := range extent.GetStoreUUIDs() {
-		cache.put(extID, storeID(store), nil) // Add a placeholder so that a store extent may be found if no consumer group extent exists for it
-	}
+	qdc.iter.dstExtents[extentID(extent.GetExtentUUID())] = extent
 }
 
 func (qdc *queueDepthCalculator) handleConsumerGroupExtent(dstDesc *shared.DestinationDescription, cgDesc *shared.ConsumerGroupDescription, cgExtent *metadata.ConsumerGroupExtent) {
@@ -271,7 +253,12 @@ func (qdc *queueDepthCalculator) handleConsumerGroupExtent(dstDesc *shared.Desti
 		return
 	}
 
-	qdc.addExtentBacklog(dstDesc, cgDesc, cgExtent, logger)
+	dstExtent, ok := iter.dstExtents[extentID(cgExtent.GetExtentUUID())]
+	if !ok {
+		return // cgExtent not in dstExtent, must never happen
+	}
+
+	qdc.addExtentBacklog(dstDesc, cgDesc, dstExtent, cgExtent, logger)
 	delete(iter.cg.coverMap, extentID(cgExtent.GetExtentUUID()))
 }
 
@@ -281,6 +268,7 @@ func (qdc *queueDepthCalculator) handleConsumerGroupExtent(dstDesc *shared.Desti
 func (qdc *queueDepthCalculator) addExtentBacklog(
 	dstDesc *shared.DestinationDescription,
 	cgDesc *shared.ConsumerGroupDescription,
+	dstExtent *metadata.DestinationExtent,
 	cgExtent *metadata.ConsumerGroupExtent,
 	logger bark.Logger) {
 
@@ -302,6 +290,13 @@ func (qdc *queueDepthCalculator) addExtentBacklog(
 		return
 	}
 
+	if !qdc.isExtentBelongsToCG(dstExtent, cgDesc) || qdc.isPurgedDLQExtent(dstExtent) {
+		if iter.cg.isTabulationRequested {
+			logger.Info(`Queue Depth Tabulation, skipping other other CG's merged and/or purged dlq extent`)
+		}
+		return
+	}
+
 	ΔInFlight := common.ExtrapolateDifference(
 		common.SequenceNumber(cgExtent.GetReadLevelSeqNo()),
 		common.SequenceNumber(cgExtent.GetAckLevelSeqNo()),
@@ -315,12 +310,11 @@ func (qdc *queueDepthCalculator) addExtentBacklog(
 	iter.cg.backlogInflight += ΔInFlight
 
 	// Calculations requiring store extent
-	storeExtent := qdc.destinationExtentsCache.get(extID, connectedStoreID)
+	storeExtentMetadata := iter.storeExtentMetadataCache.get(connectedStoreID, extID)
 
-	// This happens pretty commonly when extents are churning. There are races where a
-	// consumer group extent exists, but hasn't been updated with the connected store id.
-	// Hence, the storeExtent may not be possible to retrieve. This is a temporary condition.
-	if storeExtent == nil {
+	if storeExtentMetadata == nil {
+		// Can only happen due to cassandra's eventual consistency
+		// nature. Without store metadata, we can't compute backlog
 		if iter.cg.isTabulationRequested {
 			logger.WithFields(bark.Fields{
 				common.TagStor:     string(connectedStoreID),
@@ -332,54 +326,16 @@ func (qdc *queueDepthCalculator) addExtentBacklog(
 		return
 	}
 
-	// Depending on status, we may already know that backlogs should be zero, regardless of what the other metadata says
-	// Note that the increment to BacklogInflight above should have been zero
-	if storeExtent.GetStatus() >= shared.ExtentStatus_CONSUMED {
-		iter.cg.backlogInflight -= ΔInFlight
-		if iter.cg.isTabulationRequested {
-			logger.WithFields(bark.Fields{
-				common.TagStor: string(connectedStoreID),
-				`extentStatus`: storeExtent.GetStatus(),
-			}).Info(`Queue Depth Tabulation (skipping deleted store extent)`)
-		}
-		return
-	}
-
-	if qdc.isMergedDLQExtentForOtherCG(storeExtent, cgDesc) || qdc.isPurgedDLQExtent(storeExtent) {
-		if iter.cg.isTabulationRequested {
-			logger.Info(`Queue Depth Tabulation, skipping other other CG's merged and/or purged dlq extent`)
-		}
-		return
-	}
-
-	rs := storeExtent.GetReplicaStats()[0]
-
-	// T471438 -- Fix meta-values leaked by storehost
-	// T520701 -- Fix massive int64 negative values
-	var fixed bool
-	for _, val := range []*int64{rs.AvailableSequence, rs.BeginSequence, rs.LastSequence} {
-		if val != nil && (*val >= storageMetaValuesLimit || *val < -1) {
-			*val = 0
-			fixed = true
-		}
-	}
-	if fixed {
-		logger.WithFields(bark.Fields{
-			common.TagStor: string(connectedStoreID),
-			`cachedStore`:  rs.GetStoreUUID(),
-		}).Info(`Queue Depth Temporarily Fixed Replica-Stats`)
-	}
-
 	// Skip dangling extents that are excluded by the startFrom time, or modify the consumerGroupExtent to adjust for
 	// retention or startFrom
-	if !qdc.handleStartFrom(dstDesc, cgDesc, cgExtent, storeExtent, rs, logger) {
+	if !qdc.handleStartFrom(dstDesc, cgDesc, dstExtent, cgExtent, storeExtentMetadata, logger) {
 		return
 	}
 
-	iter.cg.backlogAvailable += qdc.computeBacklog(cgExtent, rs, string(connectedStoreID), logger)
+	iter.cg.backlogAvailable += qdc.computeBacklog(cgExtent, storeExtentMetadata, string(connectedStoreID), logger)
 }
 
-func (qdc *queueDepthCalculator) computeBacklog(cgExtent *metadata.ConsumerGroupExtent, rs *shared.ExtentReplicaStats, storeID string, logger bark.Logger) int64 {
+func (qdc *queueDepthCalculator) computeBacklog(cgExtent *metadata.ConsumerGroupExtent, storeMetadata *storeExtentMetadata, storeID string, logger bark.Logger) int64 {
 
 	var backlog int64
 	var iter = &qdc.iter
@@ -387,21 +343,21 @@ func (qdc *queueDepthCalculator) computeBacklog(cgExtent *metadata.ConsumerGroup
 	switch qdc.iter.isDLQ {
 	case true:
 		backlog = common.ExtrapolateDifference(
-			common.SequenceNumber(rs.GetLastSequence()),
-			common.SequenceNumber(rs.GetBeginSequence())+1, // Begin sequence is -1 if no retention has occurred
-			rs.GetLastSequenceRate(),
+			common.SequenceNumber(storeMetadata.lastSequence),
+			common.SequenceNumber(storeMetadata.beginSequence)+1, // Begin sequence is -1 if no retention has occurred
+			storeMetadata.lastSequenceRate,
 			0,
-			common.UnixNanoTime(rs.GetWriteTime()),
-			common.UnixNanoTime(rs.GetWriteTime()),
+			storeMetadata.writeTime,
+			storeMetadata.writeTime,
 			iter.cg.extrapolatedTime,
 			maxExtrapolation)
 	case false:
 		backlog = common.ExtrapolateDifference(
-			common.SequenceNumber(rs.GetAvailableSequence()),
+			common.SequenceNumber(storeMetadata.availableSequence),
 			common.SequenceNumber(cgExtent.GetAckLevelSeqNo()),
-			rs.GetAvailableSequenceRate(),
+			storeMetadata.availableSequenceRate,
 			cgExtent.GetAckLevelSeqNoRate(),
-			common.UnixNanoTime(rs.GetWriteTime()),
+			common.UnixNanoTime(storeMetadata.writeTime),
 			common.UnixNanoTime(cgExtent.GetWriteTime()),
 			iter.cg.extrapolatedTime,
 			maxExtrapolation)
@@ -410,14 +366,14 @@ func (qdc *queueDepthCalculator) computeBacklog(cgExtent *metadata.ConsumerGroup
 	if iter.cg.isTabulationRequested {
 		logger.WithFields(bark.Fields{
 			common.TagStor:      storeID,
-			`rsStore`:           rs.GetStoreUUID(),
-			`rsAvailSeq`:        rs.GetAvailableSequence(),
-			`rsLastSeq`:         rs.GetLastSequence(),
-			`rsLastSeqRate`:     rs.GetLastSequenceRate(),
+			`rsStore`:           storeMetadata.storeID,
+			`rsAvailSeq`:        storeMetadata.availableSequence,
+			`rsLastSeq`:         storeMetadata.lastSequence,
+			`rsLastSeqRate`:     storeMetadata.lastSequenceRate,
 			`cgeAckLvlSeq`:      cgExtent.GetAckLevelSeqNo(),
-			`rsAvailSeqRate`:    rs.GetAvailableSequenceRate(),
+			`rsAvailSeqRate`:    storeMetadata.availableSequenceRate,
 			`cgeAckLvlSeqRate`:  cgExtent.GetAckLevelSeqNoRate(),
-			`rsWriteTime`:       (iter.cg.extrapolatedTime - common.UnixNanoTime(rs.GetWriteTime())).ToSecondsFmt(),
+			`rsWriteTime`:       (iter.cg.extrapolatedTime - storeMetadata.writeTime).ToSecondsFmt(),
 			`cgeWriteTime`:      (iter.cg.extrapolatedTime - common.UnixNanoTime(cgExtent.GetWriteTime())).ToSecondsFmt(),
 			`subTotalAvail`:     backlog,
 			`runningTotalAvail`: backlog + iter.cg.backlogAvailable,
@@ -517,9 +473,9 @@ fail:
 func (qdc *queueDepthCalculator) handleStartFrom(
 	dstDesc *shared.DestinationDescription,
 	cgDesc *shared.ConsumerGroupDescription,
+	dstExtent *metadata.DestinationExtent,
 	consumerGroupExtent *metadata.ConsumerGroupExtent,
-	storeExtent *shared.ExtentStats,
-	rs *shared.ExtentReplicaStats,
+	storeMetadata *storeExtentMetadata,
 	logger bark.Logger,
 ) (qualify bool) {
 
@@ -531,7 +487,7 @@ func (qdc *queueDepthCalculator) handleStartFrom(
 	var trace int // This is just for debugging purposes. It shows the path of 'if's that the function went through before exiting.
 	qualify = true
 	doGaft := true
-	createTime := storeExtent.GetCreatedTimeMillis() * 1000 * 1000
+	createTime := storeMetadata.createdTime
 
 	now := qdc.iter.cg.extrapolatedTime
 	isTabulationRequested := qdc.iter.cg.isTabulationRequested
@@ -556,32 +512,32 @@ func (qdc *queueDepthCalculator) handleStartFrom(
 
 		// Startfrom is greater than the last firing time for the extent, ignore this extent for now.
 		// We haven't cached, so if EndTime change we will re-evaluate
-		case rs.GetEndTime() != 0 && cgDesc.GetStartFrom() > rs.GetEndTime():
+		case storeMetadata.endTime != 0 && cgDesc.GetStartFrom() > storeMetadata.endTime:
 			trace = 3
 			qualify = false
 			goto done
 
 		// If we don't have a last firing time (i.e. non-timer destinations), check if the startFrom is greater than the last enqueue time
 		// If so, ignore this extent
-		case rs.GetEndTime() == 0 && rs.GetLastEnqueueTimeUtc() != 0 && cgDesc.GetStartFrom() > rs.GetLastEnqueueTimeUtc():
+		case storeMetadata.endTime == 0 && storeMetadata.lastEnqueueTimeUtc != 0 && cgDesc.GetStartFrom() > storeMetadata.lastEnqueueTimeUtc:
 			trace = 4
 			qualify = false
 			goto done
 
 		// These two mean that we will have some part of this extent, and we need to do getAddressFromTimestamp to determine how much
-		case rs.GetBeginTime() != 0 && cgDesc.GetStartFrom() >= rs.GetBeginTime():
+		case storeMetadata.beginTime != 0 && cgDesc.GetStartFrom() >= storeMetadata.beginTime:
 			trace = 5
-		case rs.GetBeginTime() == 0 && rs.GetBeginEnqueueTimeUtc() != 0 && cgDesc.GetStartFrom() >= rs.GetBeginEnqueueTimeUtc():
+		case storeMetadata.beginTime == 0 && storeMetadata.beginEnqueueTimeUtc != 0 && cgDesc.GetStartFrom() >= storeMetadata.beginEnqueueTimeUtc:
 			trace = 6
 
 		// TODO: we can avoid doing getAddressFromTimestampOnStores() below if we have the begin times and we know startFrom is below them
 
 		// If we don't have the begin times, we can tell that we should have some messages if startFrom is > createTime
-		case rs.GetBeginTime() == 0 && rs.GetBeginEnqueueTimeUtc() == 0 && cgDesc.GetStartFrom() > createTime:
+		case storeMetadata.beginTime == 0 && storeMetadata.beginEnqueueTimeUtc == 0 && cgDesc.GetStartFrom() > int64(createTime):
 			trace = 7
 
 		// If our startFrom time is before the extent was created, all messages in this extent qualify. We don't need to call getAddressFromTimestamp
-		case createTime != 0 && cgDesc.GetStartFrom() <= createTime: // If the startFrom is before the create time, the extent always qualifies
+		case createTime != 0 && cgDesc.GetStartFrom() <= int64(createTime): // If the startFrom is before the create time, the extent always qualifies
 			trace = 8
 			doGaft = false
 
@@ -590,11 +546,11 @@ func (qdc *queueDepthCalculator) handleStartFrom(
 			trace = 9
 			if isTabulationRequested {
 				logger.WithFields(bark.Fields{
-					`rsBeginSeq`:     rs.GetBeginSequence(),
-					`rsEndtime`:      rs.GetEndTime(),
-					`rsLastEnqueue`:  rs.GetLastEnqueueTimeUtc(),
-					`rsBeginTime`:    rs.GetBeginTime(),
-					`rsBeginEnqueue`: rs.GetBeginEnqueueTimeUtc(),
+					`rsBeginSeq`:     storeMetadata.beginSequence,
+					`rsEndtime`:      storeMetadata.endTime,
+					`rsLastEnqueue`:  storeMetadata.lastEnqueueTimeUtc,
+					`rsBeginTime`:    storeMetadata.beginTime,
+					`rsBeginEnqueue`: storeMetadata.beginEnqueueTimeUtc,
 					`createTime`:     createTime,
 					`startFrom`:      cgDesc.GetStartFrom(),
 				}).Warn(`Queue Depth Tabulation (StartFrom) Unhandled case`)
@@ -604,7 +560,7 @@ func (qdc *queueDepthCalculator) handleStartFrom(
 		if doGaft {
 			// At this point, startFrom might be in the middle of the extent. We need to call GetAddressFromTimestamp to determine the number of messages
 			// after the startFrom point
-			startFromSeq = getAddressFromTimestampOnStores(qdc.context, cgDesc, storeExtent.GetExtent().GetStoreUUIDs(), storeExtent.GetExtent().GetExtentUUID(), cgDesc.GetStartFrom())
+			startFromSeq = getAddressFromTimestampOnStores(qdc.context, cgDesc, dstExtent.GetStoreUUIDs(), dstExtent.GetExtentUUID(), cgDesc.GetStartFrom())
 			if startFromSeq == gaftSealed {
 				trace += 10
 				qualify = false // We include none of the messages in this extent
@@ -618,8 +574,8 @@ func (qdc *queueDepthCalculator) handleStartFrom(
 			trace += 100
 			consumerGroupExtent.WriteTime = common.Int64Ptr(int64(now))
 			consumerGroupExtent.AckLevelSeqNo = common.Int64Ptr(common.MaxInt64(
-				rs.GetBeginSequence(), // Retention may have removed some messages
-				int64(startFromSeq),   // Otherwise, act like we had just opened this extent at startFrom, i.e. don't count messages before startFrom
+				storeMetadata.beginSequence, // Retention may have removed some messages
+				int64(startFromSeq),         // Otherwise, act like we had just opened this extent at startFrom, i.e. don't count messages before startFrom
 			))
 		}
 	}
@@ -627,9 +583,9 @@ func (qdc *queueDepthCalculator) handleStartFrom(
 done:
 	if isTabulationRequested {
 		logger.WithFields(bark.Fields{
-			`rsBeginSeq`:   rs.GetBeginSequence(),
+			`rsBeginSeq`:   storeMetadata.beginSequence,
 			`startFromSeq`: startFromSeq,
-			`rsAvailSeq`:   rs.GetAvailableSequence(),
+			`rsAvailSeq`:   storeMetadata.availableSequence,
 			`qualify`:      qualify,
 			`trace`:        trace,
 		}).Info(`Queue Depth Tabulation (StartFrom)`)
@@ -745,12 +701,22 @@ func (qdc *queueDepthCalculator) reportBacklog(cgDesc *shared.ConsumerGroupDescr
 	}
 }
 
-func (qdc *queueDepthCalculator) isMergedDLQExtentForOtherCG(extent *shared.ExtentStats, cgDesc *shared.ConsumerGroupDescription) bool {
-	return len(extent.GetConsumerGroupVisibility()) > 0 &&
-		extent.GetConsumerGroupVisibility() != cgDesc.GetConsumerGroupUUID()
+// getExtentCoverMap returns a copy of all the extent
+// ids for the currently iterated destination
+func (qdc *queueDepthCalculator) getExtentCoverMap() map[extentID]struct{} {
+	result := make(map[extentID]struct{}, len(qdc.iter.dstExtents))
+	for extID := range qdc.iter.dstExtents {
+		result[extID] = struct{}{}
+	}
+	return result
 }
 
-func (qdc *queueDepthCalculator) isPurgedDLQExtent(extent *shared.ExtentStats) bool {
+func (qdc *queueDepthCalculator) isExtentBelongsToCG(extent *metadata.DestinationExtent, cgDesc *shared.ConsumerGroupDescription) bool {
+	return len(extent.GetConsumerGroupVisibility()) == 0 ||
+		extent.GetConsumerGroupVisibility() == cgDesc.GetConsumerGroupUUID()
+}
+
+func (qdc *queueDepthCalculator) isPurgedDLQExtent(extent *metadata.DestinationExtent) bool {
 	return len(extent.GetConsumerGroupVisibility()) > 0 && qdc.iter.isDLQ
 }
 
@@ -787,32 +753,4 @@ func (qdc *queueDepthCalculator) makeCGExtentLogger(dstDesc *shared.DestinationD
 		})
 	}
 	return logger
-}
-
-func newQueueDepthCache() *QueueDepthCache {
-	return &QueueDepthCache{
-		capacity: queueDepthCacheLimit,
-		entries:  make(map[string]QueueDepthCacheEntry),
-	}
-}
-
-func (cache *QueueDepthCache) get(key string) (QueueDepthCacheEntry, bool) {
-	cache.RLock()
-	defer cache.RUnlock()
-	if entry, ok := cache.entries[key]; ok {
-		return entry, ok
-	}
-	return QueueDepthCacheEntry{}, false
-}
-
-func (cache *QueueDepthCache) put(key string, value *QueueDepthCacheEntry) {
-	cache.Lock()
-	defer cache.Unlock()
-	if len(cache.entries) > cache.capacity { // Random eviction if the cache has grown too large;
-		for k := range cache.entries {
-			delete(cache.entries, k)
-			break
-		}
-	}
-	cache.entries[key] = *value
 }
