@@ -66,8 +66,9 @@ type (
 		// stats will be reset at the beginning
 		// of a new iteration.
 		loopStats struct {
-			nExtentsByStatus   [maxExtentStates]int64
-			nCGExtentsByStatus [maxCGExtentStates]int64
+			nExtentsByStatus    [maxExtentStates]int64
+			nDLQExtentsByStatus [maxExtentStates]int64
+			nCGExtentsByStatus  [maxCGExtentStates]int64
 		}
 	}
 
@@ -317,6 +318,8 @@ func (monitor *extentStateMonitor) iterateDestinationExtents(dstDesc *shared.Des
 	var context = monitor.context
 	var extents []*metadata.DestinationExtent
 
+	isDLQ := common.IsDLQDestinationPath(dstDesc.GetPath())
+
 	// Note that there may be duplicates in these multiple passes, but because these are in chronological order, we should not
 	// miss an extent.
 
@@ -342,7 +345,7 @@ extentIter:
 		}
 
 		for _, extent := range extents {
-			monitor.handleDestinationExtent(dstDesc, extent) // local handler
+			monitor.handleDestinationExtent(dstDesc, isDLQ, extent) // local handler
 			monitor.mi.publishEvent(eExtent, extent)
 		}
 	}
@@ -491,9 +494,12 @@ func (monitor *extentStateMonitor) deleteConsumerGroup(dstDesc *shared.Destinati
 }
 
 // handleDestinationExtent is the local handler for every destination extent
-func (monitor *extentStateMonitor) handleDestinationExtent(dstDesc *shared.DestinationDescription, extent *metadata.DestinationExtent) {
+func (monitor *extentStateMonitor) handleDestinationExtent(dstDesc *shared.DestinationDescription, isDLQ bool, extent *metadata.DestinationExtent) {
 
 	monitor.loopStats.nExtentsByStatus[int(extent.GetStatus())]++
+	if isDLQ {
+		monitor.loopStats.nDLQExtentsByStatus[int(extent.GetStatus())]++
+	}
 
 	switch extent.GetStatus() {
 	case shared.ExtentStatus_OPEN:
@@ -680,6 +686,7 @@ func (monitor *extentStateMonitor) isExtentHealthy(dstDesc *shared.DestinationDe
 
 func (monitor *extentStateMonitor) resetLoopStats() {
 	monitor.loopStats.nExtentsByStatus = [maxExtentStates]int64{}
+	monitor.loopStats.nDLQExtentsByStatus = [maxExtentStates]int64{}
 	monitor.loopStats.nCGExtentsByStatus = [maxCGExtentStates]int64{}
 }
 
@@ -689,6 +696,9 @@ func (monitor *extentStateMonitor) emitLoopStats() {
 	m3Client.AddCounter(metrics.ExtentMonitorScope, metrics.ControllerNumOpenExtents, stats.nExtentsByStatus[int(shared.ExtentStatus_OPEN)])
 	m3Client.AddCounter(metrics.ExtentMonitorScope, metrics.ControllerNumSealedExtents, stats.nExtentsByStatus[int(shared.ExtentStatus_SEALED)])
 	m3Client.AddCounter(metrics.ExtentMonitorScope, metrics.ControllerNumConsumedExtents, stats.nExtentsByStatus[int(shared.ExtentStatus_CONSUMED)])
+	m3Client.AddCounter(metrics.ExtentMonitorScope, metrics.ControllerNumOpenDLQExtents, stats.nDLQExtentsByStatus[int(shared.ExtentStatus_OPEN)])
+	m3Client.AddCounter(metrics.ExtentMonitorScope, metrics.ControllerNumSealedDLQExtents, stats.nDLQExtentsByStatus[int(shared.ExtentStatus_SEALED)])
+	m3Client.AddCounter(metrics.ExtentMonitorScope, metrics.ControllerNumConsumedDLQExtents, stats.nDLQExtentsByStatus[int(shared.ExtentStatus_CONSUMED)])
 	m3Client.AddCounter(metrics.ExtentMonitorScope, metrics.ControllerNumOpenCGExtents, stats.nCGExtentsByStatus[int(metadata.ConsumerGroupExtentStatus_OPEN)])
 	m3Client.AddCounter(metrics.ExtentMonitorScope, metrics.ControllerNumConsumedCGExtents, stats.nCGExtentsByStatus[int(metadata.ConsumerGroupExtentStatus_CONSUMED)])
 }
