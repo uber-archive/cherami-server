@@ -75,6 +75,7 @@ type (
 		source        LoadReporterSource
 		reporter      LoadReporter
 		started       int32
+		reported      bool
 		shutdownCh    chan struct{}
 		shutdownWG    sync.WaitGroup
 		logger        bark.Logger
@@ -154,15 +155,27 @@ func (d *loadReporterDaemonImpl) Stop() {
 }
 
 func (d *loadReporterDaemonImpl) reporterPump() {
+
 	defer d.shutdownWG.Done()
+
 	reportTicker := d.tickerFactory.CreateTicker(d.interval)
 	defer reportTicker.Stop()
 
 	for {
 		select {
 		case <-reportTicker.Ticks():
+
 			d.source.Report(d.reporter)
+			d.reported = true
+
 		case <-d.shutdownCh:
+
+			// ensure we report at least once
+			if !d.reported {
+				d.source.Report(d.reporter)
+				d.reported = true
+			}
+
 			d.logger.Info("Load reporter pump shutting down.")
 			return
 		}
