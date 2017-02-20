@@ -107,6 +107,9 @@ type (
 		lastExtLoadReportedTime int64 // unix nanos when the last extent metrics were reported
 
 		minimumAllowedMessageDelaySeconds int32 // min delay on messages
+
+		maxSizeBytes  int64 // max size for this extent; TODO: Make this dynamically configurable?
+		currSizeBytes int64 // current size of this extent
 	}
 
 	// Holds a particular extent for use by multiple publisher connections.
@@ -207,6 +210,12 @@ func newExtConnection(destUUID string, pathCache *inPathCache, extUUID string, n
 		conn.lastSuccessSeqNoCh = make(chan int64, 1)
 	}
 	conn.loadReporter = loadReporterFactory.CreateReporter(extLoadReportingInterval, conn, logger)
+	// by default, max size is now based on the max allowed sequence number for this extent
+	// and an average message size of 1KiB;
+	// So in general, it will be max of ~20GB, assuming max seq num is 20 million
+	// Note: This max sequence number is based on 1% of the storage size which for now is assumed to
+	// be 2T. In the future, we should calculate this based on the SKU of the store.
+	conn.maxSizeBytes = int64(conn.maxSequenceNumber * 1024)
 
 	// set minimumAllowedMessageDelaySeconds for timer-destinations
 	if conn.destType == shared.DestinationType_TIMER {
@@ -243,7 +252,10 @@ func (conn *extHost) open() {
 		go conn.aggregateAndSendReplies(conn.numReplicas)
 		conn.opened = true
 
-		conn.logger.WithField(`extentRolloverSeqnum`, conn.maxSequenceNumber).Info("extHost opened")
+		conn.logger.WithFields(bark.Fields{
+			`extentRolloverSeqnum`: conn.maxSequenceNumber,
+			`maxSizeBytes`:         conn.maxSizeBytes,
+		}).Info("extHost opened")
 	}
 }
 
@@ -304,8 +316,10 @@ func (conn *extHost) close() {
 	conn.lk.Unlock() // no longer need the lock
 
 	conn.logger.WithFields(bark.Fields{
-		`sentSeqNo`: conn.seqNo,
-		`ackSeqNo`:  conn.lastSuccessSeqNo,
+		`sentSeqNo`:        conn.seqNo,
+		`ackSeqNo`:         conn.lastSuccessSeqNo,
+		`currentSizeBytes`: conn.currSizeBytes,
+		`maxSizeBytes`:     conn.maxSizeBytes,
 	}).Info("extHost closed")
 
 	// notify the pathCache so that we can tear down the client
@@ -568,11 +582,16 @@ func (conn *extHost) sendMessage(pr *inPutMessage, extSendTimer *common.Timer, w
 		return
 	}
 
-	// If we reach the max sequence number, notify the extent controller but
-	// keep the pumps open
+	// just get the size of the actual data here
+	// ignoring other headers for the size computation
+	// Note: size of will not work here
+	conn.currSizeBytes += int64(len(pr.putMsg.Data))
+
+	// If we reach the max sequence number or reach the max allowed size for this extent,
+	// notify the extent controller but keep the pumps open.
 	// Eventually we will get an error from the store when the extent is sealed
 	// notify only if we have not already sent the notification
-	if sequenceNumber >= conn.maxSequenceNumber && atomic.LoadUint32(&conn.sealed) == open {
+	if sequenceNumber >= conn.maxSequenceNumber || conn.currSizeBytes > conn.maxSizeBytes && atomic.LoadUint32(&conn.sealed) == open {
 		// notify asynchronously
 		go conn.sealExtent()
 	}
@@ -628,7 +647,7 @@ func (conn *extHost) aggregateAndSendReplies(numReplicas int) {
 					}
 				}
 				// mark this seqNo as the last success seqno
-				conn.lastSuccessSeqNo = resCh.seqNo
+				atomic.StoreInt64(&conn.lastSuccessSeqNo, resCh.seqNo)
 				// Notify about the last seqNo removing the previous notification as it is not needed anymore
 				// Without such removal channel buffer would need to be larger than the maximum number of
 				// outstanding notifications to avoid deadlocks.
@@ -688,7 +707,7 @@ func (conn *extHost) sealExtent() error {
 		update := &admin.ExtentUnreachableNotification{
 			DestinationUUID:    common.StringPtr(conn.destUUID),
 			ExtentUUID:         common.StringPtr(conn.extUUID),
-			SealSequenceNumber: common.Int64Ptr(conn.lastSuccessSeqNo),
+			SealSequenceNumber: common.Int64Ptr(atomic.LoadInt64(&conn.lastSuccessSeqNo)),
 		}
 
 		req := &admin.ExtentsUnreachableRequest{
@@ -696,7 +715,11 @@ func (conn *extHost) sealExtent() error {
 			Updates:    []*admin.ExtentUnreachableNotification{update},
 		}
 
-		conn.logger.WithField(common.TagSeq, conn.lastSuccessSeqNo).Info("Notifying controller to seal extent")
+		conn.logger.WithFields(bark.Fields{
+			common.TagSeq:      atomic.LoadInt64(&conn.lastSuccessSeqNo),
+			`currentSizeBytes`: conn.currSizeBytes,
+			`maxSizeBytes`:     conn.maxSizeBytes,
+		}).Info("Notifying controller to seal extent")
 
 		ctx, cancel := thrift.NewContext(thriftCallTimeout)
 		defer cancel()

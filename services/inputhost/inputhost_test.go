@@ -26,6 +26,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -66,6 +67,7 @@ type InputHostSuite struct {
 	mockMeta              *mockmeta.TChanMetadataService
 	mockClientFactory     *mockcommon.MockClientFactory
 	mockWSConnector       *mockcommon.MockWSConnector
+	mockRpm               *common.MockRingpopMonitor
 	desinationDescription *shared.DestinationDescription
 }
 
@@ -164,11 +166,12 @@ func (s *InputHostSuite) SetupCommonMock() {
 		mExt.StoreUUIDs = append(mExt.StoreUUIDs, uuid)
 	}
 
+	s.mockRpm = rpm
 	mListExtStats := metadata.NewListInputHostExtentsStatsResult_()
 	mListExtStats.ExtentStatsList = []*shared.ExtentStats{mExtStats}
 	s.mockMeta.On("ReadDestination", mock.Anything, mock.Anything).Return(s.desinationDescription, nil)
 	s.mockMeta.On("ListInputHostExtentsStats", mock.Anything, mock.Anything).Return(mListExtStats, nil)
-	s.mockService.On("GetRingpopMonitor").Return(rpm)
+	s.mockService.On("GetRingpopMonitor").Return(s.mockRpm)
 	s.mockService.On("GetClientFactory").Return(s.mockClientFactory)
 
 	mockLoadReporterDaemonFactory := setupMockLoadReporterDaemonFactory()
@@ -1121,6 +1124,134 @@ func (s *InputHostSuite) TestInputExtHostRateLimit() {
 	inputHost.Shutdown()
 }
 
+func (s *InputHostSuite) TestInputExtHostSizeLimit() {
+	destinationPath := "foo"
+
+	// setup mockService here to use the mock admin controller client
+	ch, _ := tchannel.NewChannel("cherami-test-size-in", nil)
+	mockService := new(common.MockService)
+	mockService.On("GetConfig").Return(s.cfg.GetServiceConfig(common.InputServiceName))
+	mockService.On("GetMetricsReporter").Return(common.NewMetricReporterWithHostname(configure.NewCommonServiceConfig()))
+	mockService.On("GetDConfigClient").Return(dconfig.NewDconfigClient(configure.NewCommonServiceConfig(), common.InputServiceName))
+	mockService.On("GetTChannel").Return(ch)
+	mockService.On("IsLimitsEnabled").Return(true)
+	mockService.On("GetHostConnLimit").Return(100)
+	mockService.On("GetHostConnLimitPerSecond").Return(100)
+	mockService.On("GetWSConnector").Return(s.mockWSConnector, nil)
+
+	mockAdminC := &mockAdminController{}
+	mockClientFactory := new(mockcommon.MockClientFactory)
+	mockClientFactory.On("GetThriftStoreClient", mock.Anything, mock.Anything).Return(store.TChanBStore(s.mockStore), nil)
+	mockClientFactory.On("ReleaseThriftStoreClient", mock.Anything).Return(nil)
+	mockClientFactory.On("GetAdminControllerClient").Return(mockAdminC, nil)
+	mockService.On("GetClientFactory").Return(mockClientFactory)
+
+	mockLoadReporterDaemonFactory := setupMockLoadReporterDaemonFactory()
+	mockService.On("GetLoadReporterDaemonFactory").Return(mockLoadReporterDaemonFactory)
+	mockService.On("GetHostUUID").Return("99999999-9999-9999-9999-999999999999")
+	mockService.On("GetRingpopMonitor").Return(s.mockRpm)
+
+	inputHost, _ := NewInputHost("inputhost-test", mockService, s.mockMeta, nil)
+	ctx, cancel := utilGetThriftContextWithPath(destinationPath)
+	defer cancel()
+
+	// create the message of size 2k
+	var dataBuf = make([]byte, 2048)
+
+	msg := cherami.NewPutMessage()
+	msg.ID = common.StringPtr(strconv.Itoa(1))
+	msg.Data = dataBuf
+
+	wCh := make(chan time.Time)
+
+	s.mockAppend.On("Read").Return(nil, io.EOF).WaitUntil(wCh)
+	s.mockAppend.On("Write", mock.Anything).Return(io.EOF).WaitUntil(wCh)
+	s.mockPub.On("Read").Return(nil, io.EOF).WaitUntil(wCh)
+	s.mockPub.On("Write", mock.Anything).Return(io.EOF).WaitUntil(wCh)
+
+	aMsg := store.NewAppendMessageAck()
+	aMsg.Status = common.CheramiStatusPtr(cherami.Status_OK)
+	aMsg.Address = common.Int64Ptr(int64(100))
+
+	destUUID, destType, _, _ := inputHost.checkDestination(ctx, destinationPath)
+	extents, e := inputHost.getExtentsInfoForDestination(ctx, destUUID)
+	s.Nil(e)
+
+	putMsgCh := make(chan *inPutMessage)
+	ackChannel := make(chan *cherami.PutMessageAck)
+
+	reporter := metrics.NewSimpleReporter(nil)
+	logger := common.GetDefaultLogger().WithFields(bark.Fields{"test": "ExtHostRateLimit"})
+
+	pathCache := &inPathCache{
+		destinationPath:       destinationPath,
+		destUUID:              destUUID,
+		destType:              destType,
+		extentCache:           make(map[extentUUID]*inExtentCache),
+		loadReporterFactory:   mockLoadReporterDaemonFactory,
+		reconfigureCh:         make(chan inReconfigInfo, defaultBufferSize),
+		putMsgCh:              putMsgCh,
+		connections:           make(map[connectionID]*pubConnection),
+		closeCh:               make(chan struct{}),
+		notifyExtHostCloseCh:  make(chan string, defaultExtCloseNotifyChSize),
+		notifyExtHostUnloadCh: make(chan string, defaultExtCloseNotifyChSize),
+		notifyConnsCloseCh:    make(chan connectionID, defaultConnsCloseChSize),
+		logger:                logger,
+		m3Client:              metrics.NewClient(reporter, metrics.Inputhost),
+		lastDisconnectTime:    time.Now(),
+		dstMetrics:            load.NewDstMetrics(),
+		hostMetrics:           load.NewHostMetrics(),
+		inputHost:             inputHost,
+	}
+
+	pathCache.loadReporter = inputHost.GetLoadReporterDaemonFactory().CreateReporter(time.Minute, pathCache, logger)
+	pathCache.destM3Client = metrics.NewClientWithTags(pathCache.m3Client, metrics.Inputhost, inputHost.getDestinationTags(destinationPath))
+	var connection *extHost
+	for _, extent := range extents {
+		connection = newExtConnection(
+			destUUID,
+			pathCache,
+			string(extent.uuid),
+			len(extent.replicas),
+			mockLoadReporterDaemonFactory,
+			inputHost.logger,
+			inputHost.GetClientFactory(),
+			&pathCache.connsWG,
+			true)
+		// overwrite the size limit
+		connection.maxSizeBytes = 1024 // 1k extent size
+		err := pathCache.checkAndLoadReplicaStreams(connection, extentUUID(extent.uuid), extent.replicas)
+		s.Nil(err)
+
+		pathCache.connsWG.Add(1)
+		connection.open()
+		break
+	}
+
+	inMsg := &inPutMessage{
+		putMsg:      msg,
+		putMsgAckCh: ackChannel,
+	}
+	// try to push upto the limit on putMsgsCh
+	putMsgCh <- inMsg
+	<-ackChannel
+
+	// sleep a bit to make sure seal goes through
+	time.Sleep(100 * time.Millisecond)
+
+	// make sure the extent is sealed now
+	connection.sealLk.Lock()
+	extSeal := atomic.LoadUint32(&connection.sealed)
+	connection.sealLk.Unlock()
+
+	s.Equal(extSeal, sealed)
+
+	close(wCh)
+	close(connection.forceUnloadCh)
+	connection.close()
+	inputHost.Shutdown()
+}
+
 func setupMockLoadReporterDaemonFactory() *common.MockLoadReporterDaemonFactory {
 	mockLoadReporterDaemonFactory := new(common.MockLoadReporterDaemonFactory)
 	mockLoadReporterDaemon := new(common.MockLoadReporterDaemon)
@@ -1129,4 +1260,13 @@ func setupMockLoadReporterDaemonFactory() *common.MockLoadReporterDaemonFactory 
 	mockLoadReporterDaemon.On("Stop").Return()
 
 	return mockLoadReporterDaemonFactory
+}
+
+// mockAdminController is the mock controller used for
+// seal notification
+type mockAdminController struct {
+}
+
+func (ma *mockAdminController) ExtentsUnreachable(ctx thrift.Context, extentsUnreachableRequest *admin.ExtentsUnreachableRequest) error {
+	return nil
 }
