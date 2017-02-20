@@ -336,7 +336,7 @@ func (r *metadataReconciler) reconcileDestExtentMetadata() error {
 	}
 
 	for _, dest := range dests {
-		localExtents, errCur := r.getAllDestExtentInCurrentZone(dest.GetDestinationUUID())
+		localExtentsPerZone, errCur := r.getAllDestExtentInCurrentZone(dest.GetDestinationUUID())
 		if errCur != nil {
 			continue
 		}
@@ -352,6 +352,8 @@ func (r *metadataReconciler) reconcileDestExtentMetadata() error {
 					continue
 				}
 
+				// only need to reconcile for extents that are originated from the remote zone
+				localExtents := localExtentsPerZone[zoneConfig.GetZone()]
 				if err = r.reconcileDestExtent(dest.GetDestinationUUID(), localExtents, remoteExtents, zoneConfig.GetZone()); err != nil {
 					continue
 				}
@@ -401,14 +403,14 @@ func (r *metadataReconciler) getAllDestExtentInRemoteZone(zone string, destUUID 
 	return extents, nil
 }
 
-func (r *metadataReconciler) getAllDestExtentInCurrentZone(destUUID string) (map[string]shared.ExtentStatus, error) {
+func (r *metadataReconciler) getAllDestExtentInCurrentZone(destUUID string) (map[string]map[string]shared.ExtentStatus, error) {
 	listReq := &shared.ListExtentsStatsRequest{
 		DestinationUUID:  common.StringPtr(destUUID),
 		LocalExtentsOnly: common.BoolPtr(false),
 		Limit:            common.Int64Ptr(metadataListRequestPageSize),
 	}
 
-	extents := make(map[string]shared.ExtentStatus)
+	perZoneExtents := make(map[string]map[string]shared.ExtentStatus)
 	for {
 		res, err := r.mClient.ListExtentsStats(nil, listReq)
 		if err != nil {
@@ -417,7 +419,11 @@ func (r *metadataReconciler) getAllDestExtentInCurrentZone(destUUID string) (map
 		}
 
 		for _, ext := range res.GetExtentStatsList() {
-			extents[ext.GetExtent().GetExtentUUID()] = ext.GetStatus()
+			zone := ext.GetExtent().GetOriginZone()
+			if _, ok := perZoneExtents[zone]; !ok {
+				perZoneExtents[zone] = make(map[string]shared.ExtentStatus)
+			}
+			perZoneExtents[zone][ext.GetExtent().GetExtentUUID()] = ext.GetStatus()
 		}
 
 		if len(res.GetNextPageToken()) == 0 {
@@ -426,10 +432,11 @@ func (r *metadataReconciler) getAllDestExtentInCurrentZone(destUUID string) (map
 
 		listReq.PageToken = res.GetNextPageToken()
 	}
-	return extents, nil
+	return perZoneExtents, nil
 }
 
 func (r *metadataReconciler) reconcileDestExtent(destUUID string, localExtents map[string]shared.ExtentStatus, remoteExtents map[string]shared.ExtentStatus, remoteZone string) error {
+	var destExtentRemoteDeletedLocalNotCount int64
 	for remoteExtentUUID, remoteExtentStatus := range remoteExtents {
 		localExtentStatus, ok := localExtents[remoteExtentUUID]
 		if !ok {
@@ -478,7 +485,7 @@ func (r *metadataReconciler) reconcileDestExtent(destUUID string, localExtents m
 				r.sealExtentInMetadata(destUUID, remoteExtentUUID)
 			}
 			if remoteExtentStatus == shared.ExtentStatus_DELETED {
-				r.handleExtentDeletedOrMissingInRemote(destUUID, remoteExtentUUID, localExtentStatus)
+				r.handleExtentDeletedOrMissingInRemote(destUUID, remoteExtentUUID, localExtentStatus, &destExtentRemoteDeletedLocalNotCount)
 			}
 		}
 	}
@@ -519,7 +526,7 @@ func (r *metadataReconciler) reconcileDestExtent(destUUID string, localExtents m
 					}).Error(`code bug!! suspect extent should in local extent map!!`)
 					continue
 				}
-				r.handleExtentDeletedOrMissingInRemote(suspectExtentInfo.destUUID, suspectExtent, localStatus)
+				r.handleExtentDeletedOrMissingInRemote(suspectExtentInfo.destUUID, suspectExtent, localStatus, &destExtentRemoteDeletedLocalNotCount)
 			}
 		}
 	}
@@ -535,10 +542,12 @@ func (r *metadataReconciler) reconcileDestExtent(destUUID string, localExtents m
 	}
 
 	r.m3Client.UpdateGauge(metrics.ReplicatorReconcileScope, metrics.ReplicatorReconcileDestExtentSuspectMissingExtents, int64(len(r.suspectMissingExtents)))
+	r.m3Client.UpdateGauge(metrics.ReplicatorReconcileScope, metrics.ReplicatorReconcileDestExtentRemoteDeletedLocalNot, destExtentRemoteDeletedLocalNotCount)
+
 	return nil
 }
 
-func (r *metadataReconciler) handleExtentDeletedOrMissingInRemote(destUUID string, extentUUID string, localStatus shared.ExtentStatus) {
+func (r *metadataReconciler) handleExtentDeletedOrMissingInRemote(destUUID string, extentUUID string, localStatus shared.ExtentStatus, destExtentRemoteDeletedLocalNotCount *int64) {
 	// lifecycle for extent in local zone(origin of the extent is remote):
 	// open->sealed: after extent becomes sealed in remote(origin) zone
 	// sealed->consumed: decided by local retention manager
@@ -549,7 +558,7 @@ func (r *metadataReconciler) handleExtentDeletedOrMissingInRemote(destUUID strin
 		return
 	}
 
-	r.m3Client.UpdateGauge(metrics.ReplicatorReconcileScope, metrics.ReplicatorReconcileDestExtentRemoteDeletedLocalNot, 1)
+	*destExtentRemoteDeletedLocalNotCount = *destExtentRemoteDeletedLocalNotCount + 1
 
 	// if extent is still open in metadata, seal the extent in metadata
 	if localStatus == shared.ExtentStatus_OPEN {
@@ -570,7 +579,6 @@ func (r *metadataReconciler) handleExtentDeletedOrMissingInRemote(destUUID strin
 		}).Error(`Failed to seal extent in store`)
 	} else {
 		r.logger.WithFields(bark.Fields{
-			common.TagErr: err,
 			common.TagDst: common.FmtDst(destUUID),
 			common.TagExt: common.FmtExt(extentUUID),
 		}).Info(`Extent sealed in store`)
