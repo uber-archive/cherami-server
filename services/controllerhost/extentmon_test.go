@@ -119,6 +119,39 @@ func (s *ExtentStateMonitorSuite) createDestination(name string) (*shared.Destin
 	return s.mClient.CreateDestination(nil, mReq)
 }
 
+func (s *ExtentStateMonitorSuite) TestStoreExtentMetadataCache() {
+
+	context := s.mcp.context
+
+	path := s.generateName("/extentmon/store-metadatacache")
+	desc, err := s.createDestination(path)
+	s.Nil(err, "failed to create destination")
+
+	extID := uuid.New()
+	storeIDs := []string{uuid.New(), uuid.New(), uuid.New()}
+
+	_, err = context.mm.CreateExtent(desc.GetDestinationUUID(), extID, uuid.New(), storeIDs)
+	s.Nil(err, "error creating extent")
+
+	cache := newStoreExtentMetadataCache(s.mcp.context.mm, bark.NewLoggerFromLogrus(log.New()))
+	s.True(nil == cache.get(storeID(uuid.New()), extentID(uuid.New())), "unexpected cache hit")
+	s.True(nil == cache.get(storeID(storeIDs[0]), extentID(uuid.New())), "unexpected cache hit")
+	s.True(nil == cache.get(storeID(uuid.New()), extentID(extID)), "unexpected cache hit")
+	s.True(nil == cache.get(storeID(storeIDs[1]), extentID(uuid.New())), "unexpected cache hit")
+	s.True(nil == cache.get(storeID(storeIDs[2]), extentID(uuid.New())), "unexpected cache hit")
+
+	for _, st := range storeIDs {
+		val := cache.get(storeID(st), extentID(extID))
+		s.NotNil(val, "unexpected cache miss for store %v", s)
+		s.Equal(st, val.storeID, "wrong store id on cache hit")
+		s.Equal(int64(0), val.beginSequence)
+		s.Equal(int64(0), val.lastSequence)
+		s.Equal(float64(0), val.availableSequenceRate)
+		s.Equal(float64(0), val.lastSequenceRate)
+		s.True(val.createdTime > 0)
+	}
+}
+
 func (s *ExtentStateMonitorSuite) TestStoreExtentStatusOutOfSync() {
 
 	path := s.generateName("/storeoutofsync/test1")
@@ -144,13 +177,11 @@ func (s *ExtentStateMonitorSuite) TestStoreExtentStatusOutOfSync() {
 	s.mcp.context.extentMonitor.mi.publishEvent(eIterStart, nil)
 	s.mcp.context.extentMonitor.mi.publishEvent(eDestStart, desc)
 	s.mcp.context.extentMonitor.mi.publishEvent(eExtentIterStart, nil)
-	s.mcp.context.extentMonitor.processExtents(desc, []*m.DestinationExtent{
-		{
-			Status:        common.MetadataExtentStatusPtr(shared.ExtentStatus_SEALED),
-			ExtentUUID:    common.StringPtr(extentID),
-			InputHostUUID: common.StringPtr(inHostID),
-			StoreUUIDs:    storeIDs,
-		},
+	s.mcp.context.extentMonitor.handleDestinationExtent(desc, false, &m.DestinationExtent{
+		Status:        common.MetadataExtentStatusPtr(shared.ExtentStatus_SEALED),
+		ExtentUUID:    common.StringPtr(extentID),
+		InputHostUUID: common.StringPtr(inHostID),
+		StoreUUIDs:    storeIDs,
 	})
 	s.mcp.context.extentMonitor.mi.publishEvent(eExtentIterEnd, nil)
 	s.mcp.context.extentMonitor.mi.publishEvent(eDestEnd, desc)

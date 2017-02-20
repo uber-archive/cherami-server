@@ -914,6 +914,22 @@ const (
 	ControllerCGBacklogDLQ
 	// ControllerCGBacklogProgress is an indication of progress made on the backlog
 	ControllerCGBacklogProgress
+	// ControllerNumOpenExtents represents the count of open extents
+	ControllerNumOpenExtents
+	// ControllerNumSealedExtents represents the count of sealed extents
+	ControllerNumSealedExtents
+	// ControllerNumConsumedExtents represents the count of consumed extents
+	ControllerNumConsumedExtents
+	// ControllerNumOpenDLQExtents represents the count of open dlq extents
+	ControllerNumOpenDLQExtents
+	// ControllerNumSealedDLQExtents represents the count of sealed dlq extents
+	ControllerNumSealedDLQExtents
+	// ControllerNumConsumedDLQExtents represents the count of consumed dlq extents
+	ControllerNumConsumedDLQExtents
+	// ControllerNumOpenCGExtents represents the count of open cg extents
+	ControllerNumOpenCGExtents
+	// ControllerNumConsumedCGExtents represents the count of consumed cg extents
+	ControllerNumConsumedCGExtents
 
 	// -- Replicator metrics -- //
 
@@ -1086,6 +1102,14 @@ var metricDefs = map[ServiceIdx]map[int]metricDefinition{
 		ControllerGetAddressFailedCounter:          {Counter, "controller.retentionmgr.getaddress.failed"},
 		ControllerGetAddressCompletedCounter:       {Counter, "controller.retentionmgr.getaddress.completed"},
 		ControllerPurgeMessagesRequestCounter:      {Counter, "controller.retentionmgr.purgemessagesrequest"},
+		ControllerNumOpenExtents:                   {Counter, "controller.dstextents.open"},
+		ControllerNumSealedExtents:                 {Counter, "controller.dstextents.sealed"},
+		ControllerNumConsumedExtents:               {Counter, "controller.dstextents.consumed"},
+		ControllerNumOpenDLQExtents:                {Counter, "controller.dstextents.dlq.open"},
+		ControllerNumSealedDLQExtents:              {Counter, "controller.dstextents.dlq.sealed"},
+		ControllerNumConsumedDLQExtents:            {Counter, "controller.dstextents.dlq.consumed"},
+		ControllerNumOpenCGExtents:                 {Counter, "controller.cgextents.open"},
+		ControllerNumConsumedCGExtents:             {Counter, "controller.cgextents.consumed"},
 		ControllerLatencyTimer:                     {Timer, "controller.latency"},
 		ControllerRetentionJobDuration:             {Timer, "controller.retentionmgr.jobduration"},
 		ControllerGetAddressLatency:                {Timer, "controller.retentionmgr.getaddresslatency"},
@@ -1094,25 +1118,25 @@ var metricDefs = map[ServiceIdx]map[int]metricDefinition{
 
 	// definitions for Replicator metrics
 	Replicator: {
-		ReplicatorCreateInStreamFailure:                        {Counter, "replicator.create-in-stream.failure"},
-		ReplicatorCreateOutStreamFailure:                       {Counter, "replicator.create-out-stream.failure"},
-		ReplicatorRequests:                                     {Counter, "replicator.requests"},
-		ReplicatorFailures:                                     {Counter, "replicator.errors"},
-		ReplicatorBadRequest:                                   {Counter, "replicator.requests.bad"},
-		ReplicatorInConnCreditsReceived:                        {Counter, "replicator.inconn.creditsreceived"},
-		ReplicatorInConnMsgWritten:                             {Counter, "replicator.inconn.msgwritten"},
-		ReplicatorOutConnCreditsSent:                           {Counter, "replicator.outconn.creditssent"},
-		ReplicatorOutConnMsgRead:                               {Counter, "replicator.outconn.msgread"},
-		ReplicatorReconcileDestRun:                             {Gauge, "replicator.reconcile.dest.run"},
-		ReplicatorReconcileDestFail:                            {Gauge, "replicator.reconcile.dest.fail"},
-		ReplicatorReconcileDestFoundMissing:                    {Gauge, "replicator.reconcile.dest.foundmissing"},
-		ReplicatorReconcileDestExtentRun:                       {Gauge, "replicator.reconcile.destextent.run"},
-		ReplicatorReconcileDestExtentFail:                      {Gauge, "replicator.reconcile.destextent.fail"},
-		ReplicatorReconcileDestExtentFoundMissing:              {Gauge, "replicator.reconcile.destextent.foundmissing"},
-		ReplicatorReconcileDestExtentRemoteConsumedLocalMissing:{Gauge, "replicator.reconcile.destextent.remote-consumed-local-missing"},
-		ReplicatorReconcileDestExtentRemoteDeletedLocalMissing: {Gauge, "replicator.reconcile.destextent.remote-deleted-local-missing"},
-		ReplicatorReconcileDestExtentRemoteDeletedLocalNot:     {Gauge, "replicator.reconcile.destextent.remote-deleted-local-not"},
-		ReplicatorReconcileDestExtentSuspectMissingExtents:     {Gauge, "replicator.reconcile.destextent.suspect-missing-extent"},
+		ReplicatorCreateInStreamFailure:                         {Counter, "replicator.create-in-stream.failure"},
+		ReplicatorCreateOutStreamFailure:                        {Counter, "replicator.create-out-stream.failure"},
+		ReplicatorRequests:                                      {Counter, "replicator.requests"},
+		ReplicatorFailures:                                      {Counter, "replicator.errors"},
+		ReplicatorBadRequest:                                    {Counter, "replicator.requests.bad"},
+		ReplicatorInConnCreditsReceived:                         {Counter, "replicator.inconn.creditsreceived"},
+		ReplicatorInConnMsgWritten:                              {Counter, "replicator.inconn.msgwritten"},
+		ReplicatorOutConnCreditsSent:                            {Counter, "replicator.outconn.creditssent"},
+		ReplicatorOutConnMsgRead:                                {Counter, "replicator.outconn.msgread"},
+		ReplicatorReconcileDestRun:                              {Gauge, "replicator.reconcile.dest.run"},
+		ReplicatorReconcileDestFail:                             {Gauge, "replicator.reconcile.dest.fail"},
+		ReplicatorReconcileDestFoundMissing:                     {Gauge, "replicator.reconcile.dest.foundmissing"},
+		ReplicatorReconcileDestExtentRun:                        {Gauge, "replicator.reconcile.destextent.run"},
+		ReplicatorReconcileDestExtentFail:                       {Gauge, "replicator.reconcile.destextent.fail"},
+		ReplicatorReconcileDestExtentFoundMissing:               {Gauge, "replicator.reconcile.destextent.foundmissing"},
+		ReplicatorReconcileDestExtentRemoteConsumedLocalMissing: {Gauge, "replicator.reconcile.destextent.remote-consumed-local-missing"},
+		ReplicatorReconcileDestExtentRemoteDeletedLocalMissing:  {Gauge, "replicator.reconcile.destextent.remote-deleted-local-missing"},
+		ReplicatorReconcileDestExtentRemoteDeletedLocalNot:      {Gauge, "replicator.reconcile.destextent.remote-deleted-local-not"},
+		ReplicatorReconcileDestExtentSuspectMissingExtents:      {Gauge, "replicator.reconcile.destextent.suspect-missing-extent"},
 	},
 }
 

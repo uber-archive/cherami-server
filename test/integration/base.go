@@ -334,6 +334,7 @@ func (tb *testBase) TearDown() {
 	}
 }
 
+// GetFrontend returns a random frontend instance
 func (tb *testBase) GetFrontend() *frontendhost.Frontend {
 	for _, fh := range tb.Frontends {
 		return fh
@@ -341,9 +342,22 @@ func (tb *testBase) GetFrontend() *frontendhost.Frontend {
 	return nil
 }
 
+// GetOutput returns a random output host instance
 func (tb *testBase) GetOutput() *outputhost.OutputHost {
 	for _, oh := range tb.OutputHosts {
 		return oh
+	}
+	return nil
+}
+
+// GetController returns a random controller
+// instance object from the set of controllers
+// configured for this test. This method asssumes
+// that the test is configured for a single controller
+func (tb *testBase) GetController() *controllerhost.Mcp {
+	tb.Equal(1, len(tb.Controllers), "Cannot return primary controller")
+	for _, ch := range tb.Controllers {
+		return ch
 	}
 	return nil
 }

@@ -47,10 +47,6 @@ type (
 	}
 )
 
-func (m *dlqMonitor) initialize(common *Context) {
-	m.Context = common
-}
-
 const (
 	mergeOp = op(iota + 77)
 	purgeOp
@@ -69,6 +65,10 @@ func (o op) String() string {
 	default:
 		return `INVALID` + fmt.Sprintf(`%d`, o)
 	}
+}
+
+func newDlqMonitor(c *Context) *dlqMonitor {
+	return &dlqMonitor{Context: c}
 }
 
 /*

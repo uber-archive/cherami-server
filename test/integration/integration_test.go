@@ -21,6 +21,7 @@
 package integration
 
 import (
+	"encoding/json"
 	"fmt"
 	"math/rand"
 	"net"
@@ -39,6 +40,7 @@ import (
 	"github.com/uber/cherami-server/services/controllerhost"
 	"github.com/uber/cherami-server/services/storehost"
 	"github.com/uber/cherami-thrift/.generated/go/cherami"
+	"github.com/uber/cherami-thrift/.generated/go/controller"
 	"github.com/uber/cherami-thrift/.generated/go/metadata"
 	"github.com/uber/cherami-thrift/.generated/go/shared"
 
@@ -2249,17 +2251,29 @@ func (s *NetIntegrationSuiteParallelB) TestQueueDepth() {
 			return
 		}
 		for {
-			r, _ := controllerhost.GetQueueDepthResult(cgDescs[cg].GetConsumerGroupUUID())
+			qReq := &controller.GetQueueDepthInfoRequest{Key: common.StringPtr(cgDescs[cg].GetConsumerGroupUUID())}
+			r, err := s.GetController().GetQueueDepthInfo(nil, qReq)
+			if err != nil {
+				ll().WithField(`error`, err).Error("GetQueueDepthInfo error")
+				continue
+			}
+
+			var queueDepthInfo controllerhost.QueueDepthCacheJSONFields
+			err = json.Unmarshal([]byte(r.GetValue()), &queueDepthInfo)
+			if err != nil {
+				ll().WithField(`error`, err).Error("json.Unmarshal(queueDepthJSONFields) error")
+				continue
+			}
+
 			ll().WithFields(bark.Fields{
 				`cg`:                   cgNames[cg],
-				`tm`:                   r.Time,
-				`BacklogAvailable`:     r.BacklogAvailable,
+				`BacklogAvailable`:     queueDepthInfo.BacklogAvailable,
 				`WantBacklogAvailable`: ba,
-				`BacklogUnavailable`:   r.BacklogUnavailable,
-				`BacklogInflight`:      r.BacklogInflight,
-				`BacklogDLQ`:           r.BacklogDLQ, `WantBacklogDLQ`: dlq,
+				`BacklogInflight`:      queueDepthInfo.BacklogInflight,
+				`BacklogDLQ`:           queueDepthInfo.BacklogDLQ, `WantBacklogDLQ`: dlq,
 			}).Info(`waiting on backlog result...`)
-			if r.Time != 0 && r.BacklogAvailable == ba && r.BacklogDLQ == dlq && r.BacklogUnavailable == 0 {
+
+			if queueDepthInfo.BacklogAvailable == ba && queueDepthInfo.BacklogDLQ == dlq {
 				return
 			}
 			time.Sleep(controllerhost.IntervalBtwnScans)
