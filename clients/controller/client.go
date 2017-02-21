@@ -28,7 +28,7 @@ import (
 )
 
 // NewClient returns a new instance of cherami controller client
-func NewClient(ch *tchannel.Channel, hostAddr string) controller.TChanControllerClient {
+func NewClient(ch *tchannel.Channel, hostAddr string) controller.TChanController {
 	tClient := thrift.NewClient(ch, common.ControllerServiceName, &thrift.ClientOptions{
 		HostPort: hostAddr,
 	})
