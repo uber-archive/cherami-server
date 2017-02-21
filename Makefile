@@ -108,7 +108,7 @@ cover_profile: bins
 	done
 
 	# merge the package cover files into one single cover
-	gocovmerge `find $(BUILD) -name "coverage.out"` > $(BUILD)/cover.out
+	gocovmerge `find $(BUILD) -name "coverage.out" | grep -v "$(BUILD)/tools"` > $(BUILD)/cover.out
 
 cover: cover_profile
 	go tool cover -html=$(BUILD)/cover.out
