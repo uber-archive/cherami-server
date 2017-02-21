@@ -104,7 +104,7 @@ imports:
 - name: github.com/uber-go/atomic
   version: 3b8db5e93c4c02efbc313e17b2e796b0914a01fb
 - name: github.com/uber/cherami-client-go
-  version: f6da4234a00f2494cacf22e364b92c3972e2050a
+  version: 1cdcfc4a204fe42013f4cf7196fab208d3b98085 
   subpackages:
   - client/cherami
   - common
