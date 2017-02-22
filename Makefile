@@ -4,6 +4,7 @@ SHELL = /bin/bash
 
 PROJECT_ROOT=github.com/uber/cherami-server
 INTEG_TEST_ROOT=./test
+TOOLS_ROOT=./tools
 export GO15VENDOREXPERIMENT=1
 NOVENDOR = $(shell GO15VENDOREXPERIMENT=1 glide novendor)
 TEST_ARG ?= -race -v -timeout 5m
@@ -36,6 +37,7 @@ ALL_SRC := $(shell find . -name "*.go" | grep -v -e Godeps -e vendor \
 ALL_TEST_DIRS := $(sort $(dir $(filter %_test.go,$(ALL_SRC))))
 # all tests other than integration test fall into the pkg_test category
 PKG_TEST_DIRS := $(filter-out $(INTEG_TEST_ROOT)%,$(ALL_TEST_DIRS))
+PKG_TEST_DIRS := $(filter-out $(TOOLS_ROOT)%,$(PKG_TEST_DIRS))
 # dirs that contain integration tests, these need to be treated
 # differently to get correct code coverage
 INTEG_TEST_DIRS := $(filter $(INTEG_TEST_ROOT)%,$(ALL_TEST_DIRS))
@@ -100,7 +102,7 @@ cover_profile: bins
 	@for dir in $(PKG_TEST_DIRS); do \
 		mkdir -p $(BUILD)/"$$dir"; \
 		go test $(EMBED) "$$dir" $(TEST_ARG) -coverprofile=$(BUILD)/"$$dir"/coverage.out || exit 1; \
-		cat $(BUILD)/"$$dir"/coverage.out | grep -v "mode: atomic" | grep -v "$(PROJECT_ROOT)/tools" >> $(BUILD)/cover.out; \
+		cat $(BUILD)/"$$dir"/coverage.out | grep -v "mode: atomic" >> $(BUILD)/cover.out; \
 	done
 	
 	@echo Running integration tests:
