@@ -100,7 +100,7 @@ cover_profile: bins
 	@for dir in $(PKG_TEST_DIRS); do \
 		mkdir -p $(BUILD)/"$$dir"; \
 		go test $(EMBED) "$$dir" $(TEST_ARG) -coverprofile=$(BUILD)/"$$dir"/coverage.out || exit 1; \
-		cat $(BUILD)/"$$dir"/coverage.out | grep -v "mode: atomic" >> $(BUILD)/cover.out; \
+		cat $(BUILD)/"$$dir"/coverage.out | grep -v "mode: atomic" | grep -v "$(PROJECT_ROOT)/tools" >> $(BUILD)/cover.out; \
 	done
 	
 	@echo Running integration tests:
