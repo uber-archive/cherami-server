@@ -99,16 +99,15 @@ cover_profile: bins
 	@for dir in $(PKG_TEST_DIRS); do \
 		mkdir -p $(BUILD)/"$$dir"; \
 		go test $(EMBED) "$$dir" $(TEST_ARG) -coverprofile=$(BUILD)/"$$dir"/coverage.out || exit 1; \
+		cat $(BUILD)/"$$dir"/coverage.out | grep -v "mode: atomic" >> $(BUILD)/cover.out; \
 	done
 	
 	@echo Running integration tests:
 	@for dir in $(INTEG_TEST_DIRS); do \
 		mkdir -p $(BUILD)/"$$dir"; \
 		go test $(EMBED) "$$dir" $(TEST_ARG) $(GOCOVERPKG_ARG) -coverprofile=$(BUILD)/"$$dir"/coverage.out || exit 1; \
+		cat $(BUILD)/"$$dir"/coverage.out | grep -v "mode: atomic" >> $(BUILD)/cover.out; \
 	done
-
-	# merge the package cover files into one single cover
-	gocovmerge `find $(BUILD) -name "coverage.out" | grep -v "$(BUILD)/tools"` > $(BUILD)/cover.out
 
 cover: cover_profile
 	go tool cover -html=$(BUILD)/cover.out
