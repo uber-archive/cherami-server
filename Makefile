@@ -96,6 +96,7 @@ bins: cherami-server cherami-replicator-server cherami-cli cherami-admin cherami
 cover_profile: bins 
 	@echo Running tests:
 	@mkdir -p $(BUILD)
+	@echo "mode: atomic" > $(BUILD)/cover.out
 	@for dir in $(PKG_TEST_DIRS); do \
 		mkdir -p $(BUILD)/"$$dir"; \
 		go test $(EMBED) "$$dir" $(TEST_ARG) -coverprofile=$(BUILD)/"$$dir"/coverage.out || exit 1; \
