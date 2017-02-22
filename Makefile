@@ -3,6 +3,8 @@
 SHELL = /bin/bash
 
 PROJECT_ROOT=github.com/uber/cherami-server
+INTEG_TEST_ROOT=./test
+TOOLS_ROOT=./tools
 export GO15VENDOREXPERIMENT=1
 NOVENDOR = $(shell GO15VENDOREXPERIMENT=1 glide novendor)
 TEST_ARG ?= -race -v -timeout 5m
@@ -32,15 +34,29 @@ ALL_SRC := $(shell find . -name "*.go" | grep -v -e Godeps -e vendor \
 	-e ".*/mocks.*")
 
 # all directories with *_test.go files in them
-TEST_DIRS := $(sort $(dir $(filter %_test.go,$(ALL_SRC))))
+ALL_TEST_DIRS := $(sort $(dir $(filter %_test.go,$(ALL_SRC))))
+# all tests other than integration test fall into the pkg_test category
+PKG_TEST_DIRS := $(filter-out $(INTEG_TEST_ROOT)%,$(ALL_TEST_DIRS))
+PKG_TEST_DIRS := $(filter-out $(TOOLS_ROOT)%,$(PKG_TEST_DIRS))
+# dirs that contain integration tests, these need to be treated
+# differently to get correct code coverage
+INTEG_TEST_DIRS := $(filter $(INTEG_TEST_ROOT)%,$(ALL_TEST_DIRS))
+
+# Need the following option to have integration tests
+# count towards coverage. godoc below:
+# -coverpkg pkg1,pkg2,pkg3
+#   Apply coverage analysis in each test to the given list of packages.
+#   The default is for each test to analyze only the package being tested.
+#   Packages are specified as import paths.
+GOCOVERPKG_ARG := -coverpkg="$(PROJECT_ROOT)/common/...,$(PROJECT_ROOT)/services/...,$(PROJECT_ROOT)/clients/..."
 
 test: bins
-	@for dir in $(TEST_DIRS); do \
+	@for dir in $(ALL_TEST_DIRS); do \
 		go test $(EMBED) "$$dir" $(TEST_NO_RACE_ARG) $(shell glide nv); \
 	done;
 
 test-race: $(ALL_SRC)
-	@for dir in $(TEST_DIRS); do \
+	@for dir in $(ALL_TEST_DIRS); do \
 		go test $(EMBED) "$$dir" $(TEST_ARG) | tee -a "$$dir"_test.log; \
 	done;	       
 
@@ -79,13 +95,20 @@ cherami-store-tool: $(DEPS)
 
 bins: cherami-server cherami-replicator-server cherami-cli cherami-admin cherami-replicator-tool cherami-cassandra-tool cherami-store-tool
 
-cover_profile: bins
-	@echo Testing packages:
+cover_profile: bins 
+	@echo Running tests:
 	@mkdir -p $(BUILD)
 	@echo "mode: atomic" > $(BUILD)/cover.out
-	@for dir in $(TEST_DIRS); do \
+	@for dir in $(PKG_TEST_DIRS); do \
 		mkdir -p $(BUILD)/"$$dir"; \
 		go test $(EMBED) "$$dir" $(TEST_ARG) -coverprofile=$(BUILD)/"$$dir"/coverage.out || exit 1; \
+		cat $(BUILD)/"$$dir"/coverage.out | grep -v "mode: atomic" >> $(BUILD)/cover.out; \
+	done
+	
+	@echo Running integration tests:
+	@for dir in $(INTEG_TEST_DIRS); do \
+		mkdir -p $(BUILD)/"$$dir"; \
+		go test $(EMBED) "$$dir" $(TEST_ARG) $(GOCOVERPKG_ARG) -coverprofile=$(BUILD)/"$$dir"/coverage.out || exit 1; \
 		cat $(BUILD)/"$$dir"/coverage.out | grep -v "mode: atomic" >> $(BUILD)/cover.out; \
 	done
 
