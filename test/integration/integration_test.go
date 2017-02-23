@@ -45,6 +45,8 @@ import (
 	"github.com/uber/cherami-thrift/.generated/go/shared"
 
 	"testing"
+	"github.com/Sirupsen/logrus"
+	"os"
 )
 
 type NetIntegrationSuiteParallelB struct {
@@ -2100,7 +2102,12 @@ func (s *NetIntegrationSuiteParallelB) TestQueueDepth() {
 	testStart := int64(common.Now())
 
 	ll := func() bark.Logger {
-		return common.GetDefaultLogger().WithFields(bark.Fields{`phase`: phase, `t`: `qDepth`})
+		logger := logrus.New()
+		logger.Out = os.Stdout
+		formatter := new(logrus.TextFormatter)
+		formatter.FullTimestamp = true
+		logger.Formatter = formatter
+		return bark.NewLoggerFromLogrus(logger).WithFields(bark.Fields{`phase`: phase, `t`: `qDepth`})
 	}
 
 	// Enable the tabulation feature for verbose logging only

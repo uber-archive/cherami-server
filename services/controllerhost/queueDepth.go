@@ -61,8 +61,6 @@ const (
 
 var (
 	gaftCache = make(map[gaftKey]common.SequenceNumber)
-	// This allows extrapolation up to 1 reporting period in either direction, meaning that missing a report shouldn't cause a blip
-	maxExtrapolation = common.Seconds(float64(IntervalBtwnScans) / float64(time.Second))
 )
 
 type (
@@ -84,13 +82,13 @@ type (
 			storeExtentMetadataCache *storeExtentMetadataCache
 
 			cg struct {
+				now 				  common.UnixNanoTime
 				backlogAvailable      int64
 				backlogInflight       int64
 				nOpenExtents          int64 // stat for stallness check
 				nStalledExtents       int64 // stat for stallness check
 				desc                  *shared.ConsumerGroupDescription
 				coverMap              map[extentID]struct{} // list of extents that account towards backlog
-				extrapolatedTime      common.UnixNanoTime
 				isTabulationRequested bool
 			}
 		}
@@ -167,12 +165,11 @@ func (qdc *queueDepthCalculator) handleConsumerGroupStart(dstDesc *shared.Destin
 		return
 	}
 
+	iter.cg.now = common.Now()
 	iter.cg.coverMap = qdc.getExtentCoverMap()
-	iter.cg.extrapolatedTime = common.Now() - common.UnixNanoTime(IntervalBtwnScans/2) // Do interpolation by looking back in time for half a reporting period
 
 	if iter.cg.isTabulationRequested {
 		qdc.ll.WithFields(bark.Fields{
-			`time`:           iter.cg.extrapolatedTime,
 			common.TagDst:    common.FmtDst(dstDesc.GetDestinationUUID()),
 			common.TagDstPth: common.FmtDstPth(dstDesc.GetPath()),
 			common.TagCnsm:   common.FmtCnsm(cgDesc.GetConsumerGroupUUID()),
@@ -204,11 +201,10 @@ func (qdc *queueDepthCalculator) handleConsumerGroupEnd(dstDesc *shared.Destinat
 
 	// stallness check, can be performed only after processing all extents
 	progressScore := qdc.measureBacklogProgress(dstDesc, cgDesc, iter.cg.backlogAvailable)
-	qdc.reportBacklog(cgDesc, dstDesc, progressScore, iter.cg.extrapolatedTime)
+	qdc.reportBacklog(cgDesc, dstDesc, progressScore, iter.cg.now)
 
 	if iter.cg.isTabulationRequested {
 		qdc.ll.WithFields(bark.Fields{
-			`time`:           iter.cg.extrapolatedTime,
 			common.TagDst:    common.FmtDst(dstDesc.GetDestinationUUID()),
 			common.TagDstPth: common.FmtDstPth(dstDesc.GetPath()),
 			common.TagCnsm:   common.FmtCnsm(cgDesc.GetConsumerGroupUUID()),
@@ -284,7 +280,7 @@ func (qdc *queueDepthCalculator) addExtentBacklog(
 				`cgeStatus`:        cgExtent.GetStatus(),
 				`cgeAckLvlSeq`:     cgExtent.GetAckLevelSeqNo(),
 				`cgeAckLvlSeqRate`: cgExtent.GetAckLevelSeqNoRate(),
-				`cgeWriteTime`:     (iter.cg.extrapolatedTime - common.UnixNanoTime(cgExtent.GetWriteTime())).ToSecondsFmt(),
+				`cgeWriteTime`:     common.UnixNanoTime(cgExtent.GetWriteTime()).ToSecondsFmt(),
 			}).Info(`Queue Depth Tabulation (skipping consumed/deleted extent)`)
 		}
 		return
@@ -297,16 +293,7 @@ func (qdc *queueDepthCalculator) addExtentBacklog(
 		return
 	}
 
-	ΔInFlight := common.ExtrapolateDifference(
-		common.SequenceNumber(cgExtent.GetReadLevelSeqNo()),
-		common.SequenceNumber(cgExtent.GetAckLevelSeqNo()),
-		cgExtent.GetReadLevelSeqNoRate(),
-		cgExtent.GetAckLevelSeqNoRate(),
-		common.UnixNanoTime(cgExtent.GetWriteTime()),
-		common.UnixNanoTime(cgExtent.GetWriteTime()),
-		iter.cg.extrapolatedTime,
-		maxExtrapolation)
-
+	ΔInFlight := common.MaxInt64(0, cgExtent.GetReadLevelSeqNo()-cgExtent.GetAckLevelSeqNo())
 	iter.cg.backlogInflight += ΔInFlight
 
 	// Calculations requiring store extent
@@ -320,7 +307,7 @@ func (qdc *queueDepthCalculator) addExtentBacklog(
 				common.TagStor:     string(connectedStoreID),
 				`cgeAckLvlSeq`:     cgExtent.GetAckLevelSeqNo(),
 				`cgeAckLvlSeqRate`: cgExtent.GetAckLevelSeqNoRate(),
-				`cgeWriteTime`:     (iter.cg.extrapolatedTime - common.UnixNanoTime(cgExtent.GetWriteTime())).ToSecondsFmt(),
+				`cgeWriteTime`:    common.UnixNanoTime(cgExtent.GetWriteTime()).ToSecondsFmt(),
 			}).Info(`Queue Depth Tabulation (missing store extent)`)
 		}
 		return
@@ -357,8 +344,8 @@ func (qdc *queueDepthCalculator) computeBacklog(cgExtent *metadata.ConsumerGroup
 			`cgeAckLvlSeq`:      cgExtent.GetAckLevelSeqNo(),
 			`rsAvailSeqRate`:    storeMetadata.availableSequenceRate,
 			`cgeAckLvlSeqRate`:  cgExtent.GetAckLevelSeqNoRate(),
-			`rsWriteTime`:       (iter.cg.extrapolatedTime - storeMetadata.writeTime).ToSecondsFmt(),
-			`cgeWriteTime`:      (iter.cg.extrapolatedTime - common.UnixNanoTime(cgExtent.GetWriteTime())).ToSecondsFmt(),
+			`rsWriteTime`:       storeMetadata.writeTime.ToSecondsFmt(),
+			`cgeWriteTime`:      common.UnixNanoTime(cgExtent.GetWriteTime()).ToSecondsFmt(),
 			`subTotalAvail`:     backlog,
 			`runningTotalAvail`: backlog + iter.cg.backlogAvailable,
 		}).Info(`Queue Depth Tabulation`)
@@ -473,7 +460,7 @@ func (qdc *queueDepthCalculator) handleStartFrom(
 	doGaft := true
 	createTime := storeMetadata.createdTime
 
-	now := qdc.iter.cg.extrapolatedTime
+	now := qdc.iter.cg.now
 	isTabulationRequested := qdc.iter.cg.isTabulationRequested
 
 	// Don't allow startFrom to be in the future. Future startFrom should have zero queue depth anyway
@@ -728,7 +715,6 @@ func (qdc *queueDepthCalculator) makeCGExtentLogger(dstDesc *shared.DestinationD
 	logger := qdc.ll
 	if qdc.iter.cg.isTabulationRequested {
 		logger = qdc.ll.WithFields(bark.Fields{
-			`time`:           qdc.iter.cg.extrapolatedTime,
 			common.TagDst:    common.FmtDst(dstDesc.GetDestinationUUID()),
 			common.TagDstPth: common.FmtDstPth(dstDesc.GetPath()),
 			common.TagCnsm:   common.FmtCnsm(cgDesc.GetConsumerGroupUUID()),
