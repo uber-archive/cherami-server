@@ -319,10 +319,10 @@ func (qdc *queueDepthCalculator) addExtentBacklog(
 		return
 	}
 
-	iter.cg.backlogAvailable += qdc.computeBacklog(cgExtent, storeExtentMetadata, string(connectedStoreID), logger)
+	iter.cg.backlogAvailable += qdc.computeBacklog(cgDesc, cgExtent, storeExtentMetadata, string(connectedStoreID), logger)
 }
 
-func (qdc *queueDepthCalculator) computeBacklog(cgExtent *metadata.ConsumerGroupExtent, storeMetadata *storeExtentMetadata, storeID string, logger bark.Logger) int64 {
+func (qdc *queueDepthCalculator) computeBacklog(cgDesc *shared.ConsumerGroupDescription, cgExtent *metadata.ConsumerGroupExtent, storeMetadata *storeExtentMetadata, storeID string, logger bark.Logger) int64 {
 
 	var backlog int64
 	var iter = &qdc.iter
@@ -332,6 +332,18 @@ func (qdc *queueDepthCalculator) computeBacklog(cgExtent *metadata.ConsumerGroup
 		backlog = common.MaxInt64(0, storeMetadata.lastSequence-(storeMetadata.beginSequence+1))
 	case false:
 		backlog = common.MaxInt64(0, storeMetadata.availableSequence-cgExtent.GetAckLevelSeqNo())
+	}
+
+	if strings.Contains(cgDesc.GetConsumerGroupName(),"TestQueueDepth") {
+		fmt.Printf("cg:%v,extID:%v,storeID:%v,store.avail=%v,cg.ack=%v,store.last=%v,store.begin=%v,backlog=%v\n",
+			cgDesc.GetConsumerGroupName(),
+			common.FmtStor(cgExtent.GetExtentUUID()),
+			common.FmtStor(storeID),
+			storeMetadata.availableSequence,
+			cgExtent.GetAckLevelSeqNo(),
+			storeMetadata.lastSequence,
+			storeMetadata.beginSequence,
+			backlog)
 	}
 
 	if iter.cg.isTabulationRequested {
