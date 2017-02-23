@@ -2395,11 +2395,12 @@ func (s *NetIntegrationSuiteParallelB) TestQueueDepth() {
 
 	var newStartFrom int64
 	for ; phase < phaseCount; phase++ {
-		ll().Info(`Starting...`)
+		ll().WithField(`phase`, phase).Error(`Starting...`)
 		// Producer actions
 		switch phase {
 		case 0:
 			// Verify that all backlogs are zero before producing anything
+
 			checkBacklog(startFrom, 0, 0)
 			checkBacklog(dlq, 0, 0)
 			checkBacklog(dangling, 0, 0)
