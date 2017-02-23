@@ -342,25 +342,9 @@ func (qdc *queueDepthCalculator) computeBacklog(cgExtent *metadata.ConsumerGroup
 
 	switch qdc.iter.isDLQ {
 	case true:
-		backlog = common.ExtrapolateDifference(
-			common.SequenceNumber(storeMetadata.lastSequence),
-			common.SequenceNumber(storeMetadata.beginSequence)+1, // Begin sequence is -1 if no retention has occurred
-			storeMetadata.lastSequenceRate,
-			0,
-			storeMetadata.writeTime,
-			storeMetadata.writeTime,
-			iter.cg.extrapolatedTime,
-			maxExtrapolation)
+		backlog = common.MaxInt64(0, storeMetadata.lastSequence-(storeMetadata.beginSequence+1))
 	case false:
-		backlog = common.ExtrapolateDifference(
-			common.SequenceNumber(storeMetadata.availableSequence),
-			common.SequenceNumber(cgExtent.GetAckLevelSeqNo()),
-			storeMetadata.availableSequenceRate,
-			cgExtent.GetAckLevelSeqNoRate(),
-			common.UnixNanoTime(storeMetadata.writeTime),
-			common.UnixNanoTime(cgExtent.GetWriteTime()),
-			iter.cg.extrapolatedTime,
-			maxExtrapolation)
+		backlog = common.MaxInt64(0, storeMetadata.availableSequence-cgExtent.GetAckLevelSeqNo())
 	}
 
 	if iter.cg.isTabulationRequested {

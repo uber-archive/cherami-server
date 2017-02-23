@@ -125,7 +125,7 @@ func (s *NetIntegrationSuiteParallelC) TestMsgCacheLimit() {
 	// Create the client
 	ipaddr, port, _ := net.SplitHostPort(s.GetFrontend().GetTChannel().PeerInfo().HostPort)
 	portNum, _ := strconv.Atoi(port)
-	cheramiClient, _ := client.NewClient("cherami-test", ipaddr, portNum, nil)
+	cheramiClient := createCheramiClient("cherami-test", ipaddr, portNum)
 
 	// Create the destination to publish message
 	crReq := cherami.NewCreateDestinationRequest()
@@ -279,7 +279,7 @@ func (s *NetIntegrationSuiteParallelC) TestWriteEndToEndSuccessWithCassandra() {
 	// Create the client
 	ipaddr, port, _ := net.SplitHostPort(s.GetFrontend().GetTChannel().PeerInfo().HostPort)
 	portNum, _ := strconv.Atoi(port)
-	cheramiClient, _ := client.NewClient("cherami-test", ipaddr, portNum, nil)
+	cheramiClient := createCheramiClient("cherami-test", ipaddr, portNum)
 
 	// Create the destination to publish message
 	crReq := cherami.NewCreateDestinationRequest()
@@ -424,7 +424,7 @@ func (s *NetIntegrationSuiteSerial) TestWriteEndToEndMultipleStore() {
 	// Create the client
 	ipaddr, port, _ := net.SplitHostPort(s.GetFrontend().GetTChannel().PeerInfo().HostPort)
 	portNum, _ := strconv.Atoi(port)
-	cheramiClient, _ := client.NewClient("cherami-test", ipaddr, portNum, nil)
+	cheramiClient := createCheramiClient("cherami-test", ipaddr, portNum)
 
 	// Create the destination to publish message
 	crReq := cherami.NewCreateDestinationRequest()
@@ -592,7 +592,7 @@ func (s *NetIntegrationSuiteParallelB) _TestTimerQueue() {
 	// Create the client
 	ipaddr, port, _ := net.SplitHostPort(s.GetFrontend().GetTChannel().PeerInfo().HostPort)
 	portNum, _ := strconv.Atoi(port)
-	cheramiClient, _ := client.NewClient("cherami-test", ipaddr, portNum, nil)
+	cheramiClient := createCheramiClient("cherami-test", ipaddr, portNum)
 
 	// Create the destination to publish message
 	crReq := cherami.NewCreateDestinationRequest()
@@ -867,7 +867,7 @@ func (s *NetIntegrationSuiteParallelC) TestDLQWithCassandra() {
 	// Create the client
 	ipaddr, port, _ := net.SplitHostPort(s.GetFrontend().GetTChannel().PeerInfo().HostPort)
 	portNum, _ := strconv.Atoi(port)
-	cheramiClient, _ := client.NewClient("cherami-test", ipaddr, portNum, nil)
+	cheramiClient := createCheramiClient("cherami-test", ipaddr, portNum)
 
 	// Create the destination to publish message
 	crReq := cherami.NewCreateDestinationRequest()
@@ -977,7 +977,6 @@ func (s *NetIntegrationSuiteParallelC) TestDLQWithCassandra() {
 		ConsumerGroupName: cgPath,
 		ConsumerName:      "TestDLQWithCassandraConsumerName",
 		PrefetchCount:     cnsmrPrefetch,
-		Options:           &client.ClientOptions{Timeout: time.Second * 30}, // this is the thrift context timeout
 	}
 
 	consumerTest := cheramiClient.CreateConsumer(cConsumerReq)
@@ -1378,7 +1377,7 @@ func (s *NetIntegrationSuiteParallelD) TestSmartRetryDisableDuringDLQMerge() {
 	// Create the client
 	ipaddr, port, _ := net.SplitHostPort(s.GetFrontend().GetTChannel().PeerInfo().HostPort)
 	portNum, _ := strconv.Atoi(port)
-	cheramiClient, _ := client.NewClient("cherami-test", ipaddr, portNum, nil)
+	cheramiClient := createCheramiClient("cherami-test", ipaddr, portNum)
 
 	// Create the destination to publish message
 	crReq := cherami.NewCreateDestinationRequest()
@@ -1573,7 +1572,7 @@ func (s *NetIntegrationSuiteParallelA) _TestSmartRetry() {
 	// Create the client
 	ipaddr, port, _ := net.SplitHostPort(s.GetFrontend().GetTChannel().PeerInfo().HostPort)
 	portNum, _ := strconv.Atoi(port)
-	cheramiClient, _ := client.NewClient("cherami-test", ipaddr, portNum, nil)
+	cheramiClient := createCheramiClient("cherami-test", ipaddr, portNum)
 
 	// Create the destination to publish message
 	crReq := cherami.NewCreateDestinationRequest()
@@ -1830,7 +1829,7 @@ func (s *NetIntegrationSuiteParallelC) TestStartFromWithCassandra() {
 	// Create the client
 	ipaddr, port, _ := net.SplitHostPort(s.GetFrontend().GetTChannel().PeerInfo().HostPort)
 	portNum, _ := strconv.Atoi(port)
-	cheramiClient, _ := client.NewClient("cherami-test", ipaddr, portNum, nil)
+	cheramiClient,_ := client.NewClient("cherami-test", ipaddr, portNum, nil)
 
 	// Create the destination to publish message
 	crReq := cherami.NewCreateDestinationRequest()
@@ -2040,6 +2039,15 @@ ReadLoop2:
 	s.Nil(err, "Failed to delete destination")
 }
 
+func createCheramiClient(svcName string,  ipaddr string, port int) client.Client {
+	options := &client.ClientOptions{
+		Timeout: time.Second * 30,
+		ReconfigurationPollingInterval: time.Second,
+	}
+	cc, _ := client.NewClient(svcName, ipaddr, port, options)
+	return cc
+}
+
 func (s *NetIntegrationSuiteParallelB) TestQueueDepth() {
 	const (
 		destPath                = `/test.runner.SmartRetry/TestQueueDepth` // This path ensures that throttling is limited for this test
@@ -2092,7 +2100,7 @@ func (s *NetIntegrationSuiteParallelB) TestQueueDepth() {
 	testStart := int64(common.Now())
 
 	ll := func() bark.Logger {
-		return (common.GetDefaultLogger()).WithFields(bark.Fields{`phase`: phase, `t`: `qDepth`})
+		return common.GetDefaultLogger().WithFields(bark.Fields{`phase`: phase, `t`: `qDepth`})
 	}
 
 	// Enable the tabulation feature for verbose logging only
@@ -2104,7 +2112,7 @@ func (s *NetIntegrationSuiteParallelB) TestQueueDepth() {
 	// Create the client
 	ipaddr, port, _ := net.SplitHostPort(s.GetFrontend().GetTChannel().PeerInfo().HostPort)
 	portNum, _ := strconv.Atoi(port)
-	cheramiClient, _ := client.NewClient("TestQueueDepth", ipaddr, portNum, nil)
+	cheramiClient := createCheramiClient("TestQueueDepth", ipaddr, portNum)
 	defer cheramiClient.Close()
 
 	// Create the destination to publish message
@@ -2220,7 +2228,6 @@ func (s *NetIntegrationSuiteParallelB) TestQueueDepth() {
 				ConsumerGroupName: cgPath + cgNames[cg],
 				ConsumerName:      "TestQueueDepthConsumerName" + cgNames[cg],
 				PrefetchCount:     cnsmrPrefetch,
-				Options:           &client.ClientOptions{Timeout: time.Second * 30}, // this is the thrift context timeout
 			}
 
 			consumer := cheramiClient.CreateConsumer(cConsumerReq)
@@ -2254,7 +2261,9 @@ func (s *NetIntegrationSuiteParallelB) TestQueueDepth() {
 			qReq := &controller.GetQueueDepthInfoRequest{Key: common.StringPtr(cgDescs[cg].GetConsumerGroupUUID())}
 			r, err := s.GetController().GetQueueDepthInfo(nil, qReq)
 			if err != nil {
-				ll().WithField(`error`, err).Error("GetQueueDepthInfo error")
+				if _, ok := err.(*controller.QueueCacheMissError); !ok {
+					ll().WithField(`error`, err).Error("GetQueueDepthInfo error")
+				}
 				continue
 			}
 
@@ -2582,7 +2591,7 @@ func (s *NetIntegrationSuiteParallelC) TestEndToEndChecksum() {
 	// Create the client
 	ipaddr, port, _ := net.SplitHostPort(s.GetFrontend().GetTChannel().PeerInfo().HostPort)
 	portNum, _ := strconv.Atoi(port)
-	cheramiClient, _ := client.NewClient("cherami-test", ipaddr, portNum, nil)
+	cheramiClient := createCheramiClient("cherami-test", ipaddr, portNum)
 
 	// Create the destination to publish message
 	crReq := cherami.NewCreateDestinationRequest()
