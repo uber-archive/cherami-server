@@ -82,7 +82,7 @@ type (
 			storeExtentMetadataCache *storeExtentMetadataCache
 
 			cg struct {
-				now					  common.UnixNanoTime
+				now                   common.UnixNanoTime
 				backlogAvailable      int64
 				backlogInflight       int64
 				nOpenExtents          int64 // stat for stallness check
@@ -307,7 +307,7 @@ func (qdc *queueDepthCalculator) addExtentBacklog(
 				common.TagStor:     string(connectedStoreID),
 				`cgeAckLvlSeq`:     cgExtent.GetAckLevelSeqNo(),
 				`cgeAckLvlSeqRate`: cgExtent.GetAckLevelSeqNoRate(),
-				`cgeWriteTime`:    common.UnixNanoTime(cgExtent.GetWriteTime()).ToSecondsFmt(),
+				`cgeWriteTime`:     common.UnixNanoTime(cgExtent.GetWriteTime()).ToSecondsFmt(),
 			}).Info(`Queue Depth Tabulation (missing store extent)`)
 		}
 		return
@@ -332,19 +332,6 @@ func (qdc *queueDepthCalculator) computeBacklog(cgDesc *shared.ConsumerGroupDesc
 		backlog = common.MaxInt64(0, storeMetadata.lastSequence-(storeMetadata.beginSequence+1))
 	case false:
 		backlog = common.MaxInt64(0, storeMetadata.availableSequence-cgExtent.GetAckLevelSeqNo())
-	}
-
-	if strings.Contains(cgDesc.GetConsumerGroupName(),"TestQueueDepth") {
-		fmt.Printf("cg:%v,cgid:%v,extID:%v,storeID:%v,store.avail=%v,cg.ack=%v,store.last=%v,store.begin=%v,backlog=%v\n",
-			cgDesc.GetConsumerGroupName(),
-			common.FmtStor(cgDesc.GetConsumerGroupUUID()),
-			common.FmtStor(cgExtent.GetExtentUUID()),
-			common.FmtStor(storeID),
-			storeMetadata.availableSequence,
-			cgExtent.GetAckLevelSeqNo(),
-			storeMetadata.lastSequence,
-			storeMetadata.beginSequence,
-			backlog)
 	}
 
 	if iter.cg.isTabulationRequested {
