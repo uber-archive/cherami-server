@@ -2504,7 +2504,7 @@ func (s *NetIntegrationSuiteParallelB) TestQueueDepth() {
 			checkBacklog(startFrom, 20+13, 0)
 		case 120:
 			// verify that switching from dangling to assigned doesn't affect the startfrom group
-			consumeN(startFrom, 1)
+			//consumeN(startFrom, 1) // this depends on outputhost unloading/reloading extents (since cgUUID changed)
 			checkBacklog(startFrom, 20+13-1, 0)
 			//checkBacklog(dlq, (20+13-5)+23, 0) // T471438, sometimes fails because store wrote a bad value here
 			checkBacklog(dangling, 0, 0)
