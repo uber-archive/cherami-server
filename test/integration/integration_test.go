@@ -291,7 +291,7 @@ func (s *NetIntegrationSuiteParallelC) TestWriteEndToEndSuccessWithCassandra() {
 	// Create the client
 	ipaddr, port, _ := net.SplitHostPort(s.GetFrontend().GetTChannel().PeerInfo().HostPort)
 	portNum, _ := strconv.Atoi(port)
-	cheramiClient := createCheramiClient("cherami-test", ipaddr, portNum, nil)
+	cheramiClient,_ := client.NewClient("cherami-test", ipaddr, portNum, nil)
 
 	// Create the destination to publish message
 	crReq := cherami.NewCreateDestinationRequest()
