@@ -593,8 +593,7 @@ func (s *ReplicatorSuite) TestDestMetadataReconcileLocalMissing() {
 	remoteDests = append(remoteDests, &shared.DestinationDescription{
 		DestinationUUID: common.StringPtr(missingDestUUID),
 	})
-	err := reconciler.reconcileDest(localDests, remoteDests)
-	s.NoError(err)
+	reconciler.reconcileDest(localDests, remoteDests)
 	s.mockMeta.AssertExpectations(s.T())
 }
 
@@ -607,8 +606,7 @@ func (s *ReplicatorSuite) TestDestMetadataReconcileLocalAndRemoteEmpty() {
 
 	var localDests []*shared.DestinationDescription
 	var remoteDests []*shared.DestinationDescription
-	err := reconciler.reconcileDest(localDests, remoteDests)
-	s.NoError(err)
+	reconciler.reconcileDest(localDests, remoteDests)
 	s.mockMeta.AssertExpectations(s.T())
 }
 
@@ -625,8 +623,7 @@ func (s *ReplicatorSuite) TestDestMetadataReconcileRemoteMissing() {
 		DestinationUUID: common.StringPtr(missingDestUUID),
 	})
 	var remoteDests []*shared.DestinationDescription
-	err := reconciler.reconcileDest(localDests, remoteDests)
-	s.NoError(err)
+	reconciler.reconcileDest(localDests, remoteDests)
 	s.mockMeta.AssertExpectations(s.T())
 }
 
@@ -644,8 +641,7 @@ func (s *ReplicatorSuite) TestDestMetadataReconcileLocalMissingRemoteDeleted() {
 		DestinationUUID: common.StringPtr(missingDestUUID),
 		Status:          common.InternalDestinationStatusPtr(shared.DestinationStatus_DELETING),
 	})
-	err := reconciler.reconcileDest(localDests, remoteDests)
-	s.NoError(err)
+	reconciler.reconcileDest(localDests, remoteDests)
 	s.mockMeta.AssertExpectations(s.T())
 }
 
@@ -675,8 +671,7 @@ func (s *ReplicatorSuite) TestDestMetadataReconcileRemoteDeleted() {
 		Path:            common.StringPtr(destPath),
 		Status:          common.InternalDestinationStatusPtr(shared.DestinationStatus_DELETING),
 	})
-	err := reconciler.reconcileDest(localDests, remoteDests)
-	s.NoError(err)
+	reconciler.reconcileDest(localDests, remoteDests)
 	s.mockMeta.AssertExpectations(s.T())
 }
 
@@ -701,8 +696,7 @@ func (s *ReplicatorSuite) TestDestMetadataReconcileRemoteLocalDeleted() {
 		Path:            common.StringPtr(destPath),
 		Status:          common.InternalDestinationStatusPtr(shared.DestinationStatus_DELETING),
 	})
-	err := reconciler.reconcileDest(localDests, remoteDests)
-	s.NoError(err)
+	reconciler.reconcileDest(localDests, remoteDests)
 	s.mockMeta.AssertExpectations(s.T())
 }
 
@@ -736,8 +730,7 @@ func (s *ReplicatorSuite) TestDestMetadataReconcileRemoteUpdate() {
 		Path:            common.StringPtr(destPath),
 		OwnerEmail:      common.StringPtr(ownerRemote),
 	})
-	err := reconciler.reconcileDest(localDests, remoteDests)
-	s.NoError(err)
+	reconciler.reconcileDest(localDests, remoteDests)
 	s.mockMeta.AssertExpectations(s.T())
 }
 
@@ -763,8 +756,7 @@ func (s *ReplicatorSuite) TestDestExtentMetadataReconcileLocalMissing() {
 	localExtents := make(map[string]shared.ExtentStatus)
 	remoteExtents := make(map[string]shared.ExtentStatus)
 	remoteExtents[missingExtent] = shared.ExtentStatus_OPEN
-	err := reconciler.reconcileDestExtent(dest, localExtents, remoteExtents, remoteZone)
-	s.NoError(err)
+	reconciler.reconcileDestExtent(dest, localExtents, remoteExtents, remoteZone)
 	s.mockControllerClient.AssertExpectations(s.T())
 }
 
@@ -781,8 +773,7 @@ func (s *ReplicatorSuite) TestDestExtentMetadataReconcileLocalMissingConsumedExt
 	localExtents := make(map[string]shared.ExtentStatus)
 	remoteExtents := make(map[string]shared.ExtentStatus)
 	remoteExtents[missingExtent] = shared.ExtentStatus_CONSUMED
-	err := reconciler.reconcileDestExtent(dest, localExtents, remoteExtents, remoteZone)
-	s.NoError(err)
+	reconciler.reconcileDestExtent(dest, localExtents, remoteExtents, remoteZone)
 	s.mockControllerClient.AssertExpectations(s.T())
 }
 
@@ -797,8 +788,7 @@ func (s *ReplicatorSuite) TestDestExtentMetadataReconcileLocalAndRemoteEmpty() {
 
 	localExtents := make(map[string]shared.ExtentStatus)
 	remoteExtents := make(map[string]shared.ExtentStatus)
-	err := reconciler.reconcileDestExtent(dest, localExtents, remoteExtents, remoteZone)
-	s.NoError(err)
+	reconciler.reconcileDestExtent(dest, localExtents, remoteExtents, remoteZone)
 	s.mockControllerClient.AssertExpectations(s.T())
 }
 
@@ -824,8 +814,7 @@ func (s *ReplicatorSuite) TestDestExtentMetadataReconcileInconsistentStatus() {
 	remoteExtents := make(map[string]shared.ExtentStatus)
 	remoteExtents[extent] = shared.ExtentStatus_SEALED
 	localExtents[extent] = shared.ExtentStatus_OPEN
-	err := reconciler.reconcileDestExtent(dest, localExtents, remoteExtents, remoteZone)
-	s.NoError(err)
+	reconciler.reconcileDestExtent(dest, localExtents, remoteExtents, remoteZone)
 	s.mockMeta.AssertExpectations(s.T())
 }
 
@@ -867,8 +856,7 @@ func (s *ReplicatorSuite) TestDestExtentMetadataReconcileRemoteDeletedLocalNot()
 	remoteExtents := make(map[string]shared.ExtentStatus)
 	remoteExtents[extent] = shared.ExtentStatus_DELETED
 	localExtents[extent] = shared.ExtentStatus_OPEN
-	err := reconciler.reconcileDestExtent(dest, localExtents, remoteExtents, remoteZone)
-	s.NoError(err)
+	reconciler.reconcileDestExtent(dest, localExtents, remoteExtents, remoteZone)
 	s.mockMeta.AssertExpectations(s.T())
 	s.mockStoreClient.AssertExpectations(s.T())
 }
@@ -888,8 +876,7 @@ func (s *ReplicatorSuite) TestDestExtentMetadataReconcileRemoteGoneLocalNot() {
 	localExtents := make(map[string]shared.ExtentStatus)
 	remoteExtents := make(map[string]shared.ExtentStatus)
 	localExtents[extent] = shared.ExtentStatus_OPEN
-	err := reconciler.reconcileDestExtent(dest, localExtents, remoteExtents, remoteZone)
-	s.NoError(err)
+	reconciler.reconcileDestExtent(dest, localExtents, remoteExtents, remoteZone)
 	s.mockMeta.AssertExpectations(s.T())
 	s.mockStoreClient.AssertExpectations(s.T())
 	s.Equal(1, len(reconciler.suspectMissingExtents))
@@ -920,8 +907,7 @@ func (s *ReplicatorSuite) TestDestExtentMetadataReconcileRemoteGoneLocalNot() {
 		req := args.Get(1).(*store.SealExtentRequest)
 		s.Equal(extent, req.GetExtentUUID())
 	})
-	err = reconciler.reconcileDestExtent(dest, localExtents, remoteExtents, remoteZone)
-	s.NoError(err)
+	reconciler.reconcileDestExtent(dest, localExtents, remoteExtents, remoteZone)
 	s.mockMeta.AssertExpectations(s.T())
 	s.mockStoreClient.AssertExpectations(s.T())
 	s.Equal(1, len(reconciler.suspectMissingExtents))
@@ -948,16 +934,14 @@ func (s *ReplicatorSuite) TestDestExtentMetadataReconcileRemoteGoneLocalNot() {
 		req := args.Get(1).(*store.SealExtentRequest)
 		s.Equal(extent, req.GetExtentUUID())
 	})
-	err = reconciler.reconcileDestExtent(dest, localExtents, remoteExtents, remoteZone)
-	s.NoError(err)
+	reconciler.reconcileDestExtent(dest, localExtents, remoteExtents, remoteZone)
 	s.mockMeta.AssertExpectations(s.T())
 	s.mockStoreClient.AssertExpectations(s.T())
 	s.Equal(1, len(reconciler.suspectMissingExtents))
 
 	// step4: add the extent in remote zone, expect no action, and extent removed from suspect list
 	remoteExtents[extent] = shared.ExtentStatus_OPEN
-	err = reconciler.reconcileDestExtent(dest, localExtents, remoteExtents, remoteZone)
-	s.NoError(err)
+	reconciler.reconcileDestExtent(dest, localExtents, remoteExtents, remoteZone)
 	s.mockMeta.AssertExpectations(s.T())
 	s.mockStoreClient.AssertExpectations(s.T())
 	s.Equal(0, len(reconciler.suspectMissingExtents))

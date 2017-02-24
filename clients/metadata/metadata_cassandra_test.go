@@ -540,6 +540,106 @@ func (s *CassandraSuite) TestListDestinations() {
 	s.Equal(0, len(listResult.GetDestinations()))
 }
 
+func (s *CassandraSuite) TestListDestinationsByUUID() {
+	destPrefix := "fool/bar"
+	count := 20
+	zoneConfig := &shared.DestinationZoneConfig{
+		Zone:                   common.StringPtr(`test1`),
+		AllowConsume:           common.BoolPtr(true),
+		RemoteExtentReplicaNum: common.Int32Ptr(1),
+	}
+
+	// Create destinations (half will be multi_zone dest)
+	for i := 0; i < count; i++ {
+		zoneConfigs := []*shared.DestinationZoneConfig{zoneConfig}
+		isMultiZone := true
+		if i%2 == 0 {
+			zoneConfigs = []*shared.DestinationZoneConfig{}
+			isMultiZone = false
+		}
+
+		createDestination := &shared.CreateDestinationRequest{
+			Path: common.StringPtr(s.generateName(fmt.Sprintf("%v-%v", destPrefix, i))),
+			Type: common.InternalDestinationTypePtr(shared.DestinationType_PLAIN),
+			ConsumedMessagesRetention:   common.Int32Ptr(800),
+			UnconsumedMessagesRetention: common.Int32Ptr(1600),
+			OwnerEmail:                  common.StringPtr(destinationOwnerEmail),
+			ChecksumOption:              common.InternalChecksumOptionPtr(0),
+			IsMultiZone:                 common.BoolPtr(isMultiZone),
+			ZoneConfigs:                 zoneConfigs,
+		}
+
+		if i == count/2 {
+			s.Nil(s.Alter(), "ALTER table failed")
+		}
+
+		_, err := s.client.CreateDestination(nil, createDestination)
+		s.Nil(err)
+	}
+
+	// ListDestinationsByUUID
+	listDestinations := &shared.ListDestinationsByUUIDRequest{
+		Limit:  common.Int64Ptr(testPageSize),
+		ValidateAgainstPathTable: common.BoolPtr(true),
+	}
+	var result []*shared.DestinationDescription
+	for {
+		listResult, err := s.client.ListDestinationsByUUID(nil, listDestinations)
+		s.Nil(err)
+		for _, d := range listResult.GetDestinations() {
+			if strings.HasPrefix(d.GetPath(), destPrefix) {
+				result = append(result, d)
+			}
+		}
+		if len(listResult.GetNextPageToken()) == 0 {
+			break
+		} else {
+			listDestinations.PageToken = listResult.GetNextPageToken()
+		}
+	}
+	s.Equal(count, len(result))
+	for _, dest := range result {
+		s.Equal(shared.DestinationType_PLAIN, dest.GetType())
+		s.Equal(int32(800), dest.GetConsumedMessagesRetention())
+		s.Equal(int32(1600), dest.GetUnconsumedMessagesRetention())
+		s.Equal(shared.DestinationStatus_ENABLED, dest.GetStatus())
+	}
+
+	// list multi zone only
+	listDestinations = &shared.ListDestinationsByUUIDRequest{
+		MultiZoneOnly: common.BoolPtr(true),
+		ValidateAgainstPathTable: common.BoolPtr(true),
+		Limit:         common.Int64Ptr(testPageSize),
+	}
+	result = nil
+	for {
+		listResult, err := s.client.ListDestinationsByUUID(nil, listDestinations)
+		s.Nil(err)
+		for _, d := range listResult.GetDestinations() {
+			if strings.HasPrefix(d.GetPath(), destPrefix) {
+				result = append(result, d)
+			}
+		}
+		if len(listResult.GetNextPageToken()) == 0 {
+			break
+		} else {
+			listDestinations.PageToken = listResult.GetNextPageToken()
+		}
+	}
+	s.Equal(count/2, len(result))
+	for _, dest := range result {
+		s.Equal(shared.DestinationType_PLAIN, dest.GetType())
+		s.Equal(int32(800), dest.GetConsumedMessagesRetention())
+		s.Equal(int32(1600), dest.GetUnconsumedMessagesRetention())
+		s.Equal(shared.DestinationStatus_ENABLED, dest.GetStatus())
+		s.Equal(true, dest.GetIsMultiZone())
+		s.Equal(1, len(dest.GetZoneConfigs()))
+		s.Equal(zoneConfig.GetZone(), dest.GetZoneConfigs()[0].GetZone())
+		s.Equal(zoneConfig.GetAllowConsume(), dest.GetZoneConfigs()[0].GetAllowConsume())
+		s.Equal(zoneConfig.GetRemoteExtentReplicaNum(), dest.GetZoneConfigs()[0].GetRemoteExtentReplicaNum())
+	}
+}
+
 func (s *CassandraSuite) TestExtentCRU() {
 	// Create
 	var destinations [3]*shared.DestinationDescription

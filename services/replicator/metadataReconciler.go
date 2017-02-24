@@ -149,10 +149,12 @@ func (r *metadataReconciler) reconcileDestMetadata() error {
 		return err
 	}
 
-	return r.reconcileDest(localDests, remoteDests)
+	r.reconcileDest(localDests, remoteDests)
+	return nil
 }
 
-func (r *metadataReconciler) reconcileDest(localDests []*shared.DestinationDescription, remoteDests []*shared.DestinationDescription) error {
+func (r *metadataReconciler) reconcileDest(localDests []*shared.DestinationDescription, remoteDests []*shared.DestinationDescription) {
+	var replicatorReconcileDestFoundMissingCount int64
 	localDestsSet := make(map[string]*shared.DestinationDescription)
 	for _, dest := range localDests {
 		localDestsSet[dest.GetDestinationUUID()] = dest
@@ -225,7 +227,7 @@ func (r *metadataReconciler) reconcileDest(localDests []*shared.DestinationDescr
 		} else {
 			// case #3: destination exists in remote, but not in local. Create the destination locally
 			r.logger.WithField(common.TagDst, common.FmtDst(remoteDest.GetDestinationUUID())).Warn(`Found missing destination from remote!`)
-			r.m3Client.UpdateGauge(metrics.ReplicatorReconcileScope, metrics.ReplicatorReconcileDestFoundMissing, 1)
+			replicatorReconcileDestFoundMissingCount = replicatorReconcileDestFoundMissingCount + 1
 
 			// If the missing destination is in deleting/deleted status, we don't need to create the destination locally
 			if remoteDest.GetStatus() == shared.DestinationStatus_DELETING || remoteDest.GetStatus() == shared.DestinationStatus_DELETED {
@@ -259,7 +261,8 @@ func (r *metadataReconciler) reconcileDest(localDests []*shared.DestinationDescr
 			}
 		}
 	}
-	return nil
+
+	r.m3Client.UpdateGauge(metrics.ReplicatorReconcileScope, metrics.ReplicatorReconcileDestFoundMissing, replicatorReconcileDestFoundMissingCount)
 }
 
 func (r *metadataReconciler) getAllMultiZoneDestInLocalZone() ([]*shared.DestinationDescription, error) {
@@ -354,9 +357,7 @@ func (r *metadataReconciler) reconcileDestExtentMetadata() error {
 
 				// only need to reconcile for extents that are originated from the remote zone
 				localExtents := localExtentsPerZone[zoneConfig.GetZone()]
-				if err = r.reconcileDestExtent(dest.GetDestinationUUID(), localExtents, remoteExtents, zoneConfig.GetZone()); err != nil {
-					continue
-				}
+				r.reconcileDestExtent(dest.GetDestinationUUID(), localExtents, remoteExtents, zoneConfig.GetZone())
 			}
 		}
 	}
@@ -435,8 +436,11 @@ func (r *metadataReconciler) getAllDestExtentInCurrentZone(destUUID string) (map
 	return perZoneExtents, nil
 }
 
-func (r *metadataReconciler) reconcileDestExtent(destUUID string, localExtents map[string]shared.ExtentStatus, remoteExtents map[string]shared.ExtentStatus, remoteZone string) error {
-	var destExtentRemoteDeletedLocalNotCount int64
+func (r *metadataReconciler) reconcileDestExtent(destUUID string, localExtents map[string]shared.ExtentStatus, remoteExtents map[string]shared.ExtentStatus, remoteZone string) {
+	var remoteDeletedLocalNotCount int64
+	var remoteConsumedLocalMissingCount int64
+	var remoteDeletedLocalMissingCount int64
+	var foundMissingCount int64
 	for remoteExtentUUID, remoteExtentStatus := range remoteExtents {
 		localExtentStatus, ok := localExtents[remoteExtentUUID]
 		if !ok {
@@ -449,15 +453,15 @@ func (r *metadataReconciler) reconcileDestExtent(destUUID string, localExtents m
 
 			// if the extent is already in consumed/deleted state on remote side, don't bother to create the extent locally because all data is gone on remote side already
 			if remoteExtentStatus == shared.ExtentStatus_CONSUMED {
-				r.m3Client.UpdateGauge(metrics.ReplicatorReconcileScope, metrics.ReplicatorReconcileDestExtentRemoteConsumedLocalMissing, 1)
+				remoteConsumedLocalMissingCount = remoteConsumedLocalMissingCount + 1
 				continue
 			}
 			if remoteExtentStatus == shared.ExtentStatus_DELETED {
-				r.m3Client.UpdateGauge(metrics.ReplicatorReconcileScope, metrics.ReplicatorReconcileDestExtentRemoteDeletedLocalMissing, 1)
+				remoteDeletedLocalMissingCount = remoteDeletedLocalMissingCount + 1
 				continue
 			}
 
-			r.m3Client.UpdateGauge(metrics.ReplicatorReconcileScope, metrics.ReplicatorReconcileDestExtentFoundMissing, 1)
+			foundMissingCount = foundMissingCount + 1
 
 			createRequest := &shared.CreateExtentRequest{
 				Extent: &shared.Extent{
@@ -485,7 +489,7 @@ func (r *metadataReconciler) reconcileDestExtent(destUUID string, localExtents m
 				r.sealExtentInMetadata(destUUID, remoteExtentUUID)
 			}
 			if remoteExtentStatus == shared.ExtentStatus_DELETED {
-				r.handleExtentDeletedOrMissingInRemote(destUUID, remoteExtentUUID, localExtentStatus, &destExtentRemoteDeletedLocalNotCount)
+				r.handleExtentDeletedOrMissingInRemote(destUUID, remoteExtentUUID, localExtentStatus, &remoteDeletedLocalNotCount)
 			}
 		}
 	}
@@ -526,7 +530,7 @@ func (r *metadataReconciler) reconcileDestExtent(destUUID string, localExtents m
 					}).Error(`code bug!! suspect extent should in local extent map!!`)
 					continue
 				}
-				r.handleExtentDeletedOrMissingInRemote(suspectExtentInfo.destUUID, suspectExtent, localStatus, &destExtentRemoteDeletedLocalNotCount)
+				r.handleExtentDeletedOrMissingInRemote(suspectExtentInfo.destUUID, suspectExtent, localStatus, &remoteDeletedLocalNotCount)
 			}
 		}
 	}
@@ -541,10 +545,11 @@ func (r *metadataReconciler) reconcileDestExtent(destUUID string, localExtents m
 		}
 	}
 
+	r.m3Client.UpdateGauge(metrics.ReplicatorReconcileScope, metrics.ReplicatorReconcileDestExtentFoundMissing, foundMissingCount)
+	r.m3Client.UpdateGauge(metrics.ReplicatorReconcileScope, metrics.ReplicatorReconcileDestExtentRemoteConsumedLocalMissing, remoteConsumedLocalMissingCount)
+	r.m3Client.UpdateGauge(metrics.ReplicatorReconcileScope, metrics.ReplicatorReconcileDestExtentRemoteDeletedLocalMissing, remoteDeletedLocalMissingCount)
+	r.m3Client.UpdateGauge(metrics.ReplicatorReconcileScope, metrics.ReplicatorReconcileDestExtentRemoteDeletedLocalNot, remoteDeletedLocalNotCount)
 	r.m3Client.UpdateGauge(metrics.ReplicatorReconcileScope, metrics.ReplicatorReconcileDestExtentSuspectMissingExtents, int64(len(r.suspectMissingExtents)))
-	r.m3Client.UpdateGauge(metrics.ReplicatorReconcileScope, metrics.ReplicatorReconcileDestExtentRemoteDeletedLocalNot, destExtentRemoteDeletedLocalNotCount)
-
-	return nil
 }
 
 func (r *metadataReconciler) handleExtentDeletedOrMissingInRemote(destUUID string, extentUUID string, localStatus shared.ExtentStatus, destExtentRemoteDeletedLocalNotCount *int64) {

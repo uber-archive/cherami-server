@@ -1002,8 +1002,8 @@ func (s *CassandraMetadataService) ListDestinationsByUUID(ctx thrift.Context, li
 				Path: d.Path,
 			}
 
-			_, err := s.ReadDestination(nil, readRequest)
-			if err == nil {
+			desc, err := s.ReadDestination(nil, readRequest)
+			if err == nil && desc.GetDestinationUUID() == d.GetDestinationUUID() {
 				result.Destinations = append(result.Destinations, d)
 			}
 		} else {
