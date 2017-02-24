@@ -2099,6 +2099,7 @@ func (s *NetIntegrationSuiteParallelB) TestQueueDepth() {
 	cgDescs := make([]*cherami.ConsumerGroupDescription, len(cgNames))
 	deletedCGDescs := make([]*cherami.ConsumerGroupDescription, len(cgNames))
 	deliveryChans := make([]chan client.Delivery, len(cgNames))
+	consumers := make([]client.Consumer, len(cgNames))
 	testStart := int64(common.Now())
 
 	ll := func() bark.Logger {
@@ -2245,7 +2246,7 @@ func (s *NetIntegrationSuiteParallelB) TestQueueDepth() {
 			d, errCO := consumer.Open(d)
 			s.NoError(errCO)
 			deliveryChans[cg] = d
-
+			consumers[cg] = consumer
 			//defer consumer.Close() // Test doesn't work properly if we close; ack level doesn't reach the right level. T475365
 		}
 
@@ -2337,11 +2338,15 @@ func (s *NetIntegrationSuiteParallelB) TestQueueDepth() {
 		dReq.DestinationPath = common.StringPtr(destPath)
 		dReq.ConsumerGroupName = common.StringPtr(cgPath + cgNames[cg])
 
+		if deliveryChans[cg] != nil {
+			deliveryChans[cg] = nil // Force the consumer to be re-opened
+			consumers[cg].Close()
+		}
+
 		ctx, _ := thrift.NewContext(30 * time.Second)
 		delErr := fe.DeleteConsumerGroup(ctx, dReq)
 		s.NoError(delErr)
 
-		deliveryChans[cg] = nil // Force the consumer to be re-opened
 		deletedCGDescs = append(deletedCGDescs, cgDescs[cg])
 		cgStartFrom[cg] = startFrom
 
