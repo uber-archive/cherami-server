@@ -335,8 +335,9 @@ func (qdc *queueDepthCalculator) computeBacklog(cgDesc *shared.ConsumerGroupDesc
 	}
 
 	if strings.Contains(cgDesc.GetConsumerGroupName(),"TestQueueDepth") {
-		fmt.Printf("cg:%v,extID:%v,storeID:%v,store.avail=%v,cg.ack=%v,store.last=%v,store.begin=%v,backlog=%v\n",
+		fmt.Printf("cg:%v,cgid:%v,extID:%v,storeID:%v,store.avail=%v,cg.ack=%v,store.last=%v,store.begin=%v,backlog=%v\n",
 			cgDesc.GetConsumerGroupName(),
+			common.FmtStor(cgDesc.GetConsumerGroupUUID()),
 			common.FmtStor(cgExtent.GetExtentUUID()),
 			common.FmtStor(storeID),
 			storeMetadata.availableSequence,
