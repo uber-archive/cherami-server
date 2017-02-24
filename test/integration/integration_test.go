@@ -2363,6 +2363,11 @@ func (s *NetIntegrationSuiteParallelB) TestQueueDepth() {
 		s.NoError(lesErr)
 		s.NotNil(rs)
 
+		reset := false
+		if retentionAmount == 0 {
+			reset = true
+		}
+
 		pauseReporter()
 
 		var update bool
@@ -2381,9 +2386,10 @@ func (s *NetIntegrationSuiteParallelB) TestQueueDepth() {
 				bs := srs.GetExtent().GetReplicaStats()[0].GetBeginSequence()
 				ll().Infof(`srs=%v/%v`, as, bs)
 
+				update = false
 				stats := srs.GetExtent().GetReplicaStats()[0] // Modify the existing stats. We would otherwise write nils to most fields
 
-				if retentionAmount == 0 { // clearing
+				if reset { // clearing
 					if bs > 0 {
 						update = true
 						stats.BeginSequence = common.Int64Ptr(-1)
@@ -2392,6 +2398,7 @@ func (s *NetIntegrationSuiteParallelB) TestQueueDepth() {
 					if as > 0 {
 						update = true
 						stats.BeginSequence = common.Int64Ptr(retentionAmount)
+						retentionAmount = common.MaxInt64(0, retentionAmount-as)
 					}
 				}
 
@@ -2406,12 +2413,15 @@ func (s *NetIntegrationSuiteParallelB) TestQueueDepth() {
 					ll().Infof(`Retention E`)
 				}
 			}
-			if update { // We have modified all 3 replica stats
-				break
+
+			if !reset {
+				if retentionAmount == 0 { // touched enough extents to achieve target
+					break
+				}
 			}
 		}
 
-		s.True(update)
+		s.True(retentionAmount == 0)
 	}
 
 	var newStartFrom int64
