@@ -99,6 +99,18 @@ func XXXTestNetIntegrationSuiteSerial(t *testing.T) {
 	}
 }
 
+func createCheramiClient(svcName string,  ipaddr string, port int, logger bark.Logger) client.Client {
+	options := &client.ClientOptions{
+		Timeout: time.Second * 30,
+		ReconfigurationPollingInterval: time.Second,
+	}
+	if logger != nil {
+		options.Logger = logger
+	}
+	cc, _ := client.NewClient(svcName, ipaddr, port, options)
+	return cc
+}
+
 func (s *NetIntegrationSuiteParallelC) TestMsgCacheLimit() {
 	destPath := "/dest/TestMsgCacheLimit"
 	cgPath := "/cg/TestMsgCacheLimit"
@@ -1831,7 +1843,7 @@ func (s *NetIntegrationSuiteParallelC) TestStartFromWithCassandra() {
 	// Create the client
 	ipaddr, port, _ := net.SplitHostPort(s.GetFrontend().GetTChannel().PeerInfo().HostPort)
 	portNum, _ := strconv.Atoi(port)
-	cheramiClient,_ := client.NewClient("cherami-test", ipaddr, portNum, nil)
+	cheramiClient := createCheramiClient("cherami-test", ipaddr, portNum, nil)
 
 	// Create the destination to publish message
 	crReq := cherami.NewCreateDestinationRequest()
@@ -2039,18 +2051,6 @@ ReadLoop2:
 
 	err = cheramiClient.DeleteDestination(&cherami.DeleteDestinationRequest{Path: common.StringPtr(destPath)})
 	s.Nil(err, "Failed to delete destination")
-}
-
-func createCheramiClient(svcName string,  ipaddr string, port int, logger bark.Logger) client.Client {
-	options := &client.ClientOptions{
-		Timeout: time.Second * 30,
-		ReconfigurationPollingInterval: time.Second,
-	}
-	if logger != nil {
-		options.Logger = logger
-	}
-	cc, _ := client.NewClient(svcName, ipaddr, port, options)
-	return cc
 }
 
 func (s *NetIntegrationSuiteParallelB) TestQueueDepth() {

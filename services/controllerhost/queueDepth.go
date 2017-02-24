@@ -82,7 +82,7 @@ type (
 			storeExtentMetadataCache *storeExtentMetadataCache
 
 			cg struct {
-				now 				  common.UnixNanoTime
+				now					  common.UnixNanoTime
 				backlogAvailable      int64
 				backlogInflight       int64
 				nOpenExtents          int64 // stat for stallness check
