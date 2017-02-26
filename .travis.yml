@@ -29,8 +29,8 @@ install:
 script:
   - pushd vendor/github.com/cockroachdb/c-rocksdb/internal
   - travis_wait 20 make shared_lib
-	- strip librocksdb.so.5.0.2
-	- popd
+  - strip librocksdb.so.5.0.2
+  - popd
 
 deploy:
   provider: releases
