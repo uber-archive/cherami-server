@@ -1,5 +1,5 @@
 dist: trusty
-sudo: required
+sudo: false
 
 language: go
 directories:
@@ -22,50 +22,22 @@ addons:
     - libbz2-dev
     - libgflags-dev
 
-before_install:
-  - sudo apt-get remove gcc -y
-  - pip install --user ccm
-  - pip install --user cqlsh==5.0.3
-  - sudo apt-get install gcc g++ -y
-
 install:
   - go get -u github.com/Masterminds/glide
-  - go get github.com/axw/gocov/gocov
-  - go get github.com/mattn/goveralls
-  - go get golang.org/x/tools/cmd/cover
-  - ccm create test -v 2.2.8 -n 1 -s
-  - sudo ln -sf /home/travis/.local/bin/cqlsh /usr/local/bin/cqlsh
-  - glide install && touch vendor/glide.updated
-  - pushd vendor/github.com/cockroachdb/c-rocksdb/internal
-  - travis_wait 20 make shared_lib
-  - popd
-  - export CGO_CFLAGS="$CGO_FLAGS -I`pwd`/vendor/github.com/cockroachdb/c-rocksdb/internal/include"
-  - export CGO_LDFLAGS="$CGO_LDFLAGS -L`pwd`/vendor/github.com/cockroachdb/c-rocksdb/internal -lrocksdb"
-  - export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:`pwd`/vendor/github.com/cockroachdb/c-rocksdb/internal"
+  - glide install
 
 script:
-  - make bins
-
-after_success:
-  - export BRANCH=$(if [ "$TRAVIS_PULL_REQUEST" == "false" ]; then echo $TRAVIS_BRANCH; else echo $TRAVIS_PULL_REQUEST_BRANCH; fi)
-  - 'if [ "$BRANCH" == "master" ]; then
-        export REPO=ubercherami/cherami-server-standalone;
-        export TAG=latest;
-        echo "TRAVIS_BRANCH=$TRAVIS_BRANCH, REPO=$REPO, PR=$PR, BRANCH=$BRANCH, TAG=$TAG";
-        docker login -u $DOCKER_USER -p $DOCKER_PASS;
-        docker build -f docker/standalone/Dockerfile -t $REPO:$COMMIT docker/standalone/;
-        docker tag $REPO:$COMMIT $REPO:$TAG;
-        docker tag $REPO:$COMMIT $REPO:travis-$TRAVIS_BUILD_NUMBER;
-        docker push $REPO;
-    fi'
-
+  - pushd vendor/github.com/cockroachdb/c-rocksdb/internal
+  - travis_wait 20 make shared_lib
+	- strip librocksdb.so.5.0.2
+	- popd
 
 deploy:
   provider: releases
   api_key:
     secure: "W2Ztm+yJDfq64/NfFdCLC2+nLxxe5C6+Yic3gIHXv4qhygss4/3Ii/2gKt6I+lqcr1Wu/J8nCLmd1meVZ0SpZhPwEbWKEeZknqFxRZlxw53HzJJm2PtE1hLNeueQYSU25k455rt+iG1XgE1rIiaArSRKVB32trem/C80DwNDzUCqEKlq9g0UNGyl/+gK1ClhRtDyvLX4na/fMy6qbz7KtW3uYH5T8f6p0V6FUyo5XlR90F43Z+L+fM3hswh8o+KnuinZB+w7Cgrr9Zp0klj7sb1O9aNCgPX/vGdW2yCn5Gpg78P199vfXug6O3h1PghoKEbfWwRmzVcmMOGSmzVN3ubuEjfNMfGEoQThr30P4fxQNeJhFtCopE70zXcXg/Qg7fGdaSZwVA7/cVgYg4VmoB86ZiX5pqRvq65x9X7LKmSd/2jloLFRTAUAHZm+JcuKqNjtxNL77FT1M8e7eQGSqfqf6p34fEURykKR5snOuUPYd7VxwQwWbxvlpI3FdvAhylB+geviHoRahBfWKx2qEblCEEa2xga8tUrBoQtsQYPASmVOfTj8H4IcbaH+Axkqc3fSG+iiAD2bwNcsIMnQoceJFvbP7DtEBSGgLh12RiNkGuV4EPEEo8CPP3mXPz7bIjur2M7+PzSUUYsrMLMRsG6HpRhLeY7CW/0bHZHUVO0="
   file:
-    - "./vendor/github.com/cockroachdb/c-rocksdb/internal/librocksdb.so.*"
+    - "./vendor/github.com/cockroachdb/c-rocksdb/internal/librocksdb.so.5.0.2"
   skip_cleanup: true
   on:
     branch: update_rocksdb
