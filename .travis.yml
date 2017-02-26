@@ -58,3 +58,14 @@ after_success:
         docker tag $REPO:$COMMIT $REPO:travis-$TRAVIS_BUILD_NUMBER;
         docker push $REPO;
     fi'
+
+
+deploy:
+  provider: releases
+  api_key:
+    secure: "W2Ztm+yJDfq64/NfFdCLC2+nLxxe5C6+Yic3gIHXv4qhygss4/3Ii/2gKt6I+lqcr1Wu/J8nCLmd1meVZ0SpZhPwEbWKEeZknqFxRZlxw53HzJJm2PtE1hLNeueQYSU25k455rt+iG1XgE1rIiaArSRKVB32trem/C80DwNDzUCqEKlq9g0UNGyl/+gK1ClhRtDyvLX4na/fMy6qbz7KtW3uYH5T8f6p0V6FUyo5XlR90F43Z+L+fM3hswh8o+KnuinZB+w7Cgrr9Zp0klj7sb1O9aNCgPX/vGdW2yCn5Gpg78P199vfXug6O3h1PghoKEbfWwRmzVcmMOGSmzVN3ubuEjfNMfGEoQThr30P4fxQNeJhFtCopE70zXcXg/Qg7fGdaSZwVA7/cVgYg4VmoB86ZiX5pqRvq65x9X7LKmSd/2jloLFRTAUAHZm+JcuKqNjtxNL77FT1M8e7eQGSqfqf6p34fEURykKR5snOuUPYd7VxwQwWbxvlpI3FdvAhylB+geviHoRahBfWKx2qEblCEEa2xga8tUrBoQtsQYPASmVOfTj8H4IcbaH+Axkqc3fSG+iiAD2bwNcsIMnQoceJFvbP7DtEBSGgLh12RiNkGuV4EPEEo8CPP3mXPz7bIjur2M7+PzSUUYsrMLMRsG6HpRhLeY7CW/0bHZHUVO0="
+  file:
+    - "./vendor/github.com/cockroachdb/c-rocksdb/internal/librocksdb.so.*"
+  skip_cleanup: true
+  on:
+    branch: update_rocksdb
