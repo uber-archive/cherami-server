@@ -327,12 +327,21 @@ func convertUpdateCGRequestToInternal(updateRequest *c.UpdateConsumerGroupReques
 	internalUpdateRequest := shared.NewUpdateConsumerGroupRequest()
 	internalUpdateRequest.DestinationPath = common.StringPtr(updateRequest.GetDestinationPath())
 	internalUpdateRequest.ConsumerGroupName = common.StringPtr(updateRequest.GetConsumerGroupName())
-	internalUpdateRequest.LockTimeoutSeconds = common.Int32Ptr(updateRequest.GetLockTimeoutInSeconds())
-	internalUpdateRequest.MaxDeliveryCount = common.Int32Ptr(updateRequest.GetMaxDeliveryCount())
-	internalUpdateRequest.SkipOlderMessagesSeconds = common.Int32Ptr(updateRequest.GetSkipOlderMessagesInSeconds())
-	internalUpdateRequest.Status = common.InternalConsumerGroupStatusPtr(shared.ConsumerGroupStatus(updateRequest.GetStatus()))
-	internalUpdateRequest.DeadLetterQueueDestinationUUID = common.StringPtr(``) // Metadata interprets an empty string as "don't change", and nil, as clear
-	internalUpdateRequest.OwnerEmail = common.StringPtr(updateRequest.GetOwnerEmail())
+	if updateRequest.IsSetLockTimeoutInSeconds() {
+		internalUpdateRequest.LockTimeoutSeconds = common.Int32Ptr(updateRequest.GetLockTimeoutInSeconds())
+	}
+	if updateRequest.IsSetMaxDeliveryCount() {
+		internalUpdateRequest.MaxDeliveryCount = common.Int32Ptr(updateRequest.GetMaxDeliveryCount())
+	}
+	if updateRequest.IsSetSkipOlderMessagesInSeconds() {
+		internalUpdateRequest.SkipOlderMessagesSeconds = common.Int32Ptr(updateRequest.GetSkipOlderMessagesInSeconds())
+	}
+	if updateRequest.IsSetStatus() {
+		internalUpdateRequest.Status = common.InternalConsumerGroupStatusPtr(shared.ConsumerGroupStatus(updateRequest.GetStatus()))
+	}
+	if updateRequest.IsSetOwnerEmail() {
+		internalUpdateRequest.OwnerEmail = common.StringPtr(updateRequest.GetOwnerEmail())
+	}
 	return internalUpdateRequest
 }
 

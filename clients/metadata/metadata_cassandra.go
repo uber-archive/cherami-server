@@ -1421,42 +1421,31 @@ func (s *CassandraMetadataService) ReadConsumerGroupByUUID(ctx thrift.Context, r
 }
 
 func updateCGDescIfChanged(req *shared.UpdateConsumerGroupRequest, cgDesc *shared.ConsumerGroupDescription) bool {
-
 	isChanged := false
 
-	if sec := req.LockTimeoutSeconds; sec != nil && *sec != cgDesc.GetLockTimeoutSeconds() {
+	if req.IsSetLockTimeoutSeconds() && req.GetLockTimeoutSeconds() != cgDesc.GetLockTimeoutSeconds() {
 		isChanged = true
-		cgDesc.LockTimeoutSeconds = common.Int32Ptr(*sec)
+		cgDesc.LockTimeoutSeconds = common.Int32Ptr(req.GetLockTimeoutSeconds())
 	}
 
-	if cnt := req.MaxDeliveryCount; cnt != nil && *cnt != cgDesc.GetMaxDeliveryCount() {
+	if req.IsSetMaxDeliveryCount() && req.GetMaxDeliveryCount() != cgDesc.GetMaxDeliveryCount() {
 		isChanged = true
-		cgDesc.MaxDeliveryCount = common.Int32Ptr(*cnt)
+		cgDesc.MaxDeliveryCount = common.Int32Ptr(req.GetMaxDeliveryCount())
 	}
 
-	if sec := req.SkipOlderMessagesSeconds; sec != nil && *sec != cgDesc.GetSkipOlderMessagesSeconds() {
+	if req.IsSetSkipOlderMessagesSeconds() && req.GetSkipOlderMessagesSeconds() != cgDesc.GetSkipOlderMessagesSeconds() {
 		isChanged = true
-		cgDesc.SkipOlderMessagesSeconds = common.Int32Ptr(*sec)
+		cgDesc.SkipOlderMessagesSeconds = common.Int32Ptr(req.GetSkipOlderMessagesSeconds())
 	}
 
-	if s := req.Status; s != nil && *s != cgDesc.GetStatus() {
+	if req.IsSetStatus() && req.GetStatus() != cgDesc.GetStatus() {
 		isChanged = true
-		cgDesc.Status = common.InternalConsumerGroupStatusPtr(*s)
+		cgDesc.Status = common.InternalConsumerGroupStatusPtr(req.GetStatus())
 	}
 
-	// nil = clear DeadLetterQueueDestinationUUID; empty string = maintain DeadLetterQueueDestinationUUID
-	if s := req.GetDeadLetterQueueDestinationUUID(); s != cgDesc.GetDeadLetterQueueDestinationUUID() {
-		if req.DeadLetterQueueDestinationUUID == nil {
-			isChanged = true
-			cgDesc.DeadLetterQueueDestinationUUID = nil
-		} else if len(s) != 0 {
-			isChanged = true
-			cgDesc.DeadLetterQueueDestinationUUID = common.StringPtr(s)
-		}
-	}
-	if s := req.GetOwnerEmail(); s != cgDesc.GetOwnerEmail() {
+	if req.IsSetOwnerEmail() && req.GetOwnerEmail() != cgDesc.GetOwnerEmail() {
 		isChanged = true
-		cgDesc.OwnerEmail = common.StringPtr(s)
+		cgDesc.OwnerEmail = common.StringPtr(req.GetOwnerEmail())
 	}
 	return isChanged
 }
