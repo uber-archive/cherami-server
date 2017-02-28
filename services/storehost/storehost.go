@@ -67,9 +67,9 @@ const (
 
 // Buffer-sizes to use for the channels that wrap the read/write tchannel-streams
 const (
-	writeMsgChanBuf int = 4096 // msgC buffer to use for the write path
-	writeAckChanBuf int = 1024 // ackC buffer to use for the write path
-	readMsgChanBuf  int = 1024 // msgC buffer to use for the read path
+	writeMsgChanBuf int = 10000 // msgC buffer to use for the write path
+	writeAckChanBuf int = 10000 // ackC buffer to use for the write path
+	readMsgChanBuf  int = 10000 // msgC buffer to use for the read path
 )
 
 // SealExtent throttling: throttle requests beyond 25 every 250ms
