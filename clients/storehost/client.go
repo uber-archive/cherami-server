@@ -91,3 +91,11 @@ func (s *StoreClientImpl) PurgeMessages(req *store.PurgeMessagesRequest) (*store
 
 	return s.client.PurgeMessages(ctx, req)
 }
+
+// ListExtents lists the extents on the specified store
+func (s *StoreClientImpl) ListExtents() (*store.ListExtentsResult_, error) {
+	ctx, cancel := tcthrift.NewContext(60 * time.Second)
+	defer cancel()
+
+	return s.client.ListExtents(ctx)
+}

@@ -722,6 +722,14 @@ func main() {
 				admin.StorePurgeMessages(c)
 			},
 		},
+		{
+			Name:    "store-listextents",
+			Aliases: []string{"lsx"},
+			Usage:   "store-listextents <store_uuid>",
+			Action: func(c *cli.Context) {
+				admin.StoreListExtents(c)
+			},
+		},
 	}
 
 	app.Run(os.Args)

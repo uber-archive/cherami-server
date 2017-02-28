@@ -1169,3 +1169,10 @@ func StorePurgeMessages(c *cli.Context) {
 	mClient := toolscommon.GetMClient(c, adminToolService)
 	toolscommon.StorePurgeMessages(c, mClient)
 }
+
+// StoreListExtents sends a list-extents request to the specified store.
+func StoreListExtents(c *cli.Context) {
+
+	mClient := toolscommon.GetMClient(c, adminToolService)
+	toolscommon.StoreListExtents(c, mClient)
+}

@@ -61,6 +61,12 @@ const (
 // in this case it would be passed a key equal to 'InvalidKey'.
 type NotifyFunc func(key Key, addr Address)
 
+// ExtentInfo contains information about an extent
+type ExtentInfo struct {
+	Size     int64 // estimated size of extent on disk
+	Modified int64 // time extent was modified (in unix-nano)
+}
+
 // StoreManager is the storage interface implemented by the low-level stores
 // (currently, "Chunky" (append-only) and "Rockstor" (primarily, for indexed
 // but can be used for append-only)
@@ -71,6 +77,12 @@ type StoreManager interface {
 	// (FIXME: This should probably take in some manager-specific
 	// configuration parameters, as an empty struct/interface?)
 	OpenExtent(id ExtentUUID, pattern KeyPattern, notify NotifyFunc, failIfNotExist bool) (ExtentStore, error)
+
+	// ListExtents returns list of available extents
+	ListExtents() ([]ExtentUUID, error)
+
+	// GetExtentInfo returns information about an extent
+	GetExtentInfo(id ExtentUUID) (*ExtentInfo, error)
 }
 
 // -- EXTENT STORE -- //

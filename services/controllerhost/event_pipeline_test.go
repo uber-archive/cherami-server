@@ -604,6 +604,10 @@ func (service *MockStoreService) SealExtent(ctx thrift.Context, req *store.SealE
 	return nil
 }
 
+func (service *MockStoreService) ListExtents(ctx thrift.Context) (*store.ListExtentsResult_, error) {
+	return nil, errors.New("Not implemented")
+}
+
 func (service *MockStoreService) isSealed(extentID string) bool {
 	sealed := false
 	service.mu.Lock()

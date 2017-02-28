@@ -1558,3 +1558,45 @@ func (t *StoreHost) RemoteReplicateExtent(tCtx thrift.Context, req *store.Remote
 
 	return nil
 }
+
+// ListExtents lists extents available on this storehost
+func (t *StoreHost) ListExtents(tCtx thrift.Context) (res *store.ListExtentsResult_, err error) {
+
+	t.m3Client.IncCounter(metrics.ListExtentsScope, metrics.StorageRequests)
+
+	sw := t.m3Client.StartTimer(metrics.ListExtentsScope, metrics.StorageLatencyTimer)
+	defer sw.Stop()
+
+	log := t.logger
+
+	extents, lsxErr := t.xMgr.ListExtents()
+
+	if lsxErr != nil {
+
+		log.WithField(common.TagErr, lsxErr).Error(`ListExtents failed`)
+
+		svcErr := store.NewStoreServiceError()
+		svcErr.Message = lsxErr.Error()
+
+		return nil, svcErr
+	}
+
+	res = store.NewListExtentsResult_()
+
+	res.Extents = make([]*store.ListExtentsElem, len(extents))
+
+	for i, x := range extents {
+
+		res.Extents[i] = store.NewListExtentsElem()
+		res.Extents[i].ExtentUUID = common.StringPtr(x)
+		// res.Extents[i].DestinationUUID  = common.StringPtr(...) // TODO: currently unavailable
+
+		if info, gxiErr := t.xMgr.GetExtentInfo(x); gxiErr == nil {
+
+			res.Extents[i].Size = common.Int64Ptr(info.Size)
+			res.Extents[i].ModifiedTime = common.Int64Ptr(info.Modified)
+		}
+	}
+
+	return res, nil
+}

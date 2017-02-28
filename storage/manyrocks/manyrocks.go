@@ -29,6 +29,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 
 	"github.com/tecbot/gorocksdb"
 	"github.com/uber-common/bark"
@@ -227,6 +228,80 @@ func (t *ManyRocks) OpenExtent(id s.ExtentUUID, keyPattern s.KeyPattern, notify 
 		writeOpts:  writeOpts,
 		store:      t,
 	}, nil
+}
+
+// ListExtents returns a list of extents available on the store
+func (t *ManyRocks) ListExtents() (extents []s.ExtentUUID, err error) {
+
+	dir, err := os.Open(t.opts.BaseDir)
+	if err != nil {
+		return nil, err
+	}
+
+	defer dir.Close()
+
+	names, err := dir.Readdirnames(0)
+
+	if err == nil {
+
+		extents = make([]s.ExtentUUID, len(names))
+
+		for i, x := range names {
+			extents[i] = s.ExtentUUID(x)
+		}
+	}
+
+	return
+}
+
+// GetExtentInfo returns information about an extent
+func (t *ManyRocks) GetExtentInfo(id s.ExtentUUID) (info *s.ExtentInfo, err error) {
+
+	path := t.getDBPath(id) // get path to db
+
+	dir, err := os.Open(path)
+	if err != nil {
+		return nil, errOpenFailed
+	}
+
+	defer dir.Close()
+
+	dirStat, err := dir.Stat()
+
+	if err != nil {
+		return nil, errOpenFailed
+	}
+
+	modified := dirStat.ModTime().UnixNano() // get modified time
+
+	stat, ok := dirStat.Sys().(*syscall.Stat_t)
+	if !ok {
+		return nil, errOpenFailed
+	}
+
+	// NB: on OSX, the Stat_t does not seem to contain the 'Ctim' member
+	// created := time.Unix(int64(stat.Ctim.Sec), int64(stat.Ctim.Nsec)).UnixNano()
+
+	// NB: for some reason, the computation using 'dirStat.Blksize' does not
+	// seem to match up with the filesize; it looks like the 'dirStat.Blocks'
+	// were computed using a '512' block size!
+	// size := dirStat.Blocks * dirStat.Blksize
+	size := stat.Blocks * 512
+
+	files, err := dir.Readdir(0)
+
+	if err != nil {
+		return nil, errOpenFailed
+	}
+
+	for _, f := range files {
+
+		// see comment above
+		// size += f.Sys().(*syscall.Stat_t).Blocks * f.Sys().(*syscall.Stat_t).Blksize
+		size += f.Sys().(*syscall.Stat_t).Blocks * 512
+	}
+
+	return &s.ExtentInfo{Size: size, Modified: modified}, nil
 }
 
 // setExtentDeleted set the map entry to deleted status; if the command is

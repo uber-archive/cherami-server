@@ -379,6 +379,8 @@ const (
 	SystemResourceScope
 	// ReplicateExtentScope represents related metrics for ReplicateExtent API
 	ReplicateExtentScope
+	// ListExtentsScope represents metrics for ListExtents API
+	ListExtentsScope
 
 	// -- Operation scopes for Replicator --
 
@@ -515,6 +517,7 @@ var scopeDefs = map[ServiceIdx]map[int]scopeDefinition{
 		ExtentManagerScope:           {operation: "ExtentInfo"},
 		SystemResourceScope:          {operation: "GetSystemResourceInfo"},
 		ReplicateExtentScope:         {operation: "ReplicateExtent"},
+		ListExtentsScope:             {operation: "ListExtents"},
 	},
 
 	// Replicator operation tag values as seen by the Metrics backend
