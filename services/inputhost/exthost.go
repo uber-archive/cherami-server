@@ -625,33 +625,54 @@ func (conn *extHost) aggregateAndSendReplies(numReplicas int) {
 
 				// Note: even if this value is negative, it is ok because we should timeout immediately
 				perMsgTimer.Reset(msgAckTimeout - elapsed)
+
+				// TODO: tighten this further, by ensuring that we received exactly one ack from each replica, i.e. not N from 1 replica
+			aggregation:
 				for i := 0; i < numReplicas; i++ {
+					stat = cherami.Status_FAILED
 					select {
 					case ack, okCh := <-resCh.appendMsgAck:
-						if !okCh || ack.GetStatus() != cherami.Status_OK {
-							stat = ack.GetStatus()
-							// error means we shutdown this extent and seal it
-							go conn.close()
+						if !okCh { // channel closed, ack has all zero values
+							break aggregation
 						}
 
-						if address == 0 && okCh && ack.GetStatus() == cherami.Status_OK {
-							address = ack.GetAddress()
+						// Verify that the address received from all replicas matches perfectly
+						if address != 0 && address != ack.GetAddress() {
+							conn.logger.Error("synchronization failure aggregating acks from replicas")
+							break aggregation
 						}
+						address = ack.GetAddress()
+
+						// -------- Above here, stat = Status_FAILED
+
+						// Set & Check status, bail if not OK
+						stat = ack.GetStatus()
+						if stat != cherami.Status_OK {
+							break aggregation
+						}
+
+						// This is the only line that can exit the aggregation loop with stat = Status_OK
 					case <-perMsgTimer.C:
 						conn.logger.Error("timed out waiting for ack from replica")
-						stat = cherami.Status_FAILED
-						go conn.close()
+						break aggregation
 					case <-conn.streamClosedChannel:
 						// all streams are closed.. no point waiting for acks
 						return
 					}
 				}
+
+				if stat != cherami.Status_OK {
+					// error means we shutdown this extent and seal it
+					go conn.close()
+				}
+
 				// mark this seqNo as the last success seqno
 				atomic.StoreInt64(&conn.lastSuccessSeqNo, resCh.seqNo)
-				// Notify about the last seqNo removing the previous notification as it is not needed anymore
-				// Without such removal channel buffer would need to be larger than the maximum number of
+				
+				// Notify about the last seqNo. Remove the previous notification, as it is not needed anymore.
+				// Without this removal channel, the buffer would need to be larger than the maximum number of
 				// outstanding notifications to avoid deadlocks.
-				if conn.lastSuccessSeqNoCh != nil {
+				if conn.lastSuccessSeqNoCh != nil { // Only non-nil for LOG destinations
 				PUSHED:
 					for {
 						select {
@@ -665,6 +686,7 @@ func (conn *extHost) aggregateAndSendReplies(numReplicas int) {
 						}
 					}
 				}
+				
 				// Now send the reply back to the pubConnection and ultimately on the stream to the publisher
 				putMsgAck := cherami.NewPutMessageAck()
 				putMsgAck.ID = common.StringPtr(resCh.ackID)
