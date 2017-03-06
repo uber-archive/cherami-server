@@ -95,7 +95,7 @@ cherami-store-tool: $(DEPS)
 
 bins: cherami-server cherami-replicator-server cherami-cli cherami-admin cherami-replicator-tool cherami-cassandra-tool cherami-store-tool
 
-cover_profile: bins 
+cover_profile: bins
 	@echo Running tests:
 	@mkdir -p $(BUILD)
 	@echo "mode: atomic" > $(BUILD)/cover.out

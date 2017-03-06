@@ -36,6 +36,7 @@ import (
 	"github.com/pborman/uuid"
 	"github.com/uber/cherami-thrift/.generated/go/cherami"
 	"github.com/uber/cherami-thrift/.generated/go/store"
+	"github.com/uber/cherami-server/common"
 )
 
 func (s *StoreHostSuite) TestStoreHostTimerQueueWriteWithRead() {
@@ -85,10 +86,9 @@ func (s *StoreHostSuite) TestStoreHostTimerQueueWriteWithRead() {
 		var statsLatency = make([]*stats, numExtents)
 		var statsDrift = make([]*stats, numExtents)
 
+		wgAll.Add(numExtents)
+		var readerTimeout int32
 		for x := 0; x < numExtents; x++ {
-
-			wgAll.Add(1)
-
 			go func(i int) {
 
 				defer wgAll.Done()
@@ -233,13 +233,20 @@ func (s *StoreHostSuite) TestStoreHostTimerQueueWriteWithRead() {
 				}
 
 				log.Debugf("%v: waiting for OpenReadStream to complete", extent[i])
-				wgReader.Wait()
+
+				timedOut := !common.AwaitWaitGroup(&wgReader, 25 * time.Second)
+				if timedOut {
+					atomic.AddInt32(&readerTimeout, 1)
+					fmt.Printf("WgReader wait timeout for extent %d, iter %d\n", i, iter)
+				}
 
 				log.Infof("[%d] %v: done", i, extent[i])
 			}(x)
 		}
 
-		wgAll.Wait()
+		allTimeout := !common.AwaitWaitGroup(&wgAll, 30*time.Second)
+		s.Equal(int32(0), atomic.LoadInt32(&readerTimeout), "at least one reader timed out")
+		s.False(allTimeout, fmt.Sprintf("wgAll wait timeout for iter %d", iter))
 
 		for i := 0; i < numExtents; i++ {
 			log.Debugf("[%d] %v: latency=%v drift=%v", i, extent[i], statsLatency[i].timeString(), statsDrift[i].timeString())
@@ -294,9 +301,9 @@ func (s *StoreHostSuite) TestStoreHostTimerQueueWriteThenRead() {
 		var statsLatency = make([]*stats, numExtents)
 		var statsDrift = make([]*stats, numExtents)
 
+		wgAll.Add(numExtents)
+		var readerTimeout int32
 		for x := 0; x < numExtents; x++ {
-
-			wgAll.Add(1)
 
 			go func(i int) {
 
@@ -435,14 +442,20 @@ func (s *StoreHostSuite) TestStoreHostTimerQueueWriteThenRead() {
 					out.sendC <- newControlFlow(numMessages)
 
 					log.Debugf("%v: waiting for OpenReadStream to complete", extent[i])
-					wgReader.Wait()
+					timedOut := !common.AwaitWaitGroup(&wgReader, 25 * time.Second)
+					if timedOut {
+						atomic.AddInt32(&readerTimeout, 1)
+						fmt.Printf("WgReader wait timeout for extent %d, iter %d\n", i, iter)
+					}
 
 					log.Infof("[%d] %v: done", i, extent[i])
 				}
 			}(x)
 		}
 
-		wgAll.Wait()
+		allTimeout := !common.AwaitWaitGroup(&wgAll, 30*time.Second)
+		s.Equal(int32(0), atomic.LoadInt32(&readerTimeout), "at least one reader timed out")
+		s.False(allTimeout, fmt.Sprintf("wgAll wait timeout for iter %d", iter))
 
 		for i := 0; i < numExtents; i++ {
 			log.Debugf("[%d] %v: latency=%v drift=%v", i, extent[i], statsLatency[i].timeString(), statsDrift[i].timeString())
