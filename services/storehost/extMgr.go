@@ -625,7 +625,7 @@ func (ext *extentContext) initialize(intent OpenIntent) (err error) {
 		ext.store, err = ext.xMgr.storeMgr.OpenExtent(
 			storage.ExtentUUID(ext.id),
 			keyPattern,
-			func(storage.Key, storage.Address) { ext.notify() },
+			ext.notify,
 			failIfNotExist(intent, ext.xMgr.logger),
 		)
 
@@ -799,8 +799,10 @@ func (ext *extentContext) unlisten(notifyC chan<- struct{}) {
 	return
 }
 
-// notify notifies all listener channels registered for the extent
-func (ext *extentContext) notify() {
+// notify is the callback registered with low-level storage to listen into all
+// writes to the extent; the function in turn notifies all listener channels
+// registered for the extent.
+func (ext *extentContext) notify(storage.Key, storage.Address) {
 
 	// FIXME: currently, this callback is called literally on every write
 	// of a message; this should therefore be optimized to be lockless
