@@ -49,9 +49,8 @@ import (
 	"github.com/uber/tchannel-go/thrift"
 )
 
-// Global logger for this storehost -- initialized with an "unvailable" id. This would be
-// updated with the host-id in NewStoreHost()
-//var glog = logger.WithField(common.TagStor, "[UNAVAILABLE]")
+// Global logger for this storehost
+var glog bark.Logger
 
 // sealCheckInterval is the regular interval at which both the read and write paths check
 // to see if the extent was sealed in the background. This is to handle the case where there
@@ -195,8 +194,8 @@ type (
 		// ReplicationJobRunner periodically starts replication jobs
 		replicationJobRunner ReplicationJobRunner
 
-		// QueueMonitor monitors the queue info of this extent
-		queueMonitor QueueMonitor
+		// extStatsReporter reports various stats on active extents
+		extStatsReporter *ExtStatsReporter
 
 		// Storage Monitoring
 		storageMonitor StorageMonitor
@@ -235,6 +234,8 @@ func NewStoreHost(serviceName string, sCommon common.SCommon, mClient metadata.T
 		common.TagStor:    common.FmtStor(sCommon.GetHostUUID()),
 		common.TagDplName: common.FmtDplName(sCommon.GetConfig().GetDeploymentName()),
 	})
+
+	glog = t.logger
 
 	t.mClient = mm.NewMetadataMetricsMgr(mClient, t.m3Client, t.logger)
 
@@ -292,8 +293,8 @@ func (t *StoreHost) Start(thriftService []thrift.TChanServer) {
 	t.lastLoadReportedTime = time.Now().UnixNano()
 	t.loadReporter.Start()
 
-	t.queueMonitor = t.NewQueueMonitor(t.mClient, t, t.logger)
-	t.queueMonitor.Start()
+	t.extStatsReporter = NewExtStatsReporter(hostID, t.xMgr, t.mClient, t.logger)
+	t.extStatsReporter.Start()
 
 	t.logger.WithField("options", fmt.Sprintf("Store=%v BaseDir=%v", t.opts.Store, t.opts.BaseDir)).
 		Info("StoreHost: started")
@@ -305,7 +306,7 @@ func (t *StoreHost) Stop() {
 	t.hostIDHeartbeater.Stop()
 	t.storageMonitor.Stop()
 	t.replicationJobRunner.Stop()
-	t.queueMonitor.Stop()
+	t.extStatsReporter.Stop()
 	t.SCommon.Stop()
 	t.logger.Info("StoreHost: stopped")
 }

@@ -97,7 +97,7 @@ func XXXTestNetIntegrationSuiteSerial(t *testing.T) {
 	}
 }
 
-func createCheramiClient(svcName string,  ipaddr string, port int, logger bark.Logger) client.Client {
+func createCheramiClient(svcName string, ipaddr string, port int, logger bark.Logger) client.Client {
 	options := &client.ClientOptions{
 		Timeout: time.Second * 30,
 		ReconfigurationPollingInterval: time.Second,
@@ -291,7 +291,7 @@ func (s *NetIntegrationSuiteParallelC) TestWriteEndToEndSuccessWithCassandra() {
 	// Create the client
 	ipaddr, port, _ := net.SplitHostPort(s.GetFrontend().GetTChannel().PeerInfo().HostPort)
 	portNum, _ := strconv.Atoi(port)
-	cheramiClient,_ := client.NewClient("cherami-test", ipaddr, portNum, nil)
+	cheramiClient, _ := client.NewClient("cherami-test", ipaddr, portNum, nil)
 
 	// Create the destination to publish message
 	crReq := cherami.NewCreateDestinationRequest()
@@ -2165,7 +2165,7 @@ func (s *NetIntegrationSuiteParallelB) TestQueueDepth() {
 	pauseReporter := func() {
 		if !reporterPaused {
 			reporterPaused = true
-			storehost.QueueMonitorPause()
+			storehost.ExtStatsReporterPause()
 			ll().Info(`Reporter paused`)
 			time.Sleep(ReporterPauseEffectiveTime)
 		}
@@ -2175,7 +2175,7 @@ func (s *NetIntegrationSuiteParallelB) TestQueueDepth() {
 		if reporterPaused {
 			reporterPaused = false
 			ll().Info(`Reporter unpaused`)
-			storehost.QueueMonitorUnpause()
+			storehost.ExtStatsReporterResume()
 		}
 	}
 	defer unpauseReporter()

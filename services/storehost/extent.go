@@ -55,7 +55,7 @@ func (x *ExtentObj) Delete() {
 
 // Close closes this handle to the extent
 func (x *ExtentObj) Close() {
-	x.ext.xMgr.closeExtent(x.ext, x.intent)
+	x.ext.xMgr.closeExtent(x.ext, x.intent, nil)
 }
 
 // Mode returns this extent's mode (ie, AppendOnly or TimerQueue)

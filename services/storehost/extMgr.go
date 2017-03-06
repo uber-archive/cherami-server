@@ -39,6 +39,38 @@ import (
 )
 
 type (
+	ExtentCallbacks interface {
+
+		// ExtentInit defines the callback function called when a new extent context
+		// is initialized in memory (this could be for a new or existing extent);
+		// the callback is called with extent-lock held exclusive.
+		ExtentInit(id uuid.UUID, ext *extentContext)
+
+		// ExtentOpen defines the callback function called when an extent is referenced;
+		// this is called immediately after InitCallback and for every open that comes
+		// in while the extent is 'active';
+		// the callback is called with extent-lock held shared.
+		ExtentOpen(id uuid.UUID, ext *extentContext, intent OpenIntent)
+
+		// ExtentClose defines the callback function called when an extent is dereferenced;
+		// the extent could still be 'active' due to other references;
+		// called with extent-lock held shared.
+		// the callback can return a 'false' to indicate to the extent-manager that it needs
+		// the extent-context to be held on (not torn-down yet). when it is done and safe
+		// for the extent-context to be torn down, it is should call 'CallbackDone'.
+		ExtentClose(id uuid.UUID, ext *extentContext, intent OpenIntent) (done bool)
+
+		// ExtentCleanUp defines the callback function called when an extent is cleaned-up,
+		// ie, when all the references to the extent have been removed and the extent
+		// context is about to be torn down;
+		// called with no locks held; the extentContext is already in 'closed' state
+		// ensuring it will not be racing with any activity.
+		// the callback can return a 'false' to indicate to the extent-manager that it needs
+		// the extent-context to be held on (not torn-down yet). when it is done and safe
+		// for the extent-context to be torn down, it is should call 'CallbackDone'.
+		ExtentCleanUp(id uuid.UUID, ext *extentContext) (done bool)
+	}
+
 	// ExtentManager contains the map of all open extent-contexts
 	ExtentManager struct {
 
@@ -68,6 +100,9 @@ type (
 
 		// factory for creating load reporters for each extent
 		loadReporterFactory common.LoadReporterDaemonFactory
+
+		// list of registered extent lifecycle callbacks
+		callbacks []ExtentCallbacks
 	}
 
 	// extentContext: contains objects and methods global to an extent.
@@ -104,6 +139,9 @@ type (
 		//  - decrementing the ref can be done atomically (without locks); but when
 		//    ref is 0, the 'extentLock' needs to be acquired and the ref re-checked
 		//    before initiating clean-up/tear-down
+
+		// count of close/cleanup callbacks that have reference on the structure
+		cleanupRef uint32
 
 		// the following are used to indicate whether the extent has been
 		// initialized, deleted or closed respectively.
@@ -307,7 +345,7 @@ retryOpen:
 
 		// on failure call 'closeExtent' to remove reference and do any
 		// necessary clean-up (including updating the 'extents' map)
-		xMgr.closeExtent(ext, intent)
+		xMgr.closeExtent(ext, intent, err)
 
 		return nil, err
 	}
@@ -317,7 +355,7 @@ retryOpen:
 
 // closeExtent decrements the ref-count on the extent; if it falls to zero, this
 // does necessary clean-up, including closing the underlying DB.
-func (xMgr *ExtentManager) closeExtent(ext *extentContext, intent OpenIntent) {
+func (xMgr *ExtentManager) closeExtent(ext *extentContext, intent OpenIntent, openError error) {
 
 	// update metrics
 	switch intent {
@@ -332,23 +370,30 @@ func (xMgr *ExtentManager) closeExtent(ext *extentContext, intent OpenIntent) {
 		atomic.StoreInt32(&ext.openedForReplication, 0)
 	}
 
+	// hold ext shared, so that another thread does not tear down extent
+	ext.RLock()
+
 	// dereference, and if this was the last reference, remove from map
-	if ext.dereference() {
+	var cleanup = ext.dereference()
 
-		// get exclusive lock, since we could potentially be deleting from the map
-		xMgr.Lock()
-		delete(xMgr.extents, string(ext.id)) // remove from map
-		xMgr.Unlock()
+	if openError == nil {
 
-		numExtents := atomic.AddInt64(&xMgr.numExtents, -1)
-		xMgr.m3Client.UpdateGauge(metrics.ExtentManagerScope, metrics.StorageOpenExtents, numExtents) // metrics
-		xMgr.logger.WithField("context", fmt.Sprintf("ext=%v numExtents=%d", ext.id, numExtents)).
-			Info("ExtMgr: extent closed")
-
-		return
+		// invoke close callbacks
+		for _, cb := range xMgr.callbacks {
+			if !cb.ExtentClose(ext.id, ext, intent) {
+				atomic.AddUint32(&ext.cleanupRef, 1)
+				cleanup = false
+			}
+		}
 	}
 
-	// there still are active references; nothing to be done ..
+	ext.RUnlock()
+
+	// if last reference, attempt to clean-up
+	if cleanup {
+		xMgr.cleanupExtent(ext)
+	}
+
 	return
 }
 
@@ -387,88 +432,17 @@ func (xMgr *ExtentManager) GetExtentInfo(extentID string) (info *ExtentInfo, err
 	return &ExtentInfo{Size: xInfo.Size, Modified: xInfo.Modified}, nil
 }
 
-// IsExtentOpenedForReplication checks whether an extent is already opened for replication
-func (xMgr *ExtentManager) IsExtentOpenedForReplication(extentID string) bool {
-	xMgr.RLock()
-	defer xMgr.RUnlock()
+func (xMgr *ExtentManager) cleanupExtent(ext *extentContext) bool {
 
-	extentUUID := uuid.Parse(extentID)
-	ext, exists := xMgr.extents[string(extentUUID)]
-	if exists {
-		return atomic.LoadInt32(&ext.openedForReplication) > 0
-	}
-	return false
-}
+	ext.Lock()
 
-type seqNumSnapshot struct {
-	snapshotTime int64
-	beginSeqNum  int64
-	lastSeqNum   int64
-}
-
-// getAllExtentsSeqNumSnapshot returns a snapshot of seqnums for all currently
-// active extents, used by 'queueMonitor'.
-// TODO: we need to update this mechanism a bit .. in order to better handle
-// extents that might come and go in between queueMonitor's queries.
-func (xMgr *ExtentManager) getAllExtentsSeqNumSnapshot() map[string]*seqNumSnapshot {
-
-	xMgr.RLock()
-	defer xMgr.RUnlock()
-
-	snapshot := make(map[string]*seqNumSnapshot, len(xMgr.extents))
-
-	for _, ext := range xMgr.extents {
-		ext.RLock()
-		snapshot[uuid.UUID.String(ext.id)] = &seqNumSnapshot{
-			snapshotTime: time.Now().UnixNano(),
-			beginSeqNum:  ext.getBeginSeqNum(),
-			lastSeqNum:   ext.getLastSeqNum(),
-		}
-		ext.RUnlock()
-	}
-
-	return snapshot
-}
-
-// reference adds a reference to the extentContext
-func (ext *extentContext) reference() (err error) {
-
-	// get extent-lock shared while we get a reference on the
-	// extent-context to ensure this doesn't get deleted/closed
-	ext.RLock()
-	defer ext.RUnlock()
-
-	// check if extent has already been marked for deletion
-	if ext.deleted {
-		return errDeletePending
-	}
-
-	if ext.closed {
-		return errClosePending
-	}
-
-	// atomically add reference; this would prevent the extent
-	// from being closed/torn-down
-	atomic.AddUint32(&ext.ref, 1)
-
-	return nil // success
-}
-
-// dereference drops a reference on extentContext; if the reference goes
-// down to zero, it returns 'true' to indicate that it has been torn-down
-func (ext *extentContext) dereference() (closed bool) {
-
-	// atomically remove reference; if the reference goes down to zero,
-	// tear down the in-memory context and clean-up things
-	if atomic.AddUint32(&ext.ref, ^uint32(0)) == 0 {
-
-		ext.Lock()
+	if !ext.closed {
 
 		// double-check reference with exclusive lock, in case another
 		// thread got a reference before we acquired the lock, or it
 		// referenced/dereferenced in that time and is already tearing
 		// down this extent
-		if atomic.LoadUint32(&ext.ref) != 0 || ext.closed {
+		if atomic.LoadUint32(&ext.ref) != 0 || atomic.LoadUint32(&ext.cleanupRef) != 0 {
 
 			ext.Unlock()
 
@@ -500,10 +474,105 @@ func (ext *extentContext) dereference() (closed bool) {
 			ext.loadReporter.Stop()
 		}
 
-		return true
+		var dontDelete = false
+
+		// invoke cleanup callbacks
+		for _, cb := range xMgr.callbacks {
+			if !cb.ExtentCleanUp(ext.id, ext) {
+				atomic.AddUint32(&ext.cleanupRef, 1)
+				dontDelete = true
+			}
+		}
+
+		if dontDelete {
+			// pending deref from cleanup-callback
+			return false
+		}
+
+	} else {
+
+		ext.Unlock()
 	}
 
+	// get exclusive lock when deleting from the the map
+	xMgr.Lock()
+	delete(xMgr.extents, string(ext.id)) // remove from map
+	xMgr.Unlock()
+
+	numExtents := atomic.AddInt64(&xMgr.numExtents, -1)
+	xMgr.m3Client.UpdateGauge(metrics.ExtentManagerScope, metrics.StorageOpenExtents, numExtents) // metrics
+	xMgr.logger.WithField("context", fmt.Sprintf("ext=%v numExtents=%d", ext.id, numExtents)).
+		Info("ExtMgr: extent closed")
+
+	return true
+}
+
+// IsExtentOpenedForReplication checks whether an extent is already opened for replication
+func (xMgr *ExtentManager) IsExtentOpenedForReplication(extentID string) bool {
+
+	xMgr.RLock()
+	defer xMgr.RUnlock()
+
+	extentUUID := uuid.Parse(extentID)
+	ext, exists := xMgr.extents[string(extentUUID)]
+	if exists {
+		return atomic.LoadInt32(&ext.openedForReplication) > 0
+	}
 	return false
+}
+
+func (xMgr *ExtentManager) RegisterCallbacks(callbacks ExtentCallbacks) {
+
+	// add to list of callback objects
+	xMgr.callbacks = append(xMgr.callbacks, callbacks)
+}
+
+func (xMgr *ExtentManager) CallbackDone(ext *extentContext) {
+
+	// decrement callback-ref; if that drops to zero, call in
+	// to clean up the in-memory extent context
+	if atomic.AddUint32(&ext.cleanupRef, ^uint32(0)) == 0 {
+		xMgr.cleanupExtent(ext)
+	}
+}
+
+// reference adds a reference to the extentContext
+func (ext *extentContext) reference() (err error) {
+
+	// get extent-lock shared while we get a reference on the
+	// extent-context to ensure this doesn't get deleted/closed
+	ext.RLock()
+	defer ext.RUnlock()
+
+	// check if extent has already been marked for deletion
+	if ext.deleted {
+		return errDeletePending
+	}
+
+	if ext.closed {
+		return errClosePending
+	}
+
+	// atomically add reference; this would prevent the extent
+	// from being closed/torn-down
+	atomic.AddUint32(&ext.ref, 1)
+
+	return nil // success
+}
+
+// dereference drops a reference on extentContext; if the reference goes
+// down to zero, it returns 'true' to indicate that it has been torn-down
+func (ext *extentContext) dereference() (closed bool) {
+
+	// atomically remove reference; if the reference goes down to
+	// zero, trigger cleanup of in-memory context, etc
+	return atomic.AddUint32(&ext.ref, ^uint32(0)) == 0
+}
+
+func (ext *extentContext) isSealed() (sealed bool, sealSeqNum int64) {
+
+	sealSeqNum = atomic.LoadInt64(&ext.sealSeqNum)
+	return sealSeqNum != seqNumNotSealed, sealSeqNum
 }
 
 func (ext *extentContext) getBeginSeqNum() int64 {
@@ -560,6 +629,11 @@ func (ext *extentContext) prepareForOpen(intent OpenIntent) (err error) {
 	case OpenIntentReadStream:
 		ext.extMetrics.Increment(load.ExtentMetricNumReadConns)
 		ext.xMgr.hostMetrics.Increment(load.HostMetricNumReadConns)
+	}
+
+	// invoke open callbacks
+	for _, cb := range ext.xMgr.callbacks {
+		cb.ExtentOpen(ext.id, ext, intent)
 	}
 
 	return nil
@@ -685,6 +759,11 @@ func (ext *extentContext) initialize(intent OpenIntent) (err error) {
 		}
 
 		ext.initialized = true // mark as initialized
+
+		// invoke init callbacks
+		for _, cb := range ext.xMgr.callbacks {
+			cb.ExtentInit(ext.id, ext)
+		}
 	}
 
 	return nil
