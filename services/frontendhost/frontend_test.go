@@ -663,6 +663,72 @@ func (s *FrontendHostSuite) TestFrontendHostCreateConsumerGroup() {
 	}
 }
 
+// TestFrontendHostCreateConsumerGroupStartFrom tests whether CreateConsumerGroup is able to
+// detect and appropriately convert various startFrom units.
+func (s *FrontendHostSuite) TestFrontendHostCreateConsumerGroupStartFrom() {
+
+	testPath := uuid.New()
+	testCG := s.generateKey("/bar/CGName")
+	frontendHost, ctx := s.utilGetContextAndFrontend()
+
+	// set start-from to, say, four weeks ago
+	startFromTime := time.Now().Add(-4 * 7 * 24 * time.Hour)
+
+	startFromSeconds := startFromTime.Unix()
+	startFromMillis := startFromSeconds * int64(1000)
+	startFromMicros := startFromSeconds * int64(1000000)
+	startFromNanos := startFromSeconds * int64(1000000000)
+
+	testStartFrom := func(startFrom int64) {
+		req := c.NewCreateConsumerGroupRequest()
+		req.DestinationPath = common.StringPtr(testPath)
+		req.ConsumerGroupName = common.StringPtr(testCG)
+
+		if startFrom == 0 {
+			req.StartFrom = common.Int64Ptr(0)
+		} else {
+			req.StartFrom = common.Int64Ptr(startFromNanos)
+		}
+
+		cgDesc := cgCreateRequestToDesc(req)
+		frontendHost.writeCacheDestinationPathForUUID(destinationUUID(cgDesc.GetDestinationUUID()), testPath)
+
+		dlqPath, _ := common.GetDLQPathNameFromCGName(testCG)
+		destDesc := &shared.DestinationDescription{
+			Path:            common.StringPtr(dlqPath),
+			DestinationUUID: common.StringPtr(uuid.New()),
+		}
+
+		// create destination is needed because of dlq destination been created at time of consumer group creation
+		s.mockController.On("CreateDestination", mock.Anything, mock.Anything).Return(destDesc, nil).Run(func(args mock.Arguments) {
+			s.Equal(dlqPath, args.Get(1).(*shared.CreateDestinationRequest).GetPath())
+		})
+
+		s.mockController.On("CreateConsumerGroup", mock.Anything, mock.Anything).Once().Return(cgDesc, nil).Run(func(args mock.Arguments) {
+			createReq := args.Get(1).(*shared.CreateConsumerGroupRequest)
+
+			// we should expect to see the startFrom in nano-seconds in every case
+			if startFrom == 0 {
+				s.EqualValues(0, createReq.GetStartFrom())
+			} else {
+				s.EqualValues(startFromNanos, createReq.GetStartFrom())
+			}
+		})
+
+		// set startFrom to the test value (of varying units)
+		req.StartFrom = common.Int64Ptr(startFrom)
+
+		frontendHost.CreateConsumerGroup(ctx, req)
+	}
+
+	// test startFrom with varying units
+	testStartFrom(startFromNanos)
+	testStartFrom(startFromMicros)
+	testStartFrom(startFromMillis)
+	testStartFrom(startFromSeconds)
+	testStartFrom(0)
+}
+
 // TestFrontendHostReadConsumerGroupRejectNil tests that a nil request fails with BadRequestError
 func (s *FrontendHostSuite) TestFrontendHostReadConsumerGroupRejectNil() {
 	frontendHost, ctx := s.utilGetContextAndFrontend()

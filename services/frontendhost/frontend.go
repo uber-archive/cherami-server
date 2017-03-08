@@ -303,13 +303,38 @@ func convertCGZoneConfigToInternal(cgZoneCfg *c.ConsumerGroupZoneConfig) *shared
 
 // convertCreateCGRequestToInternal converts Cherami CreateConsumerGroupRequest to internal shared CreateConsumerGroupRequest
 func convertCreateCGRequestToInternal(createRequest *c.CreateConsumerGroupRequest) *shared.CreateConsumerGroupRequest {
+
+	// detect and correct the units for 'startFrom' (expected internally to be in nanoseconds)
+	startFrom := createRequest.GetStartFrom()
+
+	// Note: 2000-01-01T00:00 is 946684800 seconds since epoch
+	switch {
+	case startFrom == 0:
+		// special-case '0' and let it through
+
+	case startFrom < 946684800000:
+		// likely in seconds; convert to nanoseconds
+		startFrom *= 1000000000
+
+	case startFrom < 946684800000000:
+		// likely in milliseconds; convert to nanoseconds
+		startFrom *= 1000000
+
+	case startFrom < 946684800000000000:
+		// likely in microseconds; convert to nanoseconds
+		startFrom *= 1000
+
+	default:
+		// likely in nanoseconds already
+	}
+
 	internalCreateRequest := shared.NewCreateConsumerGroupRequest()
 	internalCreateRequest.DestinationPath = common.StringPtr(createRequest.GetDestinationPath())
 	internalCreateRequest.ConsumerGroupName = common.StringPtr(createRequest.GetConsumerGroupName())
 	internalCreateRequest.LockTimeoutSeconds = common.Int32Ptr(createRequest.GetLockTimeoutInSeconds())
 	internalCreateRequest.MaxDeliveryCount = common.Int32Ptr(createRequest.GetMaxDeliveryCount())
 	internalCreateRequest.SkipOlderMessagesSeconds = common.Int32Ptr(createRequest.GetSkipOlderMessagesInSeconds())
-	internalCreateRequest.StartFrom = common.Int64Ptr(createRequest.GetStartFrom())
+	internalCreateRequest.StartFrom = common.Int64Ptr(startFrom)
 	internalCreateRequest.OwnerEmail = common.StringPtr(createRequest.GetOwnerEmail())
 	internalCreateRequest.IsMultiZone = common.BoolPtr(createRequest.GetIsMultiZone())
 	if createRequest.IsSetZoneConfigs() {
