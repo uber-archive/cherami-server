@@ -178,6 +178,22 @@ func ReadCgAckID(c *cli.Context) {
 	fmt.Fprintln(os.Stdout, string(outputStr))
 }
 
+// UnloadDestination unloads the destination on the given inputhost
+func UnloadDestination(c *cli.Context) {
+	mClient := toolscommon.GetMClient(c, adminToolService)
+	toolscommon.UnloadDestination(c, mClient)
+}
+
+// ListAllLoadedDestinations unloads the destination on the given inputhost
+func ListAllLoadedDestinations(c *cli.Context) {
+	toolscommon.ListAllLoadedDestinations(c)
+}
+
+// GetDestinationState gets the destination state on the given inputhost
+func GetDestinationState(c *cli.Context) {
+	toolscommon.GetDestinationState(c)
+}
+
 type storeExtJSONOutputFields struct {
 	StoreAddr      string `json:"storehost_addr"`
 	StoreUUID      string `json:"storehost_uuid"`

@@ -224,6 +224,12 @@ const (
 	PubConnectionScope
 	//PutMessageBatchInputHostDestScope represent API PutMessageBatch for per destination
 	PutMessageBatchInputHostDestScope
+	// UnloadDestinationsScope represents UnloadDestinations API
+	UnloadDestinationsScope
+	// ListLoadedDestinationsScope represents ListLoadedDestinations API
+	ListLoadedDestinationsScope
+	// ReadDestStateScope represents ReadDestState API
+	ReadDestStateScope
 
 	// -- Operation scopes for OutputHost --
 
@@ -492,6 +498,9 @@ var scopeDefs = map[ServiceIdx]map[int]scopeDefinition{
 		DestinationsUpdatedScope:      {operation: "DestinationsUpdated"},
 		PubConnectionStreamScope:      {operation: "PubConnection"},
 		PutMessageBatchInputHostScope: {operation: "PutMessageBatchInputHost"},
+		UnloadDestinationsScope:       {operation: "UnloadDestinations"},
+		ListLoadedDestinationsScope:   {operation: "ListLoadedDestinations"},
+		ReadDestStateScope:            {operation: "ReadDestState"},
 	},
 
 	// Outputhost operation tag values as seen by the Metrics backend

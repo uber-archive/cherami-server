@@ -652,6 +652,51 @@ func main() {
 			},
 		},
 		{
+			Name:    "inputhost",
+			Aliases: []string{"ih"},
+			Usage:   "inputhost (deststate|listAllDests|unloaddest)",
+			Subcommands: []cli.Command{
+				{
+					Name:    "deststate",
+					Aliases: []string{"dests"},
+					Usage:   "inputhost deststate <hostport> [options]",
+					Flags: []cli.Flag{
+						cli.StringFlag{
+							Name:  "dest_uuid, dest",
+							Value: "",
+							Usage: "The UUID of the destination whose state will be dumped",
+						},
+					},
+					Action: func(c *cli.Context) {
+						admin.GetDestinationState(c)
+					},
+				},
+				{
+					Name:    "listAllDests",
+					Aliases: []string{"ls"},
+					Usage:   "inputhost listAllDests <hostport>",
+					Action: func(c *cli.Context) {
+						admin.ListAllLoadedDestinations(c)
+					},
+				},
+				{
+					Name:    "unloaddest",
+					Aliases: []string{"ud"},
+					Usage:   "inputhost unloaddest <hostport> [options]",
+					Flags: []cli.Flag{
+						cli.StringFlag{
+							Name:  "dest_uuid, dest",
+							Value: "",
+							Usage: "The destination UUID which should be unloaded",
+						},
+					},
+					Action: func(c *cli.Context) {
+						admin.UnloadDestination(c)
+					},
+				},
+			},
+		},
+		{
 			Name:    "seal-check",
 			Aliases: []string{"sc"},
 			Usage:   "seal-check <dest> [--seal]",
