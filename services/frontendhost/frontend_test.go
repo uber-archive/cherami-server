@@ -723,7 +723,6 @@ func (s *FrontendHostSuite) TestFrontendHostCreateConsumerGroupStartFrom() {
 	testStartFromTime(time.Date(2046, time.June, 30, 11, 59, 59, 0, time.UTC)) // ~30 years from now
 
 	testStartFrom(0, 0) // start-from of '0'
-	testStartFrom(1, 1) // start-from of '1'
 }
 
 // TestFrontendHostReadConsumerGroupRejectNil tests that a nil request fails with BadRequestError

@@ -330,8 +330,8 @@ func convertCreateCGRequestToInternal(createRequest *c.CreateConsumerGroupReques
 	// for '0'
 	startFrom := createRequest.GetStartFrom()
 
-	// special-case a StartFrom of '0' and '1' (start from beginning)
-	if startFrom != 0 && startFrom != 1 {
+	// special-case a StartFrom of '0' (start from beginning)
+	if startFrom != 0 {
 		startFrom = interpretTimeNanos(startFrom)
 	}
 
