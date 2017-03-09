@@ -284,7 +284,7 @@ func (t *StoreHost) Start(thriftService []thrift.TChanServer) {
 
 	t.replMgr = NewReplicationManager(t.xMgr, t.m3Client, t.mClient, t.logger, hostID, t.GetWSConnector())
 
-	t.replicationJobRunner = NewReplicationJobRunner(t.mClient, t, t.logger)
+	t.replicationJobRunner = NewReplicationJobRunner(t.mClient, t, t.logger, t.m3Client)
 	go t.replicationJobRunner.Start()
 
 	loadReporterDaemonfactory := t.GetLoadReporterDaemonFactory()

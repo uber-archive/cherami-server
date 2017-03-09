@@ -39,6 +39,7 @@ import (
 	"github.com/apache/thrift/lib/go/thrift"
 	"github.com/codegangsta/cli"
 	ccli "github.com/uber/cherami-client-go/client/cherami"
+	"github.com/uber/cherami-server/clients/inputhost"
 	mcli "github.com/uber/cherami-server/clients/metadata"
 	"github.com/uber/cherami-server/clients/outputhost"
 	"github.com/uber/cherami-server/clients/storehost"
@@ -506,6 +507,117 @@ func printCgState(cgState *admin.ConsumerGroupState) {
 	}
 	outputStr, _ := json.Marshal(output)
 	fmt.Fprintln(os.Stdout, string(outputStr))
+}
+
+// UnloadDestination unloads the Destination based on cli.Context
+func UnloadDestination(c *cli.Context, mClient mcli.Client) {
+	if len(c.Args()) < 1 {
+		ExitIfError(errors.New(strNotEnoughArgs))
+	}
+
+	hostPort := c.Args()[0]
+	destUUID := c.String("dest_uuid")
+
+	if !uuidRegex.MatchString(destUUID) {
+		ExitIfError(errors.New("specify a valid dest UUID"))
+	}
+
+	// generate a random instance id to be used to create a client tchannel
+	instanceID := rand.Intn(50000)
+	inputClient, err := inputhost.NewClient(instanceID, hostPort)
+	ExitIfError(err)
+	defer inputClient.Close()
+
+	destUnloadReq := admin.NewUnloadDestinationsRequest()
+	destUnloadReq.DestUUIDs = []string{destUUID}
+
+	err = inputClient.UnloadDestinations(destUnloadReq)
+	ExitIfError(err)
+}
+
+// ListAllLoadedDestinations lists all loaded Destinations in memory of the inputhost
+func ListAllLoadedDestinations(c *cli.Context) {
+	if len(c.Args()) < 1 {
+		ExitIfError(errors.New(strNotEnoughArgs))
+	}
+
+	hostPort := c.Args()[0]
+
+	// generate a random instance id to be used to create a client tchannel
+	instanceID := rand.Intn(50000)
+	inputClient, err := inputhost.NewClient(instanceID, hostPort)
+	ExitIfError(err)
+	defer inputClient.Close()
+
+	listDestResult, err := inputClient.ListLoadedDestinations()
+	ExitIfError(err)
+
+	if listDestResult != nil {
+		for _, dest := range listDestResult.Dests {
+			fmt.Printf("%v\n", Jsonify(dest))
+		}
+	}
+}
+
+// GetDestinationState unloads the Destination based on cli.Context
+func GetDestinationState(c *cli.Context) {
+	if len(c.Args()) < 1 {
+		ExitIfError(errors.New(strNotEnoughArgs))
+	}
+
+	hostPort := c.Args()[0]
+	destUUID := c.String("dest_uuid")
+
+	if !uuidRegex.MatchString(destUUID) {
+		ExitIfError(errors.New("specify a valid dest UUID"))
+	}
+
+	// generate a random instance id to be used to create a client tchannel
+	instanceID := rand.Intn(50000)
+	inputClient, err := inputhost.NewClient(instanceID, hostPort)
+	ExitIfError(err)
+	defer inputClient.Close()
+
+	destStateReq := admin.NewReadDestinationStateRequest()
+	destStateReq.DestUUIDs = []string{destUUID}
+
+	readdestStateRes, err1 := inputClient.ReadDestState(destStateReq)
+	ExitIfError(err1)
+
+	fmt.Printf("inputhostUUID: %v\n", readdestStateRes.GetInputHostUUID())
+
+	for _, dest := range readdestStateRes.DestState {
+		printDestState(dest)
+		for _, ext := range dest.DestExtents {
+			fmt.Printf("\t%v\n", Jsonify(ext))
+		}
+	}
+}
+
+type destStateJSONOutput struct {
+	DestUUID       string `json""destUUID"`
+	MsgsChSize     int64  `json:"msgsChSize"`
+	NumConnections int64  `json:"numConnections"`
+	NumMsgsIn      int64  `json:"numMsgsIn"`
+	NumSentAcks    int64  `json:"numSentAcks"`
+	NumSentNacks   int64  `json:"numSentNacks"`
+	NumThrottled   int64  `json:"numThrottled"`
+	NumFailed      int64  `json:"numFailed"`
+}
+
+func printDestState(destState *admin.DestinationState) {
+	input := &destStateJSONOutput{
+		DestUUID:       destState.GetDestUUID(),
+		MsgsChSize:     destState.GetMsgsChSize(),
+		NumConnections: destState.GetNumConnections(),
+		NumMsgsIn:      destState.GetNumMsgsIn(),
+		NumSentAcks:    destState.GetNumSentAcks(),
+		NumSentNacks:   destState.GetNumSentNacks(),
+		NumThrottled:   destState.GetNumThrottled(),
+		NumFailed:      destState.GetNumFailed(),
+	}
+	inputStr, _ := json.Marshal(input)
+	fmt.Fprintln(os.Stdout, string(inputStr))
 }
 
 type destDescJSONOutputFields struct {

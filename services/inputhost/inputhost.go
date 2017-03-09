@@ -585,6 +585,12 @@ ACKDRAIN:
 	pathCache.destM3Client.AddCounter(metrics.PutMessageBatchInputHostDestScope, metrics.InputhostDestMessageUserFailures, userErrs)
 	h.m3Client.AddCounter(metrics.PutMessageBatchInputHostScope, metrics.InputhostMessageInternalFailures, internalErrs)
 	pathCache.destM3Client.AddCounter(metrics.PutMessageBatchInputHostDestScope, metrics.InputhostDestMessageInternalFailures, internalErrs)
+
+	// Increment the overall incoming messages, failed messages and acks
+	pathCache.dstMetrics.Add(load.DstMetricOverallNumMsgs, int64(len(messages)))
+	pathCache.dstMetrics.Add(load.DstMetricNumFailed, (internalErrs + userErrs))
+	pathCache.dstMetrics.Add(load.DstMetricNumAcks, int64(len(result.SuccessMessages)))
+
 	return result, nil
 }
 
@@ -639,6 +645,110 @@ func (h *InputHost) DestinationsUpdated(ctx thrift.Context, request *admin.Desti
 		Debug("inputhost: DestinationsUpdated: finished reconfiguration")
 
 	return
+}
+
+// UnloadDestinations is the API used to unload destination to clear the cache
+func (h *InputHost) UnloadDestinations(ctx thrift.Context, request *admin.UnloadDestinationsRequest) (err error) {
+	defer atomic.AddInt32(&h.loadShutdownRef, -1)
+	sw := h.m3Client.StartTimer(metrics.UnloadDestinationsScope, metrics.InputhostLatencyTimer)
+	defer sw.Stop()
+	h.m3Client.IncCounter(metrics.UnloadDestinationsScope, metrics.InputhostRequests)
+	// If we are already shutting down, no need to do anything here
+	if atomic.AddInt32(&h.loadShutdownRef, 1) <= 0 {
+		h.logger.Error("not unloading the path cache; inputHost already shutdown")
+		h.m3Client.IncCounter(metrics.UnloadDestinationsScope, metrics.InputhostFailures)
+		return ErrHostShutdown
+	}
+
+	for _, destUUID := range request.DestUUIDs {
+		h.pathMutex.RLock()
+		pathCache, ok := h.pathCache[destUUID]
+		if ok {
+			pathCache.Lock()
+			pathCache.prepareForUnload()
+			go pathCache.unload()
+			pathCache.Unlock()
+		} else {
+			h.logger.WithField(common.TagDst, common.FmtDst(destUUID)).
+				Error("destination is not cached at all")
+			err = ErrDstNotLoaded
+			h.m3Client.IncCounter(metrics.UnloadDestinationsScope, metrics.InputhostFailures)
+		}
+		h.pathMutex.RUnlock()
+	}
+
+	return err
+}
+
+// ListLoadedDestinations is the API used to list all the loaded destinations in memory
+func (h *InputHost) ListLoadedDestinations(ctx thrift.Context) (result *admin.ListDestinationsResult_, err error) {
+	defer atomic.AddInt32(&h.loadShutdownRef, -1)
+	sw := h.m3Client.StartTimer(metrics.ListLoadedDestinationsScope, metrics.InputhostLatencyTimer)
+	defer sw.Stop()
+	h.m3Client.IncCounter(metrics.ListLoadedDestinationsScope, metrics.InputhostRequests)
+	// If we are already shutting down, no need to do anything here
+	if atomic.AddInt32(&h.loadShutdownRef, 1) <= 0 {
+		h.logger.Error("inputHost already shutdown")
+		h.m3Client.IncCounter(metrics.ListLoadedDestinationsScope, metrics.InputhostFailures)
+		return nil, ErrHostShutdown
+	}
+
+	result = admin.NewListDestinationsResult_()
+	h.pathMutex.RLock()
+	result.Dests = make([]*admin.Destinations, len(h.pathCache))
+	count := 0
+	for destUUID, pathCache := range h.pathCache {
+		destRes := admin.NewDestinations()
+		destRes.DestUUID = common.StringPtr(destUUID)
+		destRes.DestPath = common.StringPtr(pathCache.destinationPath)
+
+		result.Dests[count] = destRes
+		count++
+	}
+	h.pathMutex.RUnlock()
+
+	return result, err
+}
+
+// ReadDestState is the API used to read the state of the destination which is loaded on this inputhost
+func (h *InputHost) ReadDestState(ctx thrift.Context, request *admin.ReadDestinationStateRequest) (result *admin.ReadDestinationStateResult_, err error) {
+	defer atomic.AddInt32(&h.loadShutdownRef, -1)
+	sw := h.m3Client.StartTimer(metrics.ReadDestStateScope, metrics.InputhostLatencyTimer)
+	defer sw.Stop()
+	h.m3Client.IncCounter(metrics.ReadDestStateScope, metrics.InputhostRequests)
+	// If we are already shutting down, no need to do anything here
+	if atomic.AddInt32(&h.loadShutdownRef, 1) <= 0 {
+		h.logger.Error("inputHost already shutdown")
+		h.m3Client.IncCounter(metrics.ReadDestStateScope, metrics.InputhostFailures)
+		return nil, ErrHostShutdown
+	}
+
+	result = admin.NewReadDestinationStateResult_()
+
+	result.InputHostUUID = common.StringPtr(h.GetHostUUID())
+	result.DestState = make([]*admin.DestinationState, 0)
+
+	// Now populate all destination state
+	h.pathMutex.RLock()
+	for _, destUUID := range request.DestUUIDs {
+		pathCache, ok := h.pathCache[destUUID]
+		if ok {
+			destState := pathCache.getState()
+			result.DestState = append(result.DestState, destState)
+		} else {
+			h.logger.WithField(common.TagDst, common.FmtDst(destUUID)).
+				Warn("destination is not cached at all")
+			err = ErrDstNotLoaded
+		}
+	}
+	h.pathMutex.RUnlock()
+
+	if err != nil {
+		// update the failure metric
+		h.m3Client.IncCounter(metrics.ReadDestStateScope, metrics.InputhostFailures)
+	}
+	return result, err
+
 }
 
 // Report is the implementation for reporting host specific load to controller
