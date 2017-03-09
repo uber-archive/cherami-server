@@ -26,9 +26,9 @@ import (
 	"time"
 
 	"github.com/uber-common/bark"
-
 	"github.com/uber/cherami-server/common"
 	"github.com/uber/cherami-server/common/metrics"
+	"github.com/uber/cherami-server/services/inputhost/load"
 	serverStream "github.com/uber/cherami-server/stream"
 	"github.com/uber/cherami-thrift/.generated/go/cherami"
 )
@@ -216,6 +216,7 @@ func (conn *pubConnection) readRequestStream() {
 			// record the counter metric
 			conn.pathCache.m3Client.IncCounter(metrics.PubConnectionStreamScope, metrics.InputhostMessageReceived)
 			conn.pathCache.destM3Client.IncCounter(metrics.PubConnectionScope, metrics.InputhostDestMessageReceived)
+			conn.pathCache.dstMetrics.Increment(load.DstMetricOverallNumMsgs)
 
 			conn.recvMsgs++
 
@@ -477,6 +478,7 @@ func (conn *pubConnection) failInflightMessages(inflightMessages map[string]resp
 			conn.pathCache.m3Client.IncCounter(metrics.PubConnectionStreamScope, metrics.InputhostMessageFailures)
 			conn.pathCache.destM3Client.IncCounter(metrics.PubConnectionScope, metrics.InputhostDestMessageFailures)
 			conn.failedMsgs++
+			conn.pathCache.dstMetrics.Increment(load.DstMetricNumFailed)
 		}
 	}
 
@@ -522,10 +524,13 @@ func (conn *pubConnection) writeAckToClient(inflightMessages map[string]response
 		switch ack.GetStatus() {
 		case cherami.Status_OK:
 			conn.sentAcks++
+			conn.pathCache.dstMetrics.Increment(load.DstMetricNumAcks)
 		case cherami.Status_FAILED:
 			conn.sentNacks++
+			conn.pathCache.dstMetrics.Increment(load.DstMetricNumNacks)
 		case cherami.Status_THROTTLED:
 			conn.sentThrottled++
+			conn.pathCache.dstMetrics.Increment(load.DstMetricNumThrottled)
 		}
 	}
 

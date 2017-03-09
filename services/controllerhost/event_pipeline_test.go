@@ -727,3 +727,15 @@ func (service *MockInputOutputService) ListLoadedConsumerGroups(ctx thrift.Conte
 func (service *MockInputOutputService) ReadCgState(ctx thrift.Context, req *admin.ReadConsumerGroupStateRequest) (*admin.ReadConsumerGroupStateResult_, error) {
 	return nil, fmt.Errorf("mock not implemented")
 }
+
+func (service *MockInputOutputService) UnloadDestinations(ctx thrift.Context, request *admin.UnloadDestinationsRequest) error {
+	return fmt.Errorf("mock not implemented")
+}
+
+func (service *MockInputOutputService) ListLoadedDestinations(ctx thrift.Context) (*admin.ListDestinationsResult_, error) {
+	return nil, fmt.Errorf("mock not implemented")
+}
+
+func (service *MockInputOutputService) ReadDestState(ctx thrift.Context, req *admin.ReadDestinationStateRequest) (*admin.ReadDestinationStateResult_, error) {
+	return nil, fmt.Errorf("mock not implemented")
+}

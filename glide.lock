@@ -1,5 +1,5 @@
 hash: 95f30a537dc5b2841e061722d66e26c58126e82c19e9ba29bb6b0f44cf1741d0
-updated: 2017-02-14T08:55:45.490984145-08:00
+updated: 2017-03-09T08:28:59.876988661-08:00
 imports:
 - name: github.com/apache/thrift
   version: 2d6060d882069ed3e3d6302aa63ea7eb4bb155ad
@@ -91,7 +91,7 @@ imports:
 - name: github.com/stretchr/objx
   version: 1a9d0bb9f541897e62256577b352fdbc1fb4fd94
 - name: github.com/stretchr/testify
-  version: 4d4bfba8f1d1027c4fdbe371823030df51419987
+  version: 2402e8e7a02fc811447d11f881aa9746cdc57983
   subpackages:
   - assert
   - mock
@@ -104,7 +104,7 @@ imports:
 - name: github.com/uber-go/atomic
   version: 3b8db5e93c4c02efbc313e17b2e796b0914a01fb
 - name: github.com/uber/cherami-client-go
-  version: 1cdcfc4a204fe42013f4cf7196fab208d3b98085 
+  version: 1cdcfc4a204fe42013f4cf7196fab208d3b98085
   subpackages:
   - client/cherami
   - common
@@ -113,7 +113,7 @@ imports:
   - common/websocket
   - stream
 - name: github.com/uber/cherami-thrift
-  version: ac828452c87c2aabd8f10ba8d95c4731201a99de
+  version: 09ed2ceaeab9e52820a81caece0dee9914c31f5d
   subpackages:
   - .generated/go/admin
   - .generated/go/cherami
@@ -148,7 +148,7 @@ imports:
   - trand
   - typed
 - name: golang.org/x/net
-  version: f2499483f923065a842d38eb4c7f1927e6fc6e6d
+  version: 60c41d1de8da134c05b7b40154a9a82bf5b7edb9
   subpackages:
   - context
 - name: golang.org/x/sys

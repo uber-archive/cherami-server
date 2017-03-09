@@ -77,7 +77,7 @@ type (
 
 		extTokenBucketValue      atomic.Value // Value to controll access for TB for rate limit this extent
 		extentMsgsLimitPerSecond int32        //per second rate limit for this extent
-		lk                       sync.Mutex
+		lk                       sync.RWMutex
 		opened                   bool // Read/write protected by lk
 		closed                   bool // Read/write protected by lk
 
@@ -668,7 +668,7 @@ func (conn *extHost) aggregateAndSendReplies(numReplicas int) {
 
 				// mark this seqNo as the last success seqno
 				atomic.StoreInt64(&conn.lastSuccessSeqNo, resCh.seqNo)
-				
+
 				// Notify about the last seqNo. Remove the previous notification, as it is not needed anymore.
 				// Without this removal channel, the buffer would need to be larger than the maximum number of
 				// outstanding notifications to avoid deadlocks.
@@ -686,7 +686,7 @@ func (conn *extHost) aggregateAndSendReplies(numReplicas int) {
 						}
 					}
 				}
-				
+
 				// Now send the reply back to the pubConnection and ultimately on the stream to the publisher
 				putMsgAck := cherami.NewPutMessageAck()
 				putMsgAck.ID = common.StringPtr(resCh.ackID)
@@ -829,4 +829,21 @@ func (conn *extHost) GetExtTokenBucketValue() common.TokenBucket {
 func (conn *extHost) SetExtTokenBucketValue(connLimit int32) {
 	tokenBucket := common.NewTokenBucket(int(connLimit), common.NewRealTimeSource())
 	conn.extTokenBucketValue.Store(tokenBucket)
+}
+
+func (conn *extHost) getState() *admin.InputDestExtent {
+	conn.lk.RLock()
+	defer conn.lk.RUnlock()
+	ext := admin.NewInputDestExtent()
+	ext.ExtentUUID = common.StringPtr(conn.extUUID)
+	ext.MaxSeqNo = common.Int64Ptr(conn.maxSequenceNumber)
+	ext.MaxSizeBytes = common.Int64Ptr(conn.maxSizeBytes)
+	ext.CurrSeqNo = common.Int64Ptr(atomic.LoadInt64(&conn.seqNo))
+	ext.CurrSizeBytes = common.Int64Ptr(conn.currSizeBytes)
+	ext.Replicas = make([]string, 0)
+	for replica := range conn.streams {
+		ext.Replicas = append(ext.Replicas, string(replica))
+	}
+
+	return ext
 }
