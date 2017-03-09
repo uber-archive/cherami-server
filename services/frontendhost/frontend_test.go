@@ -671,24 +671,12 @@ func (s *FrontendHostSuite) TestFrontendHostCreateConsumerGroupStartFrom() {
 	testCG := s.generateKey("/bar/CGName")
 	frontendHost, ctx := s.utilGetContextAndFrontend()
 
-	// set start-from to, say, four weeks ago
-	startFromTime := time.Now().Add(-4 * 7 * 24 * time.Hour)
+	testStartFrom := func(startFrom, startFromExpected int64) {
 
-	startFromSeconds := startFromTime.Unix()
-	startFromMillis := startFromSeconds * int64(1000)
-	startFromMicros := startFromSeconds * int64(1000000)
-	startFromNanos := startFromSeconds * int64(1000000000)
-
-	testStartFrom := func(startFrom int64) {
 		req := c.NewCreateConsumerGroupRequest()
 		req.DestinationPath = common.StringPtr(testPath)
 		req.ConsumerGroupName = common.StringPtr(testCG)
-
-		if startFrom == 0 {
-			req.StartFrom = common.Int64Ptr(0)
-		} else {
-			req.StartFrom = common.Int64Ptr(startFromNanos)
-		}
+		req.StartFrom = common.Int64Ptr(startFromExpected)
 
 		cgDesc := cgCreateRequestToDesc(req)
 		frontendHost.writeCacheDestinationPathForUUID(destinationUUID(cgDesc.GetDestinationUUID()), testPath)
@@ -705,14 +693,9 @@ func (s *FrontendHostSuite) TestFrontendHostCreateConsumerGroupStartFrom() {
 		})
 
 		s.mockController.On("CreateConsumerGroup", mock.Anything, mock.Anything).Once().Return(cgDesc, nil).Run(func(args mock.Arguments) {
-			createReq := args.Get(1).(*shared.CreateConsumerGroupRequest)
 
-			// we should expect to see the startFrom in nano-seconds in every case
-			if startFrom == 0 {
-				s.EqualValues(0, createReq.GetStartFrom())
-			} else {
-				s.EqualValues(startFromNanos, createReq.GetStartFrom())
-			}
+			// ensure we get the value expected
+			s.EqualValues(startFromExpected, args.Get(1).(*shared.CreateConsumerGroupRequest).GetStartFrom())
 		})
 
 		// set startFrom to the test value (of varying units)
@@ -721,12 +704,25 @@ func (s *FrontendHostSuite) TestFrontendHostCreateConsumerGroupStartFrom() {
 		frontendHost.CreateConsumerGroup(ctx, req)
 	}
 
-	// test startFrom with varying units
-	testStartFrom(startFromNanos)
-	testStartFrom(startFromMicros)
-	testStartFrom(startFromMillis)
-	testStartFrom(startFromSeconds)
-	testStartFrom(0)
+	testStartFromTime := func(startFromTime time.Time) {
+
+		startFromSeconds := startFromTime.Unix()
+		startFromMillis := startFromSeconds * int64(1e3)
+		startFromMicros := startFromSeconds * int64(1e6)
+		startFromNanos := startFromSeconds * int64(1e9)
+
+		// test startFrom with varying units
+		testStartFrom(startFromSeconds, startFromNanos)
+		testStartFrom(startFromMillis, startFromNanos)
+		testStartFrom(startFromMicros, startFromNanos)
+		testStartFrom(startFromNanos, startFromNanos)
+	}
+
+	testStartFromTime(time.Now().Add(-4 * 7 * 24 * time.Hour))                 // four weeks ago
+	testStartFromTime(time.Date(2016, time.January, 1, 0, 0, 0, 0, time.UTC))  // ~ a year ago
+	testStartFromTime(time.Date(2046, time.June, 30, 11, 59, 59, 0, time.UTC)) // ~30 years from now
+
+	testStartFrom(0, 0) // start-from of '0'
 }
 
 // TestFrontendHostReadConsumerGroupRejectNil tests that a nil request fails with BadRequestError

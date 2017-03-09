@@ -301,31 +301,38 @@ func convertCGZoneConfigToInternal(cgZoneCfg *c.ConsumerGroupZoneConfig) *shared
 	return internalCGZoneCfg
 }
 
+// interpretTimeNanos converts the given timestamp to nanosecond units after
+// interpreting its units based on what yields the nearest time to 'now'.
+func interpretTimeNanos(ts int64) int64 {
+
+	// tsNanos, tsMicros, tsMillis and tsSeconds are what 'ts' would be
+	// would be if it were assumed to be in {nano,micro,milli,}seconds
+	// respectively and they are each converted to nanosecond units.  we
+	// use the timestamp that is closest to 'now' as the most reasonable
+	// interpretation of the given 'ts'. we can safely ignore potential
+	// overflows in our computations, because that would result in a
+	// negative number that would push it further from the 'now' timestamp.
+
+	tsNanos, tsMicros, tsMillis, tsSeconds := ts, ts*1e3, ts*1e6, ts*1e9
+
+	// 'now' in unix-nanos
+	now := time.Now().UnixNano()
+
+	// the time that is nearest to 'now' (in nanoseconds), would be the most
+	// reasonable interpretation of 'ts'
+	return common.FindNearestInt(now, tsNanos, tsMicros, tsMillis, tsSeconds)
+}
+
 // convertCreateCGRequestToInternal converts Cherami CreateConsumerGroupRequest to internal shared CreateConsumerGroupRequest
 func convertCreateCGRequestToInternal(createRequest *c.CreateConsumerGroupRequest) *shared.CreateConsumerGroupRequest {
 
-	// detect and correct the units for 'startFrom' (expected internally to be in nanoseconds)
+	// detect and correct the units for 'startFrom' (expected internally to be in nanoseconds);
+	// for '0'
 	startFrom := createRequest.GetStartFrom()
 
-	// Note: 2000-01-01T00:00 is 946684800 seconds since epoch
-	switch {
-	case startFrom == 0:
-		// special-case '0' and let it through
-
-	case startFrom < 946684800000:
-		// likely in seconds; convert to nanoseconds
-		startFrom *= 1000000000
-
-	case startFrom < 946684800000000:
-		// likely in milliseconds; convert to nanoseconds
-		startFrom *= 1000000
-
-	case startFrom < 946684800000000000:
-		// likely in microseconds; convert to nanoseconds
-		startFrom *= 1000
-
-	default:
-		// likely in nanoseconds already
+	// special-case a StartFrom of '0' (start from beginning)
+	if startFrom != 0 {
+		startFrom = interpretTimeNanos(startFrom)
 	}
 
 	internalCreateRequest := shared.NewCreateConsumerGroupRequest()

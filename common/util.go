@@ -700,3 +700,28 @@ moreOverrides:
 
 	return defaultVal
 }
+
+// FindNearestInt finds the integer that is closest to the given 'target'
+func FindNearestInt(target int64, nums ...int64) (nearest int64) {
+
+	nearest = math.MaxInt64
+	minΔ := uint64(math.MaxUint64)
+
+	for _, num := range nums {
+
+		var Δ uint64 // absolute difference
+
+		if num > target {
+			Δ = uint64(num) - uint64(target)
+		} else {
+			Δ = uint64(target) - uint64(num)
+		}
+
+		if Δ < minΔ {
+			minΔ = Δ
+			nearest = num
+		}
+	}
+
+	return
+}
