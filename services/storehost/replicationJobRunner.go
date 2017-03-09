@@ -30,6 +30,7 @@ import (
 	"github.com/uber-common/bark"
 
 	"github.com/uber/cherami-server/common"
+	"github.com/uber/cherami-server/common/metrics"
 	"github.com/uber/cherami-thrift/.generated/go/metadata"
 	"github.com/uber/cherami-thrift/.generated/go/shared"
 	"github.com/uber/cherami-thrift/.generated/go/store"
@@ -49,9 +50,11 @@ type (
 		storeHost   *StoreHost
 		storeID     string
 		currentZone string
+		failedJobs  map[string]int
 
-		mClient metadata.TChanMetadataService
-		logger  bark.Logger
+		mClient  metadata.TChanMetadataService
+		logger   bark.Logger
+		m3Client metrics.Client
 
 		closeChannel chan struct{}
 
@@ -69,14 +72,16 @@ const (
 )
 
 // NewReplicationJobRunner returns an instance of ReplicationJobRunner
-func NewReplicationJobRunner(mClient metadata.TChanMetadataService, store *StoreHost, logger bark.Logger) ReplicationJobRunner {
+func NewReplicationJobRunner(mClient metadata.TChanMetadataService, store *StoreHost, logger bark.Logger, m3Client metrics.Client) ReplicationJobRunner {
 	return &replicationJobRunner{
-		storeHost: store,
-		storeID:   store.GetHostUUID(),
-		mClient:   mClient,
-		logger:    logger,
-		ticker:    time.NewTicker(runInterval),
-		running:   0,
+		storeHost:  store,
+		storeID:    store.GetHostUUID(),
+		failedJobs: make(map[string]int),
+		mClient:    mClient,
+		logger:     logger,
+		m3Client:   m3Client,
+		ticker:     time.NewTicker(runInterval),
+		running:    0,
 	}
 }
 
@@ -133,6 +138,7 @@ func (runner *replicationJobRunner) run() {
 	openedForReplication := 0
 	primaryExtents := 0
 	secondaryExtents := 0
+	currentFailedJobs := make(map[string]struct{})
 	for _, extentStats := range res.GetExtentStatsList() {
 		extentID := extentStats.GetExtent().GetExtentUUID()
 		destID := extentStats.GetExtent().GetDestinationUUID()
@@ -156,6 +162,7 @@ func (runner *replicationJobRunner) run() {
 				common.TagExt:  common.FmtExt(extentID),
 				common.TagStor: common.FmtStor(runner.storeID),
 			}).Error(`No store Ids for extent from metadata`)
+			currentFailedJobs[extentID] = struct{}{}
 			continue
 		}
 
@@ -180,6 +187,7 @@ func (runner *replicationJobRunner) run() {
 					common.TagExt:  common.FmtExt(extentID),
 					common.TagStor: common.FmtStor(runner.storeID),
 				}).Error(`Remote replication for extent failed`)
+				currentFailedJobs[extentID] = struct{}{}
 				continue
 			}
 		} else {
@@ -197,6 +205,7 @@ func (runner *replicationJobRunner) run() {
 					common.TagExt:  common.FmtExt(extentID),
 					common.TagStor: common.FmtStor(runner.storeID),
 				}).Error(`No matching store id found in metadata`)
+				currentFailedJobs[extentID] = struct{}{}
 				continue
 			}
 
@@ -213,6 +222,7 @@ func (runner *replicationJobRunner) run() {
 					common.TagExt:  common.FmtExt(extentID),
 					common.TagStor: common.FmtStor(runner.storeID),
 				}).Error(`Rereplication for extent failed`)
+				currentFailedJobs[extentID] = struct{}{}
 				continue
 			}
 		}
@@ -224,9 +234,35 @@ func (runner *replicationJobRunner) run() {
 		}).Info(`replication for extent started`)
 	}
 
+	var maxConsecutiveFailures int
+	for existingFailedJob, failedTimes := range runner.failedJobs {
+		if _, ok := currentFailedJobs[existingFailedJob]; !ok {
+			delete(runner.failedJobs, existingFailedJob)
+		} else {
+			newFailedTimes := failedTimes + 1
+			runner.failedJobs[existingFailedJob] = newFailedTimes
+			if newFailedTimes > maxConsecutiveFailures {
+				maxConsecutiveFailures = newFailedTimes
+			}
+
+			runner.logger.WithFields(bark.Fields{
+				common.TagExt:  common.FmtExt(existingFailedJob),
+				`failed times`: newFailedTimes,
+			}).Info(`replication job failed for at least twice`)
+		}
+	}
+	for currentFailedJob := range currentFailedJobs {
+		if _, ok := runner.failedJobs[currentFailedJob]; !ok {
+			runner.failedJobs[currentFailedJob] = 1
+		}
+	}
+
+	runner.m3Client.UpdateGauge(metrics.ReplicateExtentScope, metrics.StorageReplicationJobCurrentFailures, int64(len(currentFailedJobs)))
+	runner.m3Client.UpdateGauge(metrics.ReplicateExtentScope, metrics.StorageReplicationJobMaxConsecutiveFailures, int64(maxConsecutiveFailures))
+
 	runner.logger.WithFields(bark.Fields{
-		`stats`: fmt.Sprintf(`total extents: %v, remote extents:%v, opened for replication: %v, primary: %v, secondary: %v`,
-			totalExtents, totalRemoteExtents, openedForReplication, primaryExtents, secondaryExtents),
+		`stats`: fmt.Sprintf(`total extents: %v, remote extents:%v, opened for replication: %v, primary: %v, secondary: %v, failed: %v`,
+			totalExtents, totalRemoteExtents, openedForReplication, primaryExtents, secondaryExtents, len(currentFailedJobs)),
 		common.TagStor: common.FmtStor(runner.storeID),
 	}).Info(`replication run finished`)
 

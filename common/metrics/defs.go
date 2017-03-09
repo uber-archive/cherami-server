@@ -838,6 +838,10 @@ const (
 	StorageOutWriteTChannelLatency
 	// StorageOutFlushTChannelLatency is the latency to flush msg to tchannel out stream
 	StorageOutFlushTChannelLatency
+	// StorageReplicationJobMaxConsecutiveFailures is the max number of consecutive failures for any replication job
+	StorageReplicationJobMaxConsecutiveFailures
+	// StorageReplicationJobCurrentFailures is the number of failed job in current run
+	StorageReplicationJobCurrentFailures
 
 	// -- Controller metrics -- //
 
@@ -1056,30 +1060,32 @@ var metricDefs = map[ServiceIdx]map[int]metricDefinition{
 
 	// definitions for Storehost metrics
 	Storage: {
-		StorageRequests:                     {Counter, "storage.requests"},
-		StorageFailures:                     {Counter, "storage.errors"},
-		StorageStoreFailures:                {Counter, "storage.store-error"},
-		StorageMessageReceived:              {Counter, "storage.message.received"},
-		StorageMessageSent:                  {Counter, "storage.message.sent"},
-		WatermarksReceived:                  {Counter, "storage.watermarks"},
-		StorageOpenExtents:                  {Gauge, "storage.open-extents"},
-		StorageWriteStreams:                 {Gauge, "storage.write.streams"},
-		StorageReadStreams:                  {Gauge, "storage.read.streams"},
-		StorageInMsgChanDepth:               {Gauge, "storage.in.msgchan-depth"},
-		StorageInAckChanDepth:               {Gauge, "storage.in.ackchan-depth"},
-		StorageOutMsgChanDepth:              {Gauge, "storage.out.msgchan-depth"},
-		StorageDiskAvailableSpaceMB:         {Gauge, "storage.disk.availablespace.mb"},
-		StorageDiskAvailableSpacePcnt:       {Gauge, "storage.disk.availablespace.pcnt"},
-		StorageLatencyTimer:                 {Timer, "storage.latency"},
-		StorageWriteStoreLatency:            {Timer, "storage.write.store-latency"},
-		StorageWriteMessageLatency:          {Timer, "storage.write.message-latency"},
-		StorageWriteMessageBeforeAckLatency: {Timer, "storage.write.message-latency-before-ack"},
-		StorageReadStoreLatency:             {Timer, "storage.read.store-latency"},
-		StorageReadMessageLatency:           {Timer, "storage.read.message-latency"},
-		StorageInWriteTChannelLatency:       {Timer, "storage.in.write-tchannel-latency"},
-		StorageInFlushTChannelLatency:       {Timer, "storage.in.flush-tchannel-latency"},
-		StorageOutWriteTChannelLatency:      {Timer, "storage.out.write-tchannel-latency"},
-		StorageOutFlushTChannelLatency:      {Timer, "storage.out.flush-tchannel-latency"},
+		StorageRequests:                             {Counter, "storage.requests"},
+		StorageFailures:                             {Counter, "storage.errors"},
+		StorageStoreFailures:                        {Counter, "storage.store-error"},
+		StorageMessageReceived:                      {Counter, "storage.message.received"},
+		StorageMessageSent:                          {Counter, "storage.message.sent"},
+		WatermarksReceived:                          {Counter, "storage.watermarks"},
+		StorageOpenExtents:                          {Gauge, "storage.open-extents"},
+		StorageWriteStreams:                         {Gauge, "storage.write.streams"},
+		StorageReadStreams:                          {Gauge, "storage.read.streams"},
+		StorageInMsgChanDepth:                       {Gauge, "storage.in.msgchan-depth"},
+		StorageInAckChanDepth:                       {Gauge, "storage.in.ackchan-depth"},
+		StorageOutMsgChanDepth:                      {Gauge, "storage.out.msgchan-depth"},
+		StorageDiskAvailableSpaceMB:                 {Gauge, "storage.disk.availablespace.mb"},
+		StorageDiskAvailableSpacePcnt:               {Gauge, "storage.disk.availablespace.pcnt"},
+		StorageLatencyTimer:                         {Timer, "storage.latency"},
+		StorageWriteStoreLatency:                    {Timer, "storage.write.store-latency"},
+		StorageWriteMessageLatency:                  {Timer, "storage.write.message-latency"},
+		StorageWriteMessageBeforeAckLatency:         {Timer, "storage.write.message-latency-before-ack"},
+		StorageReadStoreLatency:                     {Timer, "storage.read.store-latency"},
+		StorageReadMessageLatency:                   {Timer, "storage.read.message-latency"},
+		StorageInWriteTChannelLatency:               {Timer, "storage.in.write-tchannel-latency"},
+		StorageInFlushTChannelLatency:               {Timer, "storage.in.flush-tchannel-latency"},
+		StorageOutWriteTChannelLatency:              {Timer, "storage.out.write-tchannel-latency"},
+		StorageOutFlushTChannelLatency:              {Timer, "storage.out.flush-tchannel-latency"},
+		StorageReplicationJobMaxConsecutiveFailures: {Gauge, "storage.replication-job.max-consecutive-failures"},
+		StorageReplicationJobCurrentFailures:        {Gauge, "storage.replication-job.current-failures"},
 	},
 
 	// definitions for Controller metrics
