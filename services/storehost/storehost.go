@@ -22,6 +22,7 @@ package storehost
 
 import (
 	"fmt"
+	"math"
 	"net"
 	"net/http"
 	"os"
@@ -717,11 +718,6 @@ func (t *StoreHost) SealExtent(ctx thrift.Context, req *store.SealExtentRequest)
 	if oldSealSeqNum := x.getSealSeqNum(); oldSealSeqNum != seqNumNotSealed { // extent is sealed
 
 		switch {
-		case oldSealSeqNum == -1: // error reading seal-extent key
-
-			log.Error("SealExtent: error reading seal-extent key in getSealExtentInfo")
-			// return newInternalServiceError(fmt.Sprintf("%v: error reading seal-key in getExtentInfo", extentID))
-
 		case sealSeqNum == seqNumNotSealed: // redundant request
 
 			log.WithField("context", fmt.Sprintf("oldSealSeqNum=%d", oldSealSeqNum)).
@@ -789,21 +785,21 @@ func (t *StoreHost) SealExtent(ctx thrift.Context, req *store.SealExtentRequest)
 		// of 'seqNumUnspecifiedSeal' to go through, to support sealing an extent as a best effort.
 
 		switch {
-		case lastSeqNum == -1 && unspecifiedSealSeqNum: // no sealSeqNum specified and we don't know lastSeqNum
+		case lastSeqNum == math.MaxInt64 && unspecifiedSealSeqNum: // no sealSeqNum specified and we don't know lastSeqNum
 
 			// continue -> just write a sealExtentKey with 'seqNumUnspecifiedSeal' seqNum (for now)
 
-		case lastSeqNum == -1 && !unspecifiedSealSeqNum: // we were given a sealSeqNum, but we don't know lastSeqNum
+		case lastSeqNum == math.MaxInt64 && !unspecifiedSealSeqNum: // we were given a sealSeqNum, but we don't know lastSeqNum
 
 			log.Error("SealExtent: last-seqnum unknown (timer-queue mode?)")
 			// return newInternalServiceError(fmt.Sprintf("%v last-seqnum unknown", extentID))
 
-		case lastSeqNum != -1 && unspecifiedSealSeqNum: // no seal-seqnum specified and we have a known last-seqnum
+		case lastSeqNum != math.MaxInt64 && unspecifiedSealSeqNum: // no seal-seqnum specified and we have a known last-seqnum
 
 			sealSeqNum = lastSeqNum // seal at last-seqnum
 			// FIXME: we should return the sealSeqNum to the caller, in this particular case!
 
-		case lastSeqNum != -1 && !unspecifiedSealSeqNum: // we have seal-seqnum and last-seqnum available
+		case lastSeqNum != math.MaxInt64 && !unspecifiedSealSeqNum: // we have seal-seqnum and last-seqnum available
 
 			// ensure the seal-seqnum is less than (or equal to) last-seqnum
 			if sealSeqNum > lastSeqNum {
@@ -1015,7 +1011,7 @@ func (t *StoreHost) PurgeMessages(ctx thrift.Context, req *store.PurgeMessagesRe
 		x.Delete()
 
 		res.Address = common.Int64Ptr(store.ADDR_BEGIN)
-		x.setBeginSeqNum(common.SequenceEnd)
+		x.setFirstMsg(math.MaxInt64, math.MaxInt64, math.MaxInt64)
 		log.Info("PurgeMessages done: marked extent for deletion")
 		return res, nil
 
@@ -1039,19 +1035,19 @@ func (t *StoreHost) PurgeMessages(ctx thrift.Context, req *store.PurgeMessagesRe
 	switch {
 	case nextAddr == storage.EOX:
 		res.Address = common.Int64Ptr(store.ADDR_END)
-		x.setBeginSeqNum(common.SequenceEnd)
+		x.setFirstMsg(math.MaxInt64, math.MaxInt64, math.MaxInt64)
 
 	case x.isSealExtentKey(nextKey):
 		res.Address = common.Int64Ptr(store.ADDR_SEAL)
-		x.setBeginSeqNum(common.SequenceEnd)
+		x.setFirstMsg(math.MaxInt64, math.MaxInt64, math.MaxInt64)
 
 	default:
-		_, beginSequence := x.deconstructKey(nextKey)
-		x.setBeginSeqNum(beginSequence)
-		res.Address = common.Int64Ptr(int64(nextAddr))
+		visibilityTime, firstSeqNum := x.deconstructKey(nextKey)
+		x.setFirstMsg(int64(nextKey), firstSeqNum, visibilityTime)
+		res.Address = common.Int64Ptr(int64(nextKey))
 	}
 
-	log.WithField("return", fmt.Sprintf("purgeAddr=%x nextAddr=%x", purgeAddr, nextAddr)).
+	log.WithField("return", fmt.Sprintf("purgeAddr=%x nextKey=%x", purgeAddr, nextKey)).
 		Info("PurgeMessages done")
 	return res, nil
 }

@@ -112,7 +112,7 @@ type (
 
 		// this is the "extentLock" that is primarily intended for use to synchronize
 		// with SealExtent (used by both SealExtent and OpenAppendStream routines).
-		// It is also used to protect beginSeqNum, lastSeqNum, sealSeqNum, and other
+		// It is also used to protect firstSeqNum, lastSeqNum, sealSeqNum, and other
 		// members of the extentContext, as well; refer comments.
 		sync.RWMutex
 
@@ -167,16 +167,18 @@ type (
 		// notifyLock is used to protect the list of listeners, above
 		notifyLock sync.RWMutex
 
-		// beginSeqNum: int64 that contains the seqNum of the first message
-		// that could ever be consumed. It may or may not be 'available' on a
-		// timer queue.
-		beginSeqNum int64
+		// firstAddr, firstSeqNum, firstTimestamp: addr, seqnum, timestamp
+		// of the first message currently available in the extent.
+		//  - "MaxInt64" indicates this is has not been updated.
+		//  - otherwise, indicates the seqnum of the first message
+		firstAddr, firstSeqNum, firstTimestamp int64
 
-		// lastSeqNum: int64 that contains the seqNum of last message
-		// that was written to this extent (rename to 'maxSeqNum'?)
-		//  - "-1" indicates this is unknown or has not been updated.
+		// lastAddr, lastSeqNum, lastTimestamp: addr, seqnum, timestamp
+		// of the last message was written to this extent.
+		//  - "MaxInt64" indicates this has not been updated.
 		//  - otherwise, indicates the seqnum of last message
-		lastSeqNum int64
+		lastAddr, lastSeqNum, lastTimestamp int64
+
 		//  - reads/writes need to hold the 'extentLock' shared/exclusive.
 		//  - this is updated by the "OpenAppendStream" go-routine for each msg
 		// after it has written to storage; and this value is read by SealExtent
@@ -184,7 +186,6 @@ type (
 		// seqnum.
 
 		// sealSeqNum: int64 that indicates the seqnum at which this is sealed
-		//  - "-1" indicates this is unknown or has not been updated.
 		//  - "MaxInt64" indicates that the extent is not sealed.
 		//  - otherwise, indicates the seqNum at which the extent is sealed
 		sealSeqNum int64
@@ -376,6 +377,8 @@ func (xMgr *ExtentManager) closeExtent(ext *extentContext, intent OpenIntent, op
 	// dereference, and if this was the last reference, remove from map
 	var cleanup = ext.dereference()
 
+	// if this is reponse to an error encountered during open, don't invoke
+	// the close-callbacks (the open-callbacks were not called either)
 	if openError == nil {
 
 		// invoke close callbacks
@@ -575,12 +578,17 @@ func (ext *extentContext) isSealed() (sealed bool, sealSeqNum int64) {
 	return sealSeqNum != seqNumNotSealed, sealSeqNum
 }
 
-func (ext *extentContext) getBeginSeqNum() int64 {
-	return atomic.LoadInt64(&ext.beginSeqNum)
+func (ext *extentContext) getFirstMsg() (firstAddr, firstSeqNum, firstTimestamp int64) {
+	return atomic.LoadInt64(&ext.firstAddr),
+		atomic.LoadInt64(&ext.firstSeqNum),
+		atomic.LoadInt64(&ext.firstTimestamp)
 }
 
-func (ext *extentContext) getLastSeqNum() int64 {
-	return ext.lastSeqNum // should be called with extentLock held
+func (ext *extentContext) getLastMsg() (lastAddr, lastSeqNum, lastTimestamp int64) {
+	// should be called with extentLock held
+	return ext.lastAddr,
+		ext.lastSeqNum,
+		ext.lastTimestamp
 }
 
 // prepareForOpen is called once per "open" for an extent; it calls into
@@ -667,7 +675,7 @@ func failIfNotExist(intent OpenIntent, logger bark.Logger) bool {
 	return true
 }
 
-// initialize is called once per extent
+// initialize is called once per 'active' extent
 func (ext *extentContext) initialize(intent OpenIntent) (err error) {
 
 	// extent lock held exclusive during initialization
@@ -709,47 +717,32 @@ func (ext *extentContext) initialize(intent OpenIntent) (err error) {
 
 		// -- read and initialize {seal,begin,last}-seqnum -- //
 
-		// start by assuming this is an empty extent
-		emptyExtent := true
-
-		// read in seal-seqnum
-		if ext.sealSeqNum, err = ext.readSealSeqNum(); err != nil {
-
+		// initialize seal-seqnum
+		if err = ext.initSealSeqNum(); err != nil {
 			ext.store.Close()
 			ext.store = nil
 			return fmt.Errorf("error reading seal-seqnum: %v", err)
-
-		} else if ext.sealSeqNum != math.MaxInt64 {
-
-			emptyExtent = false
 		}
 
-		// read in begin-seqnum
-		if ext.beginSeqNum, err = ext.readBeginSeqNum(); err != nil {
-
+		// initialize first-msg details
+		if err = ext.initFirstMsg(); err != nil {
 			ext.store.Close()
 			ext.store = nil
 			return fmt.Errorf("error reading begin-seqnum: %v", err)
-
-		} else if ext.beginSeqNum != -1 {
-
-			emptyExtent = false
 		}
 
-		// read in last-seqnum
-		if ext.lastSeqNum, err = ext.readLastSeqNum(); err != nil {
-
+		// initialize last-msg details
+		if err = ext.initLastMsg(); err != nil {
 			ext.store.Close()
 			ext.store = nil
 			return fmt.Errorf("error reading last-seqnum: %v", err)
-
-		} else if ext.lastSeqNum != -1 {
-
-			emptyExtent = false
 		}
 
-		// if the extent is not empty, then it was previously opened for write
-		if !emptyExtent {
+		// if the extent is not empty, then it was previously opened
+		// for write and mark it as such.
+		if ext.sealSeqNum != math.MaxInt64 ||
+			ext.firstSeqNum != math.MaxInt64 || ext.lastSeqNum != math.MaxInt64 {
+
 			ext.previouslyOpenedForWrite = 1
 		}
 
@@ -783,39 +776,57 @@ func (ext *extentContext) delete() {
 	ext.store.DeleteExtent()
 }
 
-func (ext *extentContext) readBeginSeqNum() (beginSeqNum int64, err error) {
+func (ext *extentContext) initFirstMsg() error {
 
 	// FIXME: for timer-queues, this would return the seqNum of the first
 	// _available_ message to deliver, and *not* the first enqueued message.
 
 	_, key, err := ext.store.SeekFirst()
 
-	if err == nil && key != storage.InvalidKey {
-		_, beginSeqNum = ext.deconstructKey(key)
+	if err == nil && key != storage.InvalidKey &&
+		!ext.isSealExtentKey(key) {
+
+		ext.firstAddr = int64(key)
+		ext.firstTimestamp, ext.firstSeqNum = ext.deconstructKey(key)
+
 	} else {
-		beginSeqNum = -1
+
+		// no messages in extent (or error reading)
+		ext.firstAddr = math.MaxInt64
+		ext.firstSeqNum = math.MaxInt64 // indicates 'unknown'
+		ext.firstTimestamp = math.MaxInt64
 	}
 
-	return
+	return err
 }
 
-func (ext *extentContext) readLastSeqNum() (lastSeqNum int64, err error) {
+func (ext *extentContext) initLastMsg() error {
 
 	// FIXME: for timer-queues, this would return the seqNum of the last
 	// _available_ message to deliver, and *not* the last enqueued message.
 
-	_, key, err := ext.store.SeekLast()
+	// find the last message (excluding any seal-key markers)
+	lastPossibleKey := ext.constructSealExtentKey(0) - 1
+
+	_, key, err := ext.store.SeekFloor(lastPossibleKey)
 
 	if err == nil && key != storage.InvalidKey {
-		_, lastSeqNum = ext.deconstructKey(key)
+
+		ext.lastAddr = int64(key)
+		ext.lastTimestamp, ext.lastSeqNum = ext.deconstructKey(key)
+
 	} else {
-		lastSeqNum = -1
+
+		// no messages in extent (or error reading)
+		ext.lastAddr = math.MaxInt64
+		ext.lastSeqNum = math.MaxInt64 // indicates 'unknown'
+		ext.lastTimestamp = math.MaxInt64
 	}
 
-	return
+	return err
 }
 
-func (ext *extentContext) readSealSeqNum() (sealSeqNum int64, err error) {
+func (ext *extentContext) initSealSeqNum() error {
 
 	// FIXME: we could potentially have multiple "SealExtentKey" markers
 	// in an extent, since we allow re-sealing an extent with a lower
@@ -832,13 +843,15 @@ func (ext *extentContext) readSealSeqNum() (sealSeqNum int64, err error) {
 
 	// if this is a SealExtentKey, extract and return the seqNum
 	if err == nil && ext.isSealExtentKey(key) {
-		sealSeqNum = int64(ext.deconstructSealExtentKey(key))
+
+		ext.sealSeqNum = int64(ext.deconstructSealExtentKey(key))
+
 	} else {
-		// sealSeqNum of 'MaxInt64' -> not sealed
-		sealSeqNum = math.MaxInt64
+
+		ext.sealSeqNum = seqNumNotSealed // == 'MaxInt64' -> not sealed
 	}
 
-	return
+	return err
 }
 
 // listen returns a 'notification channel' that will be notified of any new writes on the extent

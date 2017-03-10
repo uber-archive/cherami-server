@@ -68,8 +68,10 @@ type (
 		extentID  uuid.UUID
 		timestamp int64
 
-		firstSeqNum, lastSeqNum int64
-		sealed                  bool
+		firstSeqNum, lastSeqNum       int64
+		firstAddress, lastAddress     int64
+		firstTimestamp, lastTimestamp int64
+		sealed                        bool
 	}
 )
 
@@ -158,7 +160,8 @@ func (t *ExtStatsReporter) trySendReport(extentID uuid.UUID, ext *extentContext,
 	r.timestamp = time.Now().UnixNano()
 
 	// get a snapshot of various extent stats
-	r.firstSeqNum, r.lastSeqNum = ext.getBeginSeqNum(), ext.getLastSeqNum()
+	r.firstAddress, r.firstSeqNum, r.firstTimestamp = ext.getFirstMsg()
+	r.lastAddress, r.lastSeqNum, r.lastTimestamp = ext.getLastMsg()
 	r.sealed, _ = ext.isSealed()
 
 	// create and send report non-blockingly
@@ -293,15 +296,15 @@ pump:
 			}
 
 			extReplStats := &shared.ExtentReplicaStats{
-				StoreUUID:  common.StringPtr(t.hostID),
-				ExtentUUID: common.StringPtr(extentID.String()),
-				// BeginAddress:  common.Int64Ptr(report.firstAddress),
-				// LastAddress: common.Int64Ptr(report.lastAddress),
-				BeginSequence:     common.Int64Ptr(report.firstSeqNum),
-				LastSequence:      common.Int64Ptr(report.lastSeqNum),
-				AvailableSequence: common.Int64Ptr(report.lastSeqNum),
-				// BeginEnqueueTimeUtc: common.Int64Ptr(report.firstTimestamp),
-				// LastEnqueueTimeUtc: common.Int64Ptr(report.lastTimestamp),
+				StoreUUID:           common.StringPtr(t.hostID),
+				ExtentUUID:          common.StringPtr(extentID.String()),
+				BeginAddress:        common.Int64Ptr(report.firstAddress),
+				LastAddress:         common.Int64Ptr(report.lastAddress),
+				BeginSequence:       common.Int64Ptr(report.firstSeqNum),
+				LastSequence:        common.Int64Ptr(report.lastSeqNum),
+				AvailableSequence:   common.Int64Ptr(report.lastSeqNum),
+				BeginEnqueueTimeUtc: common.Int64Ptr(report.firstTimestamp),
+				LastEnqueueTimeUtc:  common.Int64Ptr(report.lastTimestamp),
 				// SizeInBytes: common.Int64Ptr(report.size),
 				Status:                shared.ExtentReplicaStatusPtr(extReplStatus),
 				AvailableSequenceRate: common.Float64Ptr(lastSeqRate),
