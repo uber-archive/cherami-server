@@ -2065,7 +2065,7 @@ func (s *NetIntegrationSuiteParallelB) TestQueueDepth() {
 		publisherPubInterval    = time.Second / 5
 		DLQPublishClearTime     = cgLockTimeout * time.Second * 2
 
-		futureTSOffset = time.Minute * 5
+		futureTSOffset = 45 * time.Second
 		phaseCount     = 200
 	)
 

@@ -301,15 +301,49 @@ func convertCGZoneConfigToInternal(cgZoneCfg *c.ConsumerGroupZoneConfig) *shared
 	return internalCGZoneCfg
 }
 
+// interpretTimeNanos converts the given timestamp to nanosecond units after
+// interpreting its units based on what yields the nearest time to 'now'.
+func interpretTimeNanos(ts int64) int64 {
+
+	// tsNanos, tsMicros, tsMillis and tsSeconds are what 'ts' would be
+	// would be if it were assumed to be in {nano,micro,milli,}seconds
+	// respectively and they are each converted to nanosecond units.  we
+	// use the timestamp that is closest to 'now' as the most reasonable
+	// interpretation of the given 'ts'. we can safely ignore potential
+	// overflows in our computations, because that would result in a
+	// negative number that would push it further from the 'now' timestamp.
+
+	tsNanos, tsMicros, tsMillis, tsSeconds := ts, ts*1e3, ts*1e6, ts*1e9
+
+	// 'now' in unix-nanos
+	now := time.Now().UnixNano()
+
+	// the time that is nearest to 'now' (in nanoseconds), would be the most
+	// reasonable interpretation of 'ts'
+	return common.FindNearestInt(now, tsNanos, tsMicros, tsMillis, tsSeconds)
+}
+
 // convertCreateCGRequestToInternal converts Cherami CreateConsumerGroupRequest to internal shared CreateConsumerGroupRequest
-func convertCreateCGRequestToInternal(createRequest *c.CreateConsumerGroupRequest) *shared.CreateConsumerGroupRequest {
+func convertCreateCGRequestToInternal(createRequest *c.CreateConsumerGroupRequest) (*shared.CreateConsumerGroupRequest, error) {
+
+	// detect and correct the units for 'startFrom' (expected internally to be in nanoseconds)
+	startFrom := interpretTimeNanos(createRequest.GetStartFrom())
+
+	// if the start-from time is more than a minute into the future, then
+	// reject it.  we allow a minute to account for any time skews.
+	if time.Unix(0, startFrom).After(time.Now().Add(time.Minute)) {
+		return nil, &c.BadRequestError{
+			Message: fmt.Sprintf("StartFrom(=%x) cannot be in the future", startFrom),
+		}
+	}
+
 	internalCreateRequest := shared.NewCreateConsumerGroupRequest()
 	internalCreateRequest.DestinationPath = common.StringPtr(createRequest.GetDestinationPath())
 	internalCreateRequest.ConsumerGroupName = common.StringPtr(createRequest.GetConsumerGroupName())
 	internalCreateRequest.LockTimeoutSeconds = common.Int32Ptr(createRequest.GetLockTimeoutInSeconds())
 	internalCreateRequest.MaxDeliveryCount = common.Int32Ptr(createRequest.GetMaxDeliveryCount())
 	internalCreateRequest.SkipOlderMessagesSeconds = common.Int32Ptr(createRequest.GetSkipOlderMessagesInSeconds())
-	internalCreateRequest.StartFrom = common.Int64Ptr(createRequest.GetStartFrom())
+	internalCreateRequest.StartFrom = common.Int64Ptr(startFrom)
 	internalCreateRequest.OwnerEmail = common.StringPtr(createRequest.GetOwnerEmail())
 	internalCreateRequest.IsMultiZone = common.BoolPtr(createRequest.GetIsMultiZone())
 	if createRequest.IsSetZoneConfigs() {
@@ -319,7 +353,8 @@ func convertCreateCGRequestToInternal(createRequest *c.CreateConsumerGroupReques
 			internalCreateRequest.ZoneConfigs = append(internalCreateRequest.ZoneConfigs, convertCGZoneConfigToInternal(cgZoneCfg))
 		}
 	}
-	return internalCreateRequest
+
+	return internalCreateRequest, nil
 }
 
 // convertUpdateCGRequestToInternal converts Cherami UpdateConsumerGroupRequest to internal shared UpdateConsumerGroupRequest
@@ -992,7 +1027,11 @@ func (h *Frontend) CreateConsumerGroup(ctx thrift.Context, createRequest *c.Crea
 		lclLg.WithField(common.TagErr, err).Error(`Can't talk to Controller service, no hosts found`)
 		return nil, err
 	}
-	_createRequest := convertCreateCGRequestToInternal(createRequest)
+
+	_createRequest, err := convertCreateCGRequestToInternal(createRequest)
+	if err != nil {
+		return nil, err
+	}
 
 	// Dead Letter Queue destination creation
 
