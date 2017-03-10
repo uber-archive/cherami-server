@@ -585,7 +585,9 @@ func (conn *extHost) sendMessage(pr *inPutMessage, extSendTimer *common.Timer, w
 	// just get the size of the actual data here
 	// ignoring other headers for the size computation
 	// Note: size of will not work here
-	conn.currSizeBytes += int64(len(pr.putMsg.Data))
+	msgLength := int64(len(pr.putMsg.Data))
+	conn.currSizeBytes += msgLength
+	conn.extMetrics.Add(load.ExtentMetricBytesIn, msgLength)
 
 	// If we reach the max sequence number or reach the max allowed size for this extent,
 	// notify the extent controller but keep the pumps open.
@@ -802,9 +804,13 @@ func (conn *extHost) Report(reporter common.LoadReporter) {
 	}
 
 	msgsInPerSec := conn.extMetrics.GetAndReset(load.ExtentMetricMsgsIn) / intervalSecs
+	// Note: we just report the delta from the last round, which means we can
+	// reset the counter after this report and report the value we got this time
+	bytesInSinceLastReport := conn.extMetrics.GetAndReset(load.ExtentMetricBytesIn)
 
 	metric := controller.DestinationExtentMetrics{
 		IncomingMessagesCounter: common.Int64Ptr(msgsInPerSec),
+		IncomingBytesCounter:    common.Int64Ptr(bytesInSinceLastReport),
 	}
 	reporter.ReportDestinationExtentMetric(conn.destUUID, conn.extUUID, metric)
 }

@@ -467,11 +467,15 @@ func (pathCache *inPathCache) Report(reporter common.LoadReporter) {
 	numConnections := pathCache.dstMetrics.Get(load.DstMetricNumOpenConns)
 	numExtents := pathCache.dstMetrics.Get(load.DstMetricNumOpenExtents)
 	numMsgsInPerSec := pathCache.dstMetrics.GetAndReset(load.DstMetricMsgsIn) / diffSecs
+	// We just report the delta for the bytes in counter. so get the value and
+	// reset it.
+	bytesInSinceLastReport := pathCache.dstMetrics.GetAndReset(load.DstMetricBytesIn)
 
 	metric := controller.DestinationMetrics{
 		NumberOfConnections:     common.Int64Ptr(numConnections),
 		NumberOfActiveExtents:   common.Int64Ptr(numExtents),
 		IncomingMessagesCounter: common.Int64Ptr(numMsgsInPerSec),
+		IncomingBytesCounter:    common.Int64Ptr(bytesInSinceLastReport),
 	}
 
 	pathCache.lastDstLoadReportedTime = now

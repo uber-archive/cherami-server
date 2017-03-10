@@ -191,6 +191,7 @@ func (conn *pubConnection) close() {
 // the writeAcksStream by sending a message to the intermediary "replyCh"
 func (conn *pubConnection) readRequestStream() {
 	defer conn.waitWG.Done()
+	var msgLength int64
 
 	// Setup the connIdleTimer
 	connIdleTimer := common.NewTimer(conn.cacheTimeout)
@@ -217,6 +218,12 @@ func (conn *pubConnection) readRequestStream() {
 			conn.pathCache.m3Client.IncCounter(metrics.PubConnectionStreamScope, metrics.InputhostMessageReceived)
 			conn.pathCache.destM3Client.IncCounter(metrics.PubConnectionScope, metrics.InputhostDestMessageReceived)
 			conn.pathCache.dstMetrics.Increment(load.DstMetricOverallNumMsgs)
+
+			// Note: we increment the destination bytes in counter here because we could throttle this message
+			// even before it reaches any of the extents (which increments the extent specific bytes in counter)
+			msgLength = int64(len(msg.Data))
+			conn.pathCache.dstMetrics.Add(load.DstMetricBytesIn, msgLength)
+			conn.pathCache.hostMetrics.Add(load.HostMetricBytesIn, msgLength)
 
 			conn.recvMsgs++
 

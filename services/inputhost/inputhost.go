@@ -447,6 +447,7 @@ func (h *InputHost) PutMessageBatch(ctx thrift.Context, request *cherami.PutMess
 	path := request.GetDestinationPath()
 	messages := request.GetMessages()
 	lclLg := h.logger.WithField(common.TagDstPth, common.FmtDstPth(path))
+	var msgLength int64
 
 	// If we are already shutting down, no need to do anything here
 	if atomic.AddInt32(&h.loadShutdownRef, 1) <= 0 {
@@ -483,6 +484,11 @@ func (h *InputHost) PutMessageBatch(ctx thrift.Context, request *cherami.PutMess
 	inflightMsgMap := make(map[string]struct{})
 
 	for _, msg := range messages {
+		msgLength = int64(len(msg.Data))
+		// make sure we increment the bytes in counter for this path and this host
+		pathCache.dstMetrics.Add(load.DstMetricBytesIn, msgLength)
+		pathCache.hostMetrics.Add(load.HostMetricBytesIn, msgLength)
+
 		inMsg := &inPutMessage{
 			putMsg:         msg,
 			putMsgAckCh:    ackChannel,
@@ -761,11 +767,15 @@ func (h *InputHost) Report(reporter common.LoadReporter) {
 	}
 
 	msgsInPerSec := h.hostMetrics.GetAndReset(load.HostMetricMsgsIn) / intervalSecs
+	// We just report the delta for the bytes in counter. so get the value and
+	// reset it.
+	bytesInSinceLastReport := h.hostMetrics.GetAndReset(load.HostMetricBytesIn)
 
 	hostMetrics := controller.NodeMetrics{
 		NumberOfActiveExtents:   common.Int64Ptr(h.hostMetrics.Get(load.HostMetricNumOpenExtents)),
 		NumberOfConnections:     common.Int64Ptr(h.hostMetrics.Get(load.HostMetricNumOpenConns)),
 		IncomingMessagesCounter: common.Int64Ptr(msgsInPerSec),
+		IncomingBytesCounter:    common.Int64Ptr(bytesInSinceLastReport),
 	}
 
 	reporter.ReportHostMetric(hostMetrics)
