@@ -324,15 +324,17 @@ func interpretTimeNanos(ts int64) int64 {
 }
 
 // convertCreateCGRequestToInternal converts Cherami CreateConsumerGroupRequest to internal shared CreateConsumerGroupRequest
-func convertCreateCGRequestToInternal(createRequest *c.CreateConsumerGroupRequest) *shared.CreateConsumerGroupRequest {
+func convertCreateCGRequestToInternal(createRequest *c.CreateConsumerGroupRequest) (*shared.CreateConsumerGroupRequest, error) {
 
-	// detect and correct the units for 'startFrom' (expected internally to be in nanoseconds);
-	// for '0'
-	startFrom := createRequest.GetStartFrom()
+	// detect and correct the units for 'startFrom' (expected internally to be in nanoseconds)
+	startFrom := interpretTimeNanos(createRequest.GetStartFrom())
 
-	// special-case a StartFrom of '0' (start from beginning)
-	if startFrom != 0 {
-		startFrom = interpretTimeNanos(startFrom)
+	// if the start-from time is more than a minute into the future, then
+	// reject it.  we allow a minute to account for any time skews.
+	if time.Unix(0, startFrom).After(time.Now().Add(time.Minute)) {
+		return nil, &c.BadRequestError{
+			Message: fmt.Sprintf("StartFrom(=%x) cannot be in the future", startFrom),
+		}
 	}
 
 	internalCreateRequest := shared.NewCreateConsumerGroupRequest()
@@ -351,7 +353,8 @@ func convertCreateCGRequestToInternal(createRequest *c.CreateConsumerGroupReques
 			internalCreateRequest.ZoneConfigs = append(internalCreateRequest.ZoneConfigs, convertCGZoneConfigToInternal(cgZoneCfg))
 		}
 	}
-	return internalCreateRequest
+
+	return internalCreateRequest, nil
 }
 
 // convertUpdateCGRequestToInternal converts Cherami UpdateConsumerGroupRequest to internal shared UpdateConsumerGroupRequest
@@ -1024,7 +1027,11 @@ func (h *Frontend) CreateConsumerGroup(ctx thrift.Context, createRequest *c.Crea
 		lclLg.WithField(common.TagErr, err).Error(`Can't talk to Controller service, no hosts found`)
 		return nil, err
 	}
-	_createRequest := convertCreateCGRequestToInternal(createRequest)
+
+	_createRequest, err := convertCreateCGRequestToInternal(createRequest)
+	if err != nil {
+		return nil, err
+	}
 
 	// Dead Letter Queue destination creation
 

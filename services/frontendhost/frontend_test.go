@@ -21,13 +21,13 @@
 package frontendhost
 
 import (
+	"fmt"
+	"math"
+	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
-
-	"fmt"
-	"strconv"
-	"sync/atomic"
 
 	"github.com/uber/cherami-server/common"
 	"github.com/uber/cherami-server/common/configure"
@@ -671,12 +671,14 @@ func (s *FrontendHostSuite) TestFrontendHostCreateConsumerGroupStartFrom() {
 	testCG := s.generateKey("/bar/CGName")
 	frontendHost, ctx := s.utilGetContextAndFrontend()
 
-	testStartFrom := func(startFrom, startFromExpected int64) {
+	testStartFrom := func(startFrom int64, willError bool) (startFromReturn int64, err error) {
+
+		startFromReturn = math.MaxInt64
 
 		req := c.NewCreateConsumerGroupRequest()
 		req.DestinationPath = common.StringPtr(testPath)
 		req.ConsumerGroupName = common.StringPtr(testCG)
-		req.StartFrom = common.Int64Ptr(startFromExpected)
+		req.StartFrom = common.Int64Ptr(startFrom)
 
 		cgDesc := cgCreateRequestToDesc(req)
 		frontendHost.writeCacheDestinationPathForUUID(destinationUUID(cgDesc.GetDestinationUUID()), testPath)
@@ -687,21 +689,23 @@ func (s *FrontendHostSuite) TestFrontendHostCreateConsumerGroupStartFrom() {
 			DestinationUUID: common.StringPtr(uuid.New()),
 		}
 
-		// create destination is needed because of dlq destination been created at time of consumer group creation
-		s.mockController.On("CreateDestination", mock.Anything, mock.Anything).Return(destDesc, nil).Run(func(args mock.Arguments) {
-			s.Equal(dlqPath, args.Get(1).(*shared.CreateDestinationRequest).GetPath())
-		})
+		if !willError {
+			// create destination is needed because of dlq destination been created at time of consumer group creation
+			s.mockController.On("CreateDestination", mock.Anything, mock.Anything).Return(destDesc, nil).Run(func(args mock.Arguments) {
+				s.Equal(dlqPath, args.Get(1).(*shared.CreateDestinationRequest).GetPath())
+			})
 
-		s.mockController.On("CreateConsumerGroup", mock.Anything, mock.Anything).Once().Return(cgDesc, nil).Run(func(args mock.Arguments) {
-
-			// ensure we get the value expected
-			s.EqualValues(startFromExpected, args.Get(1).(*shared.CreateConsumerGroupRequest).GetStartFrom())
-		})
+			s.mockController.On("CreateConsumerGroup", mock.Anything, mock.Anything).Once().Return(cgDesc, nil).Run(func(args mock.Arguments) {
+				startFromReturn = args.Get(1).(*shared.CreateConsumerGroupRequest).GetStartFrom()
+			})
+		}
 
 		// set startFrom to the test value (of varying units)
 		req.StartFrom = common.Int64Ptr(startFrom)
 
-		frontendHost.CreateConsumerGroup(ctx, req)
+		_, err = frontendHost.CreateConsumerGroup(ctx, req)
+
+		return
 	}
 
 	testStartFromTime := func(startFromTime time.Time) {
@@ -712,17 +716,66 @@ func (s *FrontendHostSuite) TestFrontendHostCreateConsumerGroupStartFrom() {
 		startFromNanos := startFromSeconds * int64(1e9)
 
 		// test startFrom with varying units
-		testStartFrom(startFromSeconds, startFromNanos)
-		testStartFrom(startFromMillis, startFromNanos)
-		testStartFrom(startFromMicros, startFromNanos)
-		testStartFrom(startFromNanos, startFromNanos)
+		ret, err := testStartFrom(startFromSeconds, false)
+		s.Nil(err)
+		s.EqualValues(startFromNanos, ret)
+
+		ret, err = testStartFrom(startFromMillis, false)
+		s.Nil(err)
+		s.EqualValues(startFromNanos, ret)
+
+		ret, err = testStartFrom(startFromMicros, false)
+		s.Nil(err)
+		s.EqualValues(startFromNanos, ret)
+
+		ret, err = testStartFrom(startFromNanos, false)
+		s.Nil(err)
+		s.EqualValues(startFromNanos, ret)
 	}
 
-	testStartFromTime(time.Now().Add(-4 * 7 * 24 * time.Hour))                 // four weeks ago
-	testStartFromTime(time.Date(2016, time.January, 1, 0, 0, 0, 0, time.UTC))  // ~ a year ago
-	testStartFromTime(time.Date(2046, time.June, 30, 11, 59, 59, 0, time.UTC)) // ~30 years from now
+	testStartFromFail := func(startFromTime time.Time) {
 
-	testStartFrom(0, 0) // start-from of '0'
+		startFromSeconds := startFromTime.Unix()
+		startFromMillis := startFromSeconds * int64(1e3)
+		startFromMicros := startFromSeconds * int64(1e6)
+		startFromNanos := startFromSeconds * int64(1e9)
+
+		// test startFrom with varying units
+		_, err := testStartFrom(startFromSeconds, true)
+		s.Error(err)
+		assert.IsType(s.T(), &c.BadRequestError{}, err)
+
+		_, err = testStartFrom(startFromMillis, true)
+		s.Error(err)
+		assert.IsType(s.T(), &c.BadRequestError{}, err)
+
+		_, err = testStartFrom(startFromMicros, true)
+		s.Error(err)
+		assert.IsType(s.T(), &c.BadRequestError{}, err)
+
+		_, err = testStartFrom(startFromNanos, true)
+		s.Error(err)
+		assert.IsType(s.T(), &c.BadRequestError{}, err)
+	}
+
+	testStartFromTime(time.Now().Add(-4 * 7 * 24 * time.Hour)) // four weeks ago
+	testStartFromTime(time.Now())                              // now
+	testStartFromTime(time.Now().Add(45 * time.Second))        // 45secs from now (time skew)
+
+	testStartFromFail(time.Now().Add(2 * time.Minute)) // 2 mins from now
+	testStartFromFail(time.Now().Add(1 * time.Hour))   // an hour from now
+
+	ret, err := testStartFrom(0, false) // start-from of '0'
+	s.Nil(err)
+	s.EqualValues(0, ret)
+
+	ret, err = testStartFrom(1, false) // start-from of '1'
+	s.Nil(err)
+	s.EqualValues(1e9, ret) // '1' should get interpreted in seconds = 1e9 ns
+
+	ret, err = testStartFrom(1e9, false) // start-from of '1 * 1e9'
+	s.Nil(err)
+	s.EqualValues(1e18, ret) // 1e9 in seconds = 1e18 nanoseconds
 }
 
 // TestFrontendHostReadConsumerGroupRejectNil tests that a nil request fails with BadRequestError
