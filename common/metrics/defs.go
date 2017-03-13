@@ -64,11 +64,21 @@ const (
 
 // Common tags for all services
 const (
-	HostnameTagName      = "hostname"
 	OperationTagName     = "operation"
 	DestinationTagName   = "destination"
 	ConsumerGroupTagName = "consumerGroup"
+	HostnameTagName      = "hostname"
 )
+
+// Cherami's metrics are tagged, but if we need to flatten
+// it (e.g. for statsd), we order tags by: Operation,
+// Destination, ConsumerGroup, Hostname
+var tagsFlattenOrder = []string{
+	OperationTagName,
+	DestinationTagName,
+	ConsumerGroupTagName,
+	HostnameTagName,
+}
 
 // This package should hold all the metrics and tags for cherami
 const (

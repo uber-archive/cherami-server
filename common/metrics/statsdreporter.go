@@ -129,12 +129,14 @@ func mergeDicts(dic1 map[string]string, dic2 map[string]string) (resultDict map[
 
 // MetricWithPrefix is the default mapping for metrics to statsd keys.
 func metricstoPrefix(name string, tags map[string]string) string {
-	parts := []string{"cherami", name}
+	parts := []string{name}
 
-	for k := range tags {
-		v, _ := tags[k]
-		parts = append(parts, clean(v))
+	for _, tag := range tagsFlattenOrder {
+		if v, ok := tags[tag]; ok {
+			parts = append(parts, clean(v))
+		}
 	}
+
 	return strings.Join(parts, ".")
 }
 
