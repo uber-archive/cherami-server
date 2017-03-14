@@ -2448,6 +2448,18 @@ func timeToMilliseconds(i interface{}) int64 {
 	return t.UnixNano() / int64(time.Millisecond)
 }
 
+func timeToUnixNano(i interface{}) int64 {
+	// if the interface is nil, bail immediately
+	if i == nil {
+		return 0
+	}
+	t := i.(time.Time)
+	if t.IsZero() {
+		return 0
+	}
+	return t.UnixNano()
+}
+
 func cqlTimestampToUnixNano(milliseconds int64) common.UnixNanoTime {
 	return common.UnixNanoTime(milliseconds * 1000 * 1000) // Milliseconds are 10⁻³, nanoseconds are 10⁻⁹, (-3) - (-9) = 6, so multiply by 10⁶
 }
@@ -2506,15 +2518,15 @@ func convertReplicaStatsMap(r map[string]interface{}) *shared.ExtentReplicaStats
 		AvailableSequence:     common.Int64Ptr(toInt64(r[columnAvailableSequence])),
 		AvailableSequenceRate: common.Float64Ptr(toFloat64(r[columnAvailableSequenceRate])),
 		BeginAddress:          common.Int64Ptr(toInt64(r[columnBeginAddress])),
-		BeginEnqueueTimeUtc:   common.Int64Ptr(timeToMilliseconds(r[columnBeginEnqueueTime])),
+		BeginEnqueueTimeUtc:   common.Int64Ptr(timeToUnixNano(r[columnBeginEnqueueTime])),
 		BeginSequence:         common.Int64Ptr(toInt64(r[columnBeginSequence])),
-		BeginTime:             common.Int64Ptr(timeToMilliseconds(r[columnBeginTime])),
+		BeginTime:             common.Int64Ptr(timeToUnixNano(r[columnBeginTime])),
 		CreatedAt:             common.Int64Ptr(timeToMilliseconds(r[columnCreatedTime])),
 		/* DestinationUUID is in the CQL but not the thrift */
-		EndTime:            common.Int64Ptr(timeToMilliseconds(r[columnEndTime])),
+		EndTime:            common.Int64Ptr(timeToUnixNano(r[columnEndTime])),
 		ExtentUUID:         common.StringPtr(toUUIDString(r[columnExtentUUID])),
 		LastAddress:        common.Int64Ptr(toInt64(r[columnLastAddress])),
-		LastEnqueueTimeUtc: common.Int64Ptr(timeToMilliseconds(r[columnLastEnqueueTime])),
+		LastEnqueueTimeUtc: common.Int64Ptr(timeToUnixNano(r[columnLastEnqueueTime])),
 		LastSequence:       common.Int64Ptr(toInt64(r[columnLastSequence])),
 		LastSequenceRate:   common.Float64Ptr(toFloat64(r[columnLastSequenceRate])),
 		SizeInBytes:        common.Int64Ptr(toInt64(r[columnSizeInBytes])),
@@ -2540,14 +2552,14 @@ func makeReplicaStatsMap(rs []*shared.ExtentReplicaStats, destUUID string) map[s
 			columnBeginSequence:         r.GetBeginSequence(),
 			columnLastSequence:          r.GetLastSequence(),
 			columnLastSequenceRate:      r.GetLastSequenceRate(),
-			columnBeginEnqueueTime:      r.GetBeginEnqueueTimeUtc(),
-			columnLastEnqueueTime:       r.GetLastEnqueueTimeUtc(),
+			columnBeginEnqueueTime:      time.Unix(0, r.GetBeginEnqueueTimeUtc()),
+			columnLastEnqueueTime:       time.Unix(0, r.GetLastEnqueueTimeUtc()),
 			columnSizeInBytes:           r.GetSizeInBytes(),
 			columnSizeInBytesRate:       r.GetSizeInBytesRate(),
 			columnStatus:                r.GetStatus(),
-			columnBeginTime:             r.GetBeginTime(),
-			columnCreatedTime:           r.GetCreatedAt(),
-			columnEndTime:               r.GetEndTime(),
+			columnBeginTime:             time.Unix(0, r.GetBeginTime()),
+			columnCreatedTime:           time.Unix(0, r.GetCreatedAt()),
+			columnEndTime:               time.Unix(0, r.GetEndTime()),
 			columnStore:                 "ManyRocks", // FIXME: hardcoded for now
 			columnStoreVersion:          "0.2",       // FIXME: hardcoded for now
 		}
@@ -3099,12 +3111,12 @@ func (s *CassandraMetadataService) UpdateStoreExtentReplicaStats(ctx thrift.Cont
 			stats.GetLastAddress(),
 			stats.GetBeginSequence(),
 			stats.GetLastSequence(),
-			stats.GetBeginEnqueueTimeUtc(),
-			stats.GetLastEnqueueTimeUtc(),
+			time.Unix(0, stats.GetBeginEnqueueTimeUtc()),
+			time.Unix(0, stats.GetLastEnqueueTimeUtc()),
 			stats.GetSizeInBytes(),
 			stats.GetStatus(),
-			stats.GetBeginTime(),
-			stats.GetEndTime(),
+			time.Unix(0, stats.GetBeginTime()),
+			time.Unix(0, stats.GetEndTime()),
 			stats.GetAvailableSequence(),
 			stats.GetAvailableSequenceRate(),
 			stats.GetLastSequenceRate(),
@@ -3176,12 +3188,12 @@ func (s *CassandraMetadataService) UpdateExtentReplicaStats(ctx thrift.Context, 
 			stats.GetLastAddress(),
 			stats.GetBeginSequence(),
 			stats.GetLastSequence(),
-			stats.GetBeginEnqueueTimeUtc(),
-			stats.GetLastEnqueueTimeUtc(),
+			time.Unix(0, stats.GetBeginEnqueueTimeUtc()),
+			time.Unix(0, stats.GetLastEnqueueTimeUtc()),
 			stats.GetSizeInBytes(),
 			stats.GetStatus(),
-			stats.GetBeginTime(),
-			stats.GetEndTime(),
+			time.Unix(0, stats.GetBeginTime()),
+			time.Unix(0, stats.GetEndTime()),
 			request.GetDestinationUUID(),
 			request.GetExtentUUID(),
 		)
@@ -3213,12 +3225,12 @@ func (s *CassandraMetadataService) UpdateExtentReplicaStats(ctx thrift.Context, 
 			stats.GetLastAddress(),
 			stats.GetBeginSequence(),
 			stats.GetLastSequence(),
-			stats.GetBeginEnqueueTimeUtc(),
-			stats.GetLastEnqueueTimeUtc(),
+			time.Unix(0, stats.GetBeginEnqueueTimeUtc()),
+			time.Unix(0, stats.GetLastEnqueueTimeUtc()),
 			stats.GetSizeInBytes(),
 			stats.GetStatus(),
-			stats.GetBeginTime(),
-			stats.GetEndTime(),
+			time.Unix(0, stats.GetBeginTime()),
+			time.Unix(0, stats.GetEndTime()),
 			request.GetDestinationUUID(),
 			request.GetInputHostUUID(),
 			request.GetExtentUUID(),
@@ -3253,12 +3265,12 @@ func (s *CassandraMetadataService) UpdateExtentReplicaStats(ctx thrift.Context, 
 			stats.GetLastAddress(),
 			stats.GetBeginSequence(),
 			stats.GetLastSequence(),
-			stats.GetBeginEnqueueTimeUtc(),
-			stats.GetLastEnqueueTimeUtc(),
+			time.Unix(0, stats.GetBeginEnqueueTimeUtc()),
+			time.Unix(0, stats.GetLastEnqueueTimeUtc()),
 			stats.GetSizeInBytes(),
 			stats.GetStatus(),
-			stats.GetBeginTime(),
-			stats.GetEndTime(),
+			time.Unix(0, stats.GetBeginTime()),
+			time.Unix(0, stats.GetEndTime()),
 			stats.GetAvailableSequence(),
 			stats.GetAvailableSequenceRate(),
 			stats.GetLastSequenceRate(),
