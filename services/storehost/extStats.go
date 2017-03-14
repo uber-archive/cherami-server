@@ -302,23 +302,23 @@ pump:
 			}
 
 			extReplStats := &shared.ExtentReplicaStats{
-				StoreUUID:           common.StringPtr(t.hostID),
-				ExtentUUID:          common.StringPtr(extentID.String()),
-				BeginAddress:        common.Int64Ptr(report.firstAddress),
-				LastAddress:         common.Int64Ptr(report.lastAddress),
-				BeginSequence:       common.Int64Ptr(report.firstSeqNum),
-				LastSequence:        common.Int64Ptr(report.lastSeqNum),
-				AvailableSequence:   common.Int64Ptr(report.lastSeqNum),
-				BeginEnqueueTimeUtc: common.Int64Ptr(report.firstTimestamp),
-				LastEnqueueTimeUtc:  common.Int64Ptr(0x123456789ABCDEF), //report.lastTimestamp),
-				// SizeInBytes: common.Int64Ptr(report.size),
-				Status:                shared.ExtentReplicaStatusPtr(extReplStatus),
-				AvailableSequenceRate: common.Float64Ptr(lastSeqRate),
+				StoreUUID:             common.StringPtr(t.hostID),
+				ExtentUUID:            common.StringPtr(extentID.String()),
+				BeginAddress:          common.Int64Ptr(report.firstAddress),
+				LastAddress:           common.Int64Ptr(report.lastAddress),
+				AvailableAddress:      common.Int64Ptr(report.lastAddress),
+				BeginSequence:         common.Int64Ptr(report.firstSeqNum),
+				LastSequence:          common.Int64Ptr(report.lastSeqNum),
 				LastSequenceRate:      common.Float64Ptr(lastSeqRate),
-				// AvailableAddress
+				AvailableSequence:     common.Int64Ptr(report.lastSeqNum),
+				AvailableSequenceRate: common.Float64Ptr(lastSeqRate),
+				BeginEnqueueTimeUtc:   common.Int64Ptr(report.firstTimestamp),
+				LastEnqueueTimeUtc:    common.Int64Ptr(report.lastTimestamp),
+				Status:                shared.ExtentReplicaStatusPtr(extReplStatus),
+				// BeginTime:             common.Int64Ptr(report.firstTimestamp), // only for timer-queue
+				// EndTime:               common.Int64Ptr(report.lastTimestamp),
+				// SizeInBytes: common.Int64Ptr(report.size),
 				// SizeInBytesRate
-				// BeginTime
-				// EndTime
 				// WriteTime
 			}
 
