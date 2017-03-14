@@ -86,7 +86,7 @@ func (cache *storeExtentMetadataCache) get(store storeID, extID extentID) *store
 	result := findStoreMetadata(entry, string(store))
 
 	if result != nil {
-		fmt.Printf("storeExtentMetadata.get (cached): extent=%v result={%v}\n", extID, result)
+		// fmt.Printf("storeExtentMetadata.get (cached): extent=%v result={%v}\n", extID, result)
 		return result
 	}
 	// cache miss, lets fetch the data from source
@@ -95,15 +95,15 @@ func (cache *storeExtentMetadataCache) get(store storeID, extID extentID) *store
 		entry = append(entry, result)
 		cache.entries[extID] = entry
 	}
-	fmt.Printf("storeExtentMetadata.get (miss): extent=%v result={%v}\n", extID, result)
+	// fmt.Printf("storeExtentMetadata.get (miss): extent=%v result={%v}\n", extID, result)
 	return result
 }
 
 func (cache *storeExtentMetadataCache) fetchStoreExtentMetadata(extID string, store string) (result *storeExtentMetadata) {
 
-	defer func() {
-		fmt.Printf("storeExtentMetadata.fetchStoreExtentMetadata: extent=%v result={%v}\n", extID, result)
-	}()
+	// defer func() {
+	// 	fmt.Printf("storeExtentMetadata.fetchStoreExtentMetadata: extent=%v result={%v}\n", extID, result)
+	// }()
 
 	stats, err := cache.datasource.ReadStoreExtentStats(extID, store)
 	if err != nil {
@@ -118,8 +118,8 @@ func (cache *storeExtentMetadataCache) fetchStoreExtentMetadata(extID string, st
 	// fix them if needed
 	cache.fixReplicaStatsIfBroken(rs)
 
-	fmt.Printf("storeExtentMetadata.fetchStoreExtentMetadata: extReplStats: ext=%v firstEnq=%x lastEnq=%x\n",
-		extID, rs.GetBeginEnqueueTimeUtc(), rs.GetLastEnqueueTimeUtc())
+	// fmt.Printf("storeExtentMetadata.fetchStoreExtentMetadata: extReplStats: ext=%v firstEnq=%x lastEnq=%x\n",
+	// 	extID, rs.GetBeginEnqueueTimeUtc(), rs.GetLastEnqueueTimeUtc())
 
 	return &storeExtentMetadata{
 		storeID:               store,

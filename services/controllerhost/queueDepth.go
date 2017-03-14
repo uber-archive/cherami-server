@@ -329,12 +329,12 @@ func (qdc *queueDepthCalculator) computeBacklog(cgDesc *shared.ConsumerGroupDesc
 
 	switch qdc.iter.isDLQ {
 	case true:
-		if storeMetadata.lastSequence != 0 {
+		if storeMetadata.lastSequence != 0 && storeMetadata.beginSequence != 0 {
 			backlog = storeMetadata.lastSequence - storeMetadata.beginSequence + 1
 		}
 	case false:
 		if storeMetadata.availableSequence != 0 {
-			backlog = storeMetadata.availableSequence - cgExtent.GetAckLevelSeqNo() + 1
+			backlog = storeMetadata.availableSequence - cgExtent.GetAckLevelSeqNo()
 		}
 	}
 
@@ -552,8 +552,8 @@ func (qdc *queueDepthCalculator) handleStartFrom(
 			trace += 100
 			consumerGroupExtent.WriteTime = common.Int64Ptr(int64(now))
 			consumerGroupExtent.AckLevelSeqNo = common.Int64Ptr(common.MaxInt64(
-				storeMetadata.beginSequence, // Retention may have removed some messages
-				int64(startFromSeq),         // Otherwise, act like we had just opened this extent at startFrom, i.e. don't count messages before startFrom
+				storeMetadata.beginSequence-1, // Retention may have removed some messages
+				int64(startFromSeq),           // Otherwise, act like we had just opened this extent at startFrom, i.e. don't count messages before startFrom
 			))
 		}
 	}
@@ -569,8 +569,9 @@ done:
 		}).Info(`Queue Depth Tabulation (StartFrom)`)
 	}
 
-	fmt.Printf("handleStartFrom: CG=%v qualify=%v trace=%d start=%d first=%d avail=%d (store-metadata=%v)\n",
-		cgDesc.GetConsumerGroupName(), qualify, trace, startFromSeq, storeMetadata.beginSequence, storeMetadata.availableSequence, storeMetadata)
+	fmt.Printf("handleStartFrom: CG=%v qualify=%v trace=%d start=%d first=%d avail=%d (store-metadata=%v) => AckLevelSeqNo=%d\n",
+		cgDesc.GetConsumerGroupName(), qualify, trace, startFromSeq, storeMetadata.beginSequence, storeMetadata.availableSequence, storeMetadata,
+		consumerGroupExtent.GetAckLevelSeqNo())
 	return
 }
 
