@@ -41,10 +41,6 @@ import (
 )
 
 const (
-	// T471438, ADDR_SEAL is being written into replica_stats. We ignore small negative 26-bit 2's-compliment numbers,
-	// which are larger than this constant in signed 64-bit space
-	storageMetaValuesLimit = int64(1<<26) - (1 << 4)
-
 	// QueueDepthTabulationString can be added to a destination or CG owner email to request queue depth tabulation
 	// Note that Google allows something like this: gbailey+queueDepthTabulation@uber.com
 	// The above is still a valid email and will be delivered to gbailey@uber.com
