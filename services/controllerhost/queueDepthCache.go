@@ -23,7 +23,9 @@ package controllerhost
 import (
 	"github.com/uber-common/bark"
 	"github.com/uber/cherami-server/common"
+	"github.com/uber/cherami-thrift/.generated/go/shared"
 
+	"math"
 	"sync"
 )
 
@@ -96,6 +98,9 @@ func (cache *storeExtentMetadataCache) fetchStoreExtentMetadata(extID string, st
 
 	rs := stats.GetReplicaStats()[0]
 
+	// fix illegal values, if needed
+	cache.fixReplicaStatsIfBroken(rs)
+
 	return &storeExtentMetadata{
 		storeID:               store,
 		beginSequence:         rs.GetBeginSequence(),
@@ -109,6 +114,23 @@ func (cache *storeExtentMetadataCache) fetchStoreExtentMetadata(extID string, st
 		lastEnqueueTimeUtc:    rs.GetLastEnqueueTimeUtc(),
 		writeTime:             common.UnixNanoTime(rs.GetWriteTime()),
 		createdTime:           common.UnixNanoTime(stats.GetCreatedTimeMillis() * 1000 * 1000),
+	}
+}
+
+// T471438 -- Fix meta-values leaked by storehost
+// T520701 -- Fix massive int64 negative values
+func (cache *storeExtentMetadataCache) fixReplicaStatsIfBroken(rs *shared.ExtentReplicaStats) {
+	var fixed bool
+	for _, val := range []*int64{rs.AvailableSequence, rs.BeginSequence, rs.LastSequence} {
+		if val != nil && (*val >= storageMetaValuesLimit || *val < -1) {
+			*val = math.MaxInt64
+			fixed = true
+		}
+	}
+	if fixed {
+		cache.logger.WithFields(bark.Fields{
+			common.TagStor: rs.GetStoreUUID(),
+		}).Info(`Queue Depth Temporarily Fixed Replica-Stats`)
 	}
 }
 

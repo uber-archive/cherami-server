@@ -41,6 +41,10 @@ import (
 )
 
 const (
+	// T471438, ADDR_SEAL is being written into replica_stats. We ignore small negative 26-bit 2's-compliment numbers,
+	// which are larger than this constant in signed 64-bit space
+	storageMetaValuesLimit = int64(1<<26) - (1 << 4)
+
 	// QueueDepthTabulationString can be added to a destination or CG owner email to request queue depth tabulation
 	// Note that Google allows something like this: gbailey+queueDepthTabulation@uber.com
 	// The above is still a valid email and will be delivered to gbailey@uber.com
@@ -321,15 +325,17 @@ func (qdc *queueDepthCalculator) addExtentBacklog(
 
 func (qdc *queueDepthCalculator) computeBacklog(cgDesc *shared.ConsumerGroupDescription, cgExtent *metadata.ConsumerGroupExtent, storeMetadata *storeExtentMetadata, storeID string, logger bark.Logger) int64 {
 
-	var backlog int64
+	var backlog int64 = 0 // default
 	var iter = &qdc.iter
 
 	switch qdc.iter.isDLQ {
 	case true:
+		// update backog, only if the begin/first seqnums are available
 		if storeMetadata.lastSequence != math.MaxInt64 && storeMetadata.beginSequence != math.MaxInt64 {
 			backlog = storeMetadata.lastSequence - storeMetadata.beginSequence + 1
 		}
 	case false:
+		// update backlog, only if there is an available seqnum
 		if storeMetadata.availableSequence != math.MaxInt64 {
 			backlog = storeMetadata.availableSequence - cgExtent.GetAckLevelSeqNo()
 		}
@@ -543,11 +549,12 @@ func (qdc *queueDepthCalculator) handleStartFrom(
 
 		// if doGaft == false, this just adjusts for retention, if applicable
 		if qualify {
-			trace += 100
 			consumerGroupExtent.WriteTime = common.Int64Ptr(int64(now))
 
 			// retention may have purged some messages, account for that
 			if storeMetadata.beginSequence != math.MaxInt64 {
+
+				trace += 100
 
 				// the 'ack-level' corresponds to message that has already been read (ie 'acked');
 				// so reduce one from the 'beginSequence' to since that msg has not been read.
@@ -555,6 +562,13 @@ func (qdc *queueDepthCalculator) handleStartFrom(
 					storeMetadata.beginSequence-1, // Retention may have removed some messages
 					int64(startFromSeq),           // Otherwise, act like we had just opened this extent at startFrom, i.e. don't count messages before startFrom
 				))
+
+			} else {
+
+				trace += 200
+
+				// if the extent is empty, then assume the 'ack-level' is at the beginning (ie, seqnum 0)
+				consumerGroupExtent.AckLevelSeqNo = common.Int64Ptr(0)
 			}
 		}
 	}
