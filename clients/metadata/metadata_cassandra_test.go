@@ -579,7 +579,7 @@ func (s *CassandraSuite) TestListDestinationsByUUID() {
 
 	// ListDestinationsByUUID
 	listDestinations := &shared.ListDestinationsByUUIDRequest{
-		Limit:  common.Int64Ptr(testPageSize),
+		Limit: common.Int64Ptr(testPageSize),
 		ValidateAgainstPathTable: common.BoolPtr(true),
 	}
 	var result []*shared.DestinationDescription
@@ -607,9 +607,9 @@ func (s *CassandraSuite) TestListDestinationsByUUID() {
 
 	// list multi zone only
 	listDestinations = &shared.ListDestinationsByUUIDRequest{
-		MultiZoneOnly: common.BoolPtr(true),
+		MultiZoneOnly:            common.BoolPtr(true),
 		ValidateAgainstPathTable: common.BoolPtr(true),
-		Limit:         common.Int64Ptr(testPageSize),
+		Limit: common.Int64Ptr(testPageSize),
 	}
 	result = nil
 	for {
@@ -752,7 +752,137 @@ func (s *CassandraSuite) TestExtentCRU() {
 	}
 }
 
+func (s *CassandraSuite) TestUpdateStoreExtentReplicaStats() {
+	extentUUID := uuid.New()
+	destUUID := uuid.New()
+	storeIds := []string{uuid.New(), uuid.New(), uuid.New()}
+	extent := &shared.Extent{
+		ExtentUUID:      common.StringPtr(extentUUID),
+		DestinationUUID: common.StringPtr(destUUID),
+		StoreUUIDs:      storeIds,
+		InputHostUUID:   common.StringPtr(uuid.New()),
+	}
+	createRequest := &shared.CreateExtentRequest{Extent: extent}
+	_, err := s.client.CreateExtent(nil, createRequest)
+	s.Nil(err)
+
+	beginEnqTime := time.Now().Add(-time.Hour)
+	lastEnqTime := time.Now().Add(-time.Second)
+
+	beginTime := time.Now().Add(-time.Minute)
+	endTime := time.Now().Add(time.Millisecond)
+
+	var beginSeq, lastSeq, availSeq int64 = 0x123, 0x456789, 0x345678
+	var lastSeqRate, availSeqRate float64 = 23.45, 67.89
+	var beginAddr, lastAddr int64 = 0x123456789ABCDE, 0xABCDEF012345678
+	var sizeInBytes int64 = 0x456123789
+	var sizeInBytesRate float64 = 987.67
+
+	stats1 := &shared.ExtentReplicaStats{
+		ExtentUUID:            common.StringPtr(extentUUID),
+		StoreUUID:             common.StringPtr(storeIds[1]),
+		BeginAddress:          common.Int64Ptr(beginAddr),
+		LastAddress:           common.Int64Ptr(lastAddr),
+		BeginSequence:         common.Int64Ptr(beginSeq),
+		LastSequence:          common.Int64Ptr(lastSeq),
+		LastSequenceRate:      common.Float64Ptr(lastSeqRate),
+		AvailableSequence:     common.Int64Ptr(availSeq),
+		AvailableSequenceRate: common.Float64Ptr(availSeqRate),
+		BeginEnqueueTimeUtc:   common.Int64Ptr(beginEnqTime.UnixNano()),
+		LastEnqueueTimeUtc:    common.Int64Ptr(lastEnqTime.UnixNano()),
+		SizeInBytes:           common.Int64Ptr(sizeInBytes),
+		SizeInBytesRate:       common.Float64Ptr(sizeInBytesRate),
+		Status:                common.MetadataExtentReplicaStatusPtr(shared.ExtentReplicaStatus_SEALED),
+		BeginTime:             common.Int64Ptr(beginTime.UnixNano()),
+		EndTime:               common.Int64Ptr(endTime.UnixNano()),
+	}
+
+	// update replica stats
+	updateRequest := &m.UpdateStoreExtentReplicaStatsRequest{
+		StoreUUID:    common.StringPtr(storeIds[1]),
+		ExtentUUID:   common.StringPtr(extentUUID),
+		ReplicaStats: []*shared.ExtentReplicaStats{stats1},
+	}
+	err = s.client.UpdateStoreExtentReplicaStats(nil, updateRequest)
+	s.Nil(err)
+
+	readReq := &m.ReadStoreExtentReplicaStatsRequest{
+		StoreUUID:  common.StringPtr(storeIds[1]),
+		ExtentUUID: common.StringPtr(extent.GetExtentUUID()),
+	}
+
+	result, err := s.client.ReadStoreExtentReplicaStats(nil, readReq)
+	s.Nil(err, "Reading store extent stats failed")
+	s.NotNil(result, "ReadStoreExtentReplicaStats returned nil")
+
+	stats := result.GetExtent().GetReplicaStats()
+
+	s.Equal(stats1.GetExtentUUID(), stats[0].GetExtentUUID())
+	s.Equal(stats1.GetStoreUUID(), stats[0].GetStoreUUID())
+	s.Equal(stats1.GetBeginAddress(), stats[0].GetBeginAddress())
+	s.Equal(stats1.GetLastAddress(), stats[0].GetLastAddress())
+	s.Equal(stats1.GetBeginSequence(), stats[0].GetBeginSequence())
+	s.Equal(stats1.GetLastSequence(), stats[0].GetLastSequence())
+	s.Equal(stats1.GetLastSequenceRate(), stats[0].GetLastSequenceRate())
+	s.Equal(stats1.GetAvailableSequence(), stats[0].GetAvailableSequence())
+	s.Equal(stats1.GetAvailableSequenceRate(), stats[0].GetAvailableSequenceRate())
+	s.Equal(stats1.GetSizeInBytes(), stats[0].GetSizeInBytes())
+	s.Equal(stats1.GetSizeInBytesRate(), stats[0].GetSizeInBytesRate())
+	s.Equal(stats1.GetStatus(), stats[0].GetStatus())
+
+	// after gocql marshals and unmarshals the timestamps, the values are off by a little, but not much!
+	timeDifference := func(t0, t1 int64) time.Duration {
+		if t0 > t1 {
+			return time.Unix(0, t0).Sub(time.Unix(0, t1))
+		} else {
+			return time.Unix(0, t1).Sub(time.Unix(0, t0))
+		}
+	}
+	s.True(timeDifference(stats1.GetBeginEnqueueTimeUtc(), stats[0].GetBeginEnqueueTimeUtc()) < time.Millisecond)
+	s.True(timeDifference(stats1.GetLastEnqueueTimeUtc(), stats[0].GetLastEnqueueTimeUtc()) < time.Millisecond)
+	s.True(timeDifference(stats1.GetBeginTime(), stats[0].GetBeginTime()) < time.Millisecond)
+	s.True(timeDifference(stats1.GetEndTime(), stats[0].GetEndTime()) < time.Millisecond)
+}
+
 func (s *CassandraSuite) TestReplicationStatus() {
+	extentUUID := uuid.New()
+	destUUID := uuid.New()
+	storeIds := []string{uuid.New(), uuid.New(), uuid.New()}
+	extent := &shared.Extent{
+		ExtentUUID:      common.StringPtr(extentUUID),
+		DestinationUUID: common.StringPtr(destUUID),
+		StoreUUIDs:      storeIds,
+		InputHostUUID:   common.StringPtr(uuid.New()),
+	}
+	createRequest := &shared.CreateExtentRequest{Extent: extent}
+	_, err := s.client.CreateExtent(nil, createRequest)
+	s.Nil(err)
+
+	// read store extent with filtering
+	readRequest := &m.ListStoreExtentsStatsRequest{
+		StoreUUID:         common.StringPtr(storeIds[0]),
+		ReplicationStatus: common.InternalExtentReplicaReplicationStatusTypePtr(shared.ExtentReplicaReplicationStatus_INVALID),
+	}
+	readResult, err := s.client.ListStoreExtentsStats(nil, readRequest)
+	s.Nil(err)
+	s.Equal(1, len(readResult.GetExtentStatsList()))
+
+	// update replication status
+	updateRequest := &m.UpdateStoreExtentReplicaStatsRequest{
+		StoreUUID:         common.StringPtr(storeIds[0]),
+		ExtentUUID:        common.StringPtr(extentUUID),
+		ReplicationStatus: common.InternalExtentReplicaReplicationStatusTypePtr(shared.ExtentReplicaReplicationStatus_DONE),
+	}
+	err = s.client.UpdateStoreExtentReplicaStats(nil, updateRequest)
+	s.Nil(err)
+
+	// read again with filtering, expect no result is returned
+	readResult, err = s.client.ListStoreExtentsStats(nil, readRequest)
+	s.Nil(err)
+	s.Equal(0, len(readResult.GetExtentStatsList()))
+}
+
+func (s *CassandraSuite) TestStoreExtentTimestamps() {
 	extentUUID := uuid.New()
 	destUUID := uuid.New()
 	storeIds := []string{uuid.New(), uuid.New(), uuid.New()}
