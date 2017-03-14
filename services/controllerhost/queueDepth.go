@@ -329,9 +329,13 @@ func (qdc *queueDepthCalculator) computeBacklog(cgDesc *shared.ConsumerGroupDesc
 
 	switch qdc.iter.isDLQ {
 	case true:
-		backlog = common.MaxInt64(0, storeMetadata.lastSequence-(storeMetadata.beginSequence+1))
+		if storeMetadata.lastSequence != 0 {
+			backlog = storeMetadata.lastSequence - storeMetadata.beginSequence + 1
+		}
 	case false:
-		backlog = common.MaxInt64(0, storeMetadata.availableSequence-cgExtent.GetAckLevelSeqNo())
+		if storeMetadata.availableSequence != 0 {
+			backlog = storeMetadata.availableSequence - cgExtent.GetAckLevelSeqNo() + 1
+		}
 	}
 
 	if iter.cg.isTabulationRequested {
@@ -350,6 +354,9 @@ func (qdc *queueDepthCalculator) computeBacklog(cgDesc *shared.ConsumerGroupDesc
 			`runningTotalAvail`: backlog + iter.cg.backlogAvailable,
 		}).Info(`Queue Depth Tabulation`)
 	}
+
+	fmt.Printf("computeBacklog: CG=%v first=%d last=%d avail=%d acklvl=%d => BACKLOG=%d\n",
+		cgDesc.GetConsumerGroupName(), storeMetadata.beginSequence, storeMetadata.lastSequence, storeMetadata.availableSequence, cgExtent.GetAckLevelSeqNo(), backlog)
 
 	return backlog
 }
@@ -561,6 +568,9 @@ done:
 			`trace`:        trace,
 		}).Info(`Queue Depth Tabulation (StartFrom)`)
 	}
+
+	fmt.Printf("handleStartFrom: CG=%v qualify=%v trace=%d start=%d first=%d avail=%d (store-metadata=%v)\n",
+		cgDesc.GetConsumerGroupName(), qualify, trace, startFromSeq, storeMetadata.beginSequence, storeMetadata.availableSequence, storeMetadata)
 	return
 }
 

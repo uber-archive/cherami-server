@@ -23,6 +23,7 @@ package integration
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"math/rand"
 	"net"
 	"strconv"
@@ -2065,7 +2066,7 @@ func (s *NetIntegrationSuiteParallelB) TestQueueDepth() {
 		publisherPubInterval    = time.Second / 5
 		DLQPublishClearTime     = cgLockTimeout * time.Second * 2
 
-		futureTSOffset = time.Minute * 5
+		futureTSOffset = 45 * time.Second
 		phaseCount     = 200
 	)
 
@@ -2278,13 +2279,8 @@ func (s *NetIntegrationSuiteParallelB) TestQueueDepth() {
 				continue
 			}
 
-			ll().WithFields(bark.Fields{
-				`cg`:                   cgNames[cg],
-				`BacklogAvailable`:     queueDepthInfo.BacklogAvailable,
-				`WantBacklogAvailable`: ba,
-				`BacklogInflight`:      queueDepthInfo.BacklogInflight,
-				`BacklogDLQ`:           queueDepthInfo.BacklogDLQ, `WantBacklogDLQ`: dlq,
-			}).Info(`waiting on backlog result...`)
+			fmt.Printf("TestQueueDepth: CG=%v backlog=%d (want=%d) inflight=%d dlq=%d (want=%d)\n",
+				cgNames[cg], queueDepthInfo.BacklogAvailable, ba, queueDepthInfo.BacklogInflight, queueDepthInfo.BacklogDLQ, dlq)
 
 			if queueDepthInfo.BacklogAvailable == ba && queueDepthInfo.BacklogDLQ == dlq {
 				return
@@ -2386,15 +2382,17 @@ func (s *NetIntegrationSuiteParallelB) TestQueueDepth() {
 				stats := srs.GetExtent().GetReplicaStats()[0] // Modify the existing stats. We would otherwise write nils to most fields
 
 				if reset { // clearing
-					if bs > 0 {
+					if bs != math.MaxInt64 {
 						update = true
-						stats.BeginSequence = common.Int64Ptr(-1)
+						stats.BeginSequence = common.Int64Ptr(1)
 					}
 				} else { // Setting retention
-					if as > 0 {
+					// if as > 0 {
+					if bs != math.MaxInt64 {
 						update = true
-						stats.BeginSequence = common.Int64Ptr(retentionAmount)
-						retentionAmount = common.MaxInt64(0, retentionAmount-as)
+						// stats.BeginSequence = common.Int64Ptr(retentionAmount)
+						stats.BeginSequence = common.Int64Ptr(bs + common.MinInt64(retentionAmount, as-bs))
+						retentionAmount -= common.MaxInt64(0, common.MinInt64(retentionAmount, as-bs))
 					}
 				}
 
@@ -2423,6 +2421,7 @@ func (s *NetIntegrationSuiteParallelB) TestQueueDepth() {
 	var newStartFrom int64
 	for ; phase < phaseCount; phase++ {
 		ll().WithField(`phase`, phase).Error(`Starting...`)
+		fmt.Printf("TestQueueDepth: PHASE=%d\n", phase)
 		// Producer actions
 		switch phase {
 		case 0:

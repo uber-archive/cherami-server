@@ -21,6 +21,9 @@
 package controllerhost
 
 import (
+	"fmt"
+	"math"
+
 	"github.com/uber-common/bark"
 	"github.com/uber/cherami-server/common"
 	"github.com/uber/cherami-thrift/.generated/go/shared"
@@ -57,6 +60,13 @@ type (
 	}
 )
 
+func (t *storeExtentMetadata) String() string {
+	return fmt.Sprintf("storeID=%v first=%d last=%d (rate=%f) avail=%d (rate=%f) beginT=%d endT=%d firstEnq=%d lastEnq=%d write=%v created=%v",
+		t.storeID, t.beginSequence, t.lastSequence, t.lastSequenceRate, t.availableSequence, t.availableSequenceRate,
+		t.beginTime, t.endTime, t.beginEnqueueTimeUtc, t.lastEnqueueTimeUtc, t.writeTime, t.createdTime)
+
+}
+
 // newStoreExtentMetadataCache returns a new instance of storeExtentMetadataCache
 func newStoreExtentMetadataCache(datasource MetadataMgr, logger bark.Logger) *storeExtentMetadataCache {
 	return &storeExtentMetadataCache{
@@ -74,7 +84,9 @@ func (cache *storeExtentMetadataCache) get(store storeID, extID extentID) *store
 	var entry []*storeExtentMetadata
 	entry = cache.entries[extID]
 	result := findStoreMetadata(entry, string(store))
+
 	if result != nil {
+		fmt.Printf("storeExtentMetadata.get (cached): extent=%v result={%v}\n", extID, result)
 		return result
 	}
 	// cache miss, lets fetch the data from source
@@ -83,10 +95,16 @@ func (cache *storeExtentMetadataCache) get(store storeID, extID extentID) *store
 		entry = append(entry, result)
 		cache.entries[extID] = entry
 	}
+	fmt.Printf("storeExtentMetadata.get (miss): extent=%v result={%v}\n", extID, result)
 	return result
 }
 
-func (cache *storeExtentMetadataCache) fetchStoreExtentMetadata(extID string, store string) *storeExtentMetadata {
+func (cache *storeExtentMetadataCache) fetchStoreExtentMetadata(extID string, store string) (result *storeExtentMetadata) {
+
+	defer func() {
+		fmt.Printf("storeExtentMetadata.fetchStoreExtentMetadata: extent=%v result={%v}\n", extID, result)
+	}()
+
 	stats, err := cache.datasource.ReadStoreExtentStats(extID, store)
 	if err != nil {
 		cache.logger.WithField(common.TagExt, common.FmtExt(extID)).
@@ -99,6 +117,9 @@ func (cache *storeExtentMetadataCache) fetchStoreExtentMetadata(extID string, st
 	// store apparently reports illegal values
 	// fix them if needed
 	cache.fixReplicaStatsIfBroken(rs)
+
+	fmt.Printf("storeExtentMetadata.fetchStoreExtentMetadata: extReplStats: ext=%v firstEnq=%x lastEnq=%x\n",
+		extID, rs.GetBeginEnqueueTimeUtc(), rs.GetLastEnqueueTimeUtc())
 
 	return &storeExtentMetadata{
 		storeID:               store,
@@ -120,8 +141,9 @@ func (cache *storeExtentMetadataCache) fetchStoreExtentMetadata(extID string, st
 // T520701 -- Fix massive int64 negative values
 func (cache *storeExtentMetadataCache) fixReplicaStatsIfBroken(rs *shared.ExtentReplicaStats) {
 	var fixed bool
-	for _, val := range []*int64{rs.AvailableSequence, rs.BeginSequence, rs.LastSequence} {
-		if val != nil && (*val >= storageMetaValuesLimit || *val < -1) {
+	for i, val := range []*int64{rs.AvailableSequence, rs.BeginSequence, rs.LastSequence} {
+		if val != nil && (*val == math.MaxInt64) {
+			fmt.Printf("fixReplicaStatsIfBroken: fixed val[%d]=%d\n", i, *val)
 			*val = 0
 			fixed = true
 		}

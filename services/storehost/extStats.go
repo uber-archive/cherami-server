@@ -21,6 +21,7 @@
 package storehost
 
 import (
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -104,6 +105,11 @@ func ExtStatsReporterSetReportInterval(interval time.Duration) {
 
 	reportInterval.Store(interval)
 	common.GetDefaultLogger().WithField(`interval`, interval).Info("extStatsReporter: updated report interval")
+}
+
+func (t *report) String() string {
+	return fmt.Sprintf("{extent=%v first{seq=%d addr=%x ts=%d} last{seq=%d addr=%x ts=%d}",
+		t.extentID, t.firstSeqNum, t.firstAddress, t.firstTimestamp, t.lastSeqNum, t.lastAddress, t.lastTimestamp)
 }
 
 func NewExtStatsReporter(hostID string, xMgr *ExtentManager, mClient metadata.TChanMetadataService, logger bark.Logger) *ExtStatsReporter {
@@ -304,7 +310,7 @@ pump:
 				LastSequence:        common.Int64Ptr(report.lastSeqNum),
 				AvailableSequence:   common.Int64Ptr(report.lastSeqNum),
 				BeginEnqueueTimeUtc: common.Int64Ptr(report.firstTimestamp),
-				LastEnqueueTimeUtc:  common.Int64Ptr(report.lastTimestamp),
+				LastEnqueueTimeUtc:  common.Int64Ptr(0x123456789ABCDEF), //report.lastTimestamp),
 				// SizeInBytes: common.Int64Ptr(report.size),
 				Status:                shared.ExtentReplicaStatusPtr(extReplStatus),
 				AvailableSequenceRate: common.Float64Ptr(lastSeqRate),
@@ -338,6 +344,9 @@ pump:
 				`avail-seq`:      extReplStats.GetAvailableSequence(),     // #perfdisable
 				`avail-seq-rate`: extReplStats.GetAvailableSequenceRate(), // #perfdisable
 			}).Info("extStatsReporter: report") // #perfdisable
+
+			fmt.Printf("extStatsReporter: extReplStats: ext=%v firstEnq=%x lastEnq=%x\n",
+				extentID, extReplStats.GetBeginEnqueueTimeUtc(), extReplStats.GetLastEnqueueTimeUtc())
 
 			report.ctx.lastReport = report // update last-report
 
