@@ -22,7 +22,6 @@ package storehost
 
 import (
 	"fmt"
-	"math"
 	"net"
 	"net/http"
 	"os"
@@ -785,21 +784,21 @@ func (t *StoreHost) SealExtent(ctx thrift.Context, req *store.SealExtentRequest)
 		// of 'seqNumUnspecifiedSeal' to go through, to support sealing an extent as a best effort.
 
 		switch {
-		case lastSeqNum == math.MaxInt64 && unspecifiedSealSeqNum: // no sealSeqNum specified and we don't know lastSeqNum
+		case lastSeqNum == SeqnumInvalid && unspecifiedSealSeqNum: // no sealSeqNum specified and we don't know lastSeqNum
 
 			// continue -> just write a sealExtentKey with 'seqNumUnspecifiedSeal' seqNum (for now)
 
-		case lastSeqNum == math.MaxInt64 && !unspecifiedSealSeqNum: // we were given a sealSeqNum, but we don't know lastSeqNum
+		case lastSeqNum == SeqnumInvalid && !unspecifiedSealSeqNum: // we were given a sealSeqNum, but we don't know lastSeqNum
 
 			log.Error("SealExtent: last-seqnum unknown (timer-queue mode?)")
 			// return newInternalServiceError(fmt.Sprintf("%v last-seqnum unknown", extentID))
 
-		case lastSeqNum != math.MaxInt64 && unspecifiedSealSeqNum: // no seal-seqnum specified and we have a known last-seqnum
+		case lastSeqNum != SeqnumInvalid && unspecifiedSealSeqNum: // no seal-seqnum specified and we have a known last-seqnum
 
 			sealSeqNum = lastSeqNum // seal at last-seqnum
 			// FIXME: we should return the sealSeqNum to the caller, in this particular case!
 
-		case lastSeqNum != math.MaxInt64 && !unspecifiedSealSeqNum: // we have seal-seqnum and last-seqnum available
+		case lastSeqNum != SeqnumInvalid && !unspecifiedSealSeqNum: // we have seal-seqnum and last-seqnum available
 
 			// ensure the seal-seqnum is less than (or equal to) last-seqnum
 			if sealSeqNum > lastSeqNum {
@@ -1011,7 +1010,7 @@ func (t *StoreHost) PurgeMessages(ctx thrift.Context, req *store.PurgeMessagesRe
 		x.Delete()
 
 		res.Address = common.Int64Ptr(store.ADDR_BEGIN)
-		x.setFirstMsg(math.MaxInt64, math.MaxInt64, math.MaxInt64)
+		x.setFirstMsg(SeqnumInvalid, AddressInvalid, TimestampInvalid)
 		log.Info("PurgeMessages done: marked extent for deletion")
 		return res, nil
 
@@ -1035,11 +1034,11 @@ func (t *StoreHost) PurgeMessages(ctx thrift.Context, req *store.PurgeMessagesRe
 	switch {
 	case nextAddr == storage.EOX:
 		res.Address = common.Int64Ptr(store.ADDR_END)
-		x.setFirstMsg(math.MaxInt64, math.MaxInt64, math.MaxInt64)
+		x.setFirstMsg(SeqnumInvalid, AddressInvalid, TimestampInvalid)
 
 	case x.isSealExtentKey(nextKey):
 		res.Address = common.Int64Ptr(store.ADDR_SEAL)
-		x.setFirstMsg(math.MaxInt64, math.MaxInt64, math.MaxInt64)
+		x.setFirstMsg(SeqnumInvalid, AddressInvalid, TimestampInvalid)
 
 	default:
 		visibilityTime, firstSeqNum := x.deconstructKey(nextKey)

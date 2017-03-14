@@ -23,7 +23,6 @@ package storehost
 import (
 	"errors"
 	"fmt"
-	"math"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -740,8 +739,8 @@ func (ext *extentContext) initialize(intent OpenIntent) (err error) {
 
 		// if the extent is not empty, then it was previously opened
 		// for write and mark it as such.
-		if ext.sealSeqNum != math.MaxInt64 ||
-			ext.firstSeqNum != math.MaxInt64 || ext.lastSeqNum != math.MaxInt64 {
+		if ext.sealSeqNum != SeqnumInvalid ||
+			ext.firstSeqNum != SeqnumInvalid || ext.lastSeqNum != SeqnumInvalid {
 
 			ext.previouslyOpenedForWrite = 1
 		}
@@ -783,21 +782,21 @@ func (ext *extentContext) initFirstMsg() error {
 
 	_, key, err := ext.store.SeekFirst()
 
-	if err == nil && key != storage.InvalidKey &&
-		!ext.isSealExtentKey(key) {
-
-		ext.firstAddr = int64(key)
-		ext.firstTimestamp, ext.firstSeqNum = ext.deconstructKey(key)
-
-	} else {
+	if err != nil || key == storage.InvalidKey ||
+		ext.isSealExtentKey(key) {
 
 		// no messages in extent (or error reading)
-		ext.firstAddr = math.MaxInt64
-		ext.firstSeqNum = math.MaxInt64 // indicates 'unknown'
-		ext.firstTimestamp = math.MaxInt64
+		ext.firstAddr = AddressInvalid
+		ext.firstSeqNum = SeqnumInvalid // indicates 'unknown'
+		ext.firstTimestamp = TimestampInvalid
+
+		return err
 	}
 
-	return err
+	ext.firstAddr = int64(key)
+	ext.firstTimestamp, ext.firstSeqNum = ext.deconstructKey(key)
+
+	return nil
 }
 
 func (ext *extentContext) initLastMsg() error {
@@ -810,20 +809,20 @@ func (ext *extentContext) initLastMsg() error {
 
 	_, key, err := ext.store.SeekFloor(lastPossibleKey)
 
-	if err == nil && key != storage.InvalidKey {
-
-		ext.lastAddr = int64(key)
-		ext.lastTimestamp, ext.lastSeqNum = ext.deconstructKey(key)
-
-	} else {
+	if err != nil || key == storage.InvalidKey {
 
 		// no messages in extent (or error reading)
-		ext.lastAddr = math.MaxInt64
-		ext.lastSeqNum = math.MaxInt64 // indicates 'unknown'
-		ext.lastTimestamp = math.MaxInt64
+		ext.lastAddr = AddressInvalid
+		ext.lastSeqNum = SeqnumInvalid // indicates 'unknown'
+		ext.lastTimestamp = TimestampInvalid
+
+		return err
 	}
 
-	return err
+	ext.lastAddr = int64(key)
+	ext.lastTimestamp, ext.lastSeqNum = ext.deconstructKey(key)
+
+	return nil
 }
 
 func (ext *extentContext) initSealSeqNum() error {
@@ -842,16 +841,17 @@ func (ext *extentContext) initSealSeqNum() error {
 	_, key, err := ext.store.SeekCeiling(sealExtentKey)
 
 	// if this is a SealExtentKey, extract and return the seqNum
-	if err == nil && ext.isSealExtentKey(key) {
+	if err != nil || !ext.isSealExtentKey(key) {
 
-		ext.sealSeqNum = int64(ext.deconstructSealExtentKey(key))
-
-	} else {
-
+		// not sealed, or error reading
 		ext.sealSeqNum = seqNumNotSealed // == 'MaxInt64' -> not sealed
+
+		return err
 	}
 
-	return err
+	ext.sealSeqNum = int64(ext.deconstructSealExtentKey(key))
+
+	return nil
 }
 
 // listen returns a 'notification channel' that will be notified of any new writes on the extent
