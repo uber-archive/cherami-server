@@ -22,6 +22,7 @@ package controllerhost
 
 import (
 	"fmt"
+	"math"
 	"math/rand"
 	"strings"
 	"time"
@@ -329,9 +330,13 @@ func (qdc *queueDepthCalculator) computeBacklog(cgDesc *shared.ConsumerGroupDesc
 
 	switch qdc.iter.isDLQ {
 	case true:
-		backlog = common.MaxInt64(0, storeMetadata.lastSequence-(storeMetadata.beginSequence+1))
+		if storeMetadata.lastSequence != math.MaxInt64 && storeMetadata.beginSequence != math.MaxInt64 {
+			backlog = storeMetadata.lastSequence - storeMetadata.beginSequence + 1
+		}
 	case false:
-		backlog = common.MaxInt64(0, storeMetadata.availableSequence-cgExtent.GetAckLevelSeqNo())
+		if storeMetadata.availableSequence != math.MaxInt64 {
+			backlog = storeMetadata.availableSequence - cgExtent.GetAckLevelSeqNo()
+		}
 	}
 
 	if iter.cg.isTabulationRequested {
@@ -544,10 +549,17 @@ func (qdc *queueDepthCalculator) handleStartFrom(
 		if qualify {
 			trace += 100
 			consumerGroupExtent.WriteTime = common.Int64Ptr(int64(now))
-			consumerGroupExtent.AckLevelSeqNo = common.Int64Ptr(common.MaxInt64(
-				storeMetadata.beginSequence, // Retention may have removed some messages
-				int64(startFromSeq),         // Otherwise, act like we had just opened this extent at startFrom, i.e. don't count messages before startFrom
-			))
+
+			// retention may have purged some messages, account for that
+			if storeMetadata.beginSequence != math.MaxInt64 {
+
+				// the 'ack-level' corresponds to message that has already been read (ie 'acked');
+				// so reduce one from the 'beginSequence' to since that msg has not been read.
+				consumerGroupExtent.AckLevelSeqNo = common.Int64Ptr(common.MaxInt64(
+					storeMetadata.beginSequence-1, // Retention may have removed some messages
+					int64(startFromSeq),           // Otherwise, act like we had just opened this extent at startFrom, i.e. don't count messages before startFrom
+				))
+			}
 		}
 	}
 
@@ -561,6 +573,7 @@ done:
 			`trace`:        trace,
 		}).Info(`Queue Depth Tabulation (StartFrom)`)
 	}
+
 	return
 }
 
