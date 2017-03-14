@@ -116,7 +116,7 @@ func (cache *storeExtentMetadataCache) fetchStoreExtentMetadata(extID string, st
 	rs := stats.GetReplicaStats()[0]
 	// store apparently reports illegal values
 	// fix them if needed
-	cache.fixReplicaStatsIfBroken(rs)
+	// cache.fixReplicaStatsIfBroken(rs)
 
 	// fmt.Printf("storeExtentMetadata.fetchStoreExtentMetadata: extReplStats: ext=%v firstEnq=%x lastEnq=%x\n",
 	// 	extID, rs.GetBeginEnqueueTimeUtc(), rs.GetLastEnqueueTimeUtc())

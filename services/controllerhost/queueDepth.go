@@ -22,6 +22,7 @@ package controllerhost
 
 import (
 	"fmt"
+	"math"
 	"math/rand"
 	"strings"
 	"time"
@@ -329,11 +330,11 @@ func (qdc *queueDepthCalculator) computeBacklog(cgDesc *shared.ConsumerGroupDesc
 
 	switch qdc.iter.isDLQ {
 	case true:
-		if storeMetadata.lastSequence != 0 && storeMetadata.beginSequence != 0 {
+		if storeMetadata.lastSequence != math.MaxInt64 && storeMetadata.beginSequence != math.MaxInt64 {
 			backlog = storeMetadata.lastSequence - storeMetadata.beginSequence + 1
 		}
 	case false:
-		if storeMetadata.availableSequence != 0 {
+		if storeMetadata.availableSequence != math.MaxInt64 {
 			backlog = storeMetadata.availableSequence - cgExtent.GetAckLevelSeqNo()
 		}
 	}
@@ -551,10 +552,14 @@ func (qdc *queueDepthCalculator) handleStartFrom(
 		if qualify {
 			trace += 100
 			consumerGroupExtent.WriteTime = common.Int64Ptr(int64(now))
-			consumerGroupExtent.AckLevelSeqNo = common.Int64Ptr(common.MaxInt64(
-				storeMetadata.beginSequence-1, // Retention may have removed some messages
-				int64(startFromSeq),           // Otherwise, act like we had just opened this extent at startFrom, i.e. don't count messages before startFrom
-			))
+
+			// Account for retention having potentially removed some messages
+			if storeMetadata.beginSequence != math.MaxInt64 {
+				consumerGroupExtent.AckLevelSeqNo = common.Int64Ptr(common.MaxInt64(
+					storeMetadata.beginSequence-1, // Retention may have removed some messages
+					int64(startFromSeq),           // Otherwise, act like we had just opened this extent at startFrom, i.e. don't count messages before startFrom
+				))
+			}
 		}
 	}
 
