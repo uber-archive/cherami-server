@@ -21,6 +21,7 @@
 package storehost
 
 import (
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -68,8 +69,10 @@ type (
 		extentID  uuid.UUID
 		timestamp int64
 
-		firstSeqNum, lastSeqNum int64
-		sealed                  bool
+		firstSeqNum, lastSeqNum       int64
+		firstAddress, lastAddress     int64
+		firstTimestamp, lastTimestamp int64
+		sealed                        bool
 	}
 )
 
@@ -102,6 +105,11 @@ func ExtStatsReporterSetReportInterval(interval time.Duration) {
 
 	reportInterval.Store(interval)
 	common.GetDefaultLogger().WithField(`interval`, interval).Info("extStatsReporter: updated report interval")
+}
+
+func (t *report) String() string {
+	return fmt.Sprintf("{extent=%v first{seq=%d addr=%x ts=%d} last{seq=%d addr=%x ts=%d}",
+		t.extentID, t.firstSeqNum, t.firstAddress, t.firstTimestamp, t.lastSeqNum, t.lastAddress, t.lastTimestamp)
 }
 
 func NewExtStatsReporter(hostID string, xMgr *ExtentManager, mClient metadata.TChanMetadataService, logger bark.Logger) *ExtStatsReporter {
@@ -158,7 +166,8 @@ func (t *ExtStatsReporter) trySendReport(extentID uuid.UUID, ext *extentContext,
 	r.timestamp = time.Now().UnixNano()
 
 	// get a snapshot of various extent stats
-	r.firstSeqNum, r.lastSeqNum = ext.getBeginSeqNum(), ext.getLastSeqNum()
+	r.firstAddress, r.firstSeqNum, r.firstTimestamp = ext.getFirstMsg()
+	r.lastAddress, r.lastSeqNum, r.lastTimestamp = ext.getLastMsg()
 	r.sealed, _ = ext.isSealed()
 
 	// create and send report non-blockingly
@@ -293,23 +302,23 @@ pump:
 			}
 
 			extReplStats := &shared.ExtentReplicaStats{
-				StoreUUID:  common.StringPtr(t.hostID),
-				ExtentUUID: common.StringPtr(extentID.String()),
-				// BeginAddress:  common.Int64Ptr(report.firstAddress),
-				// LastAddress: common.Int64Ptr(report.lastAddress),
-				BeginSequence:     common.Int64Ptr(report.firstSeqNum),
-				LastSequence:      common.Int64Ptr(report.lastSeqNum),
-				AvailableSequence: common.Int64Ptr(report.lastSeqNum),
-				// BeginEnqueueTimeUtc: common.Int64Ptr(report.firstTimestamp),
-				// LastEnqueueTimeUtc: common.Int64Ptr(report.lastTimestamp),
-				// SizeInBytes: common.Int64Ptr(report.size),
-				Status:                shared.ExtentReplicaStatusPtr(extReplStatus),
-				AvailableSequenceRate: common.Float64Ptr(lastSeqRate),
+				StoreUUID:             common.StringPtr(t.hostID),
+				ExtentUUID:            common.StringPtr(extentID.String()),
+				BeginAddress:          common.Int64Ptr(report.firstAddress),
+				LastAddress:           common.Int64Ptr(report.lastAddress),
+				AvailableAddress:      common.Int64Ptr(report.lastAddress),
+				BeginSequence:         common.Int64Ptr(report.firstSeqNum),
+				LastSequence:          common.Int64Ptr(report.lastSeqNum),
 				LastSequenceRate:      common.Float64Ptr(lastSeqRate),
-				// AvailableAddress
+				AvailableSequence:     common.Int64Ptr(report.lastSeqNum),
+				AvailableSequenceRate: common.Float64Ptr(lastSeqRate),
+				BeginEnqueueTimeUtc:   common.Int64Ptr(report.firstTimestamp),
+				LastEnqueueTimeUtc:    common.Int64Ptr(report.lastTimestamp),
+				Status:                shared.ExtentReplicaStatusPtr(extReplStatus),
+				// BeginTime:             common.Int64Ptr(report.firstTimestamp), // only for timer-queue
+				// EndTime:               common.Int64Ptr(report.lastTimestamp),
+				// SizeInBytes: common.Int64Ptr(report.size),
 				// SizeInBytesRate
-				// BeginTime
-				// EndTime
 				// WriteTime
 			}
 

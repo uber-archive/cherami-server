@@ -184,6 +184,7 @@ func (t *inConn) writeMessagesPumpAppendOnly(msgC <-chan *inMessage, ackC chan<-
 	defer x.Close() // cleanup/close DB
 	defer x.storeSync()
 
+	var firstMsg = true            // flag to check if first message
 	var lastMessageKey storage.Key // track the previous message's key to ensure that it strictly increasing
 
 	// start ticker to check for extent seal. if the "seal" request comes in
@@ -303,7 +304,7 @@ func (t *inConn) writeMessagesPumpAppendOnly(msgC <-chan *inMessage, ackC chan<-
 			}
 
 			// if seqNum is not in expected (continuously increasing) order, log error as FYI
-			if x.getLastSeqNum()+1 != msgSeqNum && x.getLastSeqNum() != -1 {
+			if x.getLastSeqNum()+1 != msgSeqNum && x.getLastSeqNum() != math.MaxInt64 {
 				// FIXME: add metric to help alert this case
 				expectedSeqNum := 1 + x.getLastSeqNum()
 				x.extentUnlock() // we only needed the lock held while reading lastSeqNum
@@ -348,8 +349,14 @@ func (t *inConn) writeMessagesPumpAppendOnly(msgC <-chan *inMessage, ackC chan<-
 
 			recvMsgs++ // keep a count of the messages written during this "session"
 
-			// update lastSeqNum with this seqnum (for SealExtent to use)
-			x.setLastSeqNum(msgSeqNum)
+			// if first msg written to this extent, update first-seqnum, etc
+			if firstMsg {
+				x.setFirstMsg(int64(key), msgSeqNum, visibilityTime)
+				firstMsg = false
+			}
+
+			// update last-seqnum, etc (for SealExtent to use)
+			x.setLastMsg(int64(key), msgSeqNum, visibilityTime)
 
 			// safe to drop the sealExtent lock now, since we have written message to storage
 			// and have updated the lastSeqNum thereby guaranteeing that any seal operation
@@ -408,6 +415,8 @@ func (t *inConn) writeMessagesPumpTimerQueue(msgC <-chan *inMessage, ackC chan<-
 	}
 
 	defer x.Close() // cleanup/close DB
+
+	var firstMsg = true // flag to check if first message
 
 	// start ticker to check for extent seal. if the "seal" request comes in
 	// when messages are being received, we will handle the seal request
@@ -527,7 +536,7 @@ func (t *inConn) writeMessagesPumpTimerQueue(msgC <-chan *inMessage, ackC chan<-
 			}
 
 			// if seqNum is not in expected (continuously increasing) order, log error as FYI
-			if x.getLastSeqNum()+1 != msgSeqNum && x.getLastSeqNum() != -1 {
+			if x.getLastSeqNum()+1 != msgSeqNum && x.getLastSeqNum() != math.MaxInt64 {
 				// FIXME: add metric to help alert this case
 				expectedSeqNum := 1 + x.getLastSeqNum()
 				x.extentUnlock() // we only needed the lock held while reading lastSeqNum
@@ -572,8 +581,15 @@ func (t *inConn) writeMessagesPumpTimerQueue(msgC <-chan *inMessage, ackC chan<-
 
 			recvMsgs++ // keep a count of the messages written during this "session"
 
+			// if first msg written to this extent, update first-seqnum, etc
+			if firstMsg {
+				x.setFirstMsg(int64(key), msgSeqNum, visibilityTime)
+				firstMsg = false
+			}
+
 			// update lastSeqNum with this seqnum (for SealExtent to use)
-			x.setLastSeqNum(msgSeqNum)
+			// update last-seqnum, etc (for SealExtent to use)
+			x.setLastMsg(int64(key), msgSeqNum, visibilityTime)
 
 			// safe to drop the sealExtent lock now, since we have written message to storage
 			// and have updated the lastSeqNum thereby guaranteeing that any seal operation
