@@ -291,7 +291,7 @@ func (t *inConn) writeMessagesPumpAppendOnly(msgC <-chan *inMessage, ackC chan<-
 			x.extentLock()
 
 			// check if extent has been sealed
-			if x.getSealSeqNum() != math.MaxInt64 {
+			if x.getSealSeqNum() != seqNumNotSealed {
 				x.extentUnlock()
 
 				log.WithFields(bark.Fields{
@@ -304,7 +304,7 @@ func (t *inConn) writeMessagesPumpAppendOnly(msgC <-chan *inMessage, ackC chan<-
 			}
 
 			// if seqNum is not in expected (continuously increasing) order, log error as FYI
-			if x.getLastSeqNum()+1 != msgSeqNum && x.getLastSeqNum() != math.MaxInt64 {
+			if x.getLastSeqNum()+1 != msgSeqNum && x.getLastSeqNum() != SeqnumInvalid {
 				// FIXME: add metric to help alert this case
 				expectedSeqNum := 1 + x.getLastSeqNum()
 				x.extentUnlock() // we only needed the lock held while reading lastSeqNum
@@ -367,7 +367,7 @@ func (t *inConn) writeMessagesPumpAppendOnly(msgC <-chan *inMessage, ackC chan<-
 
 		case <-sealCheckTicker.C:
 			// check at regular intervals if extent got sealed, and if so, close this connection
-			if x.getSealSeqNum() != math.MaxInt64 {
+			if x.getSealSeqNum() != seqNumNotSealed {
 
 				log.WithFields(bark.Fields{
 					"reason":      "extent sealed",
@@ -523,7 +523,7 @@ func (t *inConn) writeMessagesPumpTimerQueue(msgC <-chan *inMessage, ackC chan<-
 			x.extentLock()
 
 			// check if extent has been sealed
-			if x.getSealSeqNum() != math.MaxInt64 {
+			if x.getSealSeqNum() != seqNumNotSealed {
 				x.extentUnlock()
 
 				log.WithFields(bark.Fields{
@@ -536,7 +536,7 @@ func (t *inConn) writeMessagesPumpTimerQueue(msgC <-chan *inMessage, ackC chan<-
 			}
 
 			// if seqNum is not in expected (continuously increasing) order, log error as FYI
-			if x.getLastSeqNum()+1 != msgSeqNum && x.getLastSeqNum() != math.MaxInt64 {
+			if x.getLastSeqNum()+1 != msgSeqNum && x.getLastSeqNum() != SeqnumInvalid {
 				// FIXME: add metric to help alert this case
 				expectedSeqNum := 1 + x.getLastSeqNum()
 				x.extentUnlock() // we only needed the lock held while reading lastSeqNum
@@ -600,7 +600,7 @@ func (t *inConn) writeMessagesPumpTimerQueue(msgC <-chan *inMessage, ackC chan<-
 
 		case <-sealCheckTicker.C:
 			// check at regular intervals if extent got sealed, and if so, close this connection
-			if x.getSealSeqNum() != math.MaxInt64 {
+			if x.getSealSeqNum() != seqNumNotSealed {
 				log.WithFields(bark.Fields{
 					"reason":     "extent sealed",
 					"sealSeqNum": x.getSealSeqNum(),
