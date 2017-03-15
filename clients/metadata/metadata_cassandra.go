@@ -2558,7 +2558,7 @@ func makeReplicaStatsMap(rs []*shared.ExtentReplicaStats, destUUID string) map[s
 			columnSizeInBytesRate:       r.GetSizeInBytesRate(),
 			columnStatus:                r.GetStatus(),
 			columnBeginTime:             time.Unix(0, r.GetBeginTime()),
-			columnCreatedTime:           time.Unix(0, r.GetCreatedAt()),
+			columnCreatedTime:           r.GetCreatedAt(),
 			columnEndTime:               time.Unix(0, r.GetEndTime()),
 			columnStore:                 "ManyRocks", // FIXME: hardcoded for now
 			columnStoreVersion:          "0.2",       // FIXME: hardcoded for now
