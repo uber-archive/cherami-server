@@ -22,7 +22,6 @@ package storehost
 
 import (
 	"fmt"
-	"math"
 	"strconv"
 	"sync"
 	"time"
