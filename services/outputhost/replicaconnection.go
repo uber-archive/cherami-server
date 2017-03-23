@@ -22,6 +22,7 @@ package outputhost
 
 import (
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/net/context"
@@ -55,7 +56,8 @@ type (
 		cancel              context.CancelFunc
 		closeChannel        chan struct{}
 		connectionsClosedCh chan<- error
-		readMsgsCh          chan int32
+		readMsgsCh          chan struct{}
+		localReadMsgs       int32
 		extCache            *extentCache
 		name                string // Name of this replicaConnection for logging/heartbeat
 		waitWG              sync.WaitGroup
@@ -89,7 +91,7 @@ func newReplicaConnection(stream storeStream.BStoreOpenReadStreamOutCall, msgsCh
 		cancel:              cancel,
 		shutdownWG:          shutdownWG,
 		closeChannel:        make(chan struct{}),
-		readMsgsCh:          make(chan int32, replicaConnectionCreditsChBuffer),
+		readMsgsCh:          make(chan struct{}, 1), // just a notification channel
 		connectionsClosedCh: replicaCloseCh,
 		extCache:            extCache,
 		name:                replicaConnectionName,
@@ -154,8 +156,8 @@ func (conn *replicaConnection) sendCreditsToStore(credits int32) error {
 }
 
 // updateSuccessfulSendToMsgCh updates the local counter and records metric as well
-func (conn *replicaConnection) updateSuccessfulSendToMsgsCh(localMsgs *int32, length int64) {
-	*localMsgs++
+func (conn *replicaConnection) updateSuccessfulSendToMsgsCh(length int64) {
+	atomic.AddInt32(&conn.localReadMsgs, 1)
 	conn.extCache.loadMetrics.Increment(load.ExtentMetricMsgsOut)
 	conn.extCache.loadMetrics.Add(load.ExtentMetricBytesOut, length)
 	conn.recvMsgs++
@@ -191,7 +193,6 @@ func (conn *replicaConnection) grantCredits(credits int32) bool {
 // "batch" of credits as determined above
 func (conn *replicaConnection) readMessagesPump() {
 	defer conn.waitWG.Done()
-	var localReadMsgs int32
 	hb := common.NewHeartbeat(&conn.name)
 	defer hb.CloseHeartbeat()
 
@@ -202,23 +203,22 @@ func (conn *replicaConnection) readMessagesPump() {
 	// we notify the other pump to ask for credits
 	// this should be less than or equal to the creditBatchSize because we
 	// need to make sure we are listening for credits on the other pump properly
-	readBatchSize := minReadBatchSize
+	readBatchSize := int32(minReadBatchSize)
 
-	if readBatchSize < int(conn.initialCredits/10) {
-		readBatchSize = int(conn.initialCredits / 10)
+	if readBatchSize < (conn.initialCredits / 10) {
+		readBatchSize = int32(conn.initialCredits / 10)
 	}
 
 	for {
 		select {
 		default:
-			if localReadMsgs >= minReadBatchSize {
-				// Issue more credits
+			if conn.isCreditBatchSatisfied(readBatchSize) {
 				select {
-				case conn.readMsgsCh <- int32(localReadMsgs):
-					localReadMsgs = 0
+				case conn.readMsgsCh <- struct{}{}:
 				default:
-					// if we are unable to renew credits at this time accumulate it
-					conn.logger.WithField(`credits`, localReadMsgs).
+					// if we are unable to notify, it's ok we will anyway update the atomic variable and the
+					// other pump will check
+					conn.logger.WithField(`credits`, conn.localReadMsgs).
 						Warn("readMessagesPump: blocked sending credits; accumulating credits to send later")
 				}
 			}
@@ -282,14 +282,14 @@ func (conn *replicaConnection) readMessagesPump() {
 					// TODO: one message is now assumed to take one credit
 					// we might need to change it to be based on size later.
 					// we accumulate a bunch of credits and then send it in a batch to store
-					conn.updateSuccessfulSendToMsgsCh(&localReadMsgs, int64(len(cMsg.Payload.GetData())))
+					conn.updateSuccessfulSendToMsgsCh(int64(len(cMsg.Payload.GetData())))
 				default:
 					// we were unable to write it above which probably means the channel is full
 					// now do it in a blocking way except shutdown.
 					select {
 					case conn.msgsCh <- cMsg:
 						// written successfully. Now accumulate credits
-						conn.updateSuccessfulSendToMsgsCh(&localReadMsgs, int64(len(cMsg.Payload.GetData())))
+						conn.updateSuccessfulSendToMsgsCh(int64(len(cMsg.Payload.GetData())))
 					// TODO: Make sure we listen on the close channel if and only if, all the
 					// consumers are gone as well. (i.e, separate out the close channel).
 					case <-conn.closeChannel:
@@ -330,14 +330,28 @@ func (conn *replicaConnection) readMessagesPump() {
 	}
 }
 
-func (conn *replicaConnection) utilSendCredits(credits int32, numMsgsRead *int32, totalCreditsSent *int32) {
+func (conn *replicaConnection) isCreditBatchSatisfied(readBatchSize int32) bool {
+	if atomic.LoadInt32(&conn.localReadMsgs) >= readBatchSize {
+		return true
+	}
+	return false
+}
+
+func (conn *replicaConnection) updateLocalReadMsgs(credits int32) {
+	if atomic.AddInt32(&conn.localReadMsgs, -credits) < 0 {
+		// reset to 0
+		atomic.StoreInt32(&conn.localReadMsgs, 0)
+	}
+}
+
+func (conn *replicaConnection) utilSendCredits(credits int32, totalCreditsSent *int32) {
 	// conn.logger.WithField(`credits`, credits).Debug(`Sending credits to store.`)
 	if err := conn.sendCreditsToStore(credits); err != nil {
 		conn.logger.WithField(common.TagErr, err).Error(`error writing credits to store`)
 
 		go conn.close(nil)
 	}
-	*numMsgsRead = *numMsgsRead - credits
+	conn.updateLocalReadMsgs(credits)
 	*totalCreditsSent = *totalCreditsSent + credits
 }
 
@@ -362,30 +376,28 @@ func (conn *replicaConnection) writeCreditsPump() {
 
 	// creditBatchSize is proportionate to the number of initial credits
 	// with 10 being the minimum batchsize
-	creditBatchSize := (conn.initialCredits / 10)
-	if creditBatchSize < minCreditBatchSize {
-		creditBatchSize = minCreditBatchSize
+	creditBatchSize := int32(conn.initialCredits / 10)
+	if creditBatchSize < int32(minCreditBatchSize) {
+		creditBatchSize = int32(minCreditBatchSize)
 	}
 
-	var numMsgsRead int32
 	creditRequestTicker := time.NewTicker(creditRequestTimeout)
 	defer creditRequestTicker.Stop()
 
 	// Start the write pump
 	for {
 		// listen for credits only if we satisfy the batch size
-		if numMsgsRead > creditBatchSize {
+		if conn.isCreditBatchSatisfied(creditBatchSize) {
 			select {
 			case credits := <-conn.creditNotifyCh: // this is the common credit channel from redelivery cache
-				conn.utilSendCredits(credits, &numMsgsRead, &totalCreditsSent)
+				conn.utilSendCredits(credits, &totalCreditsSent)
 			case credits := <-conn.localCreditCh: // this is the local credits channel only for this connection
-				conn.utilSendCredits(credits, &numMsgsRead, &totalCreditsSent)
-			case msgsRead := <-conn.readMsgsCh:
-				numMsgsRead += msgsRead
+				conn.utilSendCredits(credits, &totalCreditsSent)
+			case <-conn.readMsgsCh:
 			case <-creditRequestTicker.C:
 				// if we didn't get any credits for a long time and we are starving for
 				// credits, then request some credits
-				if numMsgsRead >= totalCreditsSent {
+				if atomic.LoadInt32(&conn.localReadMsgs) >= totalCreditsSent {
 					conn.logger.Warn("WritecreditsPump starving for credits: requesting more")
 					conn.extCache.requestCredits()
 				}
@@ -395,12 +407,12 @@ func (conn *replicaConnection) writeCreditsPump() {
 			}
 		} else {
 			select {
-			case msgsRead := <-conn.readMsgsCh:
-				numMsgsRead += msgsRead
+			case <-conn.readMsgsCh:
+				// got a notification! just continue above and we will get credits
 			// we should listen on the local credits ch, just in case we requested for some credits
 			// above and we are just getting it now
 			case credits := <-conn.localCreditCh:
-				conn.utilSendCredits(credits, &numMsgsRead, &totalCreditsSent)
+				conn.utilSendCredits(credits, &totalCreditsSent)
 			case <-conn.closeChannel:
 				conn.logger.Info("WriteCreditsPump closing due to connection closed.")
 				return
