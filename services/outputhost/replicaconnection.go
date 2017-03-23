@@ -218,8 +218,6 @@ func (conn *replicaConnection) readMessagesPump() {
 				default:
 					// if we are unable to notify, it's ok we will anyway update the atomic variable and the
 					// other pump will check
-					conn.logger.WithField(`credits`, conn.localReadMsgs).
-						Warn("readMessagesPump: blocked sending credits; accumulating credits to send later")
 				}
 			}
 
