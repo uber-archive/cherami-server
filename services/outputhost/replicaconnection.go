@@ -219,7 +219,7 @@ func (conn *replicaConnection) readMessagesPump() {
 				default:
 					// if we are unable to renew credits at this time accumulate it
 					conn.logger.WithField(`credits`, localReadMsgs).
-						Debug("readMessagesPump: blocked sending credits; accumulating credits to send later")
+						Warn("readMessagesPump: blocked sending credits; accumulating credits to send later")
 				}
 			}
 

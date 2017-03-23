@@ -38,7 +38,7 @@ import (
 	"github.com/uber/cherami-thrift/.generated/go/store"
 )
 
-const outConnDebug = false
+const outConnDebug = true
 
 // outConnArgs are the arguments passed to outConn, including details on the
 // extent to open and the tchannel-stream to use.
