@@ -23,6 +23,7 @@ package integration
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"math/rand"
 	"net"
 	"strconv"
@@ -2386,15 +2387,19 @@ func (s *NetIntegrationSuiteParallelB) TestQueueDepth() {
 				stats := srs.GetExtent().GetReplicaStats()[0] // Modify the existing stats. We would otherwise write nils to most fields
 
 				if reset { // clearing
-					if bs > 0 {
+					if bs != math.MaxInt64 {
 						update = true
-						stats.BeginSequence = common.Int64Ptr(-1)
+						// reset BeginSequence to original starting seq (of "1")
+						stats.BeginSequence = common.Int64Ptr(1)
 					}
 				} else { // Setting retention
-					if as > 0 {
+					// check if there are messages in the extent, and if there
+					// are 'retention' as many as we can out of this extent
+					if bs != math.MaxInt64 {
 						update = true
-						stats.BeginSequence = common.Int64Ptr(retentionAmount)
-						retentionAmount = common.MaxInt64(0, retentionAmount-as)
+						// move the begin-sequence as much as we can (within 'retentionAmount')
+						stats.BeginSequence = common.Int64Ptr(bs + common.MinInt64(retentionAmount, as-bs))
+						retentionAmount -= common.MaxInt64(0, common.MinInt64(retentionAmount, as-bs))
 					}
 				}
 

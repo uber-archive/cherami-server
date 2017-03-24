@@ -89,13 +89,19 @@ func (x *ExtentObj) extentRUnlock() {
 	x.ext.RUnlock()
 }
 
-// wrappers that modify the {begin,last,seal}SeqNum
-func (x *ExtentObj) getBeginSeqNum() int64 {
-	return atomic.LoadInt64(&x.ext.beginSeqNum)
+// wrappers that modify the {first,last,seal}SeqNum
+func (x *ExtentObj) getFirstSeqNum() int64 {
+	return atomic.LoadInt64(&x.ext.firstSeqNum)
 }
 
-func (x *ExtentObj) setBeginSeqNum(beginSeqNum int64) {
-	atomic.StoreInt64(&x.ext.beginSeqNum, beginSeqNum)
+func (x *ExtentObj) setFirstSeqNum(firstSeqNum int64) {
+	atomic.StoreInt64(&x.ext.firstSeqNum, firstSeqNum)
+}
+
+func (x *ExtentObj) setFirstMsg(firstAddr, firstSeqNum, firstTimestamp int64) {
+	atomic.StoreInt64(&x.ext.firstAddr, firstAddr)
+	atomic.StoreInt64(&x.ext.firstSeqNum, firstSeqNum)
+	atomic.StoreInt64(&x.ext.firstTimestamp, firstTimestamp)
 }
 
 func (x *ExtentObj) getLastSeqNum() int64 {
@@ -104,6 +110,14 @@ func (x *ExtentObj) getLastSeqNum() int64 {
 
 func (x *ExtentObj) setLastSeqNum(lastSeqNum int64) {
 	x.ext.lastSeqNum = lastSeqNum // should be called with extentLock held
+}
+
+// setLastMsg sets the addr, seqnum, timestamp of the last message;
+// should be called with the extentLock held.
+func (x *ExtentObj) setLastMsg(lastAddr, lastSeqNum, lastTimestamp int64) {
+	x.ext.lastAddr = lastAddr
+	x.ext.lastSeqNum = lastSeqNum
+	x.ext.lastTimestamp = lastTimestamp
 }
 
 func (x *ExtentObj) getSealSeqNum() int64 {
