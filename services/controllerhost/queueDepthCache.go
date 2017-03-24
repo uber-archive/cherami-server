@@ -122,7 +122,7 @@ func (cache *storeExtentMetadataCache) fetchStoreExtentMetadata(extID string, st
 func (cache *storeExtentMetadataCache) fixReplicaStatsIfBroken(rs *shared.ExtentReplicaStats) {
 	var fixed bool
 	for _, val := range []*int64{rs.AvailableSequence, rs.BeginSequence, rs.LastSequence} {
-		if val != nil && (*val >= storageMetaValuesLimit || *val < -1) {
+		if val != nil && (*val >= storageMetaValuesLimit || *val < 0) {
 			*val = math.MaxInt64
 			fixed = true
 		}

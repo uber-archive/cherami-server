@@ -325,16 +325,15 @@ func (qdc *queueDepthCalculator) addExtentBacklog(
 
 func (qdc *queueDepthCalculator) computeBacklog(cgDesc *shared.ConsumerGroupDescription, cgExtent *metadata.ConsumerGroupExtent, storeMetadata *storeExtentMetadata, storeID string, logger bark.Logger) int64 {
 
-	var backlog int64 = 0 // default
+	var backlog int64 // backlog defaults to '0'
 	var iter = &qdc.iter
 
-	switch qdc.iter.isDLQ {
-	case true:
+	if qdc.iter.isDLQ {
 		// update backog, only if the begin/first seqnums are available
 		if storeMetadata.lastSequence != math.MaxInt64 && storeMetadata.beginSequence != math.MaxInt64 {
 			backlog = storeMetadata.lastSequence - storeMetadata.beginSequence + 1
 		}
-	case false:
+	} else {
 		// update backlog, only if there is an available seqnum
 		if storeMetadata.availableSequence != math.MaxInt64 {
 			backlog = storeMetadata.availableSequence - cgExtent.GetAckLevelSeqNo()
