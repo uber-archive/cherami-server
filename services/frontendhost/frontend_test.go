@@ -37,7 +37,6 @@ import (
 	mockmeta "github.com/uber/cherami-server/test/mocks/metadata"
 	c "github.com/uber/cherami-thrift/.generated/go/cherami"
 	"github.com/uber/cherami-thrift/.generated/go/controller"
-	"github.com/uber/cherami-thrift/.generated/go/metadata"
 	"github.com/uber/cherami-thrift/.generated/go/shared"
 
 	log "github.com/Sirupsen/logrus"
@@ -1233,7 +1232,7 @@ func (s *FrontendHostSuite) TestFrontendHostListConsumerGroupsRejectBadPath() {
 // TestFrontendHostListConsumerGroupsNoExistPath tests that a non-extant consumer group path succeeds with no results
 func (s *FrontendHostSuite) TestFrontendHostListConsumerGroupsNoExistPath() {
 	frontendHost, ctx := s.utilGetContextAndFrontend()
-	s.mockMeta.On("ListConsumerGroups", mock.Anything, mock.Anything).Return(metadata.NewListConsumerGroupResult_(), nil)
+	s.mockMeta.On("ListConsumerGroups", mock.Anything, mock.Anything).Return(shared.NewListConsumerGroupResult_(), nil)
 
 	req := c.NewListConsumerGroupRequest()
 	req.DestinationPath = common.StringPtr(s.generateKey("/foo/bad"))
@@ -1255,7 +1254,7 @@ func (s *FrontendHostSuite) TestFrontendHostListConsumerGroups() {
 
 	// An accounting map to keep track of which consumer groups have been added/seen
 	groups := make(map[string]bool)
-	listResult := &metadata.ListConsumerGroupResult_{ConsumerGroups: make([]*shared.ConsumerGroupDescription, 0, 9)}
+	listResult := &shared.ListConsumerGroupResult_{ConsumerGroups: make([]*shared.ConsumerGroupDescription, 0, 9)}
 	for i := 0; i < 3; i++ {
 		for j := 0; j < 3; j++ {
 			reqCG := c.NewCreateConsumerGroupRequest()

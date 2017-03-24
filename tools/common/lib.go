@@ -285,7 +285,7 @@ func UpdateDestination(c *cli.Context, cClient ccli.Client, mClient mcli.Client)
 	// this is a prevention mechanism to prevent messages from being deleted in source zone in case there's some
 	// issue with cross zone replication(for example, network down between zones)
 	if c.IsSet(`unconsumed_messages_retention`) && int32(c.Int(`unconsumed_messages_retention`)) < MinUnconsumedMessagesRetentionForMultiZoneDest {
-		desc, err := mClient.ReadDestination(&metadata.ReadDestinationRequest{
+		desc, err := mClient.ReadDestination(&shared.ReadDestinationRequest{
 			Path: &path,
 		})
 		ExitIfError(err)
@@ -671,7 +671,7 @@ func ReadDestination(c *cli.Context, mClient mcli.Client) {
 
 	path := c.Args().First()
 	showCG := string(c.String("showcg"))
-	desc, err := mClient.ReadDestination(&metadata.ReadDestinationRequest{
+	desc, err := mClient.ReadDestination(&shared.ReadDestinationRequest{
 		Path: &path,
 	})
 	ExitIfError(err)
@@ -681,7 +681,7 @@ func ReadDestination(c *cli.Context, mClient mcli.Client) {
 	if showCG == "true" {
 		// read all the consumer group for this destination, including deleted ones
 		destUUID := desc.GetDestinationUUID()
-		req := &metadata.ListConsumerGroupRequest{
+		req := &shared.ListConsumerGroupRequest{
 			Limit: common.Int64Ptr(DefaultPageSize),
 		}
 		var cgsInfo = make([]*shared.ConsumerGroupDescription, 0)
@@ -715,7 +715,7 @@ func ReadDlq(c *cli.Context, mClient mcli.Client) {
 	}
 
 	dlqUUID := c.Args().First()
-	desc, err0 := mClient.ReadDestination(&metadata.ReadDestinationRequest{
+	desc, err0 := mClient.ReadDestination(&shared.ReadDestinationRequest{
 		Path: &dlqUUID,
 	})
 

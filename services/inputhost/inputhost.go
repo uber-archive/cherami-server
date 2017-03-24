@@ -244,7 +244,7 @@ func (h *InputHost) getExtentsAndLoadPathCache(ctx thrift.Context, destPath, des
 // checkDestination reads destination from metadata store and make sure it's writable
 func (h *InputHost) checkDestination(ctx thrift.Context, path string) (string, shared.DestinationType, metrics.ErrorClass, error) {
 	// talk to metadata
-	mGetRequest := metadata.ReadDestinationRequest{Path: common.StringPtr(path)}
+	mGetRequest := shared.ReadDestinationRequest{Path: common.StringPtr(path)}
 	destDesc, err := h.mClient.ReadDestination(ctx, &mGetRequest)
 	if err != nil {
 		errC, newErr := common.ConvertDownstreamErrors(h.logger, err)

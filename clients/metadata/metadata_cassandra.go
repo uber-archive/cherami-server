@@ -43,7 +43,11 @@ const directoryUUID string = "CC3B477C-E6F2-4465-9A98-7FE71B68CD1F"
 
 var uuidRegex, _ = regexp.Compile(`^[[:xdigit:]]{8}-[[:xdigit:]]{4}-[[:xdigit:]]{4}-[[:xdigit:]]{4}-[[:xdigit:]]{12}$`)
 
-const defaultSessionTimeout = 10 * time.Second
+const (
+	defaultSessionTimeout         = 10 * time.Second
+	defaultDLQConsumedRetention   = 7 * 24 * 3600 // One Week
+	defaultDLQUnconsumedRetention = 7 * 24 * 3600 // One Week
+)
 
 const (
 	opsCreate = "create"
@@ -585,7 +589,7 @@ func unmarshalDstZoneConfigs(configsData []map[string]interface{}) []*shared.Des
 // ReadDestination implements the corresponding TChanMetadataServiceClient API
 // Either path or destinationUUID can be specified.
 // Deleted destinations are returned with DELETED status only when destinationUUID is used.
-func (s *CassandraMetadataService) ReadDestination(ctx thrift.Context, getRequest *m.ReadDestinationRequest) (result *shared.DestinationDescription, err error) {
+func (s *CassandraMetadataService) ReadDestination(ctx thrift.Context, getRequest *shared.ReadDestinationRequest) (result *shared.DestinationDescription, err error) {
 	var query *gocql.Query
 	var uuid, sql string
 	if getRequest.Path != nil {
@@ -673,7 +677,7 @@ func (s *CassandraMetadataService) UpdateDestination(ctx thrift.Context, updateR
 			Message: "UpdateDestination: Update to DELETED status is not allowed. Use DeleteDestination instead.",
 		}
 	}
-	getDestination := &m.ReadDestinationRequest{
+	getDestination := &shared.ReadDestinationRequest{
 		DestinationUUID: common.StringPtr(updateRequest.GetDestinationUUID()),
 	}
 	existing, err := s.ReadDestination(nil, getDestination)
@@ -775,7 +779,7 @@ func (s *CassandraMetadataService) UpdateDestination(ctx thrift.Context, updateR
 
 // DeleteDestination implements the corresponding TChanMetadataServiceClient API
 func (s *CassandraMetadataService) DeleteDestination(ctx thrift.Context, deleteRequest *shared.DeleteDestinationRequest) error {
-	getDestination := &m.ReadDestinationRequest{
+	getDestination := &shared.ReadDestinationRequest{
 		Path: common.StringPtr(deleteRequest.GetPath()),
 	}
 	existing, err := s.ReadDestination(nil, getDestination)
@@ -829,7 +833,7 @@ func (s *CassandraMetadataService) DeleteDestinationUUID(ctx thrift.Context, del
 		return &shared.BadRequestError{Message: "Missing UUID param"}
 	}
 
-	getDestination := &m.ReadDestinationRequest{
+	getDestination := &shared.ReadDestinationRequest{
 		DestinationUUID: common.StringPtr(deleteRequest.GetUUID()),
 	}
 	existing, err := s.ReadDestination(nil, getDestination)
@@ -998,7 +1002,7 @@ func (s *CassandraMetadataService) ListDestinationsByUUID(ctx thrift.Context, li
 		*d.DLQMergeBefore = int64(cqlTimestampToUnixNano(*d.DLQMergeBefore))
 
 		if listRequest.GetValidateAgainstPathTable() {
-			readRequest := &m.ReadDestinationRequest{
+			readRequest := &shared.ReadDestinationRequest{
 				Path: d.Path,
 			}
 
@@ -1181,19 +1185,45 @@ const (
 		` WHERE ` + columnDestinationUUID + `=? and ` + columnName + `=?`
 )
 
-// CreateConsumerGroup creates a ConsumerGroup for the given destination, if it doesn't already exist
+func (s *CassandraMetadataService) CreateConsumerGroup(ctx thrift.Context, request *shared.CreateConsumerGroupRequest) (*shared.ConsumerGroupDescription, error) {
+	uuidRequest := shared.NewCreateConsumerGroupUUIDRequest()
+	uuidRequest.Request = request
+	uuidRequest.ConsumerGroupUUID = common.StringPtr(uuid.New())
+	return s.CreateConsumerGroupUUID(ctx, uuidRequest)
+}
+
+// CreateConsumerGroupUUID creates a ConsumerGroup for the given destination, if it doesn't already exist
 // ConsumerGroups are tied to a destination path, so the same ConsumerGroupName can be used across
 // multiple destination paths. If the requested [destinationPath, consumerGroupName] already exists,
 // this method will return an EntityAlreadyExistsError.
-func (s *CassandraMetadataService) CreateConsumerGroup(ctx thrift.Context, request *shared.CreateConsumerGroupRequest) (*shared.ConsumerGroupDescription, error) {
+func (s *CassandraMetadataService) CreateConsumerGroupUUID(ctx thrift.Context, request *shared.CreateConsumerGroupUUIDRequest) (*shared.ConsumerGroupDescription, error) {
+	createRequest := request.GetRequest()
+	cgUUID := request.GetConsumerGroupUUID()
 
-	dstInfo, err := s.ReadDestination(nil, &m.ReadDestinationRequest{Path: common.StringPtr(request.GetDestinationPath())})
+	// Dead Letter Queue destination creation
+
+	// Only non-UUID (non-DLQ) destinations get a DLQ for the corresponding consumer groups
+	// We may create a consumer group consume a DLQ destination and no DLQ destination creation needed in this case
+	var dlqUUID *string
+	if common.PathRegex.MatchString(createRequest.GetDestinationPath()) {
+		dlqDestDesc, err := s.createDlqDestination(cgUUID, createRequest.GetConsumerGroupName(), createRequest.GetOwnerEmail())
+		if err != nil {
+			return nil, err
+		}
+
+		dlqUUID = common.StringPtr(dlqDestDesc.GetDestinationUUID())
+	} else {
+		log.WithFields(log.Fields{common.TagCnsm: common.FmtCnsm(cgUUID)}).Info("DeadLetterQueue destination not being created")
+	}
+
+	dstInfo, err := s.ReadDestination(nil, &shared.ReadDestinationRequest{Path: common.StringPtr(createRequest.GetDestinationPath())})
 	if err != nil {
 		return nil, err
 	}
+	dstUUID := dstInfo.GetDestinationUUID()
 
 	/*
-		   Every ConsumerGroup is assigned a UUID, which identifes the group uniquely. We need to
+		   Every ConsumerGroup is assigned a UUID, which identifies the group uniquely. We need to
 			 be able to retrieve a ConsumerGroup given either a UUID or a (destinationPath, groupName)
 			 tuple. To enable this, we maintain the ConsumerGroup information across two tables, one
 			 indexed by the UUID and the other indexed by the (destinationUUID, groupName) tuple. Creation
@@ -1207,70 +1237,48 @@ func (s *CassandraMetadataService) CreateConsumerGroup(ctx thrift.Context, reque
 			A batch query cannot be used here, because CassandraDB requires all the queries in a batch
 			to be from the same partition.
 	*/
-	cgUUID := uuid.New()
-	dstUUID := dstInfo.GetDestinationUUID()
-	var dlqUUID *string
-	if request.DeadLetterQueueDestinationUUID != nil {
-		var destDesc *shared.DestinationDescription
-		dlqUUID = common.StringPtr(request.GetDeadLetterQueueDestinationUUID())
-
-		// We need to create the consumer group with UUID matching the random UUID already populated in the DLQ destination
-
-		readDestReq := m.NewReadDestinationRequest()
-		readDestReq.DestinationUUID = common.StringPtr(request.GetDeadLetterQueueDestinationUUID())
-
-		destDesc, err = s.ReadDestination(ctx, readDestReq)
-		if err != nil || destDesc == nil || len(destDesc.GetDLQConsumerGroupUUID()) == 0 {
-			return nil, &shared.InternalServiceError{
-				Message: fmt.Sprintf("CreateConsumerGroup - lookup of DLQ destination failed dst=%v, cg=%v, dlqDst=%v err=%v",
-					request.GetDestinationPath(), request.GetConsumerGroupName(), request.GetDeadLetterQueueDestinationUUID(), err),
-			}
-		}
-
-		cgUUID = destDesc.GetDLQConsumerGroupUUID()
-	}
 
 	err = s.session.Query(sqlInsertCGByUUID,
 		cgUUID,
-		request.GetIsMultiZone(),
+		createRequest.GetIsMultiZone(),
 		cgUUID,
 		dstUUID,
-		request.GetConsumerGroupName(),
-		request.GetStartFrom(),
+		createRequest.GetConsumerGroupName(),
+		createRequest.GetStartFrom(),
 		shared.ConsumerGroupStatus_ENABLED,
-		request.GetLockTimeoutSeconds(),
-		request.GetMaxDeliveryCount(),
-		request.GetSkipOlderMessagesSeconds(),
+		createRequest.GetLockTimeoutSeconds(),
+		createRequest.GetMaxDeliveryCount(),
+		createRequest.GetSkipOlderMessagesSeconds(),
 		dlqUUID,
-		request.GetOwnerEmail(),
-		request.GetIsMultiZone(),
-		request.GetActiveZone(),
-		marshalCgZoneConfigs(request.GetZoneConfigs())).Exec()
+		createRequest.GetOwnerEmail(),
+		createRequest.GetIsMultiZone(),
+		createRequest.GetActiveZone(),
+		marshalCgZoneConfigs(createRequest.GetZoneConfigs())).Exec()
 
 	if err != nil {
 		return nil, &shared.InternalServiceError{
 			Message: fmt.Sprintf("CreateConsumerGroup - insert into consumer_groups table failed, dst=%v, cg=%v, err=%v",
-				request.GetDestinationPath(), request.GetConsumerGroupName(), err),
+				createRequest.GetDestinationPath(), createRequest.GetConsumerGroupName(), err),
 		}
 	}
 
 	query := s.session.Query(sqlInsertCGByName,
 		dstUUID,
-		request.GetConsumerGroupName(),
-		request.GetIsMultiZone(),
+		createRequest.GetConsumerGroupName(),
+		createRequest.GetIsMultiZone(),
 		cgUUID,
 		dstUUID,
-		request.GetConsumerGroupName(),
-		request.GetStartFrom(),
+		createRequest.GetConsumerGroupName(),
+		createRequest.GetStartFrom(),
 		shared.ConsumerGroupStatus_ENABLED,
-		request.GetLockTimeoutSeconds(),
-		request.GetMaxDeliveryCount(),
-		request.GetSkipOlderMessagesSeconds(),
+		createRequest.GetLockTimeoutSeconds(),
+		createRequest.GetMaxDeliveryCount(),
+		createRequest.GetSkipOlderMessagesSeconds(),
 		dlqUUID,
-		request.GetOwnerEmail(),
-		request.GetIsMultiZone(),
-		request.GetActiveZone(),
-		marshalCgZoneConfigs(request.GetZoneConfigs()))
+		createRequest.GetOwnerEmail(),
+		createRequest.GetIsMultiZone(),
+		createRequest.GetActiveZone(),
+		marshalCgZoneConfigs(createRequest.GetZoneConfigs()))
 
 	previous := make(map[string]interface{}) // We actually throw away the old values below, but passing nil causes a panic
 
@@ -1280,7 +1288,7 @@ func (s *CassandraMetadataService) CreateConsumerGroup(ctx thrift.Context, reque
 			log.WithFields(log.Fields{common.TagCnsm: common.FmtCnsm(cgUUID), common.TagErr: err}).Warn(`CreateConsumerGroup - failed to delete orphan record after a failed CAS attempt, ,`)
 		}
 		return nil, &shared.EntityAlreadyExistsError{
-			Message: fmt.Sprintf("CreateConsumerGroup - Group exists, dst=%v cg=%v err=%v", request.GetDestinationPath(), request.GetConsumerGroupName(), err),
+			Message: fmt.Sprintf("CreateConsumerGroup - Group exists, dst=%v cg=%v err=%v", createRequest.GetDestinationPath(), createRequest.GetConsumerGroupName(), err),
 		}
 	}
 
@@ -1289,7 +1297,7 @@ func (s *CassandraMetadataService) CreateConsumerGroup(ctx thrift.Context, reque
 	callerServiceName := getThriftContextValue(ctx, common.CallerServiceName)
 
 	s.recordUserOperation(
-		request.GetConsumerGroupName(),
+		createRequest.GetConsumerGroupName(),
 		cgUUID,
 		entityTypeCG,
 		callerUserName,
@@ -1298,23 +1306,58 @@ func (s *CassandraMetadataService) CreateConsumerGroup(ctx thrift.Context, reque
 		callerHostName,
 		opsCreate,
 		time.Now(),
-		marshalRequest(request))
+		marshalRequest(createRequest))
 
 	return &shared.ConsumerGroupDescription{
 		ConsumerGroupUUID:              common.StringPtr(cgUUID),
 		DestinationUUID:                common.StringPtr(dstUUID),
-		ConsumerGroupName:              common.StringPtr(request.GetConsumerGroupName()),
-		StartFrom:                      common.Int64Ptr(request.GetStartFrom()),
+		ConsumerGroupName:              common.StringPtr(createRequest.GetConsumerGroupName()),
+		StartFrom:                      common.Int64Ptr(createRequest.GetStartFrom()),
 		Status:                         common.InternalConsumerGroupStatusPtr(shared.ConsumerGroupStatus_ENABLED),
-		LockTimeoutSeconds:             common.Int32Ptr(request.GetLockTimeoutSeconds()),
-		MaxDeliveryCount:               common.Int32Ptr(request.GetMaxDeliveryCount()),
-		SkipOlderMessagesSeconds:       common.Int32Ptr(request.GetSkipOlderMessagesSeconds()),
-		DeadLetterQueueDestinationUUID: common.StringPtr(request.GetDeadLetterQueueDestinationUUID()),
-		OwnerEmail:                     common.StringPtr(request.GetOwnerEmail()),
-		IsMultiZone:                    common.BoolPtr(request.GetIsMultiZone()),
-		ActiveZone:                     common.StringPtr(request.GetActiveZone()),
-		ZoneConfigs:                    request.GetZoneConfigs(),
+		LockTimeoutSeconds:             common.Int32Ptr(createRequest.GetLockTimeoutSeconds()),
+		MaxDeliveryCount:               common.Int32Ptr(createRequest.GetMaxDeliveryCount()),
+		SkipOlderMessagesSeconds:       common.Int32Ptr(createRequest.GetSkipOlderMessagesSeconds()),
+		DeadLetterQueueDestinationUUID: dlqUUID,
+		OwnerEmail:                     common.StringPtr(createRequest.GetOwnerEmail()),
+		IsMultiZone:                    common.BoolPtr(createRequest.GetIsMultiZone()),
+		ActiveZone:                     common.StringPtr(createRequest.GetActiveZone()),
+		ZoneConfigs:                    createRequest.GetZoneConfigs(),
 	}, nil
+}
+
+func (s *CassandraMetadataService) createDlqDestination(cgUUID string, cgName string, ownerEmail string) (*shared.DestinationDescription, error) {
+	dlqCreateRequest := shared.NewCreateDestinationRequest()
+	dlqCreateRequest.ConsumedMessagesRetention = common.Int32Ptr(defaultDLQConsumedRetention)
+	dlqCreateRequest.UnconsumedMessagesRetention = common.Int32Ptr(defaultDLQUnconsumedRetention)
+	dlqCreateRequest.OwnerEmail = common.StringPtr(ownerEmail)
+	dlqCreateRequest.Type = common.InternalDestinationTypePtr(shared.DestinationType_PLAIN)
+	dlqCreateRequest.DLQConsumerGroupUUID = common.StringPtr(cgUUID)
+	dlqPath, _ := common.GetDLQPathNameFromCGName(cgName)
+	dlqCreateRequest.Path = common.StringPtr(dlqPath)
+
+	var dlqDestDesc *shared.DestinationDescription
+	dlqDestDesc, err := s.CreateDestination(nil, dlqCreateRequest)
+
+	if err != nil || dlqDestDesc == nil {
+		switch err.(type) {
+		case *shared.EntityAlreadyExistsError:
+			log.WithFields(log.Fields{common.TagCnsm: common.FmtCnsm(cgUUID)}).Info("DeadLetterQueue destination already existed")
+			mDLQReadRequest := shared.ReadDestinationRequest{
+				Path: dlqCreateRequest.Path,
+			}
+
+			dlqDestDesc, err = s.ReadDestination(nil, &mDLQReadRequest)
+			if err != nil || dlqDestDesc == nil {
+				log.WithFields(log.Fields{common.TagCnsm: common.FmtCnsm(cgUUID), common.TagErr: err}).Error(`Can't read existing DeadLetterQueue destination`)
+				return nil, err
+			}
+			return dlqDestDesc, nil
+		default:
+			log.WithFields(log.Fields{common.TagCnsm: common.FmtCnsm(cgUUID), common.TagErr: err}).Error(`Can't create DeadLetterQueue destination`)
+			return nil, err
+		}
+	}
+	return dlqDestDesc, err
 }
 
 func (s *CassandraMetadataService) readConsumerGroupByDstUUID(dstUUID string, cgName string) (*shared.ConsumerGroupDescription, error) {
@@ -1349,7 +1392,7 @@ func (s *CassandraMetadataService) readConsumerGroupByDstUUID(dstUUID string, cg
 	return result, nil
 }
 
-// ReadConsumerGroup returns the ConsumerGroupDescription for the [destinatinPath, groupName].
+// ReadConsumerGroup returns the ConsumerGroupDescription for the [destinationPath, groupName].
 // When destination path is specified as input, this method only returns result, if the
 // destination has not been DELETED. When destination UUID is specified as input, this
 // method will always return result, if the consumer group exist.
@@ -1369,7 +1412,7 @@ func (s *CassandraMetadataService) ReadConsumerGroup(ctx thrift.Context, request
 	var dstUUID string
 
 	if request.DestinationPath != nil {
-		dstInfo, err := s.ReadDestination(nil, &m.ReadDestinationRequest{Path: common.StringPtr(request.GetDestinationPath())})
+		dstInfo, err := s.ReadDestination(nil, &shared.ReadDestinationRequest{Path: common.StringPtr(request.GetDestinationPath())})
 		if err != nil {
 			return nil, err
 		}
@@ -1590,7 +1633,7 @@ func (s *CassandraMetadataService) DeleteConsumerGroup(ctx thrift.Context, reque
 	if len(dlqDstID) > 0 {
 		var dlqDstDesc *shared.DestinationDescription
 		// this is the same as DeleteDestination()
-		readReq := &m.ReadDestinationRequest{
+		readReq := &shared.ReadDestinationRequest{
 			Path: common.StringPtr(dlqDstID),
 		}
 		dlqDstDesc, e = s.ReadDestination(nil, readReq)
@@ -1668,7 +1711,7 @@ func (s *CassandraMetadataService) DeleteConsumerGroup(ctx thrift.Context, reque
 // If the ConsumerGroupName parameter is empty, this method will return all ConsumerGroups for the given
 // destination path/uuid. The returned value is an implementation of MetadataServiceListConsumerGroupsOutCall interface.
 // Callers must repeatedly invoke the Read() operation on the returned type until either an EOF or error is returned.
-func (s *CassandraMetadataService) ListConsumerGroups(ctx thrift.Context, request *m.ListConsumerGroupRequest) (*m.ListConsumerGroupResult_, error) {
+func (s *CassandraMetadataService) ListConsumerGroups(ctx thrift.Context, request *shared.ListConsumerGroupRequest) (*shared.ListConsumerGroupResult_, error) {
 
 	if request.DestinationPath == nil && request.DestinationUUID == nil {
 		return nil, &shared.BadRequestError{
@@ -1678,7 +1721,7 @@ func (s *CassandraMetadataService) ListConsumerGroups(ctx thrift.Context, reques
 
 	dstUUID := request.GetDestinationUUID()
 	if path := request.DestinationPath; path != nil {
-		dstInfo, err := s.ReadDestination(nil, &m.ReadDestinationRequest{Path: common.StringPtr(*path)})
+		dstInfo, err := s.ReadDestination(nil, &shared.ReadDestinationRequest{Path: common.StringPtr(*path)})
 		if err != nil {
 			preMsg := fmt.Sprintf("ListConsumerGroups - destinationUUID lookup failed, dst=%v, cg=%v, err=", request.GetDestinationPath(), request.GetConsumerGroupName())
 			switch e := err.(type) {
@@ -1714,7 +1757,7 @@ func (s *CassandraMetadataService) ListConsumerGroups(ctx thrift.Context, reques
 		}
 	}
 
-	result := &m.ListConsumerGroupResult_{
+	result := &shared.ListConsumerGroupResult_{
 		ConsumerGroups: []*shared.ConsumerGroupDescription{},
 		NextPageToken:  request.PageToken,
 	}
@@ -1760,7 +1803,7 @@ func (s *CassandraMetadataService) ListConsumerGroups(ctx thrift.Context, reques
 }
 
 // ListAllConsumerGroups returns all ConsumerGroups in ConsumerGroups Table. This API is only used for debuging tool
-func (s *CassandraMetadataService) ListAllConsumerGroups(ctx thrift.Context, request *m.ListConsumerGroupRequest) (*m.ListConsumerGroupResult_, error) {
+func (s *CassandraMetadataService) ListAllConsumerGroups(ctx thrift.Context, request *shared.ListConsumerGroupRequest) (*shared.ListConsumerGroupResult_, error) {
 
 	if request.GetLimit() <= 0 {
 		return nil, &shared.BadRequestError{
@@ -1776,7 +1819,7 @@ func (s *CassandraMetadataService) ListAllConsumerGroups(ctx thrift.Context, req
 		}
 	}
 
-	result := &m.ListConsumerGroupResult_{
+	result := &shared.ListConsumerGroupResult_{
 		ConsumerGroups: []*shared.ConsumerGroupDescription{},
 		NextPageToken:  request.PageToken,
 	}
@@ -4010,7 +4053,7 @@ func (s *CassandraMetadataService) ListHosts(ctx thrift.Context, listRequest *m.
 
 // UpdateDestinationDLQCursors implements the corresponding TChanMetadataServiceClient API
 func (s *CassandraMetadataService) UpdateDestinationDLQCursors(ctx thrift.Context, updateRequest *m.UpdateDestinationDLQCursorsRequest) (existing *shared.DestinationDescription, err error) {
-	getDestination := &m.ReadDestinationRequest{
+	getDestination := &shared.ReadDestinationRequest{
 		DestinationUUID: common.StringPtr(updateRequest.GetDestinationUUID()),
 	}
 	existing, err = s.ReadDestination(nil, getDestination)

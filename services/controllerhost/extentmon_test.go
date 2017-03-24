@@ -295,7 +295,7 @@ func (s *ExtentStateMonitorSuite) TestExtentMonitor() {
 
 		for i := 0; i < len(destinations); i++ {
 
-			desc, err := s.mcp.mClient.ReadDestination(nil, &m.ReadDestinationRequest{DestinationUUID: common.StringPtr(destinations[i].GetDestinationUUID())})
+			desc, err := s.mcp.mClient.ReadDestination(nil, &shared.ReadDestinationRequest{DestinationUUID: common.StringPtr(destinations[i].GetDestinationUUID())})
 			s.Nil(err, "Failed to read destination")
 			stats, err := s.mcp.context.mm.ListExtentsByDstIDStatus(desc.GetDestinationUUID(), nil)
 			s.Nil(err, "Failed to list extents")
@@ -328,7 +328,7 @@ func (s *ExtentStateMonitorSuite) TestExtentMonitor() {
 			}
 
 			if desc.GetStatus() == shared.DestinationStatus_DELETING {
-				cg, e := s.mcp.mClient.ListConsumerGroups(nil, &m.ListConsumerGroupRequest{
+				cg, e := s.mcp.mClient.ListConsumerGroups(nil, &shared.ListConsumerGroupRequest{
 					DestinationUUID:   common.StringPtr(desc.GetDestinationUUID()),
 					ConsumerGroupName: common.StringPtr(desc.GetPath() + "/consumer"),
 				})

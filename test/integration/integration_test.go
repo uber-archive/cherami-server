@@ -979,7 +979,7 @@ func (s *NetIntegrationSuiteParallelC) TestDLQWithCassandra() {
 	s.Equal(cgUpdateReq.GetOwnerEmail(), cgDesc2.GetOwnerEmail(), "Wrong Owner Email")
 
 	// Verify that the DLQ Destination can be read
-	dReq := metadata.NewReadDestinationRequest()
+	dReq := shared.NewReadDestinationRequest()
 	dReq.DestinationUUID = common.StringPtr(cgDesc2.GetDeadLetterQueueDestinationUUID())
 	dlqDestDesc, err := s.mClient.ReadDestination(nil, dReq)
 	s.Nil(err)

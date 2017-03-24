@@ -38,7 +38,6 @@ import (
 	localMetrics "github.com/uber/cherami-server/common/metrics"
 	"github.com/uber/cherami-server/services/controllerhost"
 	"github.com/uber/cherami-thrift/.generated/go/cherami"
-	m "github.com/uber/cherami-thrift/.generated/go/metadata"
 	"github.com/uber/cherami-thrift/.generated/go/shared"
 )
 
@@ -160,7 +159,7 @@ func (s *NodeFailureTestSuite) testNodeFailure(serviceName string, nKill int) {
 	_, err := s.createDestination(cheramiClient, destPath)
 	s.Nil(err)
 
-	mReq := &m.ReadDestinationRequest{Path: common.StringPtr(destPath)}
+	mReq := &shared.ReadDestinationRequest{Path: common.StringPtr(destPath)}
 	dstDesc, err := s.mClient.ReadDestination(nil, mReq)
 	s.Nil(err)
 

@@ -86,7 +86,7 @@ type (
 		// ListConsumerGroupsByDstID lists all consumer groups for a given destination uuid
 		ListConsumerGroupsByDstID(dstID string) ([]*shared.ConsumerGroupDescription, error)
 		// ListConsumerGroupsPage lists all consumer groups for a given destination uuid
-		ListConsumerGroupsPage(mReq *m.ListConsumerGroupRequest) (*m.ListConsumerGroupResult_, error)
+		ListConsumerGroupsPage(mReq *shared.ListConsumerGroupRequest) (*shared.ListConsumerGroupResult_, error)
 		// UpdateOutHost changes the out host for the consumer group extent
 		UpdateOutHost(dstID string, cgID string, extentID string, outHostID string) error
 		// DeleteConsumerGroup deletes the consumer group status
@@ -158,7 +158,7 @@ func (mm *metadataMgrImpl) ListDestinationsPage(mReq *shared.ListDestinationsReq
 
 func (mm *metadataMgrImpl) ReadDestination(dstID string, dstPath string) (*shared.DestinationDescription, error) {
 
-	mReq := &m.ReadDestinationRequest{}
+	mReq := &shared.ReadDestinationRequest{}
 
 	if len(dstID) > 0 {
 		mReq.DestinationUUID = common.StringPtr(dstID)
@@ -514,7 +514,7 @@ func (mm *metadataMgrImpl) AddExtentToConsumerGroup(dstID string, cgID string, e
 
 func (mm *metadataMgrImpl) ListConsumerGroupsByDstID(dstID string) ([]*shared.ConsumerGroupDescription, error) {
 
-	mReq := &m.ListConsumerGroupRequest{
+	mReq := &shared.ListConsumerGroupRequest{
 		DestinationUUID: common.StringPtr(dstID),
 		Limit:           common.Int64Ptr(defaultPageSize),
 	}
@@ -539,7 +539,7 @@ func (mm *metadataMgrImpl) ListConsumerGroupsByDstID(dstID string) ([]*shared.Co
 	return result, nil
 }
 
-func (mm *metadataMgrImpl) ListConsumerGroupsPage(mReq *m.ListConsumerGroupRequest) (*m.ListConsumerGroupResult_, error) {
+func (mm *metadataMgrImpl) ListConsumerGroupsPage(mReq *shared.ListConsumerGroupRequest) (*shared.ListConsumerGroupResult_, error) {
 	return mm.mClient.ListConsumerGroups(nil, mReq)
 }
 

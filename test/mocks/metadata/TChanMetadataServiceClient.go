@@ -224,20 +224,20 @@ func (_m *TChanMetadataServiceClient) HostAddrToUUID(ctx thrift.Context, hostAdd
 }
 
 // ListAllConsumerGroups provides a mock function with given fields: ctx, listRequest
-func (_m *TChanMetadataServiceClient) ListAllConsumerGroups(ctx thrift.Context, listRequest *metadata.ListConsumerGroupRequest) (*metadata.ListConsumerGroupResult_, error) {
+func (_m *TChanMetadataServiceClient) ListAllConsumerGroups(ctx thrift.Context, listRequest *shared.ListConsumerGroupRequest) (*shared.ListConsumerGroupResult_, error) {
 	ret := _m.Called(ctx, listRequest)
 
-	var r0 *metadata.ListConsumerGroupResult_
-	if rf, ok := ret.Get(0).(func(thrift.Context, *metadata.ListConsumerGroupRequest) *metadata.ListConsumerGroupResult_); ok {
+	var r0 *shared.ListConsumerGroupResult_
+	if rf, ok := ret.Get(0).(func(thrift.Context, *shared.ListConsumerGroupRequest) *shared.ListConsumerGroupResult_); ok {
 		r0 = rf(ctx, listRequest)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(*metadata.ListConsumerGroupResult_)
+			r0 = ret.Get(0).(*shared.ListConsumerGroupResult_)
 		}
 	}
 
 	var r1 error
-	if rf, ok := ret.Get(1).(func(thrift.Context, *metadata.ListConsumerGroupRequest) error); ok {
+	if rf, ok := ret.Get(1).(func(thrift.Context, *shared.ListConsumerGroupRequest) error); ok {
 		r1 = rf(ctx, listRequest)
 	} else {
 		r1 = ret.Error(1)
@@ -270,20 +270,20 @@ func (_m *TChanMetadataServiceClient) ListEntityOps(ctx thrift.Context, listRequ
 }
 
 // ListConsumerGroups provides a mock function with given fields: ctx, listRequest
-func (_m *TChanMetadataServiceClient) ListConsumerGroups(ctx thrift.Context, listRequest *metadata.ListConsumerGroupRequest) (*metadata.ListConsumerGroupResult_, error) {
+func (_m *TChanMetadataServiceClient) ListConsumerGroups(ctx thrift.Context, listRequest *shared.ListConsumerGroupRequest) (*shared.ListConsumerGroupResult_, error) {
 	ret := _m.Called(ctx, listRequest)
 
-	var r0 *metadata.ListConsumerGroupResult_
-	if rf, ok := ret.Get(0).(func(thrift.Context, *metadata.ListConsumerGroupRequest) *metadata.ListConsumerGroupResult_); ok {
+	var r0 *shared.ListConsumerGroupResult_
+	if rf, ok := ret.Get(0).(func(thrift.Context, *shared.ListConsumerGroupRequest) *shared.ListConsumerGroupResult_); ok {
 		r0 = rf(ctx, listRequest)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(*metadata.ListConsumerGroupResult_)
+			r0 = ret.Get(0).(*shared.ListConsumerGroupResult_)
 		}
 	}
 
 	var r1 error
-	if rf, ok := ret.Get(1).(func(thrift.Context, *metadata.ListConsumerGroupRequest) error); ok {
+	if rf, ok := ret.Get(1).(func(thrift.Context, *shared.ListConsumerGroupRequest) error); ok {
 		r1 = rf(ctx, listRequest)
 	} else {
 		r1 = ret.Error(1)
@@ -560,11 +560,11 @@ func (_m *TChanMetadataServiceClient) ReadConsumerGroupExtentsByExtUUID(ctx thri
 }
 
 // ReadDestination provides a mock function with given fields: ctx, getRequest
-func (_m *TChanMetadataServiceClient) ReadDestination(ctx thrift.Context, getRequest *metadata.ReadDestinationRequest) (*shared.DestinationDescription, error) {
+func (_m *TChanMetadataServiceClient) ReadDestination(ctx thrift.Context, getRequest *shared.ReadDestinationRequest) (*shared.DestinationDescription, error) {
 	ret := _m.Called(ctx, getRequest)
 
 	var r0 *shared.DestinationDescription
-	if rf, ok := ret.Get(0).(func(thrift.Context, *metadata.ReadDestinationRequest) *shared.DestinationDescription); ok {
+	if rf, ok := ret.Get(0).(func(thrift.Context, *shared.ReadDestinationRequest) *shared.DestinationDescription); ok {
 		r0 = rf(ctx, getRequest)
 	} else {
 		if ret.Get(0) != nil {
@@ -573,7 +573,7 @@ func (_m *TChanMetadataServiceClient) ReadDestination(ctx thrift.Context, getReq
 	}
 
 	var r1 error
-	if rf, ok := ret.Get(1).(func(thrift.Context, *metadata.ReadDestinationRequest) error); ok {
+	if rf, ok := ret.Get(1).(func(thrift.Context, *shared.ReadDestinationRequest) error); ok {
 		r1 = rf(ctx, getRequest)
 	} else {
 		r1 = ret.Error(1)
