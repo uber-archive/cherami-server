@@ -607,7 +607,7 @@ func (h *Frontend) DeleteDestination(ctx thrift.Context, deleteRequest *c.Delete
 	// TODO: remove when appropriate authentication is in place
 	if !allowMutate {
 		err = &c.BadRequestError{Message: fmt.Sprintf("Contact Cherami team to delete this path: %v", deleteRequest.GetPath())}
-		h.logger.Error(err.Error())
+		h.logger.WithField(common.TagErr, err).Error("DeleteDestination failed")
 		return
 	}
 
@@ -829,7 +829,7 @@ func (h *Frontend) UpdateDestination(ctx thrift.Context, updateRequest *c.Update
 	// TODO: remove when appropriate authentication is in place
 	if !allowMutate {
 		err := &c.BadRequestError{Message: fmt.Sprintf("Contact Cherami team to update this path: %v", updateRequest.GetPath())}
-		h.logger.Error(err.Error())
+		h.logger.WithField(common.TagErr, err).Error("Error updating destination")
 		return nil, err
 	}
 
@@ -1147,7 +1147,7 @@ func (h *Frontend) ListConsumerGroups(ctx thrift.Context, listRequest *c.ListCon
 
 	if len(listRequest.GetConsumerGroupName()) == 0 && listRequest.GetLimit() <= 0 {
 		err = &c.BadRequestError{Message: fmt.Sprintf("Invalid limit %d when no consumer group name specified", listRequest.GetLimit())}
-		h.logger.Error(err.Error())
+		h.logger.WithField(common.TagErr, err).Error("ListConsumerGroups failed")
 		return nil, err
 	}
 
@@ -1196,7 +1196,7 @@ func (h *Frontend) ListDestinations(ctx thrift.Context, listRequest *c.ListDesti
 
 	if listRequest.GetLimit() <= 0 {
 		err = &c.BadRequestError{Message: fmt.Sprintf("Invalid limit %d", listRequest.GetLimit())}
-		h.logger.Error(err.Error())
+		h.logger.WithField(common.TagErr, err).Error("ListDestinations failed")
 		return nil, err
 	}
 
