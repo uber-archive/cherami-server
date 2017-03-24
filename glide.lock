@@ -1,8 +1,8 @@
 hash: 95f30a537dc5b2841e061722d66e26c58126e82c19e9ba29bb6b0f44cf1741d0
-updated: 2017-03-09T08:28:59.876988661-08:00
+updated: 2017-03-20T09:58:47.035659706-07:00
 imports:
 - name: github.com/apache/thrift
-  version: 2d6060d882069ed3e3d6302aa63ea7eb4bb155ad
+  version: b2a4d4ae21c789b689dd162deb819665567f481c
   subpackages:
   - lib/go/thrift
 - name: github.com/aws/aws-sdk-go
@@ -50,13 +50,13 @@ imports:
 - name: github.com/cockroachdb/c-snappy
   version: c0cd3c9ce92f195001595e1fbbe66f045daad34f
 - name: github.com/codegangsta/cli
-  version: 347a9884a87374d000eec7e6445a34487c1f4a2b
+  version: 0bdeddeeb0f650497d603c4ad7b20cfe685682f6
 - name: github.com/davecgh/go-spew
   version: 346938d642f2ec3594ed81d874461961cd0faa76
   subpackages:
   - spew
 - name: github.com/dgryski/go-farm
-  version: 83948bc0eb076b6b72c28abe5282fa8cf5240db6
+  version: f94e93e5a2b3a579af0f5367c84b54cb9aa00074
 - name: github.com/go-ini/ini
   version: e3c2d47c61e5333f9aa2974695dd94396eb69c75
 - name: github.com/gocql/gocql
@@ -66,7 +66,7 @@ imports:
   - internal/murmur
   - internal/streams
 - name: github.com/golang/snappy
-  version: 7db9049039a047d955fe8c19b83c8ff5abd765c7
+  version: d7b1e156f50d3c4664f683603af70e3e47fa0aa2
 - name: github.com/gorilla/websocket
   version: c36f2fe5c330f0ac404b616b96c438b8616b1aaf
 - name: github.com/hailocab/go-hostpool
@@ -79,19 +79,19 @@ imports:
   - ext
   - log
 - name: github.com/pborman/uuid
-  version: 1b00554d822231195d1babd97ff4a781231955c9
+  version: a97ce2ca70fa5a848076093f05e639a89ca34d06
 - name: github.com/pmezard/go-difflib
   version: 792786c7400a136282c1664665ae0a8db921c6c2
   subpackages:
   - difflib
 - name: github.com/rcrowley/go-metrics
-  version: 1f30fe9094a513ce4c700b9a54458bbb0c96996c
+  version: eeba7bd0dd01ace6e690fa833b3f22aaec29af43
 - name: github.com/Sirupsen/logrus
-  version: 61e43dc76f7ee59a82bdf3d71033dc12bea4c77d
+  version: ba1b36c82c5e05c4f912a88eab0dcd91a171688f
 - name: github.com/stretchr/objx
   version: 1a9d0bb9f541897e62256577b352fdbc1fb4fd94
 - name: github.com/stretchr/testify
-  version: 2402e8e7a02fc811447d11f881aa9746cdc57983
+  version: 4d4bfba8f1d1027c4fdbe371823030df51419987
   subpackages:
   - assert
   - mock
@@ -104,7 +104,7 @@ imports:
 - name: github.com/uber-go/atomic
   version: 3b8db5e93c4c02efbc313e17b2e796b0914a01fb
 - name: github.com/uber/cherami-client-go
-  version: 1cdcfc4a204fe42013f4cf7196fab208d3b98085
+  version: 1ef6560c59eeb170f2381c02287ca44a5c50a523
   subpackages:
   - client/cherami
   - common
@@ -148,11 +148,11 @@ imports:
   - trand
   - typed
 - name: golang.org/x/net
-  version: 60c41d1de8da134c05b7b40154a9a82bf5b7edb9
+  version: a6577fac2d73be281a500b310739095313165611
   subpackages:
   - context
 - name: golang.org/x/sys
-  version: d75a52659825e75fff6158388dddc6a5b04f9ba5
+  version: d4feaf1a7e61e1d9e79e6c4e76c6349e9cab0a03
   subpackages:
   - unix
 - name: gopkg.in/inf.v0
@@ -160,5 +160,5 @@ imports:
 - name: gopkg.in/validator.v2
   version: 0a9835d809fb647a62611d30cb792e0b5dd65b11
 - name: gopkg.in/yaml.v2
-  version: 4c78c975fe7c825c6d1466c42be594d1d6f3aba6
+  version: a3f3340b5840cee44f372bddb5880fcbc419b46a
 testImports: []
