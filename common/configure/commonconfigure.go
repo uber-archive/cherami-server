@@ -233,7 +233,7 @@ func (r *CommonConfigure) SetupServerConfig() CommonAppConfig {
 			if net.ParseIP(listenAddress) == nil {
 				// default ListenAddress is not set, try obtain from TChannel
 				ip, _ := tchannel.ListenIP()
-				log.WithFields(`local-ip`, ip).Info(`No listen address specified; using local ip instead`)
+				log.WithField(`tchannel-ip`, ip).Info(`No listen address specified; using tchannel-ip instead`)
 				if ip == nil {
 					log.Panic(`Could not get listen address`)
 				}
