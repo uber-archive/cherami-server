@@ -51,9 +51,6 @@ before_install:
   - mkdir -p kafka && tar xzf kafka.tgz -C kafka --strip-components 1
   - nohup bash -c "cd kafka && bin/zookeeper-server-start.sh config/zookeeper.properties &"
   - nohup bash -c "cd kafka && bin/kafka-server-start.sh config/server.properties &"
-  - sleep 10
-  - kafka/bin/kafka-topics.sh --create --partitions 2 --replication-factor 1 --topic test_topic_1 --zookeeper localhost:2181
-  - kafka/bin/kafka-topics.sh --zookeeper localhost:2181 --list
 
 install:
   - go get -u github.com/Masterminds/glide
