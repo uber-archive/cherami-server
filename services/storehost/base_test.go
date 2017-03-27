@@ -71,9 +71,10 @@ type (
 		cfg configure.CommonAppConfig
 		metadataClient.TestCluster
 
-		testBase  *testBase
-		storehost *testStoreHost
-		baseDir   string
+		testBase   *testBase
+		storehost0 *testStoreHost
+		storehost1 *testStoreHost
+		baseDir    string
 	}
 
 	testStoreHost struct {
@@ -175,8 +176,14 @@ func (s *StoreHostSuite) SetupSuite() {
 	testBaseDir, _ := ioutil.TempDir("", "storehost-test")
 	s.testBase = newTestBase(testBaseDir)
 
-	// setup a 'default' storehost to use for tests
-	s.storehost = s.testBase.newTestStoreHost(testStore)
+	// setup storehosts to use for tests
+	s.storehost0 = s.testBase.newTestStoreHost(testStore)
+	s.storehost1 = s.testBase.newTestStoreHost(testStore)
+
+	// sleep until the ringpop on the second store refreshes and finds the
+	// first one; we do this because we were seeing 'error resolving uuid'
+	// when ReplicateExtent tries to resolve/connect to the source replica
+	time.Sleep(1250 * time.Millisecond)
 
 	s.baseDir = testBaseDir
 

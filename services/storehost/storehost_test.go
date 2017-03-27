@@ -34,9 +34,9 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/pborman/uuid"
+	"github.com/uber/cherami-server/common"
 	"github.com/uber/cherami-thrift/.generated/go/cherami"
 	"github.com/uber/cherami-thrift/.generated/go/store"
-	"github.com/uber/cherami-server/common"
 )
 
 func (s *StoreHostSuite) TestStoreHostTimerQueueWriteWithRead() {
@@ -76,7 +76,7 @@ func (s *StoreHostSuite) TestStoreHostTimerQueueWriteWithRead() {
 
 	mode := TimerQueue // mode to open extents in
 
-	storehost := s.storehost
+	storehost := s.storehost0
 
 	var wgAll sync.WaitGroup
 
@@ -234,7 +234,7 @@ func (s *StoreHostSuite) TestStoreHostTimerQueueWriteWithRead() {
 
 				log.Debugf("%v: waiting for OpenReadStream to complete", extent[i])
 
-				timedOut := !common.AwaitWaitGroup(&wgReader, 25 * time.Second)
+				timedOut := !common.AwaitWaitGroup(&wgReader, 25*time.Second)
 				if timedOut {
 					atomic.AddInt32(&readerTimeout, 1)
 					fmt.Printf("WgReader wait timeout for extent %d, iter %d\n", i, iter)
@@ -291,7 +291,7 @@ func (s *StoreHostSuite) TestStoreHostTimerQueueWriteThenRead() {
 
 	mode := TimerQueue // mode to open extents in
 
-	storehost := s.storehost
+	storehost := s.storehost0
 
 	var wgAll sync.WaitGroup
 
@@ -442,7 +442,7 @@ func (s *StoreHostSuite) TestStoreHostTimerQueueWriteThenRead() {
 					out.sendC <- newControlFlow(numMessages)
 
 					log.Debugf("%v: waiting for OpenReadStream to complete", extent[i])
-					timedOut := !common.AwaitWaitGroup(&wgReader, 25 * time.Second)
+					timedOut := !common.AwaitWaitGroup(&wgReader, 25*time.Second)
 					if timedOut {
 						atomic.AddInt32(&readerTimeout, 1)
 						fmt.Printf("WgReader wait timeout for extent %d, iter %d\n", i, iter)
@@ -496,7 +496,7 @@ func (s *StoreHostSuite) TestStoreHostAppendOnlyWriteWithRead() {
 
 	mode := AppendOnly // mode to open extents in
 
-	storehost := s.storehost
+	storehost := s.storehost0
 
 	var wgAll sync.WaitGroup
 
@@ -666,7 +666,7 @@ func (s *StoreHostSuite) TestStoreHostAppendOnlyWriteThenRead() {
 
 	mode := AppendOnly // mode to open extents in
 
-	storehost := s.storehost
+	storehost := s.storehost0
 
 	var wgAll sync.WaitGroup
 
@@ -834,7 +834,7 @@ func (s *StoreHostSuite) TestStoreHostAppendOnlyWriteThenDoReadMessages() {
 
 	mode := AppendOnly // mode to open extents in
 
-	storehost := s.storehost
+	storehost := s.storehost0
 
 	var wgAll sync.WaitGroup
 
@@ -986,7 +986,7 @@ func (s *StoreHostSuite) TestStoreHostSealExtent() {
 	dataSize := 1024
 
 	// setup test
-	t := s.storehost
+	t := s.storehost0
 
 	{
 		extent := uuid.NewRandom()
@@ -1207,7 +1207,7 @@ func (s *StoreHostSuite) TestStoreHostSealExtentThrottling() {
 
 	totalRequests := 1000
 
-	t := s.storehost
+	t := s.storehost0
 
 	{
 		extent := uuid.NewRandom()
@@ -1255,7 +1255,7 @@ func (s *StoreHostSuite) TestStoreHostPurgeMessages() {
 	dataSize := 1024
 
 	// setup test
-	t := s.storehost
+	t := s.storehost0
 
 	extent := uuid.NewRandom()
 
@@ -1429,8 +1429,8 @@ func (s *StoreHostSuite) TestStoreHostConcurrency() {
 	numParallel := 3
 
 	// setup test
-	t := s.storehost
-	// t := s.storehost
+	t := s.storehost0
+	// t := s.storehost0
 
 	extents := make([]uuid.UUID, numExtents)
 
@@ -1597,7 +1597,7 @@ func (s *StoreHostSuite) TestStoreHostMaxSeqNum() {
 	dataSize := 1024
 
 	// setup test
-	t := s.storehost
+	t := s.storehost0
 
 	extent := uuid.NewRandom()
 
@@ -1636,7 +1636,7 @@ func (s *StoreHostSuite) TestStoreHostManyManyExtents() {
 		debug.SetMaxThreads(9 * numExtents)
 	}
 
-	storehost := s.storehost
+	storehost := s.storehost0
 
 	extent := make([]uuid.UUID, numExtents)
 	mode := make([]Mode, numExtents)
@@ -1708,7 +1708,7 @@ func (s *StoreHostSuite) TestStoreHostManyManyExtents() {
 	}
 }
 
-func (s *StoreHostSuite) _TestStoreHostReplicateExtent() {
+func (s *StoreHostSuite) TestStoreHostReplicateExtent() {
 
 	mode := AppendOnly // TimerQueue
 	dataSize := 1024
@@ -1724,16 +1724,10 @@ func (s *StoreHostSuite) _TestStoreHostReplicateExtent() {
 	}
 
 	// start up two new stores
-	store0 := s.testBase.newTestStoreHost(testStore)
-	store1 := s.testBase.newTestStoreHost(testStore)
+	store0, store1 := s.storehost0, s.storehost1
 
 	log.Debugf("TestStoreHostReplicateExtent storehost0: uuid=%v hostPort=%v wsPort=%d", store0.hostID, store0.hostPort, store0.wsPort)
 	log.Debugf("TestStoreHostReplicateExtent storehost1: uuid=%v hostPort=%v wsPort=%d", store1.hostID, store1.hostPort, store1.wsPort)
-
-	// sleep until the ringpop on the second store refreshes and finds the
-	// first one; we do this because we were seeing 'error resolving uuid'
-	// when ReplicateExtent tries to resolve/connect to the source replica
-	time.Sleep(time.Second)
 
 	extent := uuid.NewRandom() // random extent
 
@@ -1747,14 +1741,14 @@ func (s *StoreHostSuite) _TestStoreHostReplicateExtent() {
 
 	// == 3. initiate replication of extent from first replica to the second ==
 
+	// HACK: set $(CHERAMI_STOREHOST_WS_PORT) to the websocket port of source replica
+	os.Setenv("CHERAMI_STOREHOST_WS_PORT", strconv.FormatInt(int64(store0.wsPort), 10))
+
 	repl0ResC := make(chan error)
 	go func() {
 
 		// replicate extent from store0 to store1
 		log.Debugf("[%v].ReplicateExtent(extent=%v, mode=%v, source=%v", store1.hostID, extent, mode, store0.hostID)
-
-		// HACK: set $(CHERAMI_STOREHOST_WS_PORT) to the websocket port of source replica
-		os.Setenv("CHERAMI_STOREHOST_WS_PORT", strconv.FormatInt(int64(store0.wsPort), 10))
 
 		repl0ResC <- store1.ReplicateExtent(extent, mode, store0.hostID)
 
@@ -1767,9 +1761,6 @@ func (s *StoreHostSuite) _TestStoreHostReplicateExtent() {
 
 		// replicate extent from store0 to store1
 		log.Debugf("[%v].ReplicateExtent(extent=%v, mode=%v, source=%v", store1.hostID, extent, mode, store0.hostID)
-
-		// HACK: set $(CHERAMI_STOREHOST_WS_PORT) to the websocket port of source replica
-		os.Setenv("CHERAMI_STOREHOST_WS_PORT", strconv.FormatInt(int64(store0.wsPort), 10))
 
 		repl1ResC <- store1.ReplicateExtent(extent, mode, store0.hostID)
 
@@ -1894,8 +1885,6 @@ func (s *StoreHostSuite) _TestStoreHostReplicateExtent() {
 
 func (s *StoreHostSuite) TestStoreHostReplicateExtentResume() {
 
-	// TODO: test resumption of ReplicateExtent
-
 	mode := AppendOnly // TimerQueue
 	dataSize := 1024
 
@@ -1913,16 +1902,10 @@ func (s *StoreHostSuite) TestStoreHostReplicateExtentResume() {
 	var resumeSeqNum = numMessages / 2
 
 	// start up two stores
-	store0 := s.testBase.newTestStoreHost(testStore)
-	store1 := s.testBase.newTestStoreHost(testStore)
+	store0, store1 := s.storehost0, s.storehost1
 
 	log.Debugf("TestStoreHostReplicateExtentResume storehost0: uuid=%v hostPort=%v wsPort=%d", store0.hostID, store0.hostPort, store0.wsPort)
 	log.Debugf("TestStoreHostReplicateExtentResume storehost1: uuid=%v hostPort=%v wsPort=%d", store1.hostID, store1.hostPort, store1.wsPort)
-
-	// sleep until the ringpop on the second store refreshes and finds the
-	// first one; we do this because we were seeing 'error resolving uuid'
-	// when ReplicateExtent tries to resolve/connect to the source replica
-	time.Sleep(time.Second)
 
 	extent := uuid.NewRandom() // random extent
 
