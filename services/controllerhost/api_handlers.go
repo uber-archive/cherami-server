@@ -317,7 +317,7 @@ func createExtent(context *Context, dstUUID string, isMultiZoneDest bool, m3Scop
 		// send to local replicator to fan out
 		localReplicator, replicatorErr := context.clientFactory.GetReplicatorClient()
 		if replicatorErr != nil {
-			lclLg.Error(replicatorErr.Error())
+			lclLg.WithField(common.TagErr, replicatorErr).Error("createExtent: GetReplicatorClient failed")
 			context.m3Client.IncCounter(m3Scope, metrics.ControllerErrCallReplicatorCounter)
 			return
 		}
@@ -326,7 +326,7 @@ func createExtent(context *Context, dstUUID string, isMultiZoneDest bool, m3Scop
 		defer cancel()
 		replicatorErr = localReplicator.CreateRemoteExtent(ctx, req)
 		if replicatorErr != nil {
-			lclLg.Error(replicatorErr.Error())
+			lclLg.WithField(common.TagErr, replicatorErr).Error("createExtent: CreateRemoteExtent failed")
 			context.m3Client.IncCounter(m3Scope, metrics.ControllerErrCallReplicatorCounter)
 			return
 		}

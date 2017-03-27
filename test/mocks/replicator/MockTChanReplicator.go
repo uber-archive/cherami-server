@@ -338,3 +338,47 @@ func (m *MockTChanReplicator) ListExtentsStats(ctx thrift.Context, listRequest *
 
 	return r0, r1
 }
+
+func (m *MockTChanReplicator) ReadDestination(ctx thrift.Context, listRequest *shared.ReadDestinationRequest) (*shared.DestinationDescription, error) {
+	ret := m.Called(ctx, listRequest)
+
+	var r0 *shared.DestinationDescription
+	if rf, ok := ret.Get(0).(func(thrift.Context, *shared.ReadDestinationRequest) *shared.DestinationDescription); ok {
+		r0 = rf(ctx, listRequest)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*shared.DestinationDescription)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(thrift.Context, *shared.ReadDestinationRequest) error); ok {
+		r1 = rf(ctx, listRequest)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+func (m *MockTChanReplicator) ListConsumerGroups(ctx thrift.Context, listRequest *shared.ListConsumerGroupRequest) (*shared.ListConsumerGroupResult_, error) {
+	ret := m.Called(ctx, listRequest)
+
+	var r0 *shared.ListConsumerGroupResult_
+	if rf, ok := ret.Get(0).(func(thrift.Context, *shared.ListConsumerGroupRequest) *shared.ListConsumerGroupResult_); ok {
+		r0 = rf(ctx, listRequest)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*shared.ListConsumerGroupResult_)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(thrift.Context, *shared.ListConsumerGroupRequest) error); ok {
+		r1 = rf(ctx, listRequest)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}

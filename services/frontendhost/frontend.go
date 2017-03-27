@@ -43,7 +43,6 @@ import (
 	m "github.com/uber/cherami-thrift/.generated/go/metadata"
 	"github.com/uber/cherami-thrift/.generated/go/shared"
 
-	"github.com/pborman/uuid"
 	"github.com/uber-common/bark"
 	"github.com/uber/tchannel-go/hyperbahn"
 	"github.com/uber/tchannel-go/thrift"
@@ -51,9 +50,6 @@ import (
 
 const (
 	maxSizeCacheDestinationPathForUUID = 1000
-	defaultDLQConsumedRetention        = 7 * 24 * 3600 // One Week
-	defaultDLQUnconsumedRetention      = 7 * 24 * 3600 // One Week
-	defaultDLQOwnerEmail               = "default@uber"
 )
 
 var nilRequestError = &c.BadRequestError{Message: `Request must not be nil`}
@@ -403,7 +399,7 @@ func (h *Frontend) convertConsumerGroupFromInternal(ctx thrift.Context, _cgDesc 
 
 	if len(destPath) == 0 {
 		var destDesc *shared.DestinationDescription
-		readRequest := m.NewReadDestinationRequest()
+		readRequest := shared.NewReadDestinationRequest()
 		readRequest.DestinationUUID = common.StringPtr(_cgDesc.GetDestinationUUID())
 		destDesc, err = h.metaClnt.ReadDestination(ctx, readRequest) // TODO: -= Maybe a GetDestinationPathForUUID =-
 
@@ -455,7 +451,7 @@ const (
 // that any destination that is returned by the metadata server will be returned to the client
 // TODO: Add a cache here with time-based retention
 func (h *Frontend) getUUIDForDestination(ctx thrift.Context, path string, rejectDisabled bool) (UUID string, err error) {
-	mGetRequest := m.ReadDestinationRequest{Path: common.StringPtr(path)}
+	mGetRequest := shared.ReadDestinationRequest{Path: common.StringPtr(path)}
 	destDesc, err := h.metaClnt.ReadDestination(ctx, &mGetRequest)
 
 	if err != nil {
@@ -607,7 +603,7 @@ func (h *Frontend) DeleteDestination(ctx thrift.Context, deleteRequest *c.Delete
 	// TODO: remove when appropriate authentication is in place
 	if !allowMutate {
 		err = &c.BadRequestError{Message: fmt.Sprintf("Contact Cherami team to delete this path: %v", deleteRequest.GetPath())}
-		h.logger.Error(err.Error())
+		h.logger.WithField(common.TagErr, err).Error("DeleteDestination failed")
 		return
 	}
 
@@ -621,7 +617,6 @@ func (h *Frontend) DeleteDestination(ctx thrift.Context, deleteRequest *c.Delete
 	}
 
 	err = cClient.DeleteDestination(ctx, convertDeleteDestRequestToInternal(deleteRequest))
-
 	if err != nil {
 		lclLg.WithField(common.TagErr, err).Error(`Error deleting destination`)
 		return
@@ -638,7 +633,7 @@ func (h *Frontend) ReadDestination(ctx thrift.Context, readRequest *c.ReadDestin
 	if _, err = h.prolog(ctx, readRequest); err != nil {
 		return
 	}
-	var mReadRequest m.ReadDestinationRequest
+	var mReadRequest shared.ReadDestinationRequest
 
 	if common.UUIDRegex.MatchString(readRequest.GetPath()) {
 		mReadRequest.DestinationUUID = common.StringPtr(readRequest.GetPath())
@@ -701,7 +696,7 @@ func (h *Frontend) ReadPublisherOptions(ctx thrift.Context, r *c.ReadPublisherOp
 		}
 	}
 
-	readDestRequest := m.ReadDestinationRequest{Path: common.StringPtr(r.GetPath())}
+	readDestRequest := shared.ReadDestinationRequest{Path: common.StringPtr(r.GetPath())}
 	var destDesc *shared.DestinationDescription
 	destDesc, err = h.metaClnt.ReadDestination(ctx, &readDestRequest)
 	if err != nil {
@@ -829,7 +824,7 @@ func (h *Frontend) UpdateDestination(ctx thrift.Context, updateRequest *c.Update
 	// TODO: remove when appropriate authentication is in place
 	if !allowMutate {
 		err := &c.BadRequestError{Message: fmt.Sprintf("Contact Cherami team to update this path: %v", updateRequest.GetPath())}
-		h.logger.Error(err.Error())
+		h.logger.WithField(common.TagErr, err).Error("Error updating destination")
 		return nil, err
 	}
 
@@ -1033,51 +1028,6 @@ func (h *Frontend) CreateConsumerGroup(ctx thrift.Context, createRequest *c.Crea
 		return nil, err
 	}
 
-	// Dead Letter Queue destination creation
-
-	// Only non-UUID (non-DLQ) destinations get a DLQ for the corresponding consumer groups
-	// We may create a consumer group consume a DLQ destination and no DLQ destination creation needed in this case
-	if common.PathRegex.MatchString(createRequest.GetDestinationPath()) {
-		dlqCreateRequest := shared.NewCreateDestinationRequest()
-		dlqCreateRequest.ConsumedMessagesRetention = common.Int32Ptr(defaultDLQConsumedRetention)
-		dlqCreateRequest.UnconsumedMessagesRetention = common.Int32Ptr(defaultDLQUnconsumedRetention)
-		dlqCreateRequest.OwnerEmail = common.StringPtr(defaultDLQOwnerEmail)
-		dlqCreateRequest.Type = common.InternalDestinationTypePtr(shared.DestinationType_PLAIN)
-		dlqCreateRequest.DLQConsumerGroupUUID = common.StringPtr(uuid.New()) // This is the UUID that the new consumer group will be created with
-		dlqPath, _ := common.GetDLQPathNameFromCGName(createRequest.GetConsumerGroupName())
-		dlqCreateRequest.Path = common.StringPtr(dlqPath)
-
-		var dlqDestDesc *shared.DestinationDescription
-		dlqDestDesc, err = cClient.CreateDestination(ctx, dlqCreateRequest)
-
-		if err != nil || dlqDestDesc == nil {
-			switch err.(type) {
-			case *shared.EntityAlreadyExistsError:
-				lclLg.Info("DeadLetterQueue destination already existed")
-				mDLQReadRequest := m.ReadDestinationRequest{
-					Path: dlqCreateRequest.Path,
-				}
-
-				dlqDestDesc, err = h.metaClnt.ReadDestination(ctx, &mDLQReadRequest)
-
-				if err != nil || dlqDestDesc == nil {
-					lclLg.WithField(common.TagErr, err).Error(`Can't read existing DeadLetterQueue destination`)
-					return nil, err
-				}
-
-				// We continue to consumer group creation if err == nil and dlqDestDesc != nil after the read
-			default:
-				lclLg.WithField(common.TagErr, err).Error(`Can't create DeadLetterQueue destination`)
-				return nil, err
-			}
-		}
-
-		// Set the DLQ destination UUID in the consumer group
-		_createRequest.DeadLetterQueueDestinationUUID = common.StringPtr(dlqDestDesc.GetDestinationUUID())
-	} else {
-		lclLg.Info("DeadLetterQueue destination not being created")
-	}
-
 	// Consumer group creation
 	var _cgDesc *shared.ConsumerGroupDescription
 	_cgDesc, err = cClient.CreateConsumerGroup(ctx, _createRequest)
@@ -1147,7 +1097,7 @@ func (h *Frontend) ListConsumerGroups(ctx thrift.Context, listRequest *c.ListCon
 
 	if len(listRequest.GetConsumerGroupName()) == 0 && listRequest.GetLimit() <= 0 {
 		err = &c.BadRequestError{Message: fmt.Sprintf("Invalid limit %d when no consumer group name specified", listRequest.GetLimit())}
-		h.logger.Error(err.Error())
+		h.logger.WithField(common.TagErr, err).Error("ListConsumerGroups failed")
 		return nil, err
 	}
 
@@ -1156,13 +1106,13 @@ func (h *Frontend) ListConsumerGroups(ctx thrift.Context, listRequest *c.ListCon
 		common.TagCnsPth: common.FmtCnsPth(listRequest.GetConsumerGroupName()),
 	})
 
-	mListRequest := m.NewListConsumerGroupRequest()
+	mListRequest := shared.NewListConsumerGroupRequest()
 	mListRequest.ConsumerGroupName = common.StringPtr(listRequest.GetConsumerGroupName())
 	mListRequest.DestinationPath = common.StringPtr(listRequest.GetDestinationPath())
 	mListRequest.PageToken = listRequest.PageToken
 	mListRequest.Limit = common.Int64Ptr(listRequest.GetLimit())
 
-	var listResult *m.ListConsumerGroupResult_
+	var listResult *shared.ListConsumerGroupResult_
 	listResult, err = h.metaClnt.ListConsumerGroups(ctx, mListRequest)
 
 	if err != nil {
@@ -1196,7 +1146,7 @@ func (h *Frontend) ListDestinations(ctx thrift.Context, listRequest *c.ListDesti
 
 	if listRequest.GetLimit() <= 0 {
 		err = &c.BadRequestError{Message: fmt.Sprintf("Invalid limit %d", listRequest.GetLimit())}
-		h.logger.Error(err.Error())
+		h.logger.WithField(common.TagErr, err).Error("ListDestinations failed")
 		return nil, err
 	}
 
@@ -1281,7 +1231,7 @@ func (h *Frontend) dlqOperationForConsumerGroup(ctx thrift.Context, destinationP
 	}
 
 	// Read the destination to see if we should allow this request
-	mReadDestRequest := m.NewReadDestinationRequest()
+	mReadDestRequest := shared.NewReadDestinationRequest()
 	mReadDestRequest.DestinationUUID = mCGDesc.DeadLetterQueueDestinationUUID
 	destDesc, err = h.metaClnt.ReadDestination(ctx, mReadDestRequest)
 

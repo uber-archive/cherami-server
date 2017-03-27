@@ -21,12 +21,20 @@
 package storehost
 
 import (
+	"math"
+
 	"github.com/uber/cherami-server/common"
 	"github.com/uber/cherami-server/storage"
 	"github.com/uber/cherami-thrift/.generated/go/cherami"
 	"github.com/uber/cherami-thrift/.generated/go/store"
 
 	"github.com/pborman/uuid"
+)
+
+const (
+	SeqnumInvalid    = int64(math.MaxInt64)
+	TimestampInvalid = int64(math.MaxInt64)
+	AddressInvalid   = int64(math.MaxInt64)
 )
 
 // -- wrappers to create various error blobs -- //

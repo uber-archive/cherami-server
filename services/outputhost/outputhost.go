@@ -200,7 +200,7 @@ func (h *OutputHost) OpenConsumerStreamHandler(w http.ResponseWriter, r *http.Re
 	path := r.Header.Get("path")
 	if len(path) == 0 {
 		err := &cherami.BadRequestError{Message: `please set path as part of the header`}
-		h.logger.WithField(common.TagErr, err).Error(err.Message)
+		h.logger.WithField(common.TagErr, err).Error("OpenConsumerStreamHandler failed")
 		h.incFailureCounter(metrics.OpenConsumerStreamScope, metrics.UserError)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -209,7 +209,7 @@ func (h *OutputHost) OpenConsumerStreamHandler(w http.ResponseWriter, r *http.Re
 	cgName := r.Header.Get("consumerGroupName")
 	if len(cgName) == 0 {
 		err := &cherami.BadRequestError{Message: `please set consumerGroupName as part of the header`}
-		h.logger.WithField(common.TagErr, err).Error(err.Message)
+		h.logger.WithField(common.TagErr, err).Error("OpenConsumerStreamScope failed")
 		h.incFailureCounter(metrics.OpenConsumerStreamScope, metrics.UserError)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -252,7 +252,7 @@ func (h *OutputHost) OpenConsumerStream(ctx thrift.Context, call stream.BOutOpen
 	path, ok := ctx.Headers()["path"]
 	if !ok {
 		err := &cherami.BadRequestError{Message: `please set path as part of the header`}
-		h.logger.WithField(common.TagErr, err).Error(err.Message)
+		h.logger.WithField(common.TagErr, err).Error("OpenConsumerStream failed")
 		h.incFailureCounter(metrics.OpenConsumerStreamScope, metrics.UserError)
 		call.Done()
 		return err
@@ -261,7 +261,7 @@ func (h *OutputHost) OpenConsumerStream(ctx thrift.Context, call stream.BOutOpen
 	cgName, ok := ctx.Headers()["consumerGroupName"]
 	if !ok {
 		err := &cherami.BadRequestError{Message: `please set consumerGroupName as part of the header`}
-		h.logger.WithField(common.TagErr, err).Error(err.Message)
+		h.logger.WithField(common.TagErr, err).Error("OpenConsumerStream failed")
 		h.incFailureCounter(metrics.OpenConsumerStreamScope, metrics.UserError)
 		call.Done()
 		return err

@@ -794,7 +794,7 @@ func (mcp *Mcp) CreateDestination(ctx thrift.Context, createRequest *shared.Crea
 	// create local destination
 	destDesc, err := mcp.mClient.CreateDestination(ctx, createRequest)
 	if err != nil {
-		lclLg.Error(err.Error())
+		lclLg.WithField(common.TagErr, err).Error("CreateDestination: local CreateDestination failed")
 		context.m3Client.IncCounter(metrics.ControllerCreateDestinationScope, metrics.ControllerFailures)
 		return nil, err
 	}
@@ -810,7 +810,7 @@ func (mcp *Mcp) CreateDestination(ctx thrift.Context, createRequest *shared.Crea
 		localReplicator, replicatorErr := mcp.GetClientFactory().GetReplicatorClient()
 		lclLg = lclLg.WithField(common.TagDst, common.FmtDst(destUUID))
 		if replicatorErr != nil {
-			lclLg.Error(replicatorErr.Error())
+			lclLg.WithField(common.TagErr, replicatorErr).Error("CreateDestination: GetReplicatorClient failed")
 			context.m3Client.IncCounter(metrics.ControllerCreateDestinationScope, metrics.ControllerErrCallReplicatorCounter)
 
 			// errors in calling replicator doesn't fail this call
@@ -820,7 +820,7 @@ func (mcp *Mcp) CreateDestination(ctx thrift.Context, createRequest *shared.Crea
 
 		replicatorErr = localReplicator.CreateRemoteDestinationUUID(ctx, createDestUUIDRequest)
 		if replicatorErr != nil {
-			lclLg.Error(replicatorErr.Error())
+			lclLg.WithField(common.TagErr, replicatorErr).Error("CreateDestination: CreateRemoteDestinationUUID failed")
 			context.m3Client.IncCounter(metrics.ControllerCreateDestinationScope, metrics.ControllerErrCallReplicatorCounter)
 
 			// errors in calling replicator doesn't fail this call
@@ -850,7 +850,7 @@ func (mcp *Mcp) UpdateDestination(ctx thrift.Context, updateRequest *shared.Upda
 	// update local destination
 	destDesc, err := mcp.mClient.UpdateDestination(ctx, updateRequest)
 	if err != nil {
-		lclLg.Error(err.Error())
+		lclLg.WithField(common.TagErr, err).Error("UpdateDestination: local UpdateDestination failed")
 		context.m3Client.IncCounter(metrics.ControllerUpdateDestinationScope, metrics.ControllerFailures)
 		return nil, err
 	}
@@ -860,7 +860,7 @@ func (mcp *Mcp) UpdateDestination(ctx thrift.Context, updateRequest *shared.Upda
 		localReplicator, replicatorErr := mcp.GetClientFactory().GetReplicatorClient()
 		lclLg = lclLg.WithField(common.TagDst, common.FmtDst(destDesc.GetDestinationUUID()))
 		if replicatorErr != nil {
-			lclLg.Error(replicatorErr.Error())
+			lclLg.WithField(common.TagErr, replicatorErr).Error("UpdateDestination: GetReplicatorClient failed")
 			context.m3Client.IncCounter(metrics.ControllerUpdateDestinationScope, metrics.ControllerErrCallReplicatorCounter)
 
 			// errors in calling replicator doesn't fail this call
@@ -870,7 +870,7 @@ func (mcp *Mcp) UpdateDestination(ctx thrift.Context, updateRequest *shared.Upda
 
 		replicatorErr = localReplicator.UpdateRemoteDestination(ctx, updateRequest)
 		if replicatorErr != nil {
-			lclLg.Error(replicatorErr.Error())
+			lclLg.WithField(common.TagErr, replicatorErr).Error("UpdateDestination: UpdateRemoteDestination failed")
 			context.m3Client.IncCounter(metrics.ControllerUpdateDestinationScope, metrics.ControllerErrCallReplicatorCounter)
 
 			// errors in calling replicator doesn't fail this call
@@ -898,12 +898,12 @@ func (mcp *Mcp) DeleteDestination(ctx thrift.Context, deleteRequest *shared.Dele
 	lclLg := context.log.WithField(common.TagDstPth, common.FmtDstPth(deleteRequest.GetPath()))
 
 	// first read the destination
-	readDestinationRequest := &m.ReadDestinationRequest{
+	readDestinationRequest := &shared.ReadDestinationRequest{
 		Path: common.StringPtr(deleteRequest.GetPath()),
 	}
 	destDesc, err := mcp.mClient.ReadDestination(ctx, readDestinationRequest)
 	if err != nil {
-		lclLg.Error(err.Error())
+		lclLg.WithField(common.TagErr, err).Error("DeleteDestination: ReadDestination failed")
 		context.m3Client.IncCounter(metrics.ControllerDeleteDestinationScope, metrics.ControllerFailures)
 		return err
 	}
@@ -913,7 +913,7 @@ func (mcp *Mcp) DeleteDestination(ctx thrift.Context, deleteRequest *shared.Dele
 	// delete local destination
 	err = mcp.mClient.DeleteDestination(ctx, deleteRequest)
 	if err != nil {
-		lclLg.Error(err.Error())
+		lclLg.WithField(common.TagErr, err).Error("DeleteDestination: local DeleteDestination failed")
 		context.m3Client.IncCounter(metrics.ControllerDeleteDestinationScope, metrics.ControllerFailures)
 		return err
 	}
@@ -922,7 +922,7 @@ func (mcp *Mcp) DeleteDestination(ctx thrift.Context, deleteRequest *shared.Dele
 		// send to local replicator to fan out
 		localReplicator, replicatorErr := mcp.GetClientFactory().GetReplicatorClient()
 		if replicatorErr != nil {
-			lclLg.Error(replicatorErr.Error())
+			lclLg.WithField(common.TagErr, replicatorErr).Error("DeleteDestination: GetReplicatorClient failed")
 			context.m3Client.IncCounter(metrics.ControllerDeleteDestinationScope, metrics.ControllerErrCallReplicatorCounter)
 
 			// errors in calling replicator doesn't fail this call
@@ -932,7 +932,7 @@ func (mcp *Mcp) DeleteDestination(ctx thrift.Context, deleteRequest *shared.Dele
 
 		replicatorErr = localReplicator.DeleteRemoteDestination(ctx, deleteRequest)
 		if replicatorErr != nil {
-			lclLg.Error(replicatorErr.Error())
+			lclLg.WithField(common.TagErr, replicatorErr).Error("DeleteDestination: DeleteRemoteDestination failed")
 			context.m3Client.IncCounter(metrics.ControllerDeleteDestinationScope, metrics.ControllerErrCallReplicatorCounter)
 
 			// errors in calling replicator doesn't fail this call
@@ -965,12 +965,12 @@ func (mcp *Mcp) CreateConsumerGroup(ctx thrift.Context, createRequest *shared.Cr
 	// create local consumer group
 	cgDesc, err := mcp.mClient.CreateConsumerGroup(ctx, createRequest)
 	if err != nil {
-		lclLg.Error(err.Error())
+		lclLg.WithField(common.TagErr, err).Error("CreateConsumerGroup: local CreateConsumerGroup failed")
 		context.m3Client.IncCounter(metrics.ControllerCreateConsumerGroupScope, metrics.ControllerFailures)
 		return nil, err
 	}
 
-	if createRequest.IsSetIsMultiZone() && createRequest.GetIsMultiZone() {
+	if createRequest.GetIsMultiZone() {
 		// get dest uuid from local consumer group, re-use for remote consumer group
 		cgUUID := cgDesc.GetConsumerGroupUUID()
 		createCGUUIDRequest := shared.NewCreateConsumerGroupUUIDRequest()
@@ -981,7 +981,7 @@ func (mcp *Mcp) CreateConsumerGroup(ctx thrift.Context, createRequest *shared.Cr
 		localReplicator, replicatorErr := mcp.GetClientFactory().GetReplicatorClient()
 		lclLg = lclLg.WithField(common.TagCnsm, common.FmtCnsm(cgUUID))
 		if replicatorErr != nil {
-			lclLg.Error(replicatorErr.Error())
+			lclLg.WithField(common.TagErr, replicatorErr).Error("CreateConsumerGroup: GetReplicatorClient failed")
 			context.m3Client.IncCounter(metrics.ControllerCreateConsumerGroupScope, metrics.ControllerErrCallReplicatorCounter)
 
 			// errors in calling replicator doesn't fail this call
@@ -991,7 +991,7 @@ func (mcp *Mcp) CreateConsumerGroup(ctx thrift.Context, createRequest *shared.Cr
 
 		replicatorErr = localReplicator.CreateRemoteConsumerGroupUUID(ctx, createCGUUIDRequest)
 		if replicatorErr != nil {
-			lclLg.Error(replicatorErr.Error())
+			lclLg.WithField(common.TagErr, replicatorErr).Error("CreateConsumerGroup: CreateRemoteConsumerGroupUUID error")
 			context.m3Client.IncCounter(metrics.ControllerCreateConsumerGroupScope, metrics.ControllerErrCallReplicatorCounter)
 
 			// errors in calling replicator doesn't fail this call
@@ -1024,26 +1024,34 @@ func (mcp *Mcp) UpdateConsumerGroup(ctx thrift.Context, updateRequest *shared.Up
 	// update local consumer group
 	cgDesc, err := mcp.mClient.UpdateConsumerGroup(ctx, updateRequest)
 	if err != nil {
-		lclLg.Error(err.Error())
+		lclLg.WithField(common.TagErr, err).Error("UpdateConsumerGroup: local UpdateConsumerGroup failed")
 		context.m3Client.IncCounter(metrics.ControllerUpdateConsumerGroupScope, metrics.ControllerFailures)
 		return nil, err
 	}
 
-	//	updateRemoteCGs := func() {
-	//		// send to local replicator to fan out
-	//		localReplicator, err := mcp.GetClientFactory().GetReplicatorClient()
-	//		if err != nil {
-	//			lclLg.Error(err.Error())
-	//		}
+	if cgDesc.GetIsMultiZone() {
+		// send to local replicator to fan out
+		localReplicator, replicatorErr := mcp.GetClientFactory().GetReplicatorClient()
+		lclLg = lclLg.WithField(common.TagCnsm, common.FmtCnsm(cgDesc.GetConsumerGroupUUID()))
+		if replicatorErr != nil {
+			lclLg.WithField(common.TagErr, err).Error("UpdateConsumerGroup: GetReplicatorClient failed")
+			context.m3Client.IncCounter(metrics.ControllerUpdateConsumerGroupScope, metrics.ControllerErrCallReplicatorCounter)
 
-	//		err = localReplicator.UpdateRemoteConsumerGroup(ctx, updateRequest)
-	//		if err != nil {
-	//			lclLg.Error(err.Error())
-	//		}
-	//	}
+			// errors in calling replicator doesn't fail this call
+			// a reconciliation process between replicators(slow path) will fix the inconsistency eventually
+			return cgDesc, nil
+		}
 
-	//	// best effort for fast path
-	//	go updateRemoteCGs()
+		replicatorErr = localReplicator.UpdateRemoteConsumerGroup(ctx, updateRequest)
+		if replicatorErr != nil {
+			lclLg.WithField(common.TagErr, err).Error("UpdateConsumerGroup: UpdateRemoteConsumerGroup failed")
+			context.m3Client.IncCounter(metrics.ControllerUpdateConsumerGroupScope, metrics.ControllerErrCallReplicatorCounter)
+
+			// errors in calling replicator doesn't fail this call
+			// a reconciliation process between replicators(slow path) will fix the inconsistency eventually
+			return cgDesc, nil
+		}
+	}
 
 	return cgDesc, nil
 }
@@ -1066,29 +1074,49 @@ func (mcp *Mcp) DeleteConsumerGroup(ctx thrift.Context, deleteRequest *shared.De
 		common.TagCnsPth: common.FmtCnsPth(deleteRequest.GetConsumerGroupName()),
 	})
 
-	// delete local consumer group
-	err := mcp.mClient.DeleteConsumerGroup(ctx, deleteRequest)
+	readCGReq := &m.ReadConsumerGroupRequest{
+		DestinationPath:   deleteRequest.DestinationPath,
+		DestinationUUID:   deleteRequest.DestinationUUID,
+		ConsumerGroupName: deleteRequest.ConsumerGroupName,
+	}
+	cgDesc, err := mcp.mClient.ReadConsumerGroup(nil, readCGReq)
 	if err != nil {
 		lclLg.Error(err.Error())
 		context.m3Client.IncCounter(metrics.ControllerDeleteConsumerGroupScope, metrics.ControllerFailures)
 		return err
 	}
 
-	//	deleteRemoteCGs := func() {
-	//		// send to local replicator to fan out
-	//		localReplicator, err := mcp.GetClientFactory().GetReplicatorClient()
-	//		if err != nil {
-	//			lclLg.Error(err.Error())
-	//		}
+	// delete local consumer group
+	err = mcp.mClient.DeleteConsumerGroup(ctx, deleteRequest)
+	if err != nil {
+		lclLg.WithField(common.TagErr, err).Error("DeleteConsumerGroup: local DeleteConsumerGroup failed")
+		context.m3Client.IncCounter(metrics.ControllerDeleteConsumerGroupScope, metrics.ControllerFailures)
+		return err
+	}
 
-	//		err = localReplicator.DeleteRemoteConsumerGroup(ctx, deleteRequest)
-	//		if err != nil {
-	//			lclLg.Error(err.Error())
-	//		}
-	//	}
+	if cgDesc.GetIsMultiZone() {
+		// send to local replicator to fan out
+		localReplicator, replicatorErr := mcp.GetClientFactory().GetReplicatorClient()
+		lclLg = lclLg.WithField(common.TagCnsm, common.FmtCnsm(cgDesc.GetConsumerGroupUUID()))
+		if replicatorErr != nil {
+			lclLg.WithField(common.TagErr, err).Error("DeleteConsumerGroup: GetReplicatorClient failed")
+			context.m3Client.IncCounter(metrics.ControllerDeleteConsumerGroupScope, metrics.ControllerErrCallReplicatorCounter)
 
-	//	// best effort for fast path
-	//	go deleteRemoteCGs()
+			// errors in calling replicator doesn't fail this call
+			// a reconciliation process between replicators(slow path) will fix the inconsistency eventually
+			return nil
+		}
+
+		replicatorErr = localReplicator.DeleteConsumerGroup(ctx, deleteRequest)
+		if replicatorErr != nil {
+			lclLg.WithField(common.TagErr, err).Error("DeleteConsumerGroup: DeleteRemoteConsumerGroup failed")
+			context.m3Client.IncCounter(metrics.ControllerDeleteConsumerGroupScope, metrics.ControllerErrCallReplicatorCounter)
+
+			// errors in calling replicator doesn't fail this call
+			// a reconciliation process between replicators(slow path) will fix the inconsistency eventually
+			return nil
+		}
+	}
 
 	return nil
 }
@@ -1117,7 +1145,7 @@ func (mcp *Mcp) CreateRemoteZoneExtent(ctx thrift.Context, createRequest *shared
 
 	storehosts, err := context.placement.PickStoreHosts(nReplicasPerExtent)
 	if err != nil {
-		lclLg.Error(err.Error())
+		lclLg.WithField(common.TagErr, err).Error("CreateRemoteZoneExtent: PickStoreHosts failed")
 		context.m3Client.IncCounter(metrics.ControllerCreateRemoteZoneExtentScope, metrics.ControllerErrPickStoreHostCounter)
 		return nil, &shared.InternalServiceError{Message: err.Error()}
 	}
@@ -1135,7 +1163,7 @@ func (mcp *Mcp) CreateRemoteZoneExtent(ctx thrift.Context, createRequest *shared
 	res, err := context.mm.CreateRemoteZoneExtent(createRequest.GetExtent().GetDestinationUUID(),
 		createRequest.GetExtent().GetExtentUUID(), inputHost, storeids, createRequest.GetExtent().GetOriginZone(), remoteExtentPrimaryStore)
 	if err != nil {
-		lclLg.Error(err.Error())
+		lclLg.WithField(common.TagErr, err).Error("CreateRemoteZoneExtent: metadata CreateRemoteZoneExtent failed")
 		context.m3Client.IncCounter(metrics.ControllerCreateRemoteZoneExtentScope, metrics.ControllerErrMetadataUpdateCounter)
 		return nil, err
 	}

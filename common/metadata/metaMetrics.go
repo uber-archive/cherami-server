@@ -76,7 +76,7 @@ func (m *metadataMetricsMgr) HostAddrToUUID(ctx thrift.Context, request string) 
 	return result, err
 }
 
-func (m *metadataMetricsMgr) ListAllConsumerGroups(ctx thrift.Context, request *m.ListConsumerGroupRequest) (result *m.ListConsumerGroupResult_, err error) {
+func (m *metadataMetricsMgr) ListAllConsumerGroups(ctx thrift.Context, request *shared.ListConsumerGroupRequest) (result *shared.ListConsumerGroupResult_, err error) {
 
 	m.m3.IncCounter(metrics.MetadataListAllConsumerGroupsScope, metrics.MetadataRequests)
 	sw := m.m3.StartTimer(metrics.MetadataListAllConsumerGroupsScope, metrics.MetadataLatency)
@@ -91,7 +91,7 @@ func (m *metadataMetricsMgr) ListAllConsumerGroups(ctx thrift.Context, request *
 	return result, err
 }
 
-func (m *metadataMetricsMgr) ListConsumerGroups(ctx thrift.Context, request *m.ListConsumerGroupRequest) (result *m.ListConsumerGroupResult_, err error) {
+func (m *metadataMetricsMgr) ListConsumerGroups(ctx thrift.Context, request *shared.ListConsumerGroupRequest) (result *shared.ListConsumerGroupResult_, err error) {
 
 	m.m3.IncCounter(metrics.MetadataListConsumerGroupsScope, metrics.MetadataRequests)
 	sw := m.m3.StartTimer(metrics.MetadataListConsumerGroupsScope, metrics.MetadataLatency)
@@ -301,7 +301,7 @@ func (m *metadataMetricsMgr) ReadConsumerGroupExtentsByExtUUID(ctx thrift.Contex
 	return result, err
 }
 
-func (m *metadataMetricsMgr) ReadDestination(ctx thrift.Context, request *m.ReadDestinationRequest) (result *shared.DestinationDescription, err error) {
+func (m *metadataMetricsMgr) ReadDestination(ctx thrift.Context, request *shared.ReadDestinationRequest) (result *shared.DestinationDescription, err error) {
 
 	m.m3.IncCounter(metrics.MetadataReadDestinationScope, metrics.MetadataRequests)
 	sw := m.m3.StartTimer(metrics.MetadataReadDestinationScope, metrics.MetadataLatency)
@@ -373,6 +373,21 @@ func (m *metadataMetricsMgr) CreateConsumerGroup(ctx thrift.Context, request *sh
 
 	if err != nil {
 		m.m3.IncCounter(metrics.MetadataCreateConsumerGroupScope, metrics.MetadataFailures)
+	}
+
+	return result, err
+}
+
+func (m *metadataMetricsMgr) CreateConsumerGroupUUID(ctx thrift.Context, request *shared.CreateConsumerGroupUUIDRequest) (result *shared.ConsumerGroupDescription, err error) {
+
+	m.m3.IncCounter(metrics.MetadataCreateConsumerGroupUUIDScope, metrics.MetadataRequests)
+	sw := m.m3.StartTimer(metrics.MetadataCreateConsumerGroupUUIDScope, metrics.MetadataLatency)
+	defer sw.Stop()
+
+	result, err = m.meta.CreateConsumerGroupUUID(ctx, request)
+
+	if err != nil {
+		m.m3.IncCounter(metrics.MetadataCreateConsumerGroupUUIDScope, metrics.MetadataFailures)
 	}
 
 	return result, err

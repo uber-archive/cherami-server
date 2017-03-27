@@ -165,6 +165,8 @@ const (
 	MetadataUpdateServiceConfigScope
 	// MetadataCreateConsumerGroupScope defines scope for an operation on metadata
 	MetadataCreateConsumerGroupScope
+	// MetadataCreateConsumerGroupUUIDScope defines scope for an operation on metadata
+	MetadataCreateConsumerGroupUUIDScope
 	// MetadataCreateConsumerGroupExtentScope defines scope for an operation on metadata
 	MetadataCreateConsumerGroupExtentScope
 	// MetadataCreateDestinationScope defines scope for an operation on metadata
@@ -416,6 +418,18 @@ const (
 	ReplicatorDeleteDestScope
 	// ReplicatorDeleteRmtDestScope represents replicator DeleteRemoteDestination API
 	ReplicatorDeleteRmtDestScope
+	// ReplicatorCreateCgUUIDScope represents replicator CreateConsumerGroupUUID API
+	ReplicatorCreateCgUUIDScope
+	// ReplicatorCreateRmtCgUUIDScope represents replicator CreateRemoteConsumerGroupUUID API
+	ReplicatorCreateRmtCgUUIDScope
+	// ReplicatorUpdateCgScope represents replicator UpdateConsumerGroup API
+	ReplicatorUpdateCgScope
+	// ReplicatorUpdateRmtCgScope represents replicator UpdateRemoteConsumerGroup API
+	ReplicatorUpdateRmtCgScope
+	// ReplicatorDeleteCgScope represents replicator DeleteConsumerGroup API
+	ReplicatorDeleteCgScope
+	// ReplicatorDeleteRmtCgScope represents replicator DeleteRemoteConsumerGroup API
+	ReplicatorDeleteRmtCgScope
 	// ReplicatorCreateExtentScope represents replicator CreateExtent API
 	ReplicatorCreateExtentScope
 	// ReplicatorCreateRmtExtentScope represents replicator CreateRemoteExtent API
@@ -451,6 +465,7 @@ var scopeDefs = map[ServiceIdx]map[int]scopeDefinition{
 		MetadataUUIDToHostAddrScope:                    {operation: "MetadataUUIDToHostAddr"},
 		MetadataUpdateServiceConfigScope:               {operation: "MetadataUpdateServiceConfig"},
 		MetadataCreateConsumerGroupScope:               {operation: "MetadataCreateConsumerGroup"},
+		MetadataCreateConsumerGroupUUIDScope:           {operation: "MetadataCreateConsumerGroupUUID"},
 		MetadataCreateConsumerGroupExtentScope:         {operation: "MetadataCreateConsumerGroupExtent"},
 		MetadataCreateDestinationScope:                 {operation: "MetadataCreateDestination"},
 		MetadataCreateDestinationUUIDScope:             {operation: "MetadataCreateDestinationUUID"},
@@ -549,6 +564,12 @@ var scopeDefs = map[ServiceIdx]map[int]scopeDefinition{
 		ReplicatorUpdateRmtDestScope:     {operation: "ReplicatorUpdateRemoteDestination"},
 		ReplicatorDeleteDestScope:        {operation: "ReplicatorDeleteDestination"},
 		ReplicatorDeleteRmtDestScope:     {operation: "ReplicatorDeleteRemoteDestination"},
+		ReplicatorCreateCgUUIDScope:    {operation: "ReplicatorCreateConsumerGroupUUID"},
+		ReplicatorCreateRmtCgUUIDScope: {operation: "ReplicatorCreateRemoteConsumerGroupUUID"},
+		ReplicatorUpdateCgScope:        {operation: "ReplicatorUpdateConsumerGroup"},
+		ReplicatorUpdateRmtCgScope:     {operation: "ReplicatorUpdateRemoteConsumerGroup"},
+		ReplicatorDeleteCgScope:        {operation: "ReplicatorDeleteConsumerGroup"},
+		ReplicatorDeleteRmtCgScope:     {operation: "ReplicatorDeleteRemoteConsumerGroup"},
 		ReplicatorCreateExtentScope:      {operation: "ReplicatorCreateExtent"},
 		ReplicatorCreateRmtExtentScope:   {operation: "ReplicatorCreateRemoteExtent"},
 		ReplicatorReconcileScope:         {operation: "ReplicatorReconcile"},
@@ -985,6 +1006,12 @@ const (
 	ReplicatorReconcileDestFail
 	// ReplicatorReconcileDestFoundMissing indicates the reconcile for dest found a missing dest
 	ReplicatorReconcileDestFoundMissing
+	// ReplicatorReconcileCgRun indicates the reconcile for cg runs
+	ReplicatorReconcileCgRun
+	// ReplicatorReconcileCgFail indicates the reconcile for cg fails
+	ReplicatorReconcileCgFail
+	// ReplicatorReconcileCgFoundMissing indicates the reconcile for cg found a missing cg
+	ReplicatorReconcileCgFoundMissing
 	// ReplicatorReconcileDestExtentRun indicates the reconcile for dest extent runs
 	ReplicatorReconcileDestExtentRun
 	// ReplicatorReconcileDestExtentFail indicates the reconcile for dest extent fails
@@ -1158,6 +1185,9 @@ var metricDefs = map[ServiceIdx]map[int]metricDefinition{
 		ReplicatorReconcileDestRun:                              {Gauge, "replicator.reconcile.dest.run"},
 		ReplicatorReconcileDestFail:                             {Gauge, "replicator.reconcile.dest.fail"},
 		ReplicatorReconcileDestFoundMissing:                     {Gauge, "replicator.reconcile.dest.foundmissing"},
+		ReplicatorReconcileCgRun:                              {Gauge, "replicator.reconcile.cg.run"},
+		ReplicatorReconcileCgFail:                             {Gauge, "replicator.reconcile.cg.fail"},
+		ReplicatorReconcileCgFoundMissing:                     {Gauge, "replicator.reconcile.cg.foundmissing"},
 		ReplicatorReconcileDestExtentRun:                        {Gauge, "replicator.reconcile.destextent.run"},
 		ReplicatorReconcileDestExtentFail:                       {Gauge, "replicator.reconcile.destextent.fail"},
 		ReplicatorReconcileDestExtentFoundMissing:               {Gauge, "replicator.reconcile.destextent.foundmissing"},

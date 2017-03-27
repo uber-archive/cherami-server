@@ -484,7 +484,7 @@ func (cgCache *consumerGroupCache) refreshCgCache(ctx thrift.Context) error {
 	// If one of them is being deleted, then just unload all extents and
 	// move on. If not, check for new extents for this consumer group
 
-	dstReq := &metadata.ReadDestinationRequest{DestinationUUID: common.StringPtr(cgCache.cachedCGDesc.GetDestinationUUID())}
+	dstReq := &shared.ReadDestinationRequest{DestinationUUID: common.StringPtr(cgCache.cachedCGDesc.GetDestinationUUID())}
 	dstDesc, errRD := cgCache.metaClient.ReadDestination(ctx, dstReq)
 	if errRD != nil || dstDesc == nil {
 		cgCache.logger.WithField(common.TagErr, errRD).Error(`ReadDestination failed on refresh`)

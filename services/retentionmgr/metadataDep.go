@@ -214,7 +214,7 @@ func (t *metadataDepImpl) GetExtentInfo(destID destinationID, extID extentID) (e
 
 func (t *metadataDepImpl) GetConsumerGroups(destID destinationID) (consumerGroups []*consumerGroupInfo) {
 
-	req := metadata.NewListConsumerGroupRequest()
+	req := shared.NewListConsumerGroupRequest()
 	req.DestinationUUID = common.StringPtr(string(destID))
 	req.Limit = common.Int64Ptr(defaultPageSize)
 	ctx, _ := thrift.NewContext(time.Second)

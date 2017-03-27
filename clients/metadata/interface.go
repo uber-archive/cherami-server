@@ -33,7 +33,7 @@ type (
 		ReadExtentStats(request *m.ReadExtentStatsRequest) (*m.ReadExtentStatsResult_, error)
 		ListExtentsStats(request *shared.ListExtentsStatsRequest) (*shared.ListExtentsStatsResult_, error)
 		ListStoreExtentsStats(request *m.ListStoreExtentsStatsRequest) (*m.ListStoreExtentsStatsResult_, error)
-		ReadDestination(request *m.ReadDestinationRequest) (*shared.DestinationDescription, error)
+		ReadDestination(request *shared.ReadDestinationRequest) (*shared.DestinationDescription, error)
 		ListDestinations(request *shared.ListDestinationsRequest) (*shared.ListDestinationsResult_, error)
 		ListDestinationsByUUID(request *shared.ListDestinationsByUUIDRequest) (*shared.ListDestinationsResult_, error)
 		ReadConsumerGroupExtents(request *m.ReadConsumerGroupExtentsRequest) (*m.ReadConsumerGroupExtentsResult_, error)
@@ -42,8 +42,8 @@ type (
 		ReadConsumerGroupByUUID(request *m.ReadConsumerGroupRequest) (*shared.ConsumerGroupDescription, error)
 		ReadConsumerGroup(request *m.ReadConsumerGroupRequest) (*shared.ConsumerGroupDescription, error)
 		ListHosts(request *m.ListHostsRequest) (*m.ListHostsResult_, error)
-		ListConsumerGroups(request *m.ListConsumerGroupRequest) (*m.ListConsumerGroupResult_, error)
-		ListAllConsumerGroups(request *m.ListConsumerGroupRequest) (*m.ListConsumerGroupResult_, error)
+		ListConsumerGroups(request *shared.ListConsumerGroupRequest) (*shared.ListConsumerGroupResult_, error)
+		ListAllConsumerGroups(request *shared.ListConsumerGroupRequest) (*shared.ListConsumerGroupResult_, error)
 		ReadServiceConfig(request *m.ReadServiceConfigRequest) (*m.ReadServiceConfigResult_, error)
 		UpdateServiceConfig(request *m.UpdateServiceConfigRequest) error
 		DeleteServiceConfig(request *m.DeleteServiceConfigRequest) error

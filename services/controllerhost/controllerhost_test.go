@@ -219,17 +219,13 @@ func (s *McpSuite) listInputHostExtents(dstUUID string, inputHostUUID string) (*
 }
 
 func (s *McpSuite) createConsumerGroup(dstPath, cgName string) (*shared.ConsumerGroupDescription, error) {
-	return s.createConsumerGroupWithDLQ(dstPath, cgName, ``)
+	return s.createConsumerGroupWithDLQ(dstPath, cgName)
 }
 
-func (s *McpSuite) createConsumerGroupWithDLQ(dstPath, cgName, dlqUUID string) (*shared.ConsumerGroupDescription, error) {
+func (s *McpSuite) createConsumerGroupWithDLQ(dstPath, cgName string) (*shared.ConsumerGroupDescription, error) {
 	mReq := &shared.CreateConsumerGroupRequest{
 		DestinationPath:   common.StringPtr(dstPath),
 		ConsumerGroupName: common.StringPtr(cgName),
-	}
-
-	if len(dlqUUID) != 0 {
-		mReq.DeadLetterQueueDestinationUUID = common.StringPtr(dlqUUID)
 	}
 
 	return s.mClient.CreateConsumerGroup(nil, mReq)
@@ -660,7 +656,7 @@ func (s *McpSuite) TestMultiZoneDestCUD() {
 	s.True(destDesc.GetIsMultiZone())
 
 	// verify local operation
-	destDesc, err = s.mClient.ReadDestination(nil, &m.ReadDestinationRequest{Path: common.StringPtr(destPath)})
+	destDesc, err = s.mClient.ReadDestination(nil, &shared.ReadDestinationRequest{Path: common.StringPtr(destPath)})
 	s.NoError(err)
 	s.NotNil(destDesc)
 	s.Equal(destUUID, destDesc.GetDestinationUUID())
@@ -691,7 +687,7 @@ func (s *McpSuite) TestMultiZoneDestCUD() {
 	s.True(destDesc.GetIsMultiZone())
 
 	// verify local operation
-	destDesc, err = s.mClient.ReadDestination(nil, &m.ReadDestinationRequest{Path: common.StringPtr(destPath)})
+	destDesc, err = s.mClient.ReadDestination(nil, &shared.ReadDestinationRequest{Path: common.StringPtr(destPath)})
 	s.NoError(err)
 	s.NotNil(destDesc)
 	s.Equal(destUUID, destDesc.GetDestinationUUID())
@@ -715,7 +711,7 @@ func (s *McpSuite) TestMultiZoneDestCUD() {
 	s.NoError(err)
 
 	// verify local operation
-	destDesc, err = s.mClient.ReadDestination(nil, &m.ReadDestinationRequest{Path: common.StringPtr(destPath)})
+	destDesc, err = s.mClient.ReadDestination(nil, &shared.ReadDestinationRequest{Path: common.StringPtr(destPath)})
 	s.Error(err)
 	s.Nil(destDesc)
 	assert.IsType(s.T(), &shared.EntityNotExistsError{}, err)

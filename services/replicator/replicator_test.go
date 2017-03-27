@@ -419,6 +419,256 @@ func (s *ReplicatorSuite) TestDeleteRemoteDestinationSuccess() {
 	mockReplicator.AssertExpectations(s.T())
 }
 
+func (s *ReplicatorSuite) TestCreateCgUUID() {
+	repliator, _ := NewReplicator("replicator-test", s.mockService, s.mockMeta, s.mockReplicatorClientFactory, s.cfg)
+	cgUUID := uuid.New()
+	req := &shared.CreateConsumerGroupUUIDRequest{
+		ConsumerGroupUUID: common.StringPtr(cgUUID),
+		Request:           shared.NewCreateConsumerGroupRequest(),
+	}
+
+	s.mockMeta.On("CreateConsumerGroupUUID", mock.Anything, mock.Anything).Return(
+		&shared.ConsumerGroupDescription{
+			ConsumerGroupUUID: common.StringPtr(cgUUID),
+		}, nil,
+	).Run(func(args mock.Arguments) {
+		createReq := args.Get(1).(*shared.CreateConsumerGroupUUIDRequest)
+		s.True(createReq.IsSetRequest())
+		s.Equal(req.GetConsumerGroupUUID(), createReq.GetConsumerGroupUUID())
+	})
+	cgDesc, err := repliator.CreateConsumerGroupUUID(nil, req)
+	s.NoError(err)
+	s.NotNil(cgDesc)
+	s.mockMeta.AssertExpectations(s.T())
+}
+
+func (s *ReplicatorSuite) TestCreateRemoteConsumerGroupUUIDBadRequests() {
+	repliator, _ := NewReplicator("replicator-test", s.mockService, s.mockMeta, s.mockReplicatorClientFactory, s.cfg)
+
+	err := repliator.CreateRemoteConsumerGroupUUID(nil, shared.NewCreateConsumerGroupUUIDRequest())
+	s.Error(err)
+	assert.IsType(s.T(), &shared.BadRequestError{}, err)
+
+	err = repliator.CreateRemoteConsumerGroupUUID(nil, &shared.CreateConsumerGroupUUIDRequest{
+		ConsumerGroupUUID: common.StringPtr(uuid.New()),
+	})
+	s.Error(err)
+	assert.IsType(s.T(), &shared.BadRequestError{}, err)
+
+	err = repliator.CreateRemoteConsumerGroupUUID(nil, &shared.CreateConsumerGroupUUIDRequest{
+		Request: shared.NewCreateConsumerGroupRequest(),
+	})
+	s.Error(err)
+	assert.IsType(s.T(), &shared.BadRequestError{}, err)
+
+	err = repliator.CreateRemoteConsumerGroupUUID(nil, &shared.CreateConsumerGroupUUIDRequest{
+		ConsumerGroupUUID: common.StringPtr(uuid.New()),
+		Request: &shared.CreateConsumerGroupRequest{
+			IsMultiZone: common.BoolPtr(false),
+		},
+	})
+	s.Error(err)
+	assert.IsType(s.T(), &shared.BadRequestError{}, err)
+
+	err = repliator.CreateRemoteConsumerGroupUUID(nil, &shared.CreateConsumerGroupUUIDRequest{
+		ConsumerGroupUUID: common.StringPtr(uuid.New()),
+		Request: &shared.CreateConsumerGroupRequest{
+			IsMultiZone: common.BoolPtr(true),
+		},
+	})
+	s.Error(err)
+	assert.IsType(s.T(), &shared.BadRequestError{}, err)
+
+	err = repliator.CreateRemoteConsumerGroupUUID(nil, &shared.CreateConsumerGroupUUIDRequest{
+		ConsumerGroupUUID: common.StringPtr(uuid.New()),
+		Request: &shared.CreateConsumerGroupRequest{
+			IsMultiZone: common.BoolPtr(true),
+			ZoneConfigs: []*shared.ConsumerGroupZoneConfig{},
+		},
+	})
+	s.Error(err)
+	assert.IsType(s.T(), &shared.BadRequestError{}, err)
+}
+
+func (s *ReplicatorSuite) TestCreateRemoteCgUUIDFailed() {
+	repliator, _ := NewReplicator("replicator-test", s.mockService, s.mockMeta, s.mockReplicatorClientFactory, s.cfg)
+	createReq := &shared.CreateConsumerGroupUUIDRequest{
+		ConsumerGroupUUID: common.StringPtr(uuid.New()),
+		Request: &shared.CreateConsumerGroupRequest{
+			IsMultiZone: common.BoolPtr(true),
+			ZoneConfigs: []*shared.ConsumerGroupZoneConfig{shared.NewConsumerGroupZoneConfig()},
+		},
+	}
+	// setup mock
+	mockReplicator := new(mockreplicator.MockTChanReplicator)
+	mockReplicator.On("CreateConsumerGroupUUID", mock.Anything, mock.Anything).Return(nil, &shared.BadRequestError{Message: "test2"})
+	s.mockReplicatorClientFactory.On("GetReplicatorClient", mock.Anything).Return(mockReplicator, nil)
+
+	err := repliator.createConsumerGroupRemoteCall(`zone1`, repliator.logger, createReq)
+	s.Error(err)
+	s.mockReplicatorClientFactory.AssertExpectations(s.T())
+	mockReplicator.AssertExpectations(s.T())
+}
+
+func (s *ReplicatorSuite) TestCreateRemoteCgUUIDSuccess() {
+	cgUUID := uuid.New()
+	repliator, _ := NewReplicator("replicator-test", s.mockService, s.mockMeta, s.mockReplicatorClientFactory, s.cfg)
+	createReq := &shared.CreateConsumerGroupUUIDRequest{
+		ConsumerGroupUUID: common.StringPtr(cgUUID),
+		Request: &shared.CreateConsumerGroupRequest{
+			IsMultiZone: common.BoolPtr(true),
+			ZoneConfigs: []*shared.ConsumerGroupZoneConfig{shared.NewConsumerGroupZoneConfig()},
+		},
+	}
+
+	// setup mock
+	mockReplicator := new(mockreplicator.MockTChanReplicator)
+	mockReplicator.On("CreateConsumerGroupUUID", mock.Anything, mock.Anything).Return(nil, nil).Run(func(args mock.Arguments) {
+		req := args.Get(1).(*shared.CreateConsumerGroupUUIDRequest)
+		s.True(req.IsSetRequest())
+		s.True(req.GetRequest().GetIsMultiZone())
+		s.Equal(cgUUID, req.GetConsumerGroupUUID())
+	})
+	s.mockReplicatorClientFactory.On("GetReplicatorClient", mock.Anything).Return(mockReplicator, nil)
+
+	err := repliator.createConsumerGroupRemoteCall(`zone1`, repliator.logger, createReq)
+	s.NoError(err)
+	s.mockReplicatorClientFactory.AssertExpectations(s.T())
+	mockReplicator.AssertExpectations(s.T())
+}
+
+func (s *ReplicatorSuite) TestUpdateCg() {
+	repliator, _ := NewReplicator("replicator-test", s.mockService, s.mockMeta, s.mockReplicatorClientFactory, s.cfg)
+	cgName := `cg`
+	newEmail := `newowner@uber.com`
+	req := &shared.UpdateConsumerGroupRequest{
+		ConsumerGroupName: common.StringPtr(cgName),
+		OwnerEmail:        common.StringPtr(newEmail),
+	}
+
+	s.mockMeta.On("UpdateConsumerGroup", mock.Anything, mock.Anything).Return(
+		&shared.ConsumerGroupDescription{
+			ConsumerGroupName: common.StringPtr(cgName),
+			OwnerEmail:        common.StringPtr(newEmail),
+		}, nil,
+	).Run(func(args mock.Arguments) {
+		updateReq := args.Get(1).(*shared.UpdateConsumerGroupRequest)
+		s.Equal(req.GetConsumerGroupName(), updateReq.GetConsumerGroupName())
+		s.Equal(req.GetOwnerEmail(), updateReq.GetOwnerEmail())
+	})
+	cgDesc, err := repliator.UpdateConsumerGroup(nil, req)
+	s.NoError(err)
+	s.NotNil(cgDesc)
+	s.mockMeta.AssertExpectations(s.T())
+}
+
+func (s *ReplicatorSuite) TestUpdateRemoteCgFailed() {
+	repliator, _ := NewReplicator("replicator-test", s.mockService, s.mockMeta, s.mockReplicatorClientFactory, s.cfg)
+	cgName := `cg`
+	newEmail := `newowner@uber.com`
+	req := &shared.UpdateConsumerGroupRequest{
+		ConsumerGroupName: common.StringPtr(cgName),
+		OwnerEmail:        common.StringPtr(newEmail),
+	}
+
+	// setup mock
+	mockReplicator := new(mockreplicator.MockTChanReplicator)
+	mockReplicator.On("UpdateConsumerGroup", mock.Anything, mock.Anything).Return(nil, &shared.InternalServiceError{Message: "test2"})
+	s.mockReplicatorClientFactory.On("GetReplicatorClient", mock.Anything).Return(mockReplicator, nil)
+
+	err := repliator.updateCgRemoteCall(`zone1`, repliator.logger, req)
+	s.Error(err)
+	s.mockReplicatorClientFactory.AssertExpectations(s.T())
+	mockReplicator.AssertExpectations(s.T())
+}
+
+func (s *ReplicatorSuite) TestUpdateRemoteCgSuccess() {
+	repliator, _ := NewReplicator("replicator-test", s.mockService, s.mockMeta, s.mockReplicatorClientFactory, s.cfg)
+	cgName := uuid.New()
+	newEmail := `newowner@uber.com`
+	req := &shared.UpdateConsumerGroupRequest{
+		ConsumerGroupName: common.StringPtr(cgName),
+		OwnerEmail:        common.StringPtr(newEmail),
+	}
+
+	// setup mock
+	mockReplicator := new(mockreplicator.MockTChanReplicator)
+	mockReplicator.On("UpdateConsumerGroup", mock.Anything, mock.Anything).Return(nil, nil).Run(func(args mock.Arguments) {
+		req := args.Get(1).(*shared.UpdateConsumerGroupRequest)
+		s.Equal(cgName, req.GetConsumerGroupName())
+		s.Equal(newEmail, req.GetOwnerEmail())
+	})
+	s.mockReplicatorClientFactory.On("GetReplicatorClient", mock.Anything).Return(mockReplicator, nil)
+
+	err := repliator.updateCgRemoteCall(`zone1`, repliator.logger, req)
+	s.NoError(err)
+	s.mockReplicatorClientFactory.AssertExpectations(s.T())
+	mockReplicator.AssertExpectations(s.T())
+}
+
+func (s *ReplicatorSuite) TestDeleteCg() {
+	repliator, _ := NewReplicator("replicator-test", s.mockService, s.mockMeta, s.mockReplicatorClientFactory, s.cfg)
+	path := `path`
+	cg := `cg`
+	req := &shared.DeleteConsumerGroupRequest{
+		DestinationPath:   common.StringPtr(path),
+		ConsumerGroupName: common.StringPtr(cg),
+	}
+
+	s.mockMeta.On("DeleteConsumerGroup", mock.Anything, mock.Anything).Return(nil).Run(func(args mock.Arguments) {
+		delReq := args.Get(1).(*shared.DeleteConsumerGroupRequest)
+		s.Equal(path, delReq.GetDestinationPath())
+		s.Equal(cg, delReq.GetConsumerGroupName())
+	})
+	err := repliator.DeleteConsumerGroup(nil, req)
+	s.NoError(err)
+	s.mockMeta.AssertExpectations(s.T())
+}
+
+func (s *ReplicatorSuite) TestDeleteRemoteCgFailed() {
+	repliator, _ := NewReplicator("replicator-test", s.mockService, s.mockMeta, s.mockReplicatorClientFactory, s.cfg)
+	path := `path`
+	cg := `cg`
+	req := &shared.DeleteConsumerGroupRequest{
+		DestinationPath:   common.StringPtr(path),
+		ConsumerGroupName: common.StringPtr(cg),
+	}
+
+	// setup mock
+	mockReplicator := new(mockreplicator.MockTChanReplicator)
+	mockReplicator.On("DeleteConsumerGroup", mock.Anything, mock.Anything).Return(&shared.InternalServiceError{Message: "test2"})
+	s.mockReplicatorClientFactory.On("GetReplicatorClient", mock.Anything).Return(mockReplicator, nil)
+
+	err := repliator.deleteCgRemoteCall(`zone1`, repliator.logger, req)
+	s.Error(err)
+	s.mockReplicatorClientFactory.AssertExpectations(s.T())
+	mockReplicator.AssertExpectations(s.T())
+}
+
+func (s *ReplicatorSuite) TestDeleteRemoteCgSuccess() {
+	repliator, _ := NewReplicator("replicator-test", s.mockService, s.mockMeta, s.mockReplicatorClientFactory, s.cfg)
+	path := `path`
+	cg := `cg`
+	req := &shared.DeleteConsumerGroupRequest{
+		DestinationPath:   common.StringPtr(path),
+		ConsumerGroupName: common.StringPtr(cg),
+	}
+
+	// setup mock
+	mockReplicator := new(mockreplicator.MockTChanReplicator)
+	mockReplicator.On("DeleteConsumerGroup", mock.Anything, mock.Anything).Return(nil).Run(func(args mock.Arguments) {
+		req := args.Get(1).(*shared.DeleteConsumerGroupRequest)
+		s.Equal(path, req.GetDestinationPath())
+		s.Equal(cg, req.GetConsumerGroupName())
+	})
+	s.mockReplicatorClientFactory.On("GetReplicatorClient", mock.Anything).Return(mockReplicator, nil)
+
+	err := repliator.deleteCgRemoteCall(`zone1`, repliator.logger, req)
+	s.NoError(err)
+	s.mockReplicatorClientFactory.AssertExpectations(s.T())
+	mockReplicator.AssertExpectations(s.T())
+}
+
 func (s *ReplicatorSuite) TestCreateExtentSuccess() {
 	repliator, _ := NewReplicator("replicator-test", s.mockService, s.mockMeta, s.mockReplicatorClientFactory, s.cfg)
 	destUUID := uuid.New()
@@ -731,6 +981,147 @@ func (s *ReplicatorSuite) TestDestMetadataReconcileRemoteUpdate() {
 		OwnerEmail:      common.StringPtr(ownerRemote),
 	})
 	reconciler.reconcileDest(localDests, remoteDests)
+	s.mockMeta.AssertExpectations(s.T())
+}
+
+// local zone is missing one cg compared to remote. Expect to create the missing cg
+func (s *ReplicatorSuite) TestCgMetadataReconcileLocalMissing() {
+	localZone := `zone2`
+	missingCgUUID := uuid.New()
+	cgCreated := &shared.ConsumerGroupDescription{
+		ConsumerGroupUUID: common.StringPtr(missingCgUUID),
+	}
+
+	repliator, _ := NewReplicator("replicator-test", s.mockService, s.mockMeta, s.mockReplicatorClientFactory, s.cfg)
+	reconciler, _ := NewMetadataReconciler(repliator.metaClient, repliator, localZone, repliator.logger, repliator.m3Client).(*metadataReconciler)
+
+	// setup mock
+	s.mockMeta.On("CreateConsumerGroupUUID", mock.Anything, mock.Anything).Return(cgCreated, nil).Run(func(args mock.Arguments) {
+		req := args.Get(1).(*shared.CreateConsumerGroupUUIDRequest)
+		s.True(req.IsSetRequest())
+		s.Equal(missingCgUUID, req.GetConsumerGroupUUID())
+	})
+
+	mockReplicator := new(mockreplicator.MockTChanReplicator)
+	mockReplicator.On("ReadDestination", mock.Anything, mock.Anything).Return(&shared.DestinationDescription{Path: common.StringPtr(`dest`)}, nil)
+	s.mockReplicatorClientFactory.On("GetReplicatorClient", mock.Anything).Return(mockReplicator, nil)
+
+	var localCgs []*shared.ConsumerGroupDescription
+	var remoteCgs []*shared.ConsumerGroupDescription
+	remoteCgs = append(remoteCgs, &shared.ConsumerGroupDescription{
+		ConsumerGroupUUID: common.StringPtr(missingCgUUID),
+	})
+	reconciler.reconcileCg(localCgs, remoteCgs)
+	s.mockMeta.AssertExpectations(s.T())
+}
+
+// both local and remote zone has no ConsumerGroup. Expect no creation request is generated
+func (s *ReplicatorSuite) TestCgMetadataReconcileLocalAndRemoteEmpty() {
+	localZone := `zone2`
+
+	repliator, _ := NewReplicator("replicator-test", s.mockService, s.mockMeta, s.mockReplicatorClientFactory, s.cfg)
+	reconciler, _ := NewMetadataReconciler(repliator.metaClient, repliator, localZone, repliator.logger, repliator.m3Client).(*metadataReconciler)
+
+	var localCgs []*shared.ConsumerGroupDescription
+	var remoteCgs []*shared.ConsumerGroupDescription
+	reconciler.reconcileCg(localCgs, remoteCgs)
+	s.mockMeta.AssertExpectations(s.T())
+}
+
+// local zone has more ConsumerGroup than remote zone. Expect no creation request is generated
+func (s *ReplicatorSuite) TestCgMetadataReconcileRemoteMissing() {
+	localZone := `zone2`
+	missingCgUUID := uuid.New()
+
+	repliator, _ := NewReplicator("replicator-test", s.mockService, s.mockMeta, s.mockReplicatorClientFactory, s.cfg)
+	reconciler, _ := NewMetadataReconciler(repliator.metaClient, repliator, localZone, repliator.logger, repliator.m3Client).(*metadataReconciler)
+
+	var localCgs []*shared.ConsumerGroupDescription
+	localCgs = append(localCgs, &shared.ConsumerGroupDescription{
+		ConsumerGroupUUID: common.StringPtr(missingCgUUID),
+	})
+	var remoteCgs []*shared.ConsumerGroupDescription
+	reconciler.reconcileCg(localCgs, remoteCgs)
+	s.mockMeta.AssertExpectations(s.T())
+}
+
+// local zone is missing one ConsumerGroup compared to remote, but ConsumerGroup is deleted in remote zone. Expect no creation request is generated
+func (s *ReplicatorSuite) TestCgMetadataReconcileLocalMissingRemoteDeleted() {
+	localZone := `zone2`
+	missingCgUUID := uuid.New()
+
+	repliator, _ := NewReplicator("replicator-test", s.mockService, s.mockMeta, s.mockReplicatorClientFactory, s.cfg)
+	reconciler, _ := NewMetadataReconciler(repliator.metaClient, repliator, localZone, repliator.logger, repliator.m3Client).(*metadataReconciler)
+
+	var localCgs []*shared.ConsumerGroupDescription
+	var remoteCgs []*shared.ConsumerGroupDescription
+	remoteCgs = append(remoteCgs, &shared.ConsumerGroupDescription{
+		ConsumerGroupUUID: common.StringPtr(missingCgUUID),
+		Status:            common.InternalConsumerGroupStatusPtr(shared.ConsumerGroupStatus_DELETED),
+	})
+	reconciler.reconcileCg(localCgs, remoteCgs)
+	s.mockMeta.AssertExpectations(s.T())
+}
+
+// ConsumerGroup is deleted in remote zone. Expect a delete request is generated
+func (s *ReplicatorSuite) TestCgMetadataReconcileRemoteDeleted() {
+	localZone := `zone2`
+	cgUUID := uuid.New()
+	destUUID := uuid.New()
+	cgName := `cg`
+
+	repliator, _ := NewReplicator("replicator-test", s.mockService, s.mockMeta, s.mockReplicatorClientFactory, s.cfg)
+	reconciler, _ := NewMetadataReconciler(repliator.metaClient, repliator, localZone, repliator.logger, repliator.m3Client).(*metadataReconciler)
+
+	// setup mock
+	s.mockMeta.On("DeleteConsumerGroup", mock.Anything, mock.Anything).Return(nil).Run(func(args mock.Arguments) {
+		req := args.Get(1).(*shared.DeleteConsumerGroupRequest)
+		s.Equal(cgName, req.GetConsumerGroupName())
+		s.Equal(destUUID, req.GetDestinationUUID())
+	})
+
+	var localCgs []*shared.ConsumerGroupDescription
+	localCgs = append(localCgs, &shared.ConsumerGroupDescription{
+		ConsumerGroupUUID: common.StringPtr(cgUUID),
+		ConsumerGroupName: common.StringPtr(cgName),
+		DestinationUUID:   common.StringPtr(destUUID),
+	})
+	var remoteCgs []*shared.ConsumerGroupDescription
+	remoteCgs = append(remoteCgs, &shared.ConsumerGroupDescription{
+		ConsumerGroupUUID: common.StringPtr(cgUUID),
+		ConsumerGroupName: common.StringPtr(cgName),
+		DestinationUUID:   common.StringPtr(destUUID),
+		Status:            common.InternalConsumerGroupStatusPtr(shared.ConsumerGroupStatus_DELETED),
+	})
+	reconciler.reconcileCg(localCgs, remoteCgs)
+	s.mockMeta.AssertExpectations(s.T())
+}
+
+// ConsumerGroup is deleted in both local and remote zones. Expect no deletion request is generated
+func (s *ReplicatorSuite) TestCgMetadataReconcileRemoteLocalDeleted() {
+	localZone := `zone2`
+	cgUUID := uuid.New()
+	destUUID := uuid.New()
+	cgName := `cg`
+
+	repliator, _ := NewReplicator("replicator-test", s.mockService, s.mockMeta, s.mockReplicatorClientFactory, s.cfg)
+	reconciler, _ := NewMetadataReconciler(repliator.metaClient, repliator, localZone, repliator.logger, repliator.m3Client).(*metadataReconciler)
+
+	var localCgs []*shared.ConsumerGroupDescription
+	localCgs = append(localCgs, &shared.ConsumerGroupDescription{
+		ConsumerGroupUUID: common.StringPtr(cgUUID),
+		ConsumerGroupName: common.StringPtr(cgName),
+		DestinationUUID:   common.StringPtr(destUUID),
+		Status:            common.InternalConsumerGroupStatusPtr(shared.ConsumerGroupStatus_DELETED),
+	})
+	var remoteCgs []*shared.ConsumerGroupDescription
+	remoteCgs = append(remoteCgs, &shared.ConsumerGroupDescription{
+		ConsumerGroupUUID: common.StringPtr(cgUUID),
+		ConsumerGroupName: common.StringPtr(cgName),
+		DestinationUUID:   common.StringPtr(destUUID),
+		Status:            common.InternalConsumerGroupStatusPtr(shared.ConsumerGroupStatus_DELETED),
+	})
+	reconciler.reconcileCg(localCgs, remoteCgs)
 	s.mockMeta.AssertExpectations(s.T())
 }
 
