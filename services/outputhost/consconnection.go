@@ -60,7 +60,7 @@ type (
 		// for concurrent access.
 		recvCreds      int64 // total credits received
 		sentMsgs       int64 // total messages sent out
-		reSentMsgs 	   int64 // count of sent messages that were re-deliveries
+		reSentMsgs     int64 // count of sent messages that were re-deliveries
 		sentToMsgCache int64 // count of message sent to message cache
 
 		lk     sync.Mutex
@@ -139,9 +139,9 @@ func (conn *consConnection) close() {
 		// now set the WG to unblock cgCache unload
 		conn.cgCache.connsWG.Done()
 		conn.logger.WithFields(bark.Fields{
-			`sentMsgs`:   conn.sentMsgs,
-			`reSentMsgs`: conn.reSentMsgs,
-			`recvCreds`:  conn.recvCreds,
+			`sentMsgs`:       conn.sentMsgs,
+			`reSentMsgs`:     conn.reSentMsgs,
+			`recvCreds`:      conn.recvCreds,
 			`sentToMsgCache`: conn.sentToMsgCache,
 		}).Info("consConn closed")
 	}

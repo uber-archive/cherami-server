@@ -21,13 +21,13 @@
 package outputhost
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"strconv"
 	"testing"
 	"time"
-	"errors"
 
 	"golang.org/x/net/context"
 
@@ -208,16 +208,15 @@ func (s *OutputHostSuite) TestOutputHostReadMessage() {
 	cFlow.Credits = common.Int32Ptr(int32(count))
 
 	connOpenedCh := make(chan struct{})
-	s.mockCons.On("Read").Return(cFlow, nil).Once().Run(func(args mock.Arguments){close(connOpenedCh)})
+	s.mockCons.On("Read").Return(cFlow, nil).Once().Run(func(args mock.Arguments) { close(connOpenedCh) })
 
 	// setup the mock so that we can read 10 messages
 	writeSeq := int64(0)
 
-
 	rmc := store.NewReadMessageContent()
 	rmc.Type = store.ReadMessageContentTypePtr(store.ReadMessageContentType_MESSAGE)
 
-	s.mockRead.On("Read").Return(rmc, nil).Times(10).Run(func(args mock.Arguments){
+	s.mockRead.On("Read").Return(rmc, nil).Times(10).Run(func(args mock.Arguments) {
 		aMsg := store.NewAppendMessage()
 		aMsg.SequenceNumber = common.Int64Ptr(writeSeq)
 		pMsg := cherami.NewPutMessage()
@@ -239,7 +238,7 @@ func (s *OutputHostSuite) TestOutputHostReadMessage() {
 	// close the read stream
 	creditUnblockCh := make(chan struct{})
 	s.mockRead.On("Read").Return(nil, io.EOF)
-	s.mockCons.On("Read").Return(nil, io.EOF).Run(func(args mock.Arguments){<-writeDoneCh; <-creditUnblockCh})
+	s.mockCons.On("Read").Return(nil, io.EOF).Run(func(args mock.Arguments) { <-writeDoneCh; <-creditUnblockCh })
 
 	<-connOpenedCh // wait for the consConnection to open
 
@@ -301,7 +300,7 @@ func (s *OutputHostSuite) TestOutputHostPutsMsgIntoMsgCacheOnWriteError() {
 	s.mockRead.On("Write", mock.Anything).Return(nil)
 
 	writeDoneCh := make(chan struct{}) // signal after write() is called
-	s.mockCons.On("Write", mock.Anything).Return(errors.New("write error")).Run(func(args mock.Arguments){close(writeDoneCh)})
+	s.mockCons.On("Write", mock.Anything).Return(errors.New("write error")).Run(func(args mock.Arguments) { close(writeDoneCh) })
 
 	cFlow := cherami.NewControlFlow()
 	cFlow.Credits = common.Int32Ptr(10)
@@ -329,7 +328,7 @@ func (s *OutputHostSuite) TestOutputHostPutsMsgIntoMsgCacheOnWriteError() {
 	// close the read stream
 	s.mockRead.On("Read").Return(nil, io.EOF)
 	// make the credit channel wait until we verify the output, this prevents the cgcache from unloading
-	s.mockCons.On("Read").Return(nil, io.EOF).Run(func(args mock.Arguments) {<-creditUnblockCh})
+	s.mockCons.On("Read").Return(nil, io.EOF).Run(func(args mock.Arguments) { <-creditUnblockCh })
 
 	// initiate a consumer connection
 	streamDoneCh := make(chan struct{})
@@ -363,7 +362,6 @@ func (s *OutputHostSuite) TestOutputHostPutsMsgIntoMsgCacheOnWriteError() {
 	// now that the whole CG is unloaded, assert that we actually put msgs into message cache
 	s.Equal(int64(1), conn.sentToMsgCache, "consConnection failed to put message into message cache")
 }
-
 
 func (s *OutputHostSuite) TestOutputHostAckMessage() {
 	outputHost, _ := NewOutputHost("outputhost-test", s.mockService, s.mockMeta, nil, nil)
