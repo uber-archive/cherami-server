@@ -77,6 +77,8 @@ func destCreateRequestToDesc(createRequest *c.CreateDestinationRequest) *shared.
 	destDesc.UnconsumedMessagesRetention = common.Int32Ptr(createRequest.GetUnconsumedMessagesRetention())
 	destDesc.OwnerEmail = common.StringPtr(createRequest.GetOwnerEmail())
 	destDesc.ChecksumOption = common.InternalChecksumOptionPtr(shared.ChecksumOption(createRequest.GetChecksumOption()))
+	destDesc.KafkaCluster = common.StringPtr(createRequest.GetKafkaCluster())
+	destDesc.KafkaTopics = createRequest.KafkaTopics
 	destDesc.IsMultiZone = common.BoolPtr(createRequest.GetIsMultiZone())
 	if createRequest.IsSetZoneConfigs() {
 		destDesc.ZoneConfigs = make([]*shared.DestinationZoneConfig, 0, len(createRequest.GetZoneConfigs().GetConfigs()))
@@ -246,7 +248,7 @@ func (s *FrontendHostSuite) TestFrontendHostCreateDestination() {
 		},
 	}
 
-	s.mockController.On("CreateDestination", mock.Anything, mock.Anything).Return(destCreateRequestToDesc(req), nil).Run(func(args mock.Arguments) {
+	s.mockController.On("CreateDestination", mock.Anything, mock.Anything).Return(destCreateRequestToDesc(req), nil).Once().Run(func(args mock.Arguments) {
 		createReq := args.Get(1).(*shared.CreateDestinationRequest)
 		s.Equal(createReq.GetPath(), req.GetPath())
 		s.Equal(createReq.GetConsumedMessagesRetention(), req.GetConsumedMessagesRetention())
@@ -256,6 +258,8 @@ func (s *FrontendHostSuite) TestFrontendHostCreateDestination() {
 		s.Equal(createReq.GetIsMultiZone(), req.GetIsMultiZone())
 		s.Equal(len(createReq.GetZoneConfigs()), len(req.GetZoneConfigs().GetConfigs()))
 		s.Equal(createReq.GetZoneConfigs()[0].GetRemoteExtentReplicaNum(), req.GetZoneConfigs().GetConfigs()[0].GetRemoteExtentReplicaNum())
+		s.Equal(createReq.GetKafkaCluster(), req.GetKafkaCluster())
+		s.True(common.StringSetEqual(createReq.GetKafkaTopics(), req.GetKafkaTopics()))
 	})
 
 	dst, err := frontendHost.CreateDestination(ctx, req)
@@ -271,7 +275,122 @@ func (s *FrontendHostSuite) TestFrontendHostCreateDestination() {
 		s.Equal(dst.GetIsMultiZone(), req.GetIsMultiZone())
 		s.Equal(len(dst.ZoneConfigs.GetConfigs()), len(req.ZoneConfigs.GetConfigs()))
 		s.Equal(dst.ZoneConfigs.GetConfigs()[0].GetRemoteExtentReplicaNum(), req.ZoneConfigs.GetConfigs()[0].GetRemoteExtentReplicaNum())
+		s.Equal(dst.GetKafkaCluster(), req.GetKafkaCluster())
+		s.True(common.StringSetEqual(dst.GetKafkaTopics(), req.GetKafkaTopics()))
 	}
+}
+
+// TestFrontendHostCreateKafkaDestination tests that kafka destination can be created
+func (s *FrontendHostSuite) TestFrontendHostCreateKafkaDestination() {
+	defer s.resetMocks()
+	frontendHost, ctx := s.utilGetContextAndFrontend()
+
+	path := s.generateKey("/foo/bar")
+	req := c.NewCreateDestinationRequest()
+	req.Path = common.StringPtr(path)
+	req.ConsumedMessagesRetention = common.Int32Ptr(15)
+	req.UnconsumedMessagesRetention = common.Int32Ptr(30)
+	req.OwnerEmail = common.StringPtr("test@uber.com")
+
+	for _, f := range []func() (bool, string){
+		func() (bool, string) {
+			req.Type = c.DestinationTypePtr(c.DestinationType_PLAIN)
+			return true, `base case plain`
+		}, func() (bool, string) {
+			req.KafkaCluster = common.StringPtr(`foo`)
+			req.KafkaTopics = nil
+			return false, `Should fail because topics not set`
+		}, func() (bool, string) {
+			req.KafkaCluster = common.StringPtr(`foo`)
+			req.KafkaTopics = make([]string, 0)
+			return false, `Should fail because topics len zero`
+		}, func() (bool, string) {
+			req.KafkaCluster = common.StringPtr(``)
+			req.KafkaTopics = []string{`bar`}
+			return false, `Should fail because cluster len zero`
+		}, func() (bool, string) {
+			req.KafkaCluster = common.StringPtr(`foo`)
+			req.KafkaTopics = []string{`bar`}
+			req.IsMultiZone = common.BoolPtr(true)
+			req.ZoneConfigs = &c.DestinationZoneConfigs{
+				Configs: []*c.DestinationZoneConfig{
+					{
+						Zone:                   common.StringPtr("zone1"),
+						AllowPublish:           common.BoolPtr(true),
+						AllowConsume:           common.BoolPtr(true),
+						AlwaysReplicateTo:      common.BoolPtr(true),
+						RemoteExtentReplicaNum: common.Int32Ptr(3),
+					},
+				},
+			}
+			return false, `Should fail because multi-zone is not allowed for a KAFKA destination`
+		}, func() (bool, string) {
+			req.KafkaCluster = common.StringPtr(`foo`)
+			req.KafkaTopics = []string{`bar`}
+			req.Type = c.DestinationTypePtr(c.DestinationType_PLAIN)
+			return false, `Should fail because KAFKA config only allowed with type KAFKA`
+		}, func() (bool, string) {
+			return false, `kafka destination requires kafka config`
+		}, func() (bool, string) {
+			req.KafkaCluster = common.StringPtr(`foo`)
+			req.KafkaTopics = []string{`bar`, ``, `quz`}
+			return false, `topics should have no empty strings`
+		}, func() (bool, string) {
+			req.KafkaCluster = common.StringPtr(`foo`)
+			req.KafkaTopics = []string{`bar`, `baz`, `quz`}
+			return true, `should work with multiple topics`
+		}, func() (bool, string) {
+			req.KafkaCluster = common.StringPtr(`foo`)
+			req.KafkaTopics = []string{`bar`}
+			return true, `should work with one topic`
+		},
+	} {
+		// Base config reset
+		req.Type = c.DestinationTypePtr(c.DestinationType_KAFKA)
+		req.IsMultiZone = common.BoolPtr(false)
+		req.ZoneConfigs = nil
+		req.KafkaCluster = nil
+		req.KafkaTopics = nil
+
+		// Adjust for this test
+		shouldPass, testMsg := f()
+
+		// Reset mock calls, since previous iterations may have queued up a spurious return that wasn't actually delivered
+		s.resetMocks()
+		s.mockController.On("CreateDestination", mock.Anything, mock.Anything).Return(destCreateRequestToDesc(req), nil).Once().Run(func(args mock.Arguments) {
+			createReq := args.Get(1).(*shared.CreateDestinationRequest)
+			s.Equal(createReq.GetPath(), req.GetPath(), testMsg)
+			s.Equal(createReq.GetConsumedMessagesRetention(), req.GetConsumedMessagesRetention(), testMsg)
+			s.Equal(createReq.GetUnconsumedMessagesRetention(), req.GetUnconsumedMessagesRetention(), testMsg)
+			s.Equal(createReq.GetType(), shared.DestinationType(req.GetType()), testMsg)
+			s.Equal(createReq.GetOwnerEmail(), req.GetOwnerEmail(), testMsg)
+			s.Equal(createReq.GetIsMultiZone(), req.GetIsMultiZone(), testMsg)
+			s.Equal(createReq.GetKafkaCluster(), req.GetKafkaCluster(), testMsg)
+			s.True(common.StringSetEqual(createReq.GetKafkaTopics(), req.GetKafkaTopics()), testMsg)
+		})
+
+		dst, err := frontendHost.CreateDestination(ctx, req)
+		if shouldPass {
+			s.NoError(err, testMsg)
+			s.NotNil(dst, testMsg)
+		} else {
+			s.Error(err, testMsg)
+			s.Nil(dst, testMsg)
+		}
+
+		if dst != nil {
+			s.Equal(dst.GetPath(), req.GetPath(), testMsg)
+			s.Equal(dst.GetConsumedMessagesRetention(), req.GetConsumedMessagesRetention(), testMsg)
+			s.Equal(dst.GetUnconsumedMessagesRetention(), req.GetUnconsumedMessagesRetention(), testMsg)
+			s.Equal(dst.GetType(), req.GetType(), testMsg)
+			s.Equal(dst.GetOwnerEmail(), req.GetOwnerEmail(), testMsg)
+			s.Equal(dst.GetIsMultiZone(), req.GetIsMultiZone(), testMsg)
+			s.Equal(dst.GetKafkaCluster(), req.GetKafkaCluster(), testMsg)
+			s.True(common.StringSetEqual(dst.GetKafkaTopics(), req.GetKafkaTopics()), testMsg)
+		}
+
+	}
+
 }
 
 // TestFrontendHostReadDestinationRejectNil tests that a nil request fails with BadRequestError
@@ -665,7 +784,7 @@ func (s *FrontendHostSuite) TestFrontendHostCreateConsumerGroup() {
 // TestFrontendHostCreateConsumerGroupStartFrom tests whether CreateConsumerGroup is able to
 // detect and appropriately convert various startFrom units.
 func (s *FrontendHostSuite) TestFrontendHostCreateConsumerGroupStartFrom() {
-
+	defer s.resetMocks()
 	testPath := uuid.New()
 	testCG := s.generateKey("/bar/CGName")
 	frontendHost, ctx := s.utilGetContextAndFrontend()
@@ -689,6 +808,7 @@ func (s *FrontendHostSuite) TestFrontendHostCreateConsumerGroupStartFrom() {
 		}
 
 		if !willError {
+			s.resetMocks()
 			// create destination is needed because of dlq destination been created at time of consumer group creation
 			s.mockController.On("CreateDestination", mock.Anything, mock.Anything).Return(destDesc, nil).Run(func(args mock.Arguments) {
 				s.Equal(dlqPath, args.Get(1).(*shared.CreateDestinationRequest).GetPath())
@@ -1415,4 +1535,12 @@ func (s *FrontendHostSuite) TestFrontendHostGetQueueDepthInfoGood() {
 	s.NoError(err)
 	s.NotNil(info)
 	s.Equal(info.GetValue(), `foo`)
+}
+
+// resetMocks clears all pending mock calls
+func (s *FrontendHostSuite) resetMocks() {
+	s.mockController.Calls = nil
+	s.mockController.ExpectedCalls = nil
+	s.mockMeta.Calls = nil
+	s.mockMeta.ExpectedCalls = nil
 }

@@ -179,3 +179,41 @@ func (s *UtilSuite) TestOverrideValueByPrefixConcurrency() {
 	startersPistol.Unlock() // bang!
 	wg.Wait()
 }
+
+// TestContainsString tests ContainsString
+func (s *UtilSuite) TestContainsString() {
+	s.False(ContainsString(nil, ``))
+	s.False(ContainsString(make([]string, 0), ``))
+	s.True(ContainsString(make([]string, 10), ``))
+	s.True(ContainsString([]string{``}, ``))
+	s.True(ContainsString([]string{`a`, ``, `c`}, ``))
+	s.True(ContainsString([]string{`a`, `b`, ``}, ``))
+	s.False(ContainsString([]string{`a`}, ``))
+	s.False(ContainsString([]string{`a`, `b`, `c`}, ``))
+	s.True(ContainsString([]string{`a`, `b`, `c`}, `a`))
+	s.True(ContainsString([]string{`a`, `b`, `c`}, `b`))
+	s.True(ContainsString([]string{`a`, `b`, `c`}, `c`))
+	s.False(ContainsString([]string{`a`, `b`, `c`}, `d`))
+}
+
+func (s *UtilSuite) TestStringSetEqual() {
+	s.False(StringSetEqual([]string{``, `a`}, []string{`a`}))
+	s.False(StringSetEqual([]string{``}, nil))
+	s.False(StringSetEqual([]string{`a`, `b`}, []string{`a`}))
+	s.False(StringSetEqual([]string{`a`}, []string{`a`, ``}))
+	s.False(StringSetEqual([]string{`a`}, []string{`a`, `b`}))
+	s.False(StringSetEqual([]string{`a`}, []string{`b`}))
+	s.False(StringSetEqual(nil, []string{``}))
+	s.False(StringSetEqual(nil, []string{`a`}))
+	s.True(StringSetEqual([]string{`a`, `a`, `c`}, []string{`a`, `c`, `a`}))
+	s.True(StringSetEqual([]string{`a`, `b`, `c`, `a`}, []string{`a`, `b`, `c`}))
+	s.True(StringSetEqual([]string{`a`, `b`, `c`}, []string{`a`, `b`, `c`, `a`}))
+	s.True(StringSetEqual([]string{`a`, `b`, `c`}, []string{`a`, `b`, `c`}))
+	s.True(StringSetEqual([]string{`a`, `b`, `c`}, []string{`b`, `a`, `c`}))
+	s.True(StringSetEqual([]string{`a`, `b`, `c`}, []string{`c`, `b`, `a`}))
+	s.True(StringSetEqual([]string{`a`, `c`, `c`}, []string{`a`, `a`, `c`}))
+	s.True(StringSetEqual([]string{`a`}, []string{`a`}))
+	s.True(StringSetEqual(nil, []string{}))
+	s.True(StringSetEqual(nil, nil))
+
+}
