@@ -725,3 +725,38 @@ func FindNearestInt(target int64, nums ...int64) (nearest int64) {
 
 	return
 }
+
+// ContainsEmpty scans a string slice for an empty string, returning true if one is found
+func ContainsEmpty(a []string) bool {
+	return ContainsString(a, ``)
+}
+
+// ContainsString scans a string slice for a matching string, returning true if one is found
+func ContainsString(a []string, x string) bool {
+	for _, s := range a {
+		if s == x {
+			return true
+		}
+	}
+	return false
+}
+
+// StringSetEqual checks for set equality (i.e. non-ordered, discounting duplicates) for two string slices
+// StringSetEqual([]string{`a`,`a`,`b`,`b`}, []string{`a`,`a`,`b`}) == TRUE !!
+// DEVNOTE: This is O(N^2), so don't use it with large N; better if len(a) > len(b) if you have duplicates
+func StringSetEqual(a, b []string) bool {
+	if len(a) == 0 { // This handles all nil/[]string{} cases, which are considered equivalent empty sets
+		return len(b) == 0
+	}
+
+	for _, A := range a { // For each in a
+		if match := ContainsString(b, A); !match { // If A is not in b
+			return false
+		}
+	}
+
+	if len(a) >= len(b) { // Only recurse if a could be a proper subset of b
+		return true
+	}
+	return StringSetEqual(b, a) // Above we checked only that all A are in B; check all B in A
+}

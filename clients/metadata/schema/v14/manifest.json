@@ -1,0 +1,8 @@
+{
+	"CurrVersion": 14,
+	"MinCompatibleVersion": 8,
+	"Description": "Add kafkaCluster and kafkaTopics",
+	"SchemaUpdateCqlFiles": [
+		"201703240000_add_kafka.cql"
+	]
+}

@@ -69,16 +69,20 @@ const (
 	tableDestinationsByPath     = "destinations_by_path"
 	tableHostAddrToUUID         = "host_addr_to_uuid"
 	tableInputHostExtents       = "input_host_extents"
-	tableStoreExtents           = "store_extents"
-	tableUUIDToHostAddr         = "uuid_to_host_addr"
 	tableOperationsByEntityName = "user_operations_by_entity_name"
 	tableOperationsByEntityUUID = "user_operations_by_entity_uuid"
+	tableStoreExtents           = "store_extents"
+	tableUUIDToHostAddr         = "uuid_to_host_addr"
 )
 
 const (
 	columnAckLevelOffset                 = "ack_level_offset"
 	columnAckLevelSequence               = "ack_level_sequence"
 	columnAckLevelSequenceRate           = "ack_level_sequence_rate"
+	columnActiveZone                     = "active_zone"
+	columnAllowConsume                   = "allow_consume"
+	columnAllowPublish                   = "allow_publish"
+	columnAlwaysReplicatedTo             = "always_replicate_to"
 	columnArchivalLocation               = "archival_location"
 	columnAvailableAddress               = "available_address"
 	columnAvailableEnqueueTime           = "available_enqueue_time"
@@ -88,6 +92,9 @@ const (
 	columnBeginEnqueueTime               = "begin_enqueue_time"
 	columnBeginSequence                  = "begin_sequence"
 	columnBeginTime                      = "begin_time"
+	columnCallerHostName                 = "caller_host_name"
+	columnCallerServiceName              = "caller_service_name"
+	columnChecksumOption                 = "checksum_option"
 	columnConnectedStore                 = "connected_store"
 	columnConsumedMessagesRetention      = "consumed_messages_retention"
 	columnConsumerGroup                  = "consumer_group"
@@ -95,35 +102,46 @@ const (
 	columnConsumerGroupVisibility        = "consumer_group_visibility"
 	columnCreatedTime                    = "created_time"
 	columnDLQConsumerGroup               = "dlq_consumer_group"
+	columnDLQMergeBefore                 = "dlq_merge_before"
+	columnDLQPurgeBefore                 = "dlq_purge_before"
 	columnDeadLetterQueueDestinationUUID = "dead_letter_queue_destination_uuid"
 	columnDestination                    = "destination"
 	columnDestinationUUID                = "destination_uuid"
 	columnDirectoryUUID                  = "directory_uuid"
 	columnEndTime                        = "end_time"
+	columnEntityName                     = "entity_name"
+	columnEntityType                     = "entity_type"
+	columnEntityUUID                     = "entity_uuid"
 	columnExtent                         = "extent"
 	columnExtentUUID                     = "extent_uuid"
 	columnHostAddr                       = "hostaddr"
 	columnHostName                       = "hostname"
+	columnInitiatorInfo                  = "initiator"
 	columnInputHostUUID                  = "input_host_uuid"
-	columnOriginZone                     = "origin_zone"
-	columnRemoteExtentPrimaryStore       = "remote_extent_primary_store"
+	columnIsMultiZone                    = "is_multi_zone"
+	columnKafkaCluster                   = "kafka_cluster"
+	columnKafkaTopics                    = "kafka_topics"
 	columnLastAddress                    = "last_address"
 	columnLastEnqueueTime                = "last_enqueue_time"
 	columnLastSequence                   = "last_sequence"
 	columnLastSequenceRate               = "last_sequence_rate"
 	columnLockTimeoutSeconds             = "lock_timeout_seconds"
 	columnMaxDeliveryCount               = "max_delivery_count"
-	columnDLQMergeBefore                 = "dlq_merge_before"
 	columnName                           = "name"
+	columnOpsContent                     = "operation_content"
+	columnOpsTime                        = "operation_time"
+	columnOpsType                        = "operation_type"
+	columnOriginZone                     = "origin_zone"
 	columnOutputHostUUID                 = "output_host_uuid"
 	columnOwnerEmail                     = "owner_email"
-	columnChecksumOption                 = "checksum_option"
 	columnPath                           = "path"
-	columnDLQPurgeBefore                 = "dlq_purge_before"
 	columnReceivedLevelOffset            = "received_level_offset"
 	columnReceivedLevelSequence          = "received_level_sequence"
 	columnReceivedLevelSequenceRate      = "received_level_sequence_rate"
+	columnRemoteExtentPrimaryStore       = "remote_extent_primary_store"
+	columnRemoteExtentReplicaNum         = "remote_extent_replica_num"
 	columnReplicaStats                   = "replica_stats"
+	columnReplicationStatus              = "replication_status"
 	columnSizeInBytes                    = "size_in_bytes"
 	columnSizeInBytesRate                = "size_in_bytes_rate"
 	columnSkipOlderMessagesSeconds       = "skip_older_messages_seconds"
@@ -137,27 +155,11 @@ const (
 	columnType                           = "type"
 	columnUUID                           = "uuid"
 	columnUnconsumedMessagesRetention    = "unconsumed_messages_retention"
-	columnEntityName                     = "entity_name"
-	columnEntityUUID                     = "entity_uuid"
-	columnEntityType                     = "entity_type"
-	columnInitiatorInfo                  = "initiator"
-	columnOpsType                        = "operation_type"
-	columnOpsTime                        = "operation_time"
-	columnOpsContent                     = "operation_content"
-	columnUserName                       = "user_name"
 	columnUserEmail                      = "user_email"
-	columnIsMultiZone                    = "is_multi_zone"
-	columnZoneConfigs                    = "zone_configs"
-	columnZone                           = "zone"
-	columnAllowPublish                   = "allow_publish"
-	columnAllowConsume                   = "allow_consume"
-	columnAlwaysReplicatedTo             = "always_replicate_to"
-	columnRemoteExtentReplicaNum         = "remote_extent_replica_num"
+	columnUserName                       = "user_name"
 	columnVisible                        = "visible"
-	columnActiveZone                     = "active_zone"
-	columnCallerServiceName              = "caller_service_name"
-	columnCallerHostName                 = "caller_host_name"
-	columnReplicationStatus              = "replication_status"
+	columnZone                           = "zone"
+	columnZoneConfigs                    = "zone_configs"
 )
 
 const userOperationTTL = "2592000" // 30 days
@@ -320,16 +322,18 @@ const (
 		columnZoneConfigs + `: ?}`
 
 	sqlInsertDstByUUID = `INSERT INTO ` + tableDestinations +
-		`(` + columnUUID + `, ` + columnIsMultiZone + `, ` + columnDestination + `, ` + columnDLQConsumerGroup + `) ` +
-		` VALUES (?, ?, ` + sqlDstType + `, ?)`
+		`(` + columnUUID + `, ` + columnIsMultiZone + `, ` + columnDestination + `, ` + columnKafkaCluster + `, ` + columnKafkaTopics + `, ` + columnDLQConsumerGroup + `) ` +
+		` VALUES (?, ?, ` + sqlDstType + `, ?, ?, ?)`
 
 	sqlInsertDstByPath = `INSERT INTO ` + tableDestinationsByPath +
 		`(` +
 		columnDirectoryUUID + `, ` +
 		columnPath + `, ` +
 		columnIsMultiZone + `, ` +
-		columnDestination +
-		`) VALUES (?, ?, ?, ` + sqlDstType + `) IF NOT EXISTS`
+		columnDestination + `, ` +
+		columnKafkaCluster + `, ` +
+		columnKafkaTopics +
+		`) VALUES (?, ?, ?, ` + sqlDstType + `, ?, ?) IF NOT EXISTS`
 
 	sqlGetDstByPath = `SELECT ` +
 		columnDestination + `.` + columnUUID + `, ` +
@@ -341,7 +345,9 @@ const (
 		columnDestination + `.` + columnOwnerEmail + `, ` +
 		columnDestination + `.` + columnChecksumOption + `, ` +
 		columnDestination + `.` + columnIsMultiZone + `, ` +
-		columnDestination + `.` + columnZoneConfigs +
+		columnDestination + `.` + columnZoneConfigs + `, ` +
+		columnKafkaCluster + `, ` +
+		columnKafkaTopics +
 		` FROM ` + tableDestinationsByPath +
 		` WHERE ` + columnDirectoryUUID + `=? and ` + columnPath + `=?`
 
@@ -358,7 +364,9 @@ const (
 		columnDestination + `.` + columnZoneConfigs + `, ` +
 		columnDLQConsumerGroup + `, ` +
 		columnDLQPurgeBefore + `, ` +
-		columnDLQMergeBefore +
+		columnDLQMergeBefore + `, ` +
+		columnKafkaCluster + `, ` +
+		columnKafkaTopics +
 		` FROM ` + tableDestinations
 
 	sqlUpdateDstByUUID = `UPDATE ` + tableDestinations + ` SET ` +
@@ -422,6 +430,8 @@ func (s *CassandraMetadataService) CreateDestinationUUID(ctx thrift.Context, uui
 		request.GetChecksumOption(),
 		request.GetIsMultiZone(),
 		marshalDstZoneConfigs(request.GetZoneConfigs()),
+		request.KafkaCluster,
+		request.KafkaTopics,
 		request.DLQConsumerGroupUUID, // may be nil
 	).Exec(); err != nil {
 		return nil, &shared.InternalServiceError{
@@ -447,7 +457,9 @@ func (s *CassandraMetadataService) CreateDestinationUUID(ctx thrift.Context, uui
 			request.GetOwnerEmail(),
 			request.GetChecksumOption(),
 			request.GetIsMultiZone(),
-			marshalDstZoneConfigs(request.GetZoneConfigs()))
+			marshalDstZoneConfigs(request.GetZoneConfigs()),
+			request.KafkaCluster,
+			request.KafkaTopics)
 		applied, err := query.MapScanCAS(previous)
 		if err != nil {
 			return nil, &shared.InternalServiceError{
@@ -495,6 +507,8 @@ func (s *CassandraMetadataService) CreateDestinationUUID(ctx thrift.Context, uui
 		IsMultiZone:                 common.BoolPtr(request.GetIsMultiZone()),
 		ZoneConfigs:                 request.GetZoneConfigs(),
 		DLQConsumerGroupUUID:        common.StringPtr(request.GetDLQConsumerGroupUUID()),
+		KafkaCluster:                common.StringPtr(request.GetKafkaCluster()),
+		KafkaTopics:                 request.KafkaTopics,
 	}, nil
 }
 
@@ -513,6 +527,8 @@ func getUtilDestinationDescription() *shared.DestinationDescription {
 	result.DLQMergeBefore = common.Int64Ptr(0)
 	result.IsMultiZone = common.BoolPtr(false)
 	result.ZoneConfigs = shared.DestinationDescription_ZoneConfigs_DEFAULT
+	result.KafkaCluster = common.StringPtr("")
+	result.KafkaTopics = make([]string, 0)
 
 	return result
 }
@@ -621,7 +637,10 @@ func (s *CassandraMetadataService) ReadDestination(ctx thrift.Context, getReques
 			result.OwnerEmail,
 			result.ChecksumOption,
 			result.IsMultiZone,
-			&zoneConfigsData)
+			&zoneConfigsData,
+			result.KafkaCluster,
+			&result.KafkaTopics,
+		)
 	} else {
 		sql = sqlListDestinationsByUUID + ` WHERE ` + columnUUID + `=?`
 		query = s.session.Query(sql).Consistency(s.lowConsLevel)
@@ -641,6 +660,8 @@ func (s *CassandraMetadataService) ReadDestination(ctx thrift.Context, getReques
 			result.DLQConsumerGroupUUID, //
 			result.DLQPurgeBefore,       // Only a UUID lookup can populate these values; this is OK since DLQ destinations can only be found by UUID anyway
 			result.DLQMergeBefore,       //
+			result.KafkaCluster,
+			&result.KafkaTopics,
 		)
 	}
 	result.ZoneConfigs = unmarshalDstZoneConfigs(zoneConfigsData)
@@ -994,7 +1015,9 @@ func (s *CassandraMetadataService) ListDestinationsByUUID(ctx thrift.Context, li
 		&zoneConfigsData,
 		d.DLQConsumerGroupUUID,
 		d.DLQPurgeBefore,
-		d.DLQMergeBefore) {
+		d.DLQMergeBefore,
+		d.KafkaCluster,
+		&d.KafkaTopics) {
 		d.ZoneConfigs = unmarshalDstZoneConfigs(zoneConfigsData)
 
 		// Get a new item within limit
@@ -1062,7 +1085,9 @@ func (s *CassandraMetadataService) ListAllDestinations(ctx thrift.Context, listR
 		&zoneConfigsData,
 		d.DLQConsumerGroupUUID,
 		d.DLQPurgeBefore,
-		d.DLQMergeBefore) && count < listRequest.GetLimit() {
+		d.DLQMergeBefore,
+		d.KafkaCluster,
+		&d.KafkaTopics) && count < listRequest.GetLimit() {
 		d.ZoneConfigs = unmarshalDstZoneConfigs(zoneConfigsData)
 		*d.DLQPurgeBefore = int64(cqlTimestampToUnixNano(*d.DLQPurgeBefore))
 		*d.DLQMergeBefore = int64(cqlTimestampToUnixNano(*d.DLQMergeBefore))

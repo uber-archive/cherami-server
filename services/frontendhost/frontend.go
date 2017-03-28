@@ -52,7 +52,9 @@ const (
 	maxSizeCacheDestinationPathForUUID = 1000
 )
 
-var nilRequestError = &c.BadRequestError{Message: `Request must not be nil`}
+var nilRequestError = &c.BadRequestError{Message: `request must not be nil`}
+var badRequestKafkaConfigError = &c.BadRequestError{Message: `kafka destination must set kafka cluster and topic, and may not be multi-zone`}
+var badRequestNonKafkaConfigError = &c.BadRequestError{Message: `non-Kafka destination must not set kafka cluster and topic`}
 
 // destinationUUID is the UUID as a string for a destination
 type destinationUUID string
@@ -221,6 +223,9 @@ func convertCreateDestRequestToInternal(createRequest *c.CreateDestinationReques
 	internalCreateRequest.ChecksumOption = common.InternalChecksumOptionPtr(shared.ChecksumOption(createRequest.GetChecksumOption()))
 	internalCreateRequest.OwnerEmail = common.StringPtr(createRequest.GetOwnerEmail())
 	internalCreateRequest.IsMultiZone = common.BoolPtr(createRequest.GetIsMultiZone())
+	internalCreateRequest.KafkaCluster = common.StringPtr(createRequest.GetKafkaCluster())
+	internalCreateRequest.KafkaTopics = createRequest.KafkaTopics
+
 	if createRequest.IsSetZoneConfigs() {
 		internalCreateRequest.ZoneConfigs = make([]*shared.DestinationZoneConfig, 0, len(createRequest.GetZoneConfigs().GetConfigs()))
 		for _, destZoneCfg := range createRequest.GetZoneConfigs().GetConfigs() {
@@ -271,6 +276,9 @@ func convertDestinationFromInternal(internalDestDesc *shared.DestinationDescript
 	destDesc.OwnerEmail = common.StringPtr(internalDestDesc.GetOwnerEmail())
 	destDesc.ChecksumOption = c.ChecksumOption(internalDestDesc.GetChecksumOption())
 	destDesc.IsMultiZone = common.BoolPtr(internalDestDesc.GetIsMultiZone())
+	destDesc.KafkaCluster = common.StringPtr(internalDestDesc.GetKafkaCluster())
+	destDesc.KafkaTopics = internalDestDesc.KafkaTopics
+
 	if internalDestDesc.IsSetZoneConfigs() {
 		destDesc.ZoneConfigs = c.NewDestinationZoneConfigs()
 		destDesc.ZoneConfigs.Configs = make([]*c.DestinationZoneConfig, 0, len(internalDestDesc.GetZoneConfigs()))
@@ -560,6 +568,19 @@ func (h *Frontend) CreateDestination(ctx thrift.Context, createRequest *c.Create
 	}
 
 	lclLg := h.logger.WithField(common.TagDstPth, common.FmtDstPth(createRequest.GetPath()))
+
+	// Verify that Kafka configuration is valid
+	if createRequest.GetType() == c.DestinationType_KAFKA {
+		if createRequest.GetKafkaCluster() == `` ||
+			len(createRequest.GetKafkaTopics()) == 0 ||
+			common.ContainsEmpty(createRequest.GetKafkaTopics()) ||
+			createRequest.GetIsMultiZone() {
+			return nil, badRequestKafkaConfigError
+		}
+	} else if createRequest.GetKafkaCluster() != `` ||
+		len(createRequest.GetKafkaTopics()) != 0 {
+		return nil, badRequestNonKafkaConfigError
+	}
 
 	// Request to controller
 	cClient, err := h.getControllerClient()
