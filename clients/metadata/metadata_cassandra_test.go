@@ -169,6 +169,8 @@ func createDestination(s *CassandraSuite, path string, dlqDestination bool) (*sh
 }
 
 var destinationOwnerEmail = "lhc@uber.com"
+var testKafkaCluster = `kafkaCluster`
+var testKafkaTopics = []string{`a`, `bb`}
 
 func (s *CassandraSuite) TestDestinationCRUD() {
 	// Create
@@ -193,6 +195,8 @@ func (s *CassandraSuite) TestDestinationCRUD() {
 			ChecksumOption:              common.InternalChecksumOptionPtr(0),
 			IsMultiZone:                 common.BoolPtr(true),
 			ZoneConfigs:                 []*shared.DestinationZoneConfig{zoneConfig},
+			KafkaCluster:                common.StringPtr(testKafkaCluster),
+			KafkaTopics:                 testKafkaTopics,
 		}
 
 		if dlq {
@@ -214,6 +218,8 @@ func (s *CassandraSuite) TestDestinationCRUD() {
 		s.Equal(zoneConfig.GetAllowPublish(), destination.GetZoneConfigs()[0].GetAllowPublish())
 		s.Equal(zoneConfig.GetRemoteExtentReplicaNum(), destination.GetZoneConfigs()[0].GetRemoteExtentReplicaNum())
 		s.Equal(createDestination.GetDLQConsumerGroupUUID(), destination.GetDLQConsumerGroupUUID())
+		s.Equal(createDestination.KafkaCluster, destination.KafkaCluster)
+		s.assertStringUnorderedArrayEqual(createDestination.KafkaTopics, destination.KafkaTopics, `KafkaTopics should match`)
 
 		// Duplicated Create
 		_, err = s.client.CreateDestination(nil, createDestination)
@@ -253,6 +259,8 @@ func (s *CassandraSuite) TestDestinationCRUD() {
 		s.Equal(destination.GetDLQConsumerGroupUUID(), loadedDestination.GetDLQConsumerGroupUUID())
 		s.Equal(destination.GetDLQPurgeBefore(), loadedDestination.GetDLQPurgeBefore())
 		s.Equal(destination.GetDLQMergeBefore(), loadedDestination.GetDLQMergeBefore())
+		s.Equal(destination.KafkaCluster, loadedDestination.KafkaCluster)
+		s.assertStringUnorderedArrayEqual(destination.KafkaTopics, loadedDestination.KafkaTopics, `KafkaTopics should match`)
 
 		// By Path
 		getDestination = &shared.ReadDestinationRequest{
@@ -277,6 +285,8 @@ func (s *CassandraSuite) TestDestinationCRUD() {
 		s.Equal(``, loadedDestination.GetDLQConsumerGroupUUID()) //
 		s.Equal(int64(0), loadedDestination.GetDLQPurgeBefore()) // DLQ destinations are not visible as a 'by path'
 		s.Equal(int64(0), loadedDestination.GetDLQMergeBefore()) //
+		s.Equal(destination.KafkaCluster, loadedDestination.KafkaCluster)
+		s.assertStringUnorderedArrayEqual(destination.KafkaTopics, loadedDestination.KafkaTopics, `KafkaTopics should match`)
 
 		// Update
 		updateDestination := &shared.UpdateDestinationRequest{
@@ -318,6 +328,8 @@ func (s *CassandraSuite) TestDestinationCRUD() {
 		s.Equal(updatedDestination.GetDLQConsumerGroupUUID(), loadedDestination.GetDLQConsumerGroupUUID())
 		s.Equal(updatedDestination.GetDLQPurgeBefore(), loadedDestination.GetDLQPurgeBefore())
 		s.Equal(updatedDestination.GetDLQMergeBefore(), loadedDestination.GetDLQMergeBefore())
+		s.Equal(destination.KafkaCluster, loadedDestination.KafkaCluster)
+		s.assertStringUnorderedArrayEqual(destination.KafkaTopics, loadedDestination.KafkaTopics, `KafkaTopics should match`)
 
 		destination.ConsumedMessagesRetention = updateDestination.ConsumedMessagesRetention
 		destination.UnconsumedMessagesRetention = updateDestination.UnconsumedMessagesRetention
@@ -364,6 +376,8 @@ func (s *CassandraSuite) TestDestinationCRUD() {
 			s.Equal(updatedDestination.GetDLQConsumerGroupUUID(), loadedDestination.GetDLQConsumerGroupUUID())
 			s.Equal(updatedDestination.GetDLQPurgeBefore(), loadedDestination.GetDLQPurgeBefore())
 			s.Equal(updatedDestination.GetDLQMergeBefore(), loadedDestination.GetDLQMergeBefore())
+			s.Equal(updatedDestination.KafkaCluster, loadedDestination.KafkaCluster)
+			s.assertStringUnorderedArrayEqual(updatedDestination.KafkaTopics, loadedDestination.KafkaTopics, `KafkaTopics should match`)
 
 			// Alter the update for the 2nd pass
 			updateDestinationDLQCursors.DLQMergeBefore = common.Int64Ptr(now + int64(time.Hour))
@@ -1193,7 +1207,7 @@ func (s *CassandraSuite) TestMoveExtent() {
 	s.Equal(mReq.GetConsumerGroupVisibilityUUID(), extentStats2.GetExtentStats().GetConsumerGroupVisibility(), "%v", mReq.GetExtentUUID())
 }
 
-func (s *CassandraSuite) assertReplicaStatsArrayEqual(a, b []*shared.ExtentReplicaStats, msgAndArgs ...interface{}) {
+func (s *CassandraSuite) assertStringUnorderedArrayEqual(a, b []string, msgAndArgs ...interface{}) {
 	s.NotNil(a, msgAndArgs)
 	s.NotNil(b, msgAndArgs)
 	s.Equal(len(a), len(b), msgAndArgs)
@@ -1201,9 +1215,27 @@ func (s *CassandraSuite) assertReplicaStatsArrayEqual(a, b []*shared.ExtentRepli
 	for _, A := range a {
 		match := false
 		for _, B := range b {
+			if A == B {
+				match = true
+			}
+		}
+		s.True(match, msgAndArgs)
+	}
+}
+
+func (s *CassandraSuite) assertReplicaStatsArrayEqual(a, b []*shared.ExtentReplicaStats, msgAndArgs ...interface{}) {
+	s.NotNil(a, msgAndArgs)
+	s.NotNil(b, msgAndArgs)
+	s.Equal(len(a), len(b), msgAndArgs)
+
+	for _, A := range a {
+		match := false
+	inner:
+		for _, B := range b {
 			if A.GetStoreUUID() == B.GetStoreUUID() {
 				match = true
 				s.assertReplicaStatsEqual(A, B, msgAndArgs)
+				break inner
 			}
 		}
 		s.True(match, msgAndArgs)
