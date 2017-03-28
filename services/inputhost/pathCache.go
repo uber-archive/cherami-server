@@ -508,3 +508,16 @@ func (pathCache *inPathCache) getState() *admin.DestinationState {
 
 	return destState
 }
+
+func (pathCache *inPathCache) drainExtent(extUUID string) error {
+	pathCache.RLock()
+	defer pathCache.RUnlock()
+
+	extCache, ok := pathCache.extentCache[extentUUID(extUUID)]
+	if !ok {
+		return &cherami.EntityNotExistsError{}
+	}
+
+	go extCache.connection.drain()
+	return nil
+}

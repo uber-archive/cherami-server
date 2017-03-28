@@ -687,7 +687,7 @@ func (h *InputHost) UnloadDestinations(ctx thrift.Context, request *admin.Unload
 }
 
 // ListLoadedDestinations is the API used to list all the loaded destinations in memory
-func (h *InputHost) ListLoadedDestinations(ctx thrift.Context) (result *admin.ListDestinationsResult_, err error) {
+func (h *InputHost) ListLoadedDestinations(ctx thrift.Context) (result *admin.ListLoadedDestinationsResult_, err error) {
 	defer atomic.AddInt32(&h.loadShutdownRef, -1)
 	sw := h.m3Client.StartTimer(metrics.ListLoadedDestinationsScope, metrics.InputhostLatencyTimer)
 	defer sw.Stop()
@@ -699,7 +699,7 @@ func (h *InputHost) ListLoadedDestinations(ctx thrift.Context) (result *admin.Li
 		return nil, ErrHostShutdown
 	}
 
-	result = admin.NewListDestinationsResult_()
+	result = admin.NewListLoadedDestinationsResult_()
 	h.pathMutex.RLock()
 	result.Dests = make([]*admin.Destinations, len(h.pathCache))
 	count := 0
@@ -755,6 +755,59 @@ func (h *InputHost) ReadDestState(ctx thrift.Context, request *admin.ReadDestina
 	}
 	return result, err
 
+}
+
+// DrainExtents is the implementation of the thrift handler for the inputhost
+func (h *InputHost) DrainExtent(ctx thrift.Context, request *admin.DrainExtentsRequest) (err error) {
+	defer atomic.AddInt32(&h.loadShutdownRef, -1)
+	sw := h.m3Client.StartTimer(metrics.DrainExtentsScope, metrics.InputhostLatencyTimer)
+	defer sw.Stop()
+	h.m3Client.IncCounter(metrics.DrainExtentsScope, metrics.InputhostRequests)
+	// If we are already shutting down, no need to do anything here
+	if atomic.AddInt32(&h.loadShutdownRef, 1) <= 0 {
+		h.logger.WithField(common.TagReconfigureID, common.FmtReconfigureID(request.GetUpdateUUID())).Error("inputhost: DrainExtent: dropping due to shutdown")
+		h.m3Client.IncCounter(metrics.DrainExtentsScope, metrics.InputhostFailures)
+		return ErrHostShutdown
+	}
+
+	var intErr error
+	updateUUID := request.GetUpdateUUID()
+	h.logger.WithField(common.TagReconfigureID, common.FmtReconfigureID(updateUUID)).
+		Debug("inputhost: DrainExtent: processing drain")
+	// Find all the extents we have and do the right thing
+	for _, req := range request.Extents {
+		// get the destUUID and see if it is in the inputhost cache
+		destUUID := req.GetDestinationUUID()
+		pathCache, ok := h.getPathCacheByDestUUID(destUUID)
+		if ok {
+			// We have a path cache loaded
+			// check if it is active or not
+			extentUUID := req.GetExtentUUID()
+			if pathCache.isActiveNoLock() {
+				intErr = pathCache.drainExtent(extentUUID)
+			} else {
+				intErr = errPathCacheUnloading
+			}
+		} else {
+			intErr = &cherami.EntityNotExistsError{}
+		}
+
+		// just save the error and proceed to the next update
+		if intErr != nil {
+			err = intErr
+			h.m3Client.IncCounter(metrics.DrainExtentsScope, metrics.InputhostFailures)
+			h.logger.WithFields(bark.Fields{
+				common.TagDst:           common.FmtDst(destUUID),
+				common.TagReconfigureID: common.FmtReconfigureID(updateUUID),
+				common.TagErr:           intErr,
+			}).Error("inputhost: DrainExtent: dropping reconfiguration")
+		}
+	}
+
+	h.logger.WithField(common.TagReconfigureID, common.FmtReconfigureID(updateUUID)).
+		Debug("inputhost: DrainExtent: finished reconfiguration")
+
+	return
 }
 
 // Report is the implementation for reporting host specific load to controller
