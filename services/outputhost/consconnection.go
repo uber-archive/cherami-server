@@ -58,9 +58,10 @@ type (
 		// one message at a time) and are read during connection close after
 		// the pumps have closed -- therefore these don't need to be protected
 		// for concurrent access.
-		recvCreds  int64 // total credits received
-		sentMsgs   int64 // total messages sent out
-		reSentMsgs int64 // count of sent messages that were re-deliveries
+		recvCreds      int64 // total credits received
+		sentMsgs       int64 // total messages sent out
+		reSentMsgs     int64 // count of sent messages that were re-deliveries
+		sentToMsgCache int64 // count of message sent to message cache
 
 		lk     sync.Mutex
 		opened bool
@@ -122,7 +123,6 @@ func (conn *consConnection) open() *sync.WaitGroup {
 
 func (conn *consConnection) close() {
 	conn.lk.Lock()
-
 	if !conn.closed {
 		// unregister from the notifier
 		conn.cgCache.notifier.Unregister(conn.connID)
@@ -139,9 +139,10 @@ func (conn *consConnection) close() {
 		// now set the WG to unblock cgCache unload
 		conn.cgCache.connsWG.Done()
 		conn.logger.WithFields(bark.Fields{
-			`sentMsgs`:   conn.sentMsgs,
-			`reSentMsgs`: conn.reSentMsgs,
-			`recvCreds`:  conn.recvCreds,
+			`sentMsgs`:       conn.sentMsgs,
+			`reSentMsgs`:     conn.reSentMsgs,
+			`recvCreds`:      conn.recvCreds,
+			`sentToMsgCache`: conn.sentToMsgCache,
 		}).Info("consConn closed")
 	}
 	conn.lk.Unlock()
@@ -390,16 +391,6 @@ func (conn *consConnection) createMsgAndWriteToClientUtil(msg *cherami.ConsumerM
 	cmd := createMsgCmd(msg)
 	if err := conn.writeToClient(cmd); err == nil {
 		*unflushedWrites++
-		// Add the message to the message cache, on the appropriate channel
-		// this should be blocking because we should not proceed forward if we
-		// cannot write to the message cache
-		select {
-		case msgCacheCh <- cacheMsg{msg: msg, connID: conn.connID}:
-		case <-conn.closeChannel:
-			conn.logger.
-				WithField(common.TagAckID, common.FmtAckID(msg.GetAckId())).
-				Error("outputhost: Unable to write the message to the cache (shutdown?)")
-		}
 		*localCredits--
 		// flush if we have reached the threshold
 		if *unflushedWrites > common.FlushThreshold {
@@ -408,6 +399,15 @@ func (conn *consConnection) createMsgAndWriteToClientUtil(msg *cherami.ConsumerM
 			}
 		}
 	}
+	// Always add to the messageCache regardless of whether the write
+	// to the client succeeded or not. If we don't add it to the
+	// message cache, the message is *lost* and will never be redelivered.
+	// This can cause the CG to be stuck forever waiting for an ACK from client.
+	// The blocking operation below can delay the closing of stream when a
+	// conn close signal is received, the assumption here is that the
+	// operation if it blocks, will only do so for less than a second
+	msgCacheCh <- cacheMsg{msg: msg, connID: conn.connID}
+	conn.sentToMsgCache++
 }
 
 func createMsgCmd(msg *cherami.ConsumerMessage) *cherami.OutputHostCommand {

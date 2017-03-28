@@ -21,6 +21,7 @@
 package outputhost
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -165,8 +166,8 @@ func (s *OutputHostSuite) TestOutputHostRejectNoPath() {
 // TestOutputHostReadMessage just reads a bunch of messages and make sure
 // we get the msg back
 func (s *OutputHostSuite) TestOutputHostReadMessage() {
-	var count int32
-	count = 10
+
+	count := 10
 
 	outputHost, _ := NewOutputHost("outputhost-test", s.mockService, s.mockMeta, nil, nil)
 	httpRequest := utilGetHTTPRequestWithPath("foo")
@@ -192,39 +193,174 @@ func (s *OutputHostSuite) TestOutputHostReadMessage() {
 	cgRes.Extents = append(cgRes.Extents, cgExt)
 	s.mockMeta.On("ReadConsumerGroupExtents", mock.Anything, mock.Anything).Return(cgRes, nil).Once()
 	s.mockRead.On("Write", mock.Anything).Return(nil)
-	s.mockCons.On("Write", mock.Anything).Return(nil)
+
+	nWritten := 0
+	writeDoneCh := make(chan struct{})
+
+	s.mockCons.On("Write", mock.Anything).Return(nil).Times(count).Run(func(args mock.Arguments) {
+		nWritten++
+		if nWritten == count {
+			close(writeDoneCh)
+		}
+	})
 
 	cFlow := cherami.NewControlFlow()
-	cFlow.Credits = common.Int32Ptr(count)
+	cFlow.Credits = common.Int32Ptr(int32(count))
 
-	s.mockCons.On("Read").Return(cFlow, nil).Once()
+	connOpenedCh := make(chan struct{})
+	s.mockCons.On("Read").Return(cFlow, nil).Once().Run(func(args mock.Arguments) { close(connOpenedCh) })
 
 	// setup the mock so that we can read 10 messages
-	for i := 0; i < int(count); i++ {
-		aMsg := store.NewAppendMessage()
-		aMsg.SequenceNumber = common.Int64Ptr(int64(i))
-		pMsg := cherami.NewPutMessage()
-		pMsg.ID = common.StringPtr(strconv.Itoa(i))
-		pMsg.Data = []byte(fmt.Sprintf("hello-%d", i))
+	writeSeq := int64(0)
 
+	rmc := store.NewReadMessageContent()
+	rmc.Type = store.ReadMessageContentTypePtr(store.ReadMessageContentType_MESSAGE)
+
+	s.mockRead.On("Read").Return(rmc, nil).Times(10).Run(func(args mock.Arguments) {
+		aMsg := store.NewAppendMessage()
+		aMsg.SequenceNumber = common.Int64Ptr(writeSeq)
+		pMsg := cherami.NewPutMessage()
+		pMsg.ID = common.StringPtr(strconv.Itoa(int(writeSeq)))
+		pMsg.Data = []byte(fmt.Sprintf("hello-%d", writeSeq))
 		aMsg.Payload = pMsg
 		rMsg := store.NewReadMessage()
 		rMsg.Message = aMsg
-
-		rmc := store.NewReadMessageContent()
-		rmc.Type = store.ReadMessageContentTypePtr(store.ReadMessageContentType_MESSAGE)
 		rmc.Message = rMsg
+		writeSeq++
+	}).Times(count)
 
-		s.mockRead.On("Read").Return(rmc, nil).Once()
-	}
+	streamDoneCh := make(chan struct{})
+	go func() {
+		outputHost.OpenConsumerStreamHandler(s.mockHTTPResponse, httpRequest)
+		close(streamDoneCh)
+	}()
 
 	// close the read stream
+	creditUnblockCh := make(chan struct{})
 	s.mockRead.On("Read").Return(nil, io.EOF)
-	s.mockCons.On("Read").Return(nil, io.EOF)
+	s.mockCons.On("Read").Return(nil, io.EOF).Run(func(args mock.Arguments) { <-writeDoneCh; <-creditUnblockCh })
 
-	outputHost.OpenConsumerStreamHandler(s.mockHTTPResponse, httpRequest)
+	<-connOpenedCh // wait for the consConnection to open
+
+	// look up cgcache and the underlying client connnection
+	outputHost.cgMutex.RLock()
+	cgCache, ok := outputHost.cgCache[cgDesc.GetConsumerGroupUUID()]
+	outputHost.cgMutex.RUnlock()
+	s.True(ok, "cannot find cgcache entry")
+
+	var nConns = 0
+	var conn *consConnection
+	cgCache.extMutex.RLock()
+	for _, conn = range cgCache.connections {
+		break
+	}
+	nConns = len(cgCache.connections)
+	cgCache.extMutex.RUnlock()
+	s.Equal(1, nConns, "wrong number of consumer connections")
+	s.NotNil(conn, "failed to find consConnection within cgcache")
+
+	creditUnblockCh <- struct{}{} // now unblock the readCreditsPump on the consconnection
+	<-streamDoneCh
+
 	s.mockHTTPResponse.AssertNotCalled(s.T(), "WriteHeader", mock.Anything)
+	s.Equal(int64(count), conn.sentMsgs, "wrong sentMsgs count")
+	s.Equal(int64(0), conn.reSentMsgs, "wrong reSentMsgs count")
+	s.Equal(conn.sentMsgs, conn.sentToMsgCache, "sentMsgs != sentToMsgCache")
 	outputHost.Shutdown()
+}
+
+// TestOutputHostPutsMsgIntoMsgCacheOnWriteError verifies that
+// consConnection always puts a dequeued into message cache regardless
+// of whether write() succeeds or fails.
+func (s *OutputHostSuite) TestOutputHostPutsMsgIntoMsgCacheOnWriteError() {
+
+	outputHost, _ := NewOutputHost("outputhost-test", s.mockService, s.mockMeta, nil, nil)
+	httpRequest := utilGetHTTPRequestWithPath("foo")
+
+	destUUID := uuid.New()
+	destDesc := shared.NewDestinationDescription()
+	destDesc.Path = common.StringPtr("/foo/bar")
+	destDesc.DestinationUUID = common.StringPtr(destUUID)
+	destDesc.Status = common.InternalDestinationStatusPtr(shared.DestinationStatus_ENABLED)
+	s.mockMeta.On("ReadDestination", mock.Anything, mock.Anything).Return(destDesc, nil).Once()
+	s.mockMeta.On("ReadExtentStats", mock.Anything, mock.Anything).Return(nil, fmt.Errorf(`foo`))
+
+	cgDesc := shared.NewConsumerGroupDescription()
+	cgDesc.ConsumerGroupUUID = common.StringPtr(uuid.New())
+	cgDesc.DestinationUUID = common.StringPtr(destUUID)
+	s.mockMeta.On("ReadConsumerGroup", mock.Anything, mock.Anything).Return(cgDesc, nil).Twice()
+
+	cgExt := metadata.NewConsumerGroupExtent()
+	cgExt.ExtentUUID = common.StringPtr(uuid.New())
+	cgExt.StoreUUIDs = []string{"mock"}
+
+	cgRes := &metadata.ReadConsumerGroupExtentsResult_{}
+	cgRes.Extents = append(cgRes.Extents, cgExt)
+	s.mockMeta.On("ReadConsumerGroupExtents", mock.Anything, mock.Anything).Return(cgRes, nil).Once()
+	s.mockRead.On("Write", mock.Anything).Return(nil)
+
+	writeDoneCh := make(chan struct{}) // signal after write() is called
+	s.mockCons.On("Write", mock.Anything).Return(errors.New("write error")).Run(func(args mock.Arguments) { close(writeDoneCh) })
+
+	cFlow := cherami.NewControlFlow()
+	cFlow.Credits = common.Int32Ptr(10)
+
+	s.mockCons.On("Read").Return(cFlow, nil).Once()
+
+	// setup to send a mock message from store
+	aMsg := store.NewAppendMessage()
+	aMsg.SequenceNumber = common.Int64Ptr(int64(1))
+	pMsg := cherami.NewPutMessage()
+	pMsg.ID = common.StringPtr(strconv.Itoa(1))
+	pMsg.Data = []byte("hello")
+
+	aMsg.Payload = pMsg
+	rMsg := store.NewReadMessage()
+	rMsg.Message = aMsg
+
+	rmc := store.NewReadMessageContent()
+	rmc.Type = store.ReadMessageContentTypePtr(store.ReadMessageContentType_MESSAGE)
+	rmc.Message = rMsg
+	// message from store to output
+	s.mockRead.On("Read").Return(rmc, nil).Once()
+
+	creditUnblockCh := make(chan struct{}) // channel to keep the consConnection open until we validate results
+	// close the read stream
+	s.mockRead.On("Read").Return(nil, io.EOF)
+	// make the credit channel wait until we verify the output, this prevents the cgcache from unloading
+	s.mockCons.On("Read").Return(nil, io.EOF).Run(func(args mock.Arguments) { <-creditUnblockCh })
+
+	// initiate a consumer connection
+	streamDoneCh := make(chan struct{})
+	go func() {
+		outputHost.OpenConsumerStreamHandler(s.mockHTTPResponse, httpRequest)
+		close(streamDoneCh)
+	}()
+
+	<-writeDoneCh // wait for the message to be written
+
+	// look up cgcache and the underlying client connnection
+	outputHost.cgMutex.RLock()
+	cgCache, ok := outputHost.cgCache[cgDesc.GetConsumerGroupUUID()]
+	outputHost.cgMutex.RUnlock()
+	s.True(ok, "cannot find cgcache entry")
+
+	var nConns = 0
+	var conn *consConnection
+	cgCache.extMutex.RLock()
+	for _, conn = range cgCache.connections {
+		break
+	}
+	nConns = len(cgCache.connections)
+	cgCache.extMutex.RUnlock()
+	s.Equal(1, nConns, "wrong number of consumer connections")
+	s.NotNil(conn, "failed to find consConnection within cgcache")
+
+	creditUnblockCh <- struct{}{} // now unblock the readCreditsPump on the consconnection
+	outputHost.Shutdown()
+	<-streamDoneCh
+	// now that the whole CG is unloaded, assert that we actually put msgs into message cache
+	s.Equal(int64(1), conn.sentToMsgCache, "consConnection failed to put message into message cache")
 }
 
 func (s *OutputHostSuite) TestOutputHostAckMessage() {
