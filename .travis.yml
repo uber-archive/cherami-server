@@ -47,6 +47,10 @@ before_install:
   - pip install --user ccm
   - pip install --user cqlsh==5.0.3
   - sudo apt-get install gcc g++ -y
+  - wget http://www.us.apache.org/dist/kafka/0.10.0.1/kafka_2.11-0.10.0.1.tgz -O kafka.tgz
+  - mkdir -p kafka && tar xzf kafka.tgz -C kafka --strip-components 1
+  - nohup bash -c "cd kafka && bin/zookeeper-server-start.sh config/zookeeper.properties &"
+  - nohup bash -c "cd kafka && bin/kafka-server-start.sh config/server.properties &"
 
 install:
   - go get -u github.com/Masterminds/glide
