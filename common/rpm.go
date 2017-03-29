@@ -507,7 +507,7 @@ func (rpm *ringpopMonitorImpl) refresh(service string, currInfo *membershipInfo)
 				continue
 			}
 
-			v.Name = names[0] // cache hostname to avoid dns reverse lookup
+			v.Name = strings.Split(names[0], ".")[0] // cache hostname to avoid dns reverse lookup
 
 			hwInfo, err := rpm.hwInfoReader.Read(names[0])
 			if err != nil {

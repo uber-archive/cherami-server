@@ -122,6 +122,11 @@ func (s *ConfigManagerTestSuite) TestConfigOverrides() {
 		SliceItem   []string `name:"slice-set" default:"a,b,c"`
 	}
 
+	type testOutputConfig1 struct {
+		CacheSizeBytes int64  `name:"cache-size-bytes" default:"1024"`
+		AdminStatus    string `name:"admin-status" default:"enabled"`
+	}
+
 	cfgItems := []m.ServiceConfigItem{
 		{ServiceName: strp("input"), ServiceVersion: strp("*"), Sku: strp("*"), Hostname: strp("*"), ConfigKey: strp("max-extents"), ConfigValue: strp("100")},
 		{ServiceName: strp("input"), ServiceVersion: strp("*"), Sku: strp("*"), Hostname: strp("*"), ConfigKey: strp("max-conns"), ConfigValue: strp("1000")},
@@ -135,6 +140,11 @@ func (s *ConfigManagerTestSuite) TestConfigOverrides() {
 		{ServiceName: strp("store"), ServiceVersion: strp("*"), Sku: strp("*"), Hostname: strp("*"), ConfigKey: strp("max-outconns"), ConfigValue: strp("1000")},
 		{ServiceName: strp("store"), ServiceVersion: strp("*"), Sku: strp("*"), Hostname: strp("*"), ConfigKey: strp("camelcase"), ConfigValue: strp("normalize")}, // intentionally use a normalized key to set in cassandra
 		{ServiceName: strp("store"), ServiceVersion: strp("*"), Sku: strp("*"), Hostname: strp("*"), ConfigKey: strp("slice-set"), ConfigValue: strp("Z")},
+		{ServiceName: strp("output"), ServiceVersion: strp("*"), Sku: strp("*"), Hostname: strp("cherami22"), ConfigKey: strp("admin-status"), ConfigValue: strp("disabled")},
+		{ServiceName: strp("output"), ServiceVersion: strp("*"), Sku: strp("*"), Hostname: strp("*"), ConfigKey: strp("cache-size-bytes"), ConfigValue: strp("10000")},
+		{ServiceName: strp("output"), ServiceVersion: strp("*"), Sku: strp("haswell"), Hostname: strp("*"), ConfigKey: strp("cache-size-bytes"), ConfigValue: strp("20000")},
+		{ServiceName: strp("output"), ServiceVersion: strp("v2"), Sku: strp("*"), Hostname: strp("*"), ConfigKey: strp("cache-size-bytes"), ConfigValue: strp("15000")},
+		{ServiceName: strp("output"), ServiceVersion: strp("v2"), Sku: strp("skylake"), Hostname: strp("*"), ConfigKey: strp("cache-size-bytes"), ConfigValue: strp("12000")},
 	}
 
 	for i, item := range cfgItems {
@@ -153,22 +163,27 @@ func (s *ConfigManagerTestSuite) TestConfigOverrides() {
 		output testStoreConfig1
 	}
 
+	type outputTestCase1 struct {
+		input  configGetterTestInput
+		output testOutputConfig1
+	}
+
 	inputTestCases := []inputTestCase1{
 		{configGetterTestInput{svc: "input"}, testInputConfig1{MaxConns: 1000, MaxExtents: 100, AdminStatus: "enabled"}},
 		{configGetterTestInput{svc: "input", sku: "whitesnake"}, testInputConfig1{MaxConns: 1000, MaxExtents: 150, AdminStatus: "enabled"}},
 		{configGetterTestInput{svc: "input", sku: "whitesnake", host: "cherami14"}, testInputConfig1{MaxConns: 1000, MaxExtents: 0, AdminStatus: "enabled"}},
 		{configGetterTestInput{svc: "input", vers: "v1"}, testInputConfig1{MaxConns: 1000, MaxExtents: 50, AdminStatus: "enabled"}},
-		{configGetterTestInput{svc: "input", vers: "v1", sku: "whitesnake"}, testInputConfig1{MaxConns: 1000, MaxExtents: 150, AdminStatus: "enabled"}},
+		{configGetterTestInput{svc: "input", vers: "v1", sku: "whitesnake"}, testInputConfig1{MaxConns: 1000, MaxExtents: 50, AdminStatus: "enabled"}},
 		{configGetterTestInput{svc: "input", vers: "v1", sku: "whitesnake", host: "cherami14"}, testInputConfig1{MaxConns: 1000, MaxExtents: 0, AdminStatus: "enabled"}},
-		{configGetterTestInput{svc: "input", vers: "v1", sku: "m1.b ", host: "cherami15"}, testInputConfig1{MaxConns: 1000, MaxExtents: 50, AdminStatus: "enabled"}},
-		{configGetterTestInput{svc: "input", vers: "v1", sku: "m1.12", host: "cherami14"}, testInputConfig1{MaxConns: 1000, MaxExtents: 50, AdminStatus: "enabled"}},
+		{configGetterTestInput{svc: "input", vers: "v1", sku: "m1.b ", host: "cherami15"}, testInputConfig1{MaxConns: 1000, MaxExtents: 1, AdminStatus: "enabled"}},
+		{configGetterTestInput{svc: "input", vers: "v1", sku: "m1.12", host: "cherami14"}, testInputConfig1{MaxConns: 1000, MaxExtents: 0, AdminStatus: "enabled"}},
 		{configGetterTestInput{svc: "input", vers: "v1", sku: "k1.12"}, testInputConfig1{MaxConns: 1000, MaxExtents: 50, AdminStatus: "enabled"}},
 		{configGetterTestInput{svc: "input", vers: "v2"}, testInputConfig1{MaxConns: 1000, MaxExtents: 100, AdminStatus: "enabled"}},
 		{configGetterTestInput{svc: "input", vers: "v2", sku: "blackeye"}, testInputConfig1{MaxConns: 1000, MaxExtents: 200, AdminStatus: "enabled"}},
 		{configGetterTestInput{svc: "input", vers: "v2", sku: "blackeye", host: "cherami20"}, testInputConfig1{MaxConns: 1000, MaxExtents: 200, AdminStatus: "enabled"}},
 		{configGetterTestInput{svc: "input", vers: "v2", sku: "whitesnake"}, testInputConfig1{MaxConns: 1000, MaxExtents: 170, AdminStatus: "enabled"}},
 		{configGetterTestInput{svc: "input", vers: "v2", sku: "whitesnake", host: "cherami60"}, testInputConfig1{MaxConns: 1000, MaxExtents: 170, AdminStatus: "enabled"}},
-		{configGetterTestInput{svc: "input", vers: "v3", sku: "whitesnake", host: "cherami55"}, testInputConfig1{MaxConns: 1000, MaxExtents: 100, AdminStatus: "enabled"}},
+		{configGetterTestInput{svc: "input", vers: "v3", sku: "whitesnake", host: "cherami55"}, testInputConfig1{MaxConns: 1000, MaxExtents: 150, AdminStatus: "enabled"}},
 		{configGetterTestInput{svc: "input", vers: "v3"}, testInputConfig1{MaxConns: 1000, MaxExtents: 100, AdminStatus: "enabled"}},
 	}
 
@@ -180,9 +195,27 @@ func (s *ConfigManagerTestSuite) TestConfigOverrides() {
 		{configGetterTestInput{svc: "store", vers: "v1", sku: "sku1", host: "host1"}, testStoreConfig1{MaxInConns: 2000, MaxOutConns: 1000, AdminStatus: "enabled", CamelCase: "normalize", SliceItem: []string{"Z"}}},
 	}
 
+	outputTestCases := []outputTestCase1{
+		{configGetterTestInput{svc: "output"}, testOutputConfig1{CacheSizeBytes: 10000, AdminStatus: "enabled"}},
+		{configGetterTestInput{svc: "output", sku: "haswell"}, testOutputConfig1{CacheSizeBytes: 20000, AdminStatus: "enabled"}},
+		{configGetterTestInput{svc: "output", vers: "v2"}, testOutputConfig1{CacheSizeBytes: 15000, AdminStatus: "enabled"}},
+		{configGetterTestInput{svc: "output", vers: "v2", sku: "haswell"}, testOutputConfig1{CacheSizeBytes: 15000, AdminStatus: "enabled"}},
+		{configGetterTestInput{svc: "output", vers: "v2", sku: "skylake"}, testOutputConfig1{CacheSizeBytes: 12000, AdminStatus: "enabled"}},
+		{configGetterTestInput{svc: "output", vers: "v2", sku: "ivy"}, testOutputConfig1{CacheSizeBytes: 15000, AdminStatus: "enabled"}},
+		{configGetterTestInput{svc: "output", vers: "v1", sku: "haswell"}, testOutputConfig1{CacheSizeBytes: 20000, AdminStatus: "enabled"}},
+		{configGetterTestInput{svc: "output", vers: "v1", sku: "ivy"}, testOutputConfig1{CacheSizeBytes: 10000, AdminStatus: "enabled"}},
+		{configGetterTestInput{svc: "output", host: "cherami22"}, testOutputConfig1{CacheSizeBytes: 10000, AdminStatus: "disabled"}},
+		{configGetterTestInput{svc: "output", host: "cherami44"}, testOutputConfig1{CacheSizeBytes: 10000, AdminStatus: "enabled"}},
+		{configGetterTestInput{svc: "output", vers: "v2", sku: "haswell", host: "cherami22"}, testOutputConfig1{CacheSizeBytes: 15000, AdminStatus: "disabled"}},
+		{configGetterTestInput{svc: "output", vers: "v1", sku: "ivy", host: "cherami22"}, testOutputConfig1{CacheSizeBytes: 10000, AdminStatus: "disabled"}},
+		{configGetterTestInput{svc: "output", sku: "haswell", host: "cherami22"}, testOutputConfig1{CacheSizeBytes: 20000, AdminStatus: "disabled"}},
+		{configGetterTestInput{svc: "output", host: "cherami22"}, testOutputConfig1{CacheSizeBytes: 10000, AdminStatus: "disabled"}},
+	}
+
 	configTypes := make(map[string]interface{})
 	configTypes["input"] = testInputConfig1{}
 	configTypes["store"] = testStoreConfig1{}
+	configTypes["output"] = testOutputConfig1{}
 
 	cfgMgrIface := NewCassandraConfigManager(s.cdb.GetClient(), configTypes, s.logger)
 	cfgMgr := cfgMgrIface.(*CassandraConfigManager)
@@ -192,13 +225,20 @@ func (s *ConfigManagerTestSuite) TestConfigOverrides() {
 		cfg, err := cfgMgr.Get(tc.input.svc, tc.input.vers, tc.input.sku, tc.input.host)
 		s.Nil(err, "configStore.Get() failed for input %v", i)
 		value := cfg.(testInputConfig1)
-		s.True(reflect.DeepEqual(tc.output, value), "Wrong output for input %v", i)
+		s.True(reflect.DeepEqual(tc.output, value), "Wrong output for input %v, output=%+v", i, value)
 	}
 
 	for i, tc := range storeTestCases {
 		cfg, err := cfgMgr.Get(tc.input.svc, tc.input.vers, tc.input.sku, tc.input.host)
 		s.Nil(err, "configStore.Get() failed for input %v", i)
 		value := cfg.(testStoreConfig1)
-		s.True(reflect.DeepEqual(tc.output, value), "Wrong output for input %v", i)
+		s.True(reflect.DeepEqual(tc.output, value), "Wrong output for input %v, output=%+v", i, value)
+	}
+
+	for i, tc := range outputTestCases {
+		cfg, err := cfgMgr.Get(tc.input.svc, tc.input.vers, tc.input.sku, tc.input.host)
+		s.Nil(err, "configStore.Get() failed for input %v", i)
+		value := cfg.(testOutputConfig1)
+		s.True(reflect.DeepEqual(tc.output, value), "Wrong output for input %v, output=%+v", i, value)
 	}
 }

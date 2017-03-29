@@ -129,8 +129,7 @@ var cfgRefreshInterval = time.Minute
 // default values that apply to a broad category, subject to
 // the following constraints:
 //
-//  (1) serviceName cannot be a wildcard
-//  (2) if sku is a wildcard, hostname MUST also be a wildcard
+//  (1) if hostname is specified, sku is always ignored (i.e. treated as wildcard)
 //
 // Config Evaluation:
 //   In general, the config evaluator ALWAYS returns the most specific config
@@ -146,8 +145,9 @@ var cfgRefreshInterval = time.Minute
 //  Example Queries:
 //       Get(inputhost, *, *, *)        = 111
 //       Get(inputhost, v1, *, *)       = 333
-//       Get(inputhost, v1, ec2m112, *) = 222 --> BEWARE, defaults applied
+//       Get(inputhost, v1, ec2m112, *) = 333
 //       Get(inputhost, v1, m1large, *) = 444
+//       Get(inputhost, v2, ec2m112, *) = 222 <-- SKU default applied
 //
 // The constructor to this class takes a configTypes param, which is a map
 // of serviceName to configObjects. The config object MUST be of struct type
@@ -245,7 +245,14 @@ func (cfgMgr *CassandraConfigManager) Get(svc string, version string, sku string
 
 		next, hasNext := curr.children[k]
 		if !hasNext {
-			break
+			if k == wildcardToken {
+				break
+			}
+			// if we don't have this value, substitute wildcard & retry
+			next, hasNext = curr.children[wildcardToken]
+			if !hasNext {
+				break
+			}
 		}
 		curr = next
 	}
@@ -318,14 +325,37 @@ func (cfgMgr *CassandraConfigManager) mkConfigTreeForSvc(cfgType interface{}, de
 	return result
 }
 
+// mkKVTreeForSvc builds a hierarchical tree of key values
+// for a speicific service. The tree hierarchy is from
+// svc -> version -> sku -> host. The key values at each
+// level serve as the default for its children nodes.
+//
+// The actual construction of the tree is a 3 step process:
+// (1) Take every config item of form svc.version.sku.host.key=value and add it to tree
+//        (a) If the version & sku are wildcard (i.e. *), then the config item
+//            MUST serve as a default for every version/ every sku, so keep track of
+//            these separately
+//        (b) If the version is a wildcard but sku is not, then this config item
+//			  MUST serve as a default for every version.sku, so trace this separately
+//        (c) If the version is not wildcard, but sku is wildcard, then the
+//            config item MUST serve as a default for every sku for that version
+//            so keep track of these separately
+// (2) Add the items tracked in 1(b) to the tree (for every sku)
+// (3) Add the items tracked in 1(a) for every version
+//
+// Its important to apply the config items in the order (1).(2).(3) to honor
+// the hierarchial structure
 func (cfgMgr *CassandraConfigManager) mkKVTreeForSvc(service string, items []*m.ServiceConfigItem) *kvTreeNode {
 
 	root := newKVTreeNode()
 
-	versions := make(map[string]struct{})
-	wildcardVersionItems := make([]*m.ServiceConfigItem, 0, len(items))
+	allSkus := make(map[string]struct{})
+	allVersions := make(map[string]struct{})
+	wildcardVersionItems := make([]*m.ServiceConfigItem, 0, len(items))              // items with version as wildcard
+	wildcardVersionSkuItems := make([]*m.ServiceConfigItem, 0, len(items))           // items with version as wildcard and sku not a wildcard
+	versionToWildcardSkuItems := make(map[string][]*m.ServiceConfigItem, len(items)) // items with sku as wildcard
 
-	for _, item := range items {
+	for i, item := range items {
 
 		cfgKey := strings.ToLower(item.GetConfigKey())
 		cfgValue := item.GetConfigValue()
@@ -339,40 +369,71 @@ func (cfgMgr *CassandraConfigManager) mkKVTreeForSvc(service string, items []*m.
 			continue
 		}
 
-		versions[version] = struct{}{}
+		if sku != wildcardToken && host != wildcardToken {
+			key := strings.Join([]string{service, version, sku, host, cfgKey}, ".")
+			sku = wildcardToken
+			items[i].Sku = common.StringPtr(wildcardToken)
+			cfgMgr.logger.WithFields(bark.Fields{
+				"key":   key,
+				"value": cfgValue,
+			}).Warn("Forcing sku=*;host specific items MUST be sku agnostic")
+		}
+
+		allSkus[sku] = struct{}{}
+		allVersions[version] = struct{}{}
 
 		if version == wildcardToken {
 			if sku == wildcardToken {
-				if host != wildcardToken {
-					// when hostname is present, we always expect the sku
-					// this is an invariant for the hierarchial config store
-					cfgMgr.logger.Errorf("Skipping illegal config item with wildcard sku, item=%v", item)
+				if host == wildcardToken {
+					// service.*.*.*.key, add it at the root level
+					root.keyValues[cfgKey] = cfgValue
 					continue
 				}
-				// service.*.*.*.key, add it at the root level
-				root.keyValues[cfgKey] = cfgValue
+				// 1(a) keep track of svc.* config items
+				wildcardVersionItems = append(wildcardVersionItems, item)
 				continue
 			}
-			// keep track of service.* wildcards separtely
-			// they are the defaults for all service.version.*
-			wildcardVersionItems = append(wildcardVersionItems, item)
+			// 1(b) Keep track of svc.*.sku config items
+			wildcardVersionSkuItems = append(wildcardVersionSkuItems, item)
+			continue
+		}
+
+		if sku == wildcardToken {
+			defaults, ok := versionToWildcardSkuItems[version]
+			if !ok {
+				defaults = make([]*m.ServiceConfigItem, 0, 4)
+				versionToWildcardSkuItems[version] = defaults
+			}
+			// 1(c) keep track of svc.ver.* items
+			versionToWildcardSkuItems[version] = append(defaults, item)
 			continue
 		}
 
 		addToKVTree(root, version, sku, host, cfgKey, cfgValue)
 	}
 
-	// now apply the wildcarded version items for every
-	// version that we know of, including the wildcard
+	// apply svc.ver.* items as default for every svc.ver.sku
+	for ver, items := range versionToWildcardSkuItems {
+		for _, item := range items {
+			for s := range allSkus {
+				addToKVTree(root, ver, s, item.GetHostname(), item.GetConfigKey(), item.GetConfigValue())
+			}
+		}
+	}
+
+	// apply svc.*.sku. items as default for every svc.ver.sku items
+	for _, item := range wildcardVersionSkuItems {
+		for ver := range allVersions {
+			addToKVTree(root, ver, item.GetSku(), item.GetHostname(), item.GetConfigKey(), item.GetConfigValue())
+		}
+	}
+
+	// apply svc.*. items as default for every svc.ver.*
 	for _, item := range wildcardVersionItems {
-
-		sku := item.GetSku()
-		host := item.GetHostname()
-		cfgKey := item.GetConfigKey()
-		cfgValue := item.GetConfigValue()
-
-		for ver := range versions {
-			addToKVTree(root, ver, sku, host, cfgKey, cfgValue)
+		for ver := range allVersions {
+			for sku := range allSkus {
+				addToKVTree(root, ver, sku, item.GetHostname(), item.GetConfigKey(), item.GetConfigValue())
+			}
 		}
 	}
 
@@ -453,13 +514,15 @@ func newKVTreeNode() *kvTreeNode {
 
 func addToKVTree(root *kvTreeNode, version, sku, host, cfgKey, cfgValue string) {
 
-	var maxDepth = 1 // max depth of tree to traverse
+	var maxDepth int // max depth of tree to traverse
 
-	if sku != wildcardToken {
-		maxDepth++
-		if host != wildcardToken {
-			maxDepth++
-		}
+	switch {
+	case host != wildcardToken:
+		maxDepth = 3
+	case sku != wildcardToken:
+		maxDepth = 2
+	default:
+		maxDepth = 1
 	}
 
 	curr := root
@@ -492,6 +555,7 @@ func setIntField(field reflect.Value, fieldName string, keyValues map[string]str
 			return
 		}
 	}
+	fmt.Printf("Using default value for fieldName=%v defaultStr=%v\n", fieldName, defaultStr)
 	if defaultVal.IsValid() {
 		field.Set(defaultVal)
 		return
