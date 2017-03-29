@@ -224,6 +224,7 @@ func (conn *pubConnection) readRequestStream() {
 			msgLength = int64(len(msg.Data))
 			conn.pathCache.dstMetrics.Add(load.DstMetricBytesIn, msgLength)
 			conn.pathCache.hostMetrics.Add(load.HostMetricBytesIn, msgLength)
+			conn.pathCache.destM3Client.AddCounter(metrics.PubConnectionScope, metrics.InputhostDestMessageReceivedBytes, msgLength)
 
 			conn.recvMsgs++
 

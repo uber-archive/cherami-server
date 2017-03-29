@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/uber/cherami-server/common"
+	"github.com/uber/cherami-server/common/metrics"
 	storeStream "github.com/uber/cherami-server/stream"
 	"github.com/uber/cherami-thrift/.generated/go/cherami"
 	"github.com/uber/cherami-thrift/.generated/go/store"
@@ -36,6 +37,7 @@ import (
 type (
 	replicaConnection struct {
 		call          storeStream.BStoreOpenAppendStreamOutCall
+		destM3Client  metrics.Client
 		logger        bark.Logger
 		replyCh       chan prepAck
 		cancel        context.CancelFunc
@@ -69,10 +71,11 @@ type (
 	}
 )
 
-func newReplicaConnection(stream storeStream.BStoreOpenAppendStreamOutCall, cancel context.CancelFunc, logger bark.Logger) *replicaConnection {
+func newReplicaConnection(stream storeStream.BStoreOpenAppendStreamOutCall, cancel context.CancelFunc, destM3Client metrics.Client, logger bark.Logger) *replicaConnection {
 	conn := &replicaConnection{
 		call:          stream,
 		cancel:        cancel,
+		destM3Client:  destM3Client,
 		logger:        logger.WithField(common.TagModule, `replConn`),
 		replyCh:       make(chan prepAck, defaultBufferSize),
 		closeChannel:  make(chan struct{}),
@@ -122,9 +125,22 @@ func (conn *replicaConnection) writeMessagesPump() {
 		defer conn.cancel()
 	}
 
-	unflushedWrites := 0
+	var unflushedWrites, unflushedSize int
 	flushTicker := time.NewTicker(common.FlushTimeout) // start ticker to flush websocket  stream
 	defer flushTicker.Stop()
+
+	flushMsgs := func() {
+
+		if err := conn.call.Flush(); err != nil {
+			conn.logger.WithFields(bark.Fields{common.TagErr: err, `unflushedWrites`: unflushedWrites, `putMessagesChLength`: len(conn.putMessagesCh), `replyChLength`: len(conn.replyCh)}).Error(`inputhost: error flushing messages to replica stream`)
+			// since flush failed, trigger a close of the connection which will fail inflight messages
+			go conn.close()
+			return
+		}
+
+		conn.destM3Client.AddCounter(metrics.ReplicaConnectionScope, metrics.InputhostDestMessageSentBytes, int64(unflushedSize))
+		unflushedWrites, unflushedSize = 0, 0
+	}
 
 	for {
 		select {
@@ -144,29 +160,21 @@ func (conn *replicaConnection) writeMessagesPump() {
 			conn.sentMsgs++
 
 			unflushedWrites++
-			if unflushedWrites >= common.FlushThreshold {
-				if err := conn.call.Flush(); err != nil {
-					conn.logger.WithFields(bark.Fields{common.TagErr: err, `unflushedWrites`: unflushedWrites, `putMessagesChLength`: len(conn.putMessagesCh), `replyChLength`: len(conn.replyCh)}).Error(`inputhost: error flushing messages to replica stream`)
-					// since flush failed, trigger a close of the connection which will fail inflight messages
-					go conn.close()
-					return
-				}
-				unflushedWrites = 0
-			}
 
 			if msg.appendMsg.Payload != nil { // no inflight info for watermarks
 				// prepare inflight map
 				conn.replyCh <- prepAck{msg.appendMsg.GetSequenceNumber(), msg.appendMsgAckCh}
+				unflushedSize += len(msg.appendMsg.Payload.Data)
 			}
+
+			if unflushedWrites >= common.FlushThreshold {
+				flushMsgs()
+			}
+
 		case <-flushTicker.C:
+
 			if unflushedWrites > 0 {
-				if err := conn.call.Flush(); err != nil {
-					conn.logger.WithFields(bark.Fields{common.TagErr: err, `unflushedWrites`: unflushedWrites, `putMessagesChLength`: len(conn.putMessagesCh), `replyChLength`: len(conn.replyCh)}).Error(`inputhost: error flushing messages to replica stream`)
-					// since flush failed, trigger a close of the connection which will fail inflight messages
-					go conn.close()
-					return
-				}
-				unflushedWrites = 0
+				flushMsgs()
 			}
 
 		case <-conn.closeChannel:

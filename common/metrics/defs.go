@@ -234,6 +234,8 @@ const (
 	PutMessageBatchInputHostScope
 	//PubConnectionScope  represents Streaming Message received by inputhost
 	PubConnectionScope
+	//ReplicaConnectionScope represents inputhost's replica connection stream
+	ReplicaConnectionScope
 	//PutMessageBatchInputHostDestScope represent API PutMessageBatch for per destination
 	PutMessageBatchInputHostDestScope
 	// UnloadDestinationsScope represents UnloadDestinations API
@@ -564,12 +566,12 @@ var scopeDefs = map[ServiceIdx]map[int]scopeDefinition{
 		ReplicatorUpdateRmtDestScope:     {operation: "ReplicatorUpdateRemoteDestination"},
 		ReplicatorDeleteDestScope:        {operation: "ReplicatorDeleteDestination"},
 		ReplicatorDeleteRmtDestScope:     {operation: "ReplicatorDeleteRemoteDestination"},
-		ReplicatorCreateCgUUIDScope:    {operation: "ReplicatorCreateConsumerGroupUUID"},
-		ReplicatorCreateRmtCgUUIDScope: {operation: "ReplicatorCreateRemoteConsumerGroupUUID"},
-		ReplicatorUpdateCgScope:        {operation: "ReplicatorUpdateConsumerGroup"},
-		ReplicatorUpdateRmtCgScope:     {operation: "ReplicatorUpdateRemoteConsumerGroup"},
-		ReplicatorDeleteCgScope:        {operation: "ReplicatorDeleteConsumerGroup"},
-		ReplicatorDeleteRmtCgScope:     {operation: "ReplicatorDeleteRemoteConsumerGroup"},
+		ReplicatorCreateCgUUIDScope:      {operation: "ReplicatorCreateConsumerGroupUUID"},
+		ReplicatorCreateRmtCgUUIDScope:   {operation: "ReplicatorCreateRemoteConsumerGroupUUID"},
+		ReplicatorUpdateCgScope:          {operation: "ReplicatorUpdateConsumerGroup"},
+		ReplicatorUpdateRmtCgScope:       {operation: "ReplicatorUpdateRemoteConsumerGroup"},
+		ReplicatorDeleteCgScope:          {operation: "ReplicatorDeleteConsumerGroup"},
+		ReplicatorDeleteRmtCgScope:       {operation: "ReplicatorDeleteRemoteConsumerGroup"},
 		ReplicatorCreateExtentScope:      {operation: "ReplicatorCreateExtent"},
 		ReplicatorCreateRmtExtentScope:   {operation: "ReplicatorCreateRemoteExtent"},
 		ReplicatorReconcileScope:         {operation: "ReplicatorReconcile"},
@@ -618,6 +620,7 @@ var dynamicScopeDefs = map[ServiceIdx]map[int]scopeDefinition{
 	Inputhost: {
 		PubConnectionScope:                {operation: "PubConnection"},
 		PutMessageBatchInputHostDestScope: {operation: "PutMessageBatchInputHost"},
+		ReplicaConnectionScope:            {operation: "ReplicaConnection"},
 	},
 
 	// Outputhost Scope Names
@@ -708,6 +711,10 @@ const (
 	InputhostDestWriteMessageBeforeAckLatency
 	// InputhostDestPubConnection is the gauge of active connections per destination
 	InputhostDestPubConnection
+	// InputhostMessageReceivedBytes tracks the total incoming messages in bytes
+	InputhostDestMessageReceivedBytes
+	// InputhostMessageSentBytes tracks the total outgoing messages (to replica) in bytes
+	InputhostDestMessageSentBytes
 
 	// -- Outputhost metrics -- //
 
@@ -1185,9 +1192,9 @@ var metricDefs = map[ServiceIdx]map[int]metricDefinition{
 		ReplicatorReconcileDestRun:                              {Gauge, "replicator.reconcile.dest.run"},
 		ReplicatorReconcileDestFail:                             {Gauge, "replicator.reconcile.dest.fail"},
 		ReplicatorReconcileDestFoundMissing:                     {Gauge, "replicator.reconcile.dest.foundmissing"},
-		ReplicatorReconcileCgRun:                              {Gauge, "replicator.reconcile.cg.run"},
-		ReplicatorReconcileCgFail:                             {Gauge, "replicator.reconcile.cg.fail"},
-		ReplicatorReconcileCgFoundMissing:                     {Gauge, "replicator.reconcile.cg.foundmissing"},
+		ReplicatorReconcileCgRun:                                {Gauge, "replicator.reconcile.cg.run"},
+		ReplicatorReconcileCgFail:                               {Gauge, "replicator.reconcile.cg.fail"},
+		ReplicatorReconcileCgFoundMissing:                       {Gauge, "replicator.reconcile.cg.foundmissing"},
 		ReplicatorReconcileDestExtentRun:                        {Gauge, "replicator.reconcile.destextent.run"},
 		ReplicatorReconcileDestExtentFail:                       {Gauge, "replicator.reconcile.destextent.fail"},
 		ReplicatorReconcileDestExtentFoundMissing:               {Gauge, "replicator.reconcile.destextent.foundmissing"},
@@ -1202,6 +1209,8 @@ var dynamicMetricDefs = map[ServiceIdx]map[int]metricDefinition{
 	// definitions for Inputhost metrics
 	Inputhost: {
 		InputhostDestMessageReceived:              {Counter, "inputhost.message.received.dest"},
+		InputhostDestMessageReceivedBytes:         {Counter, "inputhost.message.received.bytes.dest"},
+		InputhostDestMessageSentBytes:             {Counter, "inputhost.message.sent.bytes.dest"},
 		InputhostDestMessageFailures:              {Counter, "inputhost.message.errors.dest"},
 		InputhostDestMessageLimitThrottled:        {Counter, "inputhost.message.limit.throttled.dest"},
 		InputhostDestMessageChannelFullThrottled:  {Counter, "inputhost.message.channel.throttled.dest"},

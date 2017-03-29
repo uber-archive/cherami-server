@@ -403,7 +403,7 @@ func (pathCache *inPathCache) checkAndLoadReplicaStreams(conn *extHost, extUUID 
 			}
 			cancel = nil
 
-			repl := newReplicaConnection(call, cancel,
+			repl := newReplicaConnection(call, cancel, pathCache.destM3Client,
 				conn.logger.
 					WithField(common.TagInReplicaHost, common.FmtInReplicaHost(replicas[i])))
 			conn.setReplicaInfo(storeHostPort(replicas[i]), repl)
