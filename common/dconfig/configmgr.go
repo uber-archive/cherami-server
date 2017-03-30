@@ -555,7 +555,6 @@ func setIntField(field reflect.Value, fieldName string, keyValues map[string]str
 			return
 		}
 	}
-	fmt.Printf("Using default value for fieldName=%v defaultStr=%v\n", fieldName, defaultStr)
 	if defaultVal.IsValid() {
 		field.Set(defaultVal)
 		return
