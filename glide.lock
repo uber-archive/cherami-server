@@ -1,4 +1,4 @@
-hash: 95f30a537dc5b2841e061722d66e26c58126e82c19e9ba29bb6b0f44cf1741d0
+hash: c030fd31744214281169c11cb15164a7b22ea8aab5f29c9cbceff50aee2ed8d6
 updated: 2017-03-31T16:09:33.820595835-07:00
 imports:
 - name: github.com/apache/thrift
@@ -37,6 +37,8 @@ imports:
   - service/sts
 - name: github.com/benbjohnson/clock
   version: 7dc76406b6d3c05b5f71a86293cbcf3c4ea03b19
+- name: github.com/bsm/sarama-cluster
+  version: 82cfa5798a3898e4cf7d913f4a448911af83c3f5
 - name: github.com/cactus/go-statsd-client
   version: d8eabe07bc70ff9ba6a56836cde99d1ea3d005f7
   subpackages:
@@ -57,6 +59,14 @@ imports:
   - spew
 - name: github.com/dgryski/go-farm
   version: f94e93e5a2b3a579af0f5367c84b54cb9aa00074
+- name: github.com/eapache/go-resiliency
+  version: b86b1ec0dd4209a588dc1285cdd471e73525c0b3
+  subpackages:
+  - breaker
+- name: github.com/eapache/go-xerial-snappy
+  version: bb955e01b9346ac19dc29eb16586c90ded99a98c
+- name: github.com/eapache/queue
+  version: 44cc805cf13205b55f69e14bcb69867d1ae92f98
 - name: github.com/go-ini/ini
   version: e3c2d47c61e5333f9aa2974695dd94396eb69c75
 - name: github.com/gocql/gocql
@@ -73,6 +83,8 @@ imports:
   version: e80d13ce29ede4452c43dea11e79b9bc8a15b478
 - name: github.com/jmespath/go-jmespath
   version: bd40a432e4c76585ef6b72d3fd96fb9b6dc7b68d
+- name: github.com/klauspost/crc32
+  version: 1bab8b35b6bb565f92cbc97939610af9369f942a
 - name: github.com/opentracing/opentracing-go
   version: f2364047356159ed6494d3c50ca004939f79a557
   subpackages:
@@ -80,12 +92,21 @@ imports:
   - log
 - name: github.com/pborman/uuid
   version: a97ce2ca70fa5a848076093f05e639a89ca34d06
+- name: github.com/pierrec/lz4
+  version: 90290f74b1b4d9c097f0a3b3c7eba2ef3875c699
+- name: github.com/pierrec/xxHash
+  version: 5a004441f897722c627870a981d02b29924215fa
+  subpackages:
+  - xxHash32
 - name: github.com/pmezard/go-difflib
   version: 792786c7400a136282c1664665ae0a8db921c6c2
   subpackages:
   - difflib
 - name: github.com/rcrowley/go-metrics
   version: eeba7bd0dd01ace6e690fa833b3f22aaec29af43
+- name: github.com/Shopify/sarama
+  version: 0fb560e5f7fbcaee2f75e3c34174320709f69944
+  repo: http://github.com/Shopify/sarama
 - name: github.com/Sirupsen/logrus
   version: ba1b36c82c5e05c4f912a88eab0dcd91a171688f
 - name: github.com/stretchr/objx
@@ -148,7 +169,7 @@ imports:
   - trand
   - typed
 - name: golang.org/x/net
-  version: a6577fac2d73be281a500b310739095313165611
+  version: ffcf1bedda3b04ebb15a168a59800a73d6dc0f4d
   subpackages:
   - context
 - name: golang.org/x/sys
