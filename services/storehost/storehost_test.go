@@ -155,9 +155,9 @@ func (s *StoreHostSuite) TestStoreHostTimerQueueWriteWithRead() {
 								log.Panicf("%v: timer fired earlier than expected: tNow=%x tTarget=%x tETA=%x", extent[i], tNow, tTarget, tETA)
 							}
 
-							log.Debugf("%v: recv msg: seq:%d tETA:%x delay:%d (drift:%v)",
-								extent[i], appMsg.GetSequenceNumber(), tETA, appMsg.GetPayload().GetDelayMessageInSeconds(),
-								time.Unix(0, tNow).Sub(time.Unix(0, tETA)))
+							// log.Debugf("%v: recv msg: seq:%d tETA:%x delay:%d (drift:%v)",
+							// 	extent[i], appMsg.GetSequenceNumber(), tETA, appMsg.GetPayload().GetDelayMessageInSeconds(),
+							// 	time.Unix(0, tNow).Sub(time.Unix(0, tETA)))
 
 							rnd.Int63() // 'pull' a random number (corresponding to the 'wait')
 						}
@@ -198,8 +198,8 @@ func (s *StoreHostSuite) TestStoreHostTimerQueueWriteWithRead() {
 
 						wait := minRandWait + rnd.Intn(maxRandWait-minRandWait+1)
 
-						log.Debugf("%v: sent msg: seq:%d delay:%d tETA:%x (wait:%dms)",
-							extent[i], appMsg.GetSequenceNumber(), appMsg.GetPayload().GetDelayMessageInSeconds(), tETA, wait)
+						// log.Debugf("%v: sent msg: seq:%d delay:%d tETA:%x (wait:%dms)",
+						// 	extent[i], appMsg.GetSequenceNumber(), appMsg.GetPayload().GetDelayMessageInSeconds(), tETA, wait)
 
 						time.Sleep(time.Duration(wait) * time.Millisecond)
 					}
