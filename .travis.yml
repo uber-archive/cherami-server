@@ -70,7 +70,7 @@ install:
   - export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:`pwd`"
 
 script:
-  - EMBEDROCKSDB=0 make cover_ci
+  - EMBEDROCKSDB=0 make test_test
 
 after_success:
   - export BRANCH=$(if [ "$TRAVIS_PULL_REQUEST" == "false" ]; then echo $TRAVIS_BRANCH; else echo $TRAVIS_PULL_REQUEST_BRANCH; fi)
