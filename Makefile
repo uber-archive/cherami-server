@@ -124,12 +124,12 @@ cover_ci: cover_profile
 	goveralls -coverprofile=$(BUILD)/cover.out -service=travis-ci || echo -e "\x1b[31mCoveralls failed\x1b[m"
 
 test_test: bins
-	go test $(EMBED) "./services/storehost" $(TEST_ARG) -testify.m TestStoreHostTimerQueueWriteThenRead || exit 1; \
-	go test $(EMBED) "./services/storehost" $(TEST_ARG) -testify.m TestStoreHostTimerQueueWriteThenRead || exit 1; \
-	go test $(EMBED) "./services/storehost" $(TEST_ARG) -testify.m TestStoreHostTimerQueueWriteThenRead || exit 1; \
-	go test $(EMBED) "./services/storehost" $(TEST_ARG) -testify.m TestStoreHostTimerQueueWriteThenRead || exit 1; \
-	go test $(EMBED) "./services/storehost" $(TEST_ARG) -testify.m TestStoreHostTimerQueueWriteThenRead || exit 1; \
-	go test $(EMBED) "./services/storehost" $(TEST_ARG) -testify.m TestStoreHostTimerQueueWriteThenRead || exit 1;
+	go test $(EMBED) "./services/storehost" $(TEST_ARG) || exit 1; \
+	go test $(EMBED) "./services/storehost" $(TEST_ARG) || exit 1; \
+	go test $(EMBED) "./services/storehost" $(TEST_ARG) || exit 1; \
+	go test $(EMBED) "./services/storehost" $(TEST_ARG) || exit 1; \
+	go test $(EMBED) "./services/storehost" $(TEST_ARG) || exit 1; \
+	go test $(EMBED) "./services/storehost" $(TEST_ARG) || exit 1;
 
 clean:
 	rm -f cherami-server cherami-replicator-server cherami-cli cherami-admin cherami-replicator-tool cherami-cassandra-tool
