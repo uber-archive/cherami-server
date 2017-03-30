@@ -28,9 +28,9 @@ import "sync"
 // See also: https://godoc.org/github.com/dropbox/godropbox/sync2#NewUnboundedSemaphore
 //
 type UnboundedSemaphore struct {
-	resCount        int
-	once            sync.Once
-	c               *sync.Cond
+	resCount    int
+	once        sync.Once
+	c           *sync.Cond
 	m               sync.Mutex // need to name this so it's not exported. Don't use this directly, use through s.c.L
 	accumulatorLock sync.Mutex // Used by acquirer for credit accumulation
 }
