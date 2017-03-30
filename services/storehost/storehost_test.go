@@ -194,7 +194,7 @@ func (s *StoreHostSuite) TestStoreHostTimerQueueWriteWithRead() {
 
 						in.sendC <- appMsg
 
-						tETA := appMsg.GetEnqueueTimeUtc() + int64(appMsg.GetPayload().GetDelayMessageInSeconds())*time.Second.Nanoseconds()
+						// tETA := appMsg.GetEnqueueTimeUtc() + int64(appMsg.GetPayload().GetDelayMessageInSeconds())*time.Second.Nanoseconds()
 
 						wait := minRandWait + rnd.Intn(maxRandWait-minRandWait+1)
 
