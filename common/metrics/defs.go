@@ -764,6 +764,10 @@ const (
 	OutputhostLatencyTimer
 	// OutputhostCGMessageSent records the count of messages sent per consumer group
 	OutputhostCGMessageSent
+	// OutputhostCGMessageSentBytes records the total size of messages sent per consumer-group
+	OutputhostCGMessageSentBytes
+	// OutputhostCGMessageReceivedBytes records the total size of message received from replica per CG
+	OutputhostCGMessageReceivedBytes
 	// OutputhostCGMessageFailures records the count of messages sent failures per consumer group
 	OutputhostCGMessageFailures
 	// OutputhostCGCreditsReceived indicates the count of the credits per consumer group
@@ -1224,6 +1228,8 @@ var dynamicMetricDefs = map[ServiceIdx]map[int]metricDefinition{
 	// definitions for Outputhost metrics
 	Outputhost: {
 		OutputhostCGMessageSent:           {Counter, "outputhost.message.sent.cg"},
+		OutputhostCGMessageSentBytes:      {Counter, "outputhost.message.sent.bytes.cg"},
+		OutputhostCGMessageReceivedBytes:  {Counter, "outputhost.message.received.bytes.cg"},
 		OutputhostCGMessageFailures:       {Counter, "outputhost.message.errors.cg"},
 		OutputhostCGCreditsReceived:       {Counter, "outputhost.credit-received.cg"},
 		OutputhostCGDLQMessageRequests:    {Counter, "outputhost.message.sent-dlq.cg"},

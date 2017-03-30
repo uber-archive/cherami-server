@@ -315,6 +315,7 @@ func (cgCache *consumerGroupCache) loadExtentCache(ctx thrift.Context, destType 
 			creditRequestCh:      cgCache.creditRequestCh,
 			initialCredits:       defaultNumOutstandingMsgs,
 			loadMetrics:          load.NewExtentMetrics(),
+			consumerM3Client:     cgCache.consumerM3Client,
 		}
 
 		cgCache.extentCache[extUUID] = extCache

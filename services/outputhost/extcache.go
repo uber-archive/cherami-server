@@ -35,6 +35,7 @@ import (
 	"github.com/uber/tchannel-go/thrift"
 
 	"github.com/uber/cherami-server/common"
+	"github.com/uber/cherami-server/common/metrics"
 	"github.com/uber/cherami-server/services/outputhost/load"
 	serverStream "github.com/uber/cherami-server/stream"
 	"github.com/uber/cherami-thrift/.generated/go/admin"
@@ -133,6 +134,9 @@ type extentCache struct {
 
 	// extMetrics represents extent level load metrics reported to controller
 	loadMetrics *load.ExtentMetrics
+
+	// consumerM3Client for metrics per consumer group
+	consumerM3Client metrics.Client
 }
 
 // extentLoadReportingInterval is the freq which load
@@ -288,7 +292,7 @@ func (extCache *extentCache) loadReplicaStream(startAddress int64, startSequence
 		logger.WithField(`startIndex`, startIndex).Debug(`opened read stream`)
 		pickedIndex = startIndex
 		replicaConnectionName := fmt.Sprintf(`replicaConnection{Extent: %s, Store: %s}`, extUUID, storeUUID)
-		repl = newReplicaConnection(call, extCache.msgsCh, int32(extCache.initialCredits), extCache.notifyReplicaCloseCh, extCache, cancel, extCache.shutdownWG, replicaConnectionName, logger, startSequence)
+		repl = newReplicaConnection(call, extCache, cancel, replicaConnectionName, logger, startSequence)
 		// all open connections should be closed before shutdown
 		extCache.shutdownWG.Add(1)
 		repl.open()
