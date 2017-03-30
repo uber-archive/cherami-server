@@ -335,8 +335,29 @@ func (cgCache *consumerGroupCache) loadExtentCache(ctx thrift.Context, destType 
 		if err == nil {
 			extCache.initialCredits = cgCache.getMessageCacheSize(cfg, defaultNumOutstandingMsgs)
 		}
-		// TODO: create a newAckManagerRequestArgs struct here
-		extCache.ackMgr = newAckManager(cgCache, cgCache.ackIDGen.GetNextAckID(), cgCache.outputHostUUID, cgCache.cachedCGDesc.GetConsumerGroupUUID(), cgCache.cachedCGDesc.GetIsMultiZone(), extCache.extUUID, &extCache.connectedStoreUUID, extCache.waitConsumedCh, cge, cgCache.metaClient, cgCache.tClients, extCache.logger)
+
+		committer := NewCheramiCommitter(
+			cgCache.metaClient,
+			cgCache.outputHostUUID,
+			cgCache.cachedCGDesc.GetConsumerGroupUUID(),
+			extCache.extUUID,
+			&extCache.connectedStoreUUID,
+			cgCache.cachedCGDesc.GetIsMultiZone(),
+			cgCache.tClients,
+		)
+
+		extCache.ackMgr = newAckManager(
+			cgCache,
+			cgCache.ackIDGen.GetNextAckID(),
+			cgCache.outputHostUUID,
+			cgCache.cachedCGDesc.GetConsumerGroupUUID(),
+			extCache.extUUID,
+			&extCache.connectedStoreUUID,
+			extCache.waitConsumedCh,
+			cge,
+			committer,
+			extCache.logger,
+		)
 		extCache.loadReporter = cgCache.loadReporterFactory.CreateReporter(extentLoadReportingInterval, extCache, extCache.logger)
 
 		// make sure we prevent shutdown from racing
@@ -621,7 +642,14 @@ func (cgCache *consumerGroupCache) loadConsumerGroupCache(ctx thrift.Context, ex
 	if !exists {
 
 		// Try to load the DLQ for this consumer group
-		dlq, err := newDeadLetterQueue(ctx, cgCache.logger, cgCache.cachedCGDesc, cgCache.metaClient, cgCache.m3Client, cgCache.consumerM3Client)
+		dlq, err := newDeadLetterQueue(
+			ctx,
+			cgCache.logger,
+			cgCache.cachedCGDesc,
+			cgCache.metaClient,
+			cgCache.m3Client,
+			cgCache.consumerM3Client,
+		)
 		if err != nil {
 			return err
 		}

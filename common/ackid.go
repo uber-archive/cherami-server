@@ -53,7 +53,7 @@ const (
 // 16 bit - Monotonically increasing number to identify all unique ack managers within a host
 // 32 bit - Sequence Number within the AckManager which is used to update the data structure within
 //          the ack manager
-// The reason for having the above fileds in the ackID is as follows:
+// The reason for having the above fields in the ackID is as follows:
 // sessionID - to make sure ack is to the same outputhost (let's say to prevent a bad client)
 // ackID - to uniquely identify the ack managers within this outputhost
 // seqNum - to identify the data structure within the ackMgr
