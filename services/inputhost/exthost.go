@@ -525,6 +525,15 @@ func (conn *extHost) writeMessagesPump() {
 	}
 }
 
+// It is ok to do a non-blocking send of the acks here during shutdown because we will
+// be failing all messages anyway.
+func (conn *extHost) writeAckToPubConn(putMsgAckCh chan *cherami.PutMessageAck, putMsgAck *cherami.PutMessageAck) {
+	select {
+	case putMsgAckCh <- putMsgAck:
+	case <-conn.forceUnloadCh:
+	}
+}
+
 func (conn *extHost) sendMessage(pr *inPutMessage, extSendTimer *common.Timer, watermark *int64) {
 	// make sure we can satisfy the rate, if needed
 	if conn.limitsEnabled {
@@ -535,12 +544,13 @@ func (conn *extHost) sendMessage(pr *inPutMessage, extSendTimer *common.Timer, w
 				Warn("inputhost: extHost: rate exceeded. throttling the message")
 			// Immediately send throttled status back to the client so that
 			// the client can throttle
-			pr.putMsgAckCh <- &cherami.PutMessageAck{
+			putMsgAck := &cherami.PutMessageAck{
 				ID:          common.StringPtr(pr.putMsg.GetID()),
 				UserContext: pr.putMsg.GetUserContext(),
 				Status:      common.CheramiStatusPtr(cherami.Status_THROTTLED),
 				Message:     common.StringPtr("throttling: inputhost rate exceeded"),
 			}
+			conn.writeAckToPubConn(pr.putMsgAckCh, putMsgAck)
 			return
 		}
 	}
@@ -557,13 +567,13 @@ func (conn *extHost) sendMessage(pr *inPutMessage, extSendTimer *common.Timer, w
 			Warn("inputhost: extHost: message delay exceeds minimum allowed; rejecting message")
 
 		// n-ack message, since it exceeds minimum allowed delay
-		pr.putMsgAckCh <- &cherami.PutMessageAck{
+		putMsgAck := &cherami.PutMessageAck{
 			ID:          common.StringPtr(pr.putMsg.GetID()),
 			UserContext: pr.putMsg.GetUserContext(),
 			Status:      common.CheramiStatusPtr(cherami.Status_FAILED),
 			Message:     common.StringPtr("delay exceeds minimum allowed"),
 		}
-
+		conn.writeAckToPubConn(pr.putMsgAckCh, putMsgAck)
 		return
 	}
 
@@ -571,13 +581,14 @@ func (conn *extHost) sendMessage(pr *inPutMessage, extSendTimer *common.Timer, w
 	if err != nil {
 		// For now, lets reply Status_FAILED immediately and
 		// close the connection if we got an error.
-		// this will result in the creation of a new extent, probably.
-		pr.putMsgAckCh <- &cherami.PutMessageAck{
+		// this will result in the creation of a new extent, probably
+		putMsgAck := &cherami.PutMessageAck{
 			ID:          common.StringPtr(pr.putMsg.GetID()),
 			UserContext: pr.putMsg.GetUserContext(),
 			Status:      common.CheramiStatusPtr(cherami.Status_FAILED),
 			Message:     common.StringPtr(err.Error()),
 		}
+		conn.writeAckToPubConn(pr.putMsgAckCh, putMsgAck)
 		go conn.close()
 		return
 	}

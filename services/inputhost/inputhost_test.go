@@ -980,6 +980,109 @@ func (s *InputHostSuite) TestInputHostConnLimit() {
 	inputHost.Shutdown()
 }
 
+func (s *InputHostSuite) TestInputExtHostShutdown() {
+	destinationPath := "foo_limit"
+	inputHost, _ := NewInputHost("inputhost-test-block", s.mockService, s.mockMeta, nil)
+	ctx, cancel := utilGetThriftContextWithPath(destinationPath)
+	defer cancel()
+
+	// set the limits for this inputhost
+	inputHost.SetHostConnLimit(int32(100))
+	inputHost.SetHostConnLimitPerSecond(int32(10000))
+	inputHost.SetMaxConnPerDest(int32(1000))
+	inputHost.SetExtMsgsLimitPerSecond(int32(20000))
+	inputHost.SetConnMsgsLimitPerSecond(int32(80000))
+
+	aMsg := store.NewAppendMessageAck()
+	aMsg.SequenceNumber = common.Int64Ptr(int64(1))
+	aMsg.Status = common.CheramiStatusPtr(cherami.Status_OK)
+
+	wCh := make(chan time.Time)
+	msg := cherami.NewPutMessage()
+	msg.ID = common.StringPtr(strconv.Itoa(1))
+	msg.Data = []byte(fmt.Sprintf("hello-%d", 1))
+
+	s.mockAppend.On("Read").Return(nil, io.EOF).WaitUntil(wCh)
+	s.mockAppend.On("Write", mock.Anything).Return(io.EOF).WaitUntil(wCh)
+	s.mockPub.On("Read").Return(nil, io.EOF).WaitUntil(wCh)
+	s.mockPub.On("Write", mock.Anything).Return(io.EOF).WaitUntil(wCh)
+
+	destUUID, destType, _, _ := inputHost.checkDestination(ctx, destinationPath)
+
+	extents, e := inputHost.getExtentsInfoForDestination(ctx, destUUID)
+	s.Nil(e)
+
+	putMsgCh := make(chan *inPutMessage, 1)
+	ackChannel := make(chan *cherami.PutMessageAck) // intentionally create a non-buffered channel so that we make sure we can shutdown
+
+	mockLoadReporterDaemonFactory := setupMockLoadReporterDaemonFactory()
+
+	reporter := metrics.NewSimpleReporter(nil)
+	logger := common.GetDefaultLogger().WithFields(bark.Fields{"test": "ExtHostRateLimit"})
+
+	pathCache := &inPathCache{
+		destinationPath:       destinationPath,
+		destUUID:              destUUID,
+		destType:              destType,
+		extentCache:           make(map[extentUUID]*inExtentCache),
+		loadReporterFactory:   mockLoadReporterDaemonFactory,
+		reconfigureCh:         make(chan inReconfigInfo, defaultBufferSize),
+		putMsgCh:              putMsgCh,
+		connections:           make(map[connectionID]*pubConnection),
+		closeCh:               make(chan struct{}),
+		notifyExtHostCloseCh:  make(chan string, defaultExtCloseNotifyChSize),
+		notifyExtHostUnloadCh: make(chan string, defaultExtCloseNotifyChSize),
+		notifyConnsCloseCh:    make(chan connectionID, defaultConnsCloseChSize),
+		logger:                logger,
+		m3Client:              metrics.NewClient(reporter, metrics.Inputhost),
+		lastDisconnectTime:    time.Now(),
+		dstMetrics:            load.NewDstMetrics(),
+		hostMetrics:           load.NewHostMetrics(),
+		inputHost:             inputHost,
+	}
+
+	pathCache.loadReporter = inputHost.GetLoadReporterDaemonFactory().CreateReporter(time.Minute, pathCache, logger)
+
+	pathCache.destM3Client = metrics.NewClientWithTags(pathCache.m3Client, metrics.Inputhost, inputHost.getDestinationTags(destinationPath))
+
+	var connection *extHost
+	for _, extent := range extents {
+		connection = newExtConnection(
+			destUUID,
+			pathCache,
+			string(extent.uuid),
+			len(extent.replicas),
+			mockLoadReporterDaemonFactory,
+			inputHost.logger,
+			inputHost.GetClientFactory(),
+			&pathCache.connsWG,
+			true)
+		err := pathCache.checkAndLoadReplicaStreams(connection, extentUUID(extent.uuid), extent.replicas)
+		s.Nil(err)
+
+		// overwrite the token bucket so that we always throttle
+		connection.SetExtTokenBucketValue(0)
+
+		pathCache.connsWG.Add(1)
+		connection.open()
+		break
+	}
+
+	inMsg := &inPutMessage{
+		putMsg:      msg,
+		putMsgAckCh: ackChannel,
+	}
+
+	// send a message and then immediately shutdown without
+	// reading the putMsg ack channel.
+	// The shutdown should go through properly.
+	putMsgCh <- inMsg
+	close(wCh)
+	close(connection.forceUnloadCh)
+	connection.close()
+	inputHost.Shutdown()
+}
+
 func (s *InputHostSuite) TestInputExtHostRateLimit() {
 	destinationPath := "foo"
 	inputHost, _ := NewInputHost("inputhost-test", s.mockService, s.mockMeta, nil)
