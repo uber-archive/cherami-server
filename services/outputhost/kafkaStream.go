@@ -96,9 +96,7 @@ func convertKafkaMessageToCherami(k *s.ConsumerMessage) (c *store.ReadMessageCon
 	}
 
 	c.Message = &store.ReadMessage{
-		Address: common.Int64Ptr(int64(4200000000000000000) + // arbitrary number to distinguish from offset
-			int64(1000000000000000)*int64(k.Partition) + // Make addresses for different partitions disjoint
-			k.Offset), // TODO: Topic mapping?
+		Address: common.Int64Ptr(0), // TODO: Topic/partition/offset mapping?
 	}
 
 	c.Message.Message = &store.AppendMessage{
