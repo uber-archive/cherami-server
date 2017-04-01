@@ -1,5 +1,5 @@
 hash: 95f30a537dc5b2841e061722d66e26c58126e82c19e9ba29bb6b0f44cf1741d0
-updated: 2017-03-20T09:58:47.035659706-07:00
+updated: 2017-03-31T16:09:33.820595835-07:00
 imports:
 - name: github.com/apache/thrift
   version: b2a4d4ae21c789b689dd162deb819665567f481c
@@ -68,7 +68,7 @@ imports:
 - name: github.com/golang/snappy
   version: d7b1e156f50d3c4664f683603af70e3e47fa0aa2
 - name: github.com/gorilla/websocket
-  version: c36f2fe5c330f0ac404b616b96c438b8616b1aaf
+  version: 3ab3a8b8831546bd18fd182c20687ca853b2bb13
 - name: github.com/hailocab/go-hostpool
   version: e80d13ce29ede4452c43dea11e79b9bc8a15b478
 - name: github.com/jmespath/go-jmespath
@@ -104,7 +104,7 @@ imports:
 - name: github.com/uber-go/atomic
   version: 3b8db5e93c4c02efbc313e17b2e796b0914a01fb
 - name: github.com/uber/cherami-client-go
-  version: 1ef6560c59eeb170f2381c02287ca44a5c50a523
+  version: de07d3a434a354d72c5cea1c6afd40d9d26c62f3
   subpackages:
   - client/cherami
   - common
@@ -113,7 +113,7 @@ imports:
   - common/websocket
   - stream
 - name: github.com/uber/cherami-thrift
-  version: 3fecab6f4e017bf30308fb4104e8c944f2a2bb81
+  version: 8cf6af068f1f1afd930c6a43ecdd9d0dca2289d5
   subpackages:
   - .generated/go/admin
   - .generated/go/cherami

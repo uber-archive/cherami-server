@@ -30,6 +30,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/pborman/uuid"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/suite"
+	"github.com/uber-common/bark"
 	"github.com/uber/cherami-server/common"
 	"github.com/uber/cherami-server/common/configure"
 	dconfig "github.com/uber/cherami-server/common/dconfigclient"
@@ -44,13 +50,6 @@ import (
 	"github.com/uber/cherami-thrift/.generated/go/metadata"
 	"github.com/uber/cherami-thrift/.generated/go/shared"
 	"github.com/uber/cherami-thrift/.generated/go/store"
-
-	"github.com/pborman/uuid"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
-	"github.com/stretchr/testify/require"
-	"github.com/stretchr/testify/suite"
-	"github.com/uber-common/bark"
 	"github.com/uber/tchannel-go"
 	"github.com/uber/tchannel-go/thrift"
 	"golang.org/x/net/context"
@@ -1351,6 +1350,106 @@ func (s *InputHostSuite) TestInputExtHostSizeLimit() {
 
 	close(wCh)
 	close(connection.forceUnloadCh)
+	connection.close()
+	inputHost.Shutdown()
+}
+
+func (s *InputHostSuite) TestInputExtHostDrain() {
+	destinationPath := "foo"
+
+	// setup mockService here to use the mock admin controller client
+	ch, _ := tchannel.NewChannel("cherami-test-drain-in", nil)
+	mockService := new(common.MockService)
+	mockService.On("GetConfig").Return(s.cfg.GetServiceConfig(common.InputServiceName))
+	mockService.On("GetMetricsReporter").Return(common.NewMetricReporterWithHostname(configure.NewCommonServiceConfig()))
+	mockService.On("GetDConfigClient").Return(dconfig.NewDconfigClient(configure.NewCommonServiceConfig(), common.InputServiceName))
+	mockService.On("GetTChannel").Return(ch)
+	mockService.On("IsLimitsEnabled").Return(true)
+	mockService.On("GetHostConnLimit").Return(100)
+	mockService.On("GetHostConnLimitPerSecond").Return(100)
+	mockService.On("GetWSConnector").Return(s.mockWSConnector, nil)
+
+	mockAdminC := &mockAdminController{}
+	mockClientFactory := new(mockcommon.MockClientFactory)
+	mockClientFactory.On("GetThriftStoreClient", mock.Anything, mock.Anything).Return(store.TChanBStore(s.mockStore), nil)
+	mockClientFactory.On("ReleaseThriftStoreClient", mock.Anything).Return(nil)
+	mockClientFactory.On("GetAdminControllerClient").Return(mockAdminC, nil)
+	mockService.On("GetClientFactory").Return(mockClientFactory)
+
+	mockLoadReporterDaemonFactory := setupMockLoadReporterDaemonFactory()
+	mockService.On("GetLoadReporterDaemonFactory").Return(mockLoadReporterDaemonFactory)
+	mockService.On("GetHostUUID").Return("99999999-9999-9999-9999-999999999999")
+	mockService.On("GetRingpopMonitor").Return(s.mockRpm)
+
+	inputHost, _ := NewInputHost("inputhost-test", mockService, s.mockMeta, nil)
+	ctx, cancel := utilGetThriftContextWithPath(destinationPath)
+	defer cancel()
+
+	msg := cherami.NewPutMessage()
+	msg.ID = common.StringPtr(strconv.Itoa(1))
+	msg.Data = []byte("hello")
+
+	wCh := make(chan time.Time)
+
+	s.mockAppend.On("Read").Return(nil, io.EOF).WaitUntil(wCh)
+	s.mockAppend.On("Write", mock.Anything).Return(io.EOF).WaitUntil(wCh)
+	s.mockPub.On("Read").Return(nil, io.EOF).WaitUntil(wCh)
+	s.mockPub.On("Write", mock.Anything).Return(io.EOF).WaitUntil(wCh)
+
+	aMsg := store.NewAppendMessageAck()
+	aMsg.Status = common.CheramiStatusPtr(cherami.Status_OK)
+	aMsg.Address = common.Int64Ptr(int64(100))
+
+	putMsgCh := make(chan *inPutMessage, 1)
+	ackChannel := make(chan *cherami.PutMessageAck, 1)
+
+	go func() {
+		inputHost.OpenPublisherStream(ctx, s.mockPub)
+	}()
+
+	// wait for the extent to be loaded
+	common.SpinWaitOnCondition(func() bool {
+		return inputHost.hostMetrics.Get(load.HostMetricNumOpenExtents) == 1
+	}, time.Second)
+
+	// 3. Make sure we just have one extent
+	var connection *extHost
+	pathCache, ok := inputHost.getPathCacheByDestPath("foo")
+	s.True(ok)
+	pathCache.Lock()
+	s.Equal(1, len(pathCache.extentCache))
+	for _, extCache := range pathCache.extentCache {
+		connection = extCache.connection
+	}
+	pathCache.Unlock()
+
+	inMsg := &inPutMessage{
+		putMsg:      msg,
+		putMsgAckCh: ackChannel,
+	}
+	putMsgCh <- inMsg
+
+	// send a drain request
+	req := admin.NewDrainExtentsRequest()
+	req.UpdateUUID = common.StringPtr(uuid.New())
+
+	drainReq := admin.NewDrainExtents()
+	drainReq.DestinationUUID = common.StringPtr(pathCache.destUUID)
+	drainReq.ExtentUUID = common.StringPtr(connection.extUUID)
+	req.Extents = append(req.Extents, drainReq)
+
+	err := inputHost.DrainExtent(ctx, req)
+	s.NoError(err)
+
+	drained := false
+	select {
+	case <-connection.closeChannel:
+		drained = true
+	case <-time.After(5 * time.Second):
+	}
+
+	s.Equal(true, drained)
+	close(wCh)
 	connection.close()
 	inputHost.Shutdown()
 }

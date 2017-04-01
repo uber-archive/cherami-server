@@ -67,6 +67,13 @@ const (
 	// range (currently, betweetn 10 million and 20 million) and will seal at this
 	// sequence number proactively so that we don't have a very large extent.
 	extentRolloverSeqnumMin, extentRolloverSeqnumMax = 10000000, 20000000
+
+	// the default drain timeout
+	defaultDrainTimeout = 1 * time.Minute
+
+	// connWGTimeout is the timeout to wait after we send the drain command and
+	// before we start the drain
+	connWGTimeout = 5 * time.Second
 )
 
 var (
@@ -132,6 +139,9 @@ var ErrThrottled = &cherami.InternalServiceError{Message: "InputHost throttling 
 
 // ErrDstNotLoaded is returned when this input host doesn't own any extents for the destination
 var ErrDstNotLoaded = &cherami.InternalServiceError{Message: "Destination no longer served by this input host"}
+
+// ErrDrainTimedout is returned when the draining of extents times out
+var ErrDrainTimedout = &cherami.InternalServiceError{Message: "Draining of Extents timedout"}
 
 func (h *InputHost) isDestinationWritable(destDesc *shared.DestinationDescription) bool {
 	status := destDesc.GetStatus()
@@ -687,7 +697,7 @@ func (h *InputHost) UnloadDestinations(ctx thrift.Context, request *admin.Unload
 }
 
 // ListLoadedDestinations is the API used to list all the loaded destinations in memory
-func (h *InputHost) ListLoadedDestinations(ctx thrift.Context) (result *admin.ListDestinationsResult_, err error) {
+func (h *InputHost) ListLoadedDestinations(ctx thrift.Context) (result *admin.ListLoadedDestinationsResult_, err error) {
 	defer atomic.AddInt32(&h.loadShutdownRef, -1)
 	sw := h.m3Client.StartTimer(metrics.ListLoadedDestinationsScope, metrics.InputhostLatencyTimer)
 	defer sw.Stop()
@@ -699,7 +709,7 @@ func (h *InputHost) ListLoadedDestinations(ctx thrift.Context) (result *admin.Li
 		return nil, ErrHostShutdown
 	}
 
-	result = admin.NewListDestinationsResult_()
+	result = admin.NewListLoadedDestinationsResult_()
 	h.pathMutex.RLock()
 	result.Dests = make([]*admin.Destinations, len(h.pathCache))
 	count := 0
@@ -755,6 +765,84 @@ func (h *InputHost) ReadDestState(ctx thrift.Context, request *admin.ReadDestina
 	}
 	return result, err
 
+}
+
+// determine how long we need to wait for the wait group
+// if the thrift context timeout is set and is smaller than the default timeout, we
+// should use that.
+func getDrainTimeout(ctx thrift.Context) time.Duration {
+	if ctx != nil {
+		if deadline, ok := ctx.Deadline(); ok {
+			return deadline.Sub(time.Now())
+		}
+	}
+	return defaultDrainTimeout
+}
+
+// DrainExtents is the implementation of the thrift handler for the inputhost
+func (h *InputHost) DrainExtent(ctx thrift.Context, request *admin.DrainExtentsRequest) (err error) {
+	defer atomic.AddInt32(&h.loadShutdownRef, -1)
+	sw := h.m3Client.StartTimer(metrics.DrainExtentsScope, metrics.InputhostLatencyTimer)
+	defer sw.Stop()
+	h.m3Client.IncCounter(metrics.DrainExtentsScope, metrics.InputhostRequests)
+	// If we are already shutting down, no need to do anything here
+	if atomic.AddInt32(&h.loadShutdownRef, 1) <= 0 {
+		h.logger.WithField(common.TagReconfigureID, common.FmtReconfigureID(request.GetUpdateUUID())).Error("inputhost: DrainExtent: dropping due to shutdown")
+		h.m3Client.IncCounter(metrics.DrainExtentsScope, metrics.InputhostFailures)
+		return ErrHostShutdown
+	}
+
+	var intErr error
+	updateUUID := request.GetUpdateUUID()
+	h.logger.WithField(common.TagReconfigureID, common.FmtReconfigureID(updateUUID)).
+		Debug("inputhost: DrainExtent: processing drain")
+	timeoutTime := getDrainTimeout(ctx)
+	var drainWG sync.WaitGroup
+	var extentUUID string
+	// Find all the extents we have and do the right thing
+	for _, req := range request.Extents {
+		// get the destUUID and see if it is in the inputhost cache
+		destUUID := req.GetDestinationUUID()
+		pathCache, ok := h.getPathCacheByDestUUID(destUUID)
+		if ok {
+			// We have a path cache loaded
+			// check if it is active or not
+			extentUUID = req.GetExtentUUID()
+			if pathCache.isActiveNoLock() {
+				drainWG.Add(1)
+				go pathCache.drainExtent(extentUUID, updateUUID, &drainWG)
+			} else {
+				intErr = errPathCacheUnloading
+			}
+		} else {
+			intErr = &cherami.EntityNotExistsError{}
+		}
+
+		// just save the error and proceed to the next update
+		if intErr != nil {
+			err = intErr
+			h.m3Client.IncCounter(metrics.DrainExtentsScope, metrics.InputhostFailures)
+			h.logger.WithFields(bark.Fields{
+				common.TagDst:           common.FmtDst(destUUID),
+				common.TagExt:           common.FmtDst(extentUUID),
+				common.TagReconfigureID: common.FmtReconfigureID(updateUUID),
+				common.TagErr:           intErr,
+			}).Error("inputhost: DrainExtent: dropping reconfiguration")
+		}
+	}
+
+	h.logger.WithField(common.TagReconfigureID, common.FmtReconfigureID(updateUUID)).
+		Debug("inputhost: DrainExtent: finished reconfiguration")
+	if ok := common.AwaitWaitGroup(&drainWG, timeoutTime); !ok {
+		err = ErrDrainTimedout
+		h.m3Client.IncCounter(metrics.DrainExtentsScope, metrics.InputhostFailures)
+		h.logger.WithFields(bark.Fields{
+			common.TagReconfigureID: common.FmtReconfigureID(updateUUID),
+			common.TagErr:           err,
+		}).Error("inputhost: DrainExtent: timed out")
+	}
+
+	return
 }
 
 // Report is the implementation for reporting host specific load to controller

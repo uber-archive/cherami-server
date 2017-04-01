@@ -27,6 +27,7 @@ import (
 	"math/rand"
 	"net"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -34,12 +35,14 @@ import (
 	"github.com/uber-common/bark"
 	"github.com/uber/tchannel-go/thrift"
 
+	"github.com/pborman/uuid"
 	"github.com/stretchr/testify/suite"
 	client "github.com/uber/cherami-client-go/client/cherami"
 	"github.com/uber/cherami-server/common"
 	"github.com/uber/cherami-server/common/metrics"
 	"github.com/uber/cherami-server/services/controllerhost"
 	"github.com/uber/cherami-server/services/storehost"
+	"github.com/uber/cherami-thrift/.generated/go/admin"
 	"github.com/uber/cherami-thrift/.generated/go/cherami"
 	"github.com/uber/cherami-thrift/.generated/go/controller"
 	"github.com/uber/cherami-thrift/.generated/go/metadata"
@@ -350,6 +353,173 @@ func (s *NetIntegrationSuiteParallelC) TestWriteEndToEndSuccessWithCassandra() {
 		log.Infof("client: publishing data: %s with id %s", data, id)
 		s.NoError(er)
 	}
+
+	wg.Wait()
+	publisherTest.Close()
+
+	// ==READ==
+
+	// Create the consumer group
+	cgReq := cherami.NewCreateConsumerGroupRequest()
+	cgReq.ConsumerGroupName = common.StringPtr(cgPath)
+	cgReq.DestinationPath = common.StringPtr(destPath)
+	cgReq.LockTimeoutInSeconds = common.Int32Ptr(30) // this is the message redilvery timeout
+	cgReq.MaxDeliveryCount = common.Int32Ptr(1)
+	cgReq.OwnerEmail = common.StringPtr("consumer_integration_test@uber.com")
+
+	cgDesc, err := cheramiClient.CreateConsumerGroup(cgReq)
+	s.NoError(err)
+	s.NotNil(cgDesc)
+	s.Equal(cgReq.GetDestinationPath(), cgDesc.GetDestinationPath(), "Wrong destination path")
+	s.Equal(cgReq.GetConsumerGroupName(), cgDesc.GetConsumerGroupName(), "Wrong consumer group name")
+	s.Equal(cgReq.GetLockTimeoutInSeconds(), cgDesc.GetLockTimeoutInSeconds(), "Wrong LockTimeoutInSeconds")
+	s.Equal(cgReq.GetMaxDeliveryCount(), cgDesc.GetMaxDeliveryCount(), "Wrong MaxDeliveryCount")
+	s.Equal(cherami.ConsumerGroupStatus_ENABLED, cgDesc.GetStatus(), "Wrong Status")
+	s.Equal(cgReq.GetOwnerEmail(), cgDesc.GetOwnerEmail(), "Wrong OwnerEmail")
+
+	cConsumerReq := &client.CreateConsumerRequest{
+		Path:              destPath,
+		ConsumerGroupName: cgPath,
+		ConsumerName:      "TestConsumerName",
+		PrefetchCount:     1,
+		Options:           &client.ClientOptions{Timeout: time.Second * 30}, // this is the thrift context timeout
+	}
+
+	consumerTest := cheramiClient.CreateConsumer(cConsumerReq)
+	s.NotNil(consumerTest)
+
+	// Open the consumer channel
+	delivery := make(chan client.Delivery, 1)
+	delivery, err = consumerTest.Open(delivery)
+	s.NoError(err)
+
+	// Read the messages in a loop. We will exit the loop via a timeout
+ReadLoop:
+	for msgCount := 0; msgCount < testMsgCount; msgCount++ {
+		timeout := time.NewTimer(time.Second * 45)
+		log.Infof("waiting to get a message on del chan")
+		select {
+		case msg := <-delivery:
+			log.Infof("Read message: #%v (msg ID:%v)", msgCount+1, msg.GetMessage().Payload.GetID())
+			msg.Ack()
+		case <-timeout.C:
+			log.Errorf("consumer delivery channel timed out after %v messages", msgCount)
+			s.Equal(msgCount, testMsgCount) // FAIL the test
+			break ReadLoop
+		}
+	}
+
+	// Check that trying to read one more message would block
+	log.Info("Checking for additional messages...")
+	select {
+	case msg := <-delivery:
+		log.Infof("Read EXTRA message: %v", msg.GetMessage().Payload.GetID())
+		msg.Ack()
+		s.Nil(msg)
+	default:
+		log.Errorf("Good: No message available to consume.")
+	}
+
+	consumerTest.Close()
+
+	err = cheramiClient.DeleteDestination(&cherami.DeleteDestinationRequest{Path: common.StringPtr(destPath)})
+	s.Nil(err, "Failed to delete destination")
+}
+
+func (s *NetIntegrationSuiteParallelC) TestWriteWithDrain() {
+	destPath := "/dest/testWriteDrain"
+	cgPath := "/cg/testWriteDrain"
+	testMsgCount := 1000
+	log := common.GetDefaultLogger()
+
+	// Create the client
+	ipaddr, port, _ := net.SplitHostPort(s.GetFrontend().GetTChannel().PeerInfo().HostPort)
+	portNum, _ := strconv.Atoi(port)
+	cheramiClient, _ := client.NewClient("cherami-test", ipaddr, portNum, nil)
+
+	// Create the destination to publish message
+	crReq := cherami.NewCreateDestinationRequest()
+	crReq.Path = common.StringPtr(destPath)
+	crReq.Type = cherami.DestinationTypePtr(0)
+	crReq.ConsumedMessagesRetention = common.Int32Ptr(60)
+	crReq.UnconsumedMessagesRetention = common.Int32Ptr(120)
+	crReq.OwnerEmail = common.StringPtr("integration_test@uber.com")
+
+	desDesc, _ := cheramiClient.CreateDestination(crReq)
+	s.NotNil(desDesc)
+
+	// we should see the destination now in cassandra
+	rReq := cherami.NewReadDestinationRequest()
+	rReq.Path = common.StringPtr(destPath)
+	readDesc, _ := cheramiClient.ReadDestination(rReq)
+	s.NotNil(readDesc)
+
+	// ==WRITE==
+
+	log.Info("Write test beginning...")
+
+	// Create the publisher
+	cPublisherReq := &client.CreatePublisherRequest{
+		Path: destPath,
+	}
+
+	publisherTest := cheramiClient.CreatePublisher(cPublisherReq)
+	s.NotNil(publisherTest)
+
+	err := publisherTest.Open()
+	s.NoError(err)
+
+	// Publish messages
+	// Make the doneCh to be a minimum size so that we don't
+	// fill up immediately
+	doneCh := make(chan *client.PublisherReceipt, 1)
+	var wg sync.WaitGroup
+
+	for i := 0; i < testMsgCount; i++ {
+		data := []byte(fmt.Sprintf("msg_%d", i))
+		id, er := publisherTest.PublishAsync(
+			&client.PublisherMessage{
+				Data: data,
+			},
+			doneCh,
+		)
+		log.Infof("client: publishing data: %s with id %s", data, id)
+		s.NoError(er)
+	}
+
+	// now read one message to figure out the extent
+	receipt := <-doneCh
+	s.NoError(receipt.Error)
+
+	// parse to get the extent
+	receiptParts := strings.Split(receipt.Receipt, ":")
+
+	// Now call SealExtent on the inputhost to seal this extent
+	ih := s.testBase.GetInput()
+	s.NotNil(ih, "no inputhosts found")
+
+	dReq := admin.NewDrainExtentsRequest()
+	dReq.UpdateUUID = common.StringPtr(uuid.New())
+
+	drainReq := admin.NewDrainExtents()
+	drainReq.DestinationUUID = common.StringPtr(readDesc.GetDestinationUUID())
+	drainReq.ExtentUUID = common.StringPtr(receiptParts[0])
+	dReq.Extents = append(dReq.Extents, drainReq)
+
+	ctx, _ := thrift.NewContext(2 * time.Minute)
+	err = ih.DrainExtent(ctx, dReq)
+	s.Nil(err)
+
+	// Now try to get all the other messages
+	wg.Add(1)
+	go func() {
+		for i := 0; i < testMsgCount-1; i++ {
+			receipt := <-doneCh
+			log.Infof("client: acking id %s", receipt.Receipt)
+			s.NoError(receipt.Error)
+		}
+		wg.Done()
+	}()
 
 	wg.Wait()
 	publisherTest.Close()

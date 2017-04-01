@@ -244,6 +244,8 @@ const (
 	ListLoadedDestinationsScope
 	// ReadDestStateScope represents ReadDestState API
 	ReadDestStateScope
+	// DrainExtentsScope represents DrainExtentsScope API
+	DrainExtentsScope
 
 	// -- Operation scopes for OutputHost --
 
@@ -528,6 +530,7 @@ var scopeDefs = map[ServiceIdx]map[int]scopeDefinition{
 		UnloadDestinationsScope:       {operation: "UnloadDestinations"},
 		ListLoadedDestinationsScope:   {operation: "ListLoadedDestinations"},
 		ReadDestStateScope:            {operation: "ReadDestState"},
+		DrainExtentsScope:             {operation: "DrainExtentsScope"},
 	},
 
 	// Outputhost operation tag values as seen by the Metrics backend

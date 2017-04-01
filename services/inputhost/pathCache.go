@@ -318,6 +318,33 @@ func (pathCache *inPathCache) extCacheClosed(extUUID string) {
 	pathCache.Unlock()
 }
 
+// drainConnections is the routine that decides if we need to notify the
+// clients to DRAIN the connection
+func (pathCache *inPathCache) drainConnections(updateUUID string, connDrainWG *sync.WaitGroup) {
+	// initiate sending DRAIN command to the clients to let them drain their pumps and potentially
+	// retry on some other extent
+	notified := 0
+	dropped := 0
+	if pathCache.isActive() && pathCache.dstMetrics.Get(load.DstMetricNumWritableExtents) <= 0 {
+		for _, conn := range pathCache.connections {
+			connDrainWG.Add(1)
+			select {
+			case conn.reconfigureClientCh <- &reconfigInfo{updateUUID, cherami.InputHostCommandType_DRAIN, connDrainWG}:
+				notified++
+			default:
+				connDrainWG.Done()
+				dropped++
+			}
+
+		}
+	}
+	pathCache.logger.WithFields(bark.Fields{
+		common.TagUpdateUUID: updateUUID,
+		`notified`:           notified,
+		`dropped`:            dropped,
+	}).Info(`drainConnections: notified clients`)
+}
+
 // extCacheUnloaded is the routine that is called to completely
 // remove the extent from this pathCache
 func (pathCache *inPathCache) extCacheUnloaded(extUUID string) {
@@ -338,7 +365,7 @@ func (pathCache *inPathCache) reconfigureClients(updateUUID string) {
 	pathCache.RLock()
 	for _, conn := range pathCache.connections {
 		select {
-		case conn.reconfigureClientCh <- updateUUID:
+		case conn.reconfigureClientCh <- &reconfigInfo{updateUUID, cherami.InputHostCommandType_RECONFIGURE, nil}:
 			notified++
 		default:
 			dropped++
@@ -450,6 +477,7 @@ func (pathCache *inPathCache) checkAndLoadExtent(destUUID string, extUUID extent
 
 		// make sure the number of loaded extents is incremented
 		pathCache.dstMetrics.Increment(load.DstMetricNumOpenExtents)
+		pathCache.dstMetrics.Increment(load.DstMetricNumWritableExtents)
 		pathCache.hostMetrics.Increment(load.HostMetricNumOpenExtents)
 	}
 	return
@@ -507,4 +535,30 @@ func (pathCache *inPathCache) getState() *admin.DestinationState {
 	}
 
 	return destState
+}
+
+func (pathCache *inPathCache) drainExtent(extUUID string, updateUUID string, drainWG *sync.WaitGroup) {
+	defer drainWG.Done()
+	pathCache.RLock()
+
+	extCache, ok := pathCache.extentCache[extentUUID(extUUID)]
+	if !ok {
+		// draining called for extent which is not present
+		// just return
+		pathCache.RUnlock()
+		return
+	}
+
+	if extCache.connection.prepForClose() {
+		var connDrainWG sync.WaitGroup
+		// first send DRAIN command to all connections
+		// then start draining extents
+		pathCache.drainConnections(updateUUID, &connDrainWG)
+		// while drain no need to hold the lock to make sure we
+		// can proceed forward
+		pathCache.RUnlock()
+		// do best effort waiting to notify all connections here
+		common.AwaitWaitGroup(&connDrainWG, connWGTimeout)
+		extCache.connection.stopWrite()
+	}
 }

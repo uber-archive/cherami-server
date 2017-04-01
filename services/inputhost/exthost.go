@@ -110,6 +110,8 @@ type (
 
 		maxSizeBytes  int64 // max size for this extent; TODO: Make this dynamically configurable?
 		currSizeBytes int64 // current size of this extent
+
+		state extHostState // state of this extHost
 	}
 
 	// Holds a particular extent for use by multiple publisher connections.
@@ -136,8 +138,14 @@ type (
 		sendTimer *common.Timer
 	}
 
-	extCacheClosedCb   func(string)
-	extCacheUnloadedCb func(string)
+	extHostState int
+)
+
+const (
+	extHostActive     extHostState = iota
+	extHostPrepClose               // used by the pathcache to determine if the connections need to be torn down or not
+	extHostCloseWrite              // used when the actual drain is happening
+	extHostInactive                // used when the extent is closed
 )
 
 const (
@@ -275,14 +283,16 @@ func (conn *extHost) close() {
 
 	conn.closed = true
 
+	// make sure the number of writable extents is updated just once
+	if conn.state == extHostActive {
+		conn.dstMetrics.Decrement(load.DstMetricNumWritableExtents)
+	}
 	// Shutdown order:
 	// 1. stop the write pump to replicas and wait for the pump to close
 	// 2. close the replica streams
 	// 3. stop the read pump from replicas
-	close(conn.closeChannel)
-	if ok := common.AwaitWaitGroup(&conn.waitWriteWG, defaultWGTimeout); !ok {
-		conn.logger.Fatal("waitWriteGroup timed out")
-	}
+	conn.stopWritePump()
+
 	for _, stream := range conn.streams {
 		stream.conn.close()
 		// stop the timer as well so that it gets gc'ed
@@ -303,7 +313,10 @@ func (conn *extHost) close() {
 			}
 		}
 	}
+	conn.state = extHostInactive
+	conn.lk.Unlock() // no longer need the lock
 
+	// wait for the read pump to stop
 	if ok := common.AwaitWaitGroup(&conn.waitReadWG, defaultWGTimeout); !ok {
 		conn.logger.Fatal("waitReadGroup timed out")
 	}
@@ -312,8 +325,6 @@ func (conn *extHost) close() {
 	if err := conn.sealExtent(); err != nil {
 		conn.logger.Warn("seal extent notify failed during closed")
 	}
-
-	conn.lk.Unlock() // no longer need the lock
 
 	conn.logger.WithFields(bark.Fields{
 		`sentSeqNo`:        conn.seqNo,
@@ -716,6 +727,12 @@ func (conn *extHost) aggregateAndSendReplies(numReplicas int) {
 					conn.logger.WithField(common.TagAckID, resCh.ackID).Error(`sending ack back to the client timed out`)
 				}
 				delete(inflightMessages, resCh.seqNo)
+
+				// check if we drained completely
+				if conn.isDrained(resCh.seqNo) {
+					// just call close and that will take care of the rest
+					go conn.close()
+				}
 			} else {
 				// we are closing the connection.
 				return
@@ -863,4 +880,59 @@ func (conn *extHost) getState() *admin.InputDestExtent {
 	}
 
 	return ext
+}
+
+// stopWritePump is used to stop the write pump if the extent is active or has
+// been prepped for drain and  mark the extHost as "Draining"
+func (conn *extHost) stopWritePump() {
+	if conn.state <= extHostPrepClose {
+		close(conn.closeChannel)
+		// wait for the write pump to drain for some timeout period
+		if ret := common.AwaitWaitGroup(&conn.waitWriteWG, defaultWGTimeout); !ret {
+			conn.logger.Fatalf("unable to stop write pump; wait group timeout")
+		}
+		conn.state = extHostCloseWrite
+	}
+}
+
+// isDrained returns true if the following conditions are true:
+// 	(1) extHost state is "extHostCloseWrite"
+//	(2) we have seen the reply for the last sent sequence number
+// if not, it returns false
+// Note: RLock() is sufficient here.
+func (conn *extHost) isDrained(replySeqNo int64) bool {
+	conn.lk.RLock()
+	if conn.state != extHostCloseWrite {
+		conn.lk.RUnlock()
+		return false
+	}
+
+	ret := false
+	if atomic.LoadInt64(&conn.seqNo) == replySeqNo {
+		ret = true
+	}
+
+	conn.lk.RUnlock()
+	return ret
+}
+
+// prepForClose just decrements the number of writable extents for this destination
+func (conn *extHost) prepForClose() bool {
+	conn.lk.Lock()
+	if conn.state != extHostActive {
+		conn.lk.Unlock()
+		return false
+	}
+	conn.state = extHostPrepClose
+	conn.dstMetrics.Decrement(load.DstMetricNumWritableExtents)
+	conn.lk.Unlock()
+	return true
+}
+
+// drain simply stops the write pump and marks the state as such
+func (conn *extHost) stopWrite() error {
+	conn.lk.Lock()
+	conn.stopWritePump()
+	conn.lk.Unlock()
+	return nil
 }
