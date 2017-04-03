@@ -377,6 +377,18 @@ func (s *EventPipelineSuite) TestInputHostFailedEvent() {
 
 	rpm := common.NewMockRingpopMonitor()
 
+	inputs := make([]*MockInputOutputService, len(inHostIDs))
+	for i := 0; i < len(inHostIDs); i++ {
+		inputs[i] = NewMockInputOutputService(common.InputServiceName)
+		thriftService := admin.NewTChanInputHostAdminServer(inputs[i])
+		inputs[i].Start(common.InputServiceName, thriftService)
+		rpm.Add(common.InputServiceName, inHostIDs[i], inputs[i].hostPort)
+	}
+
+	for _, e := range extentIDs {
+		inputs[0].failDrainExtentFor(e)
+	}
+
 	stores := make([]*MockStoreService, len(storeIDs))
 	for i := 0; i < len(storeIDs); i++ {
 		stores[i] = NewMockStoreService()
@@ -395,6 +407,15 @@ func (s *EventPipelineSuite) TestInputHostFailedEvent() {
 			succ := true
 			for j := 0; j < len(storeIDs); j++ {
 				if !stores[j].isSealed(extentIDs[i]) {
+					succ = false
+					break
+				}
+			}
+			if !succ {
+				return false
+			}
+			for j := 0; j < len(inHostIDs); j++ {
+				if inputs[j].drainExtentsRcvdFor(extentIDs[j]) != 1 {
 					succ = false
 					break
 				}
@@ -651,18 +672,22 @@ func (service *MockStoreService) isExtentReReplicated(extentID string) bool {
 }
 
 type MockInputOutputService struct {
-	name             string
-	server           *thrift.Server
-	ch               *tchannel.Channel
-	hostPort         string
-	mu               sync.Mutex
-	keyToUpdateCount map[string]int
+	name                  string
+	server                *thrift.Server
+	ch                    *tchannel.Channel
+	hostPort              string
+	mu                    sync.Mutex
+	keyToUpdateCount      map[string]int
+	drainExtentsRcvdCount map[string]int
+	drainExtentsToFail    map[string]struct{}
 }
 
 func NewMockInputOutputService(name string) *MockInputOutputService {
 	return &MockInputOutputService{
-		name:             name,
-		keyToUpdateCount: make(map[string]int),
+		name: name,
+		drainExtentsRcvdCount: make(map[string]int),
+		keyToUpdateCount:      make(map[string]int),
+		drainExtentsToFail:    make(map[string]struct{}),
 	}
 }
 
@@ -705,6 +730,40 @@ func (service *MockInputOutputService) DestinationsUpdated(ctx thrift.Context, r
 	return nil
 }
 
+func (service *MockInputOutputService) DrainExtent(ctx thrift.Context, request *admin.DrainExtentsRequest) error {
+	service.mu.Lock()
+	defer service.mu.Unlock()
+	var err error
+	for _, extent := range request.GetExtents() {
+		count, ok := service.drainExtentsRcvdCount[extent.GetExtentUUID()]
+		if !ok {
+			count = 0
+		}
+		count++
+		service.drainExtentsRcvdCount[extent.GetExtentUUID()] = count
+		if _, ok := service.drainExtentsToFail[extent.GetExtentUUID()]; ok {
+			err = errors.New("drain failed")
+		}
+	}
+	return err
+}
+
+func (service *MockInputOutputService) drainExtentsRcvdFor(extID string) int {
+	service.mu.Lock()
+	defer service.mu.Unlock()
+	count, ok := service.drainExtentsRcvdCount[extID]
+	if !ok {
+		return 0
+	}
+	return count
+}
+
+func (service *MockInputOutputService) failDrainExtentFor(extID string) {
+	service.mu.Lock()
+	defer service.mu.Unlock()
+	service.drainExtentsToFail[extID] = struct{}{}
+}
+
 func (service *MockInputOutputService) GetUpdatedCount(key string) int {
 	count := 0
 	service.mu.Lock()
@@ -738,8 +797,4 @@ func (service *MockInputOutputService) ListLoadedDestinations(ctx thrift.Context
 
 func (service *MockInputOutputService) ReadDestState(ctx thrift.Context, req *admin.ReadDestinationStateRequest) (*admin.ReadDestinationStateResult_, error) {
 	return nil, fmt.Errorf("mock not implemented")
-}
-
-func (service *MockInputOutputService) DrainExtent(ctx thrift.Context, req *admin.DrainExtentsRequest) error {
-	return fmt.Errorf("mock not implemented")
 }

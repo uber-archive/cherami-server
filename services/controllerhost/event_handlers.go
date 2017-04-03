@@ -95,6 +95,7 @@ type (
 		sealSeq  int64
 		dstID    string
 		extentID string
+		inputID  string
 		storeIDs []string
 	}
 
@@ -140,6 +141,7 @@ type (
 // ExtentDownEvent States
 const (
 	checkPreconditionState = iota
+	drainExtentState
 	sealExtentState
 	updateMetadataState
 	doneState
@@ -148,6 +150,9 @@ const (
 // how long from now are we willing to wait
 // for the cache to refresh itself ?
 const resultCacheRefreshMaxWaitTime = int64(500 * time.Millisecond)
+
+// how long to wait for an input host to respond to a drain command
+const drainExtentTimeout = time.Minute
 
 var (
 	sealExtentInitialCallTimeout = 2 * time.Second
@@ -814,7 +819,12 @@ func (event *ExtentDownEvent) Handle(context *Context) error {
 				}).Error("Cannot read extent stats")
 				return errRetryable
 			}
+			event.inputID = stats.GetExtent().GetInputHostUUID()
 			event.storeIDs = stats.GetExtent().GetStoreUUIDs()
+			event.state = drainExtentState
+
+		case drainExtentState:
+			drainExtent(context, event.dstID, event.extentID, event.inputID, metrics.ExtentDownEventScope)
 			event.state = sealExtentState
 
 		case sealExtentState:
@@ -1035,7 +1045,8 @@ func reconfigureAllConsumers(context *Context, dstID, extentID, reason, reasonCo
 func createExtentDownEvents(context *Context, stats []*shared.ExtentStats) {
 	for _, stat := range stats {
 		if !common.IsRemoteZoneExtent(stat.GetExtent().GetOriginZone(), context.localZone) {
-			addExtentDownEvent(context, 0, stat.GetExtent().GetDestinationUUID(), stat.GetExtent().GetExtentUUID())
+			extent := stat.GetExtent()
+			addExtentDownEvent(context, 0, extent.GetDestinationUUID(), extent.GetExtentUUID())
 		}
 	}
 }
@@ -1089,6 +1100,40 @@ func sealExtentOnStore(context *Context, storeUUID string, storeAddr string, ext
 		}).Error("Sealing extent failed on store, retries exceeded")
 	}
 	return err
+}
+
+// drainExtent sends a drain command to input host to gracefully
+// drain the clients connected to a given extent. If the input
+// host is not alive in ringpop, this method will return immediately
+func drainExtent(context *Context, dstID string, extentID string, inputID string, m3Scope int) {
+	addr, err := context.rpm.ResolveUUID(common.InputServiceName, inputID)
+	if err != nil {
+		return
+	}
+	adminClient, err := common.CreateInputHostAdminClient(context.channel, addr)
+	if err != nil {
+		context.log.WithField(common.TagErr, err).Error(`drainExtent: failed to create input host client`)
+		return
+	}
+	drainExtentInfo := &admin.DrainExtents{
+		DestinationUUID: common.StringPtr(dstID),
+		ExtentUUID:      common.StringPtr(extentID),
+	}
+	drainReq := &admin.DrainExtentsRequest{
+		UpdateUUID: common.StringPtr(uuid.New()),
+		Extents:    []*admin.DrainExtents{drainExtentInfo},
+	}
+	context.log.WithFields(bark.Fields{
+		common.TagDst: common.FmtDst(dstID),
+		common.TagExt: common.FmtExt(extentID),
+		`reconfigID`:  drainReq.GetUpdateUUID(),
+	}).Info(`sending drain command to input host`)
+
+	ctx, cancel := thrift.NewContext(drainExtentTimeout)
+	if err = adminClient.DrainExtent(ctx, drainReq); err != nil {
+		context.m3Client.IncCounter(m3Scope, metrics.ControllerErrDrainFailed)
+	}
+	cancel()
 }
 
 func createRetryPolicy(initial time.Duration, max time.Duration, expiry time.Duration, maxAttempts int) backoff.RetryPolicy {

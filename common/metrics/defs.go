@@ -926,6 +926,8 @@ const (
 	ControllerErrBadRequestCounter
 	// ControllerErrBadEntityCounter indicates either an entity not exists or disabled error
 	ControllerErrBadEntityCounter
+	// ControllerErrDrainFailed indicates that a drain command issued to input failed
+	ControllerErrDrainFailed
 
 	// ControllerEventsDropped indicates an event drop due to queue full
 	ControllerEventsDropped
@@ -1158,6 +1160,7 @@ var metricDefs = map[ServiceIdx]map[int]metricDefinition{
 		ControllerErrNoRetryWorkers:                {Counter, "controller.errors.no-retry-workers"},
 		ControllerErrBadRequestCounter:             {Counter, "controller.errors.bad-requests"},
 		ControllerErrBadEntityCounter:              {Counter, "controller.errors.bad-entity"},
+		ControllerErrDrainFailed:                   {Counter, "controller.errors.drain-failed"},
 		ControllerEventsDropped:                    {Counter, "controller.events-dropped"},
 		ControllerRequests:                         {Counter, "controller.requests"},
 		ControllerFailures:                         {Counter, "controller.errors"},
