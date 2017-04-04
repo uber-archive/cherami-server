@@ -26,7 +26,6 @@ import (
 	"github.com/pborman/uuid"
 	"github.com/uber/cherami-server/common"
 	"github.com/uber/cherami-server/common/metrics"
-	m "github.com/uber/cherami-thrift/.generated/go/metadata"
 	"github.com/uber/cherami-thrift/.generated/go/shared"
 )
 
@@ -285,8 +284,8 @@ func (s *McpSuite) TestCGExtentSelectorHonorsRemoteExtent() {
 	s.Equal(remoteZoneExtent, len(gotExtents)/2)
 }
 
-func (s *McpSuite) updateCGExtentStatus(cgID string, extID string, status m.ConsumerGroupExtentStatus) error {
-	return s.mcp.mClient.UpdateConsumerGroupExtentStatus(nil, &m.UpdateConsumerGroupExtentStatusRequest{
+func (s *McpSuite) updateCGExtentStatus(cgID string, extID string, status shared.ConsumerGroupExtentStatus) error {
+	return s.mcp.mClient.UpdateConsumerGroupExtentStatus(nil, &shared.UpdateConsumerGroupExtentStatusRequest{
 		ConsumerGroupUUID: &cgID,
 		ExtentUUID:        &extID,
 		Status:            &status,
@@ -380,7 +379,7 @@ func (s *McpSuite) TestCGExtentSelectorWithBacklog() {
 		}
 
 		target := gotExtents[0].GetExtentUUID()
-		s.updateCGExtentStatus(cgDesc.GetConsumerGroupUUID(), target, m.ConsumerGroupExtentStatus_CONSUMED)
+		s.updateCGExtentStatus(cgDesc.GetConsumerGroupUUID(), target, shared.ConsumerGroupExtentStatus_CONSUMED)
 		delete(cgExtents.open, target)
 		delete(openDLQExtents, target)
 		cgExtents.consumed[target] = struct{}{}

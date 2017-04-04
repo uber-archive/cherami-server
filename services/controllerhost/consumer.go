@@ -29,6 +29,7 @@ import (
 	a "github.com/uber/cherami-thrift/.generated/go/admin"
 	m "github.com/uber/cherami-thrift/.generated/go/metadata"
 	"github.com/uber/cherami-thrift/.generated/go/shared"
+	"github.com/uber/tchannel-go/thrift"
 )
 
 const failBackoffInterval = int64(time.Millisecond * 100)
@@ -182,7 +183,7 @@ func reassignOutHost(context *Context, dstUUID string, cgUUID string, extent *m.
 func notifyOutputHostsForConsumerGroup(context *Context, dstUUID, cgUUID, reason, reasonContext string, m3Scope int) (err error) {
 	outputHosts := make(map[string]struct{})
 
-	filterBy := []m.ConsumerGroupExtentStatus{m.ConsumerGroupExtentStatus_OPEN}
+	filterBy := []shared.ConsumerGroupExtentStatus{shared.ConsumerGroupExtentStatus_OPEN}
 	openCGExtents, err := listConsumerGroupExtents(context, dstUUID, cgUUID, m3Scope, filterBy)
 	if err != nil {
 		return
@@ -248,7 +249,7 @@ func repairExtentsAndUpdateOutputHosts(
 	return nRepaired
 }
 
-func addExtentsToConsumerGroup(context *Context, dstUUID string, cgUUID string, newExtents []*m.DestinationExtent, outputHosts map[string]*common.HostInfo, m3Scope int) int {
+func addExtentsToConsumerGroup(context *Context, dstUUID string, cgUUID string, isMultiZoneCg bool, newExtents []*m.DestinationExtent, outputHosts map[string]*common.HostInfo, m3Scope int) int {
 	nAdded := 0
 
 	for _, ext := range newExtents {
@@ -267,6 +268,10 @@ func addExtentsToConsumerGroup(context *Context, dstUUID string, cgUUID string, 
 			context.m3Client.IncCounter(m3Scope, metrics.ControllerErrPickOutHostCounter)
 			context.log.WithField(common.TagErr, err).Warn("Failed to add open extent to consumer group")
 			continue
+		}
+
+		if isMultiZoneCg {
+			createCGExtentInRemote(context, dstUUID, cgUUID, ext.GetExtentUUID())
 		}
 
 		nAdded++
@@ -288,6 +293,37 @@ func addExtentsToConsumerGroup(context *Context, dstUUID string, cgUUID string, 
 	return nAdded
 }
 
+func createCGExtentInRemote(context *Context, dstUUID, cgUUID, extUUID string) {
+	lclLg := context.log.WithFields(bark.Fields{
+		common.TagDst:  common.FmtDst(dstUUID),
+		common.TagCnsm: common.FmtCnsm(cgUUID),
+		common.TagExt:  common.FmtExt(extUUID),
+	})
+
+	req := &shared.CreateConsumerGroupExtentRequest{
+		DestinationUUID:   common.StringPtr(dstUUID),
+		ConsumerGroupUUID: common.StringPtr(cgUUID),
+		ExtentUUID:        common.StringPtr(extUUID),
+	}
+
+	// send to local replicator to fan out
+	localReplicator, err := context.clientFactory.GetReplicatorClient()
+	if err != nil {
+		lclLg.WithField(common.TagErr, err).Warn("createCGExtentInRemote: Failed to get replicator client")
+		return
+	}
+
+	ctx, cancel := thrift.NewContext(replicatorCallTimeout)
+	defer cancel()
+	err = localReplicator.CreateRemoteConsumerGroupExtent(ctx, req)
+	if err != nil {
+		lclLg.WithField(common.TagErr, err).Warn("createCGExtentInRemote: Failed to get call CreateRemoteConsumerGroupExtent")
+		return
+	}
+
+	lclLg.Info("Called replicator to create CG Extent")
+}
+
 func fetchClassifyOpenCGExtents(context *Context, dstUUID string, cgUUID string, m3Scope int) (
 	cgExtents *cgExtentsByCategory,
 	outputHosts map[string]*common.HostInfo,
@@ -296,7 +332,7 @@ func fetchClassifyOpenCGExtents(context *Context, dstUUID string, cgUUID string,
 
 	cgExtents = newCGExtentsByCategory()
 	outputHosts = make(map[string]*common.HostInfo)
-	filterBy := []m.ConsumerGroupExtentStatus{m.ConsumerGroupExtentStatus_OPEN}
+	filterBy := []shared.ConsumerGroupExtentStatus{shared.ConsumerGroupExtentStatus_OPEN}
 	openCGExtentsList, err := listConsumerGroupExtents(context, dstUUID, cgUUID, m3Scope, filterBy)
 	if err != nil {
 		return
@@ -489,7 +525,7 @@ func refreshCGExtents(context *Context,
 	cgID := cgDesc.GetConsumerGroupUUID()
 
 	// generate map of consumed CG Extents
-	filterBy := []m.ConsumerGroupExtentStatus{m.ConsumerGroupExtentStatus_CONSUMED}
+	filterBy := []shared.ConsumerGroupExtentStatus{shared.ConsumerGroupExtentStatus_CONSUMED}
 	consumedCGExtentsList, err := listConsumerGroupExtents(context, dstID, cgID, m3Scope, filterBy)
 	if err != nil {
 		return 0, err
@@ -529,7 +565,7 @@ func refreshCGExtents(context *Context,
 		}
 	}
 
-	return addExtentsToConsumerGroup(context, dstID, cgID, newExtents, outputHosts, m3Scope), nil
+	return addExtentsToConsumerGroup(context, dstID, cgID, cgDesc.GetIsMultiZone(), newExtents, outputHosts, m3Scope), nil
 }
 
 // refreshOutputHostsForConsGroup refreshes the output hosts for the given consumer group

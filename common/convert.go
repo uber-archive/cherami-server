@@ -32,7 +32,6 @@ import (
 	"github.com/uber/cherami-thrift/.generated/go/admin"
 	"github.com/uber/cherami-thrift/.generated/go/cherami"
 	"github.com/uber/cherami-thrift/.generated/go/controller"
-	"github.com/uber/cherami-thrift/.generated/go/metadata"
 	"github.com/uber/cherami-thrift/.generated/go/shared"
 )
 
@@ -128,7 +127,7 @@ func CheramiConsumerGroupStatusPtr(status cherami.ConsumerGroupStatus) *cherami.
 
 // CheramiConsumerGroupExtentStatusPtr makes a copy and returns the pointer to a
 // CheramiConsumerGroupExtentStatus.
-func CheramiConsumerGroupExtentStatusPtr(status metadata.ConsumerGroupExtentStatus) *metadata.ConsumerGroupExtentStatus {
+func CheramiConsumerGroupExtentStatusPtr(status shared.ConsumerGroupExtentStatus) *shared.ConsumerGroupExtentStatus {
 	return &status
 }
 
@@ -187,7 +186,7 @@ func InternalExtentReplicaReplicationStatusTypePtr(status shared.ExtentReplicaRe
 
 // MetadataConsumerGroupExtentStatusPtr makes a copy and returns the pointer to
 // a MetadataConsumerGroupExtentStatus.
-func MetadataConsumerGroupExtentStatusPtr(status metadata.ConsumerGroupExtentStatus) *metadata.ConsumerGroupExtentStatus {
+func MetadataConsumerGroupExtentStatusPtr(status shared.ConsumerGroupExtentStatus) *shared.ConsumerGroupExtentStatus {
 	return &status
 }
 

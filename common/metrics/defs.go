@@ -332,6 +332,8 @@ const (
 	ControllerDeleteConsumerGroupScope
 	// ControllerCreateRemoteZoneExtentScope represents controller CreateRemoteZoneExtent API
 	ControllerCreateRemoteZoneExtentScope
+	// ControllerCreateRemoteZoneCgExtentScope represents controller CreateRemoteZoneConsumerGroupExtent API
+	ControllerCreateRemoteZoneCgExtentScope
 	// QueueDepthBacklogCGScope represents metrics within queuedepth per consumer group
 	QueueDepthBacklogCGScope
 
@@ -438,6 +440,14 @@ const (
 	ReplicatorCreateExtentScope
 	// ReplicatorCreateRmtExtentScope represents replicator CreateRemoteExtent API
 	ReplicatorCreateRmtExtentScope
+	// ReplicatorCreateCgExtentScope represents replicator CreateConsumerGroupExtent API
+	ReplicatorCreateCgExtentScope
+	// ReplicatorCreateRmtCgExtentScope represents replicator CreateRemoteConsumerGroupExtent API
+	ReplicatorCreateRmtCgExtentScope
+	// ReplicatorSetAckOffsetScope represents replicator SetAckOffset API
+	ReplicatorSetAckOffsetScope
+	// ReplicatorSetAckOffsetInRemoteScope represents replicator SetAckOffsetInRemote API
+	ReplicatorSetAckOffsetInRemoteScope
 	// ReplicatorReconcileScope represents replicator's reconcile process
 	ReplicatorReconcileScope
 )
@@ -561,23 +571,27 @@ var scopeDefs = map[ServiceIdx]map[int]scopeDefinition{
 
 	// Replicator operation tag values as seen by the Metrics backend
 	Replicator: {
-		OpenReplicationRemoteReadScope:   {operation: "OpenReplicationRemoteReadStream"},
-		OpenReplicationReadScope:         {operation: "OpenReplicationReadStream"},
-		ReplicatorCreateDestUUIDScope:    {operation: "ReplicatorCreateDestinationUUID"},
-		ReplicatorCreateRmtDestUUIDScope: {operation: "ReplicatorCreateRemoteDestinationUUID"},
-		ReplicatorUpdateDestScope:        {operation: "ReplicatorUpdateDestination"},
-		ReplicatorUpdateRmtDestScope:     {operation: "ReplicatorUpdateRemoteDestination"},
-		ReplicatorDeleteDestScope:        {operation: "ReplicatorDeleteDestination"},
-		ReplicatorDeleteRmtDestScope:     {operation: "ReplicatorDeleteRemoteDestination"},
-		ReplicatorCreateCgUUIDScope:      {operation: "ReplicatorCreateConsumerGroupUUID"},
-		ReplicatorCreateRmtCgUUIDScope:   {operation: "ReplicatorCreateRemoteConsumerGroupUUID"},
-		ReplicatorUpdateCgScope:          {operation: "ReplicatorUpdateConsumerGroup"},
-		ReplicatorUpdateRmtCgScope:       {operation: "ReplicatorUpdateRemoteConsumerGroup"},
-		ReplicatorDeleteCgScope:          {operation: "ReplicatorDeleteConsumerGroup"},
-		ReplicatorDeleteRmtCgScope:       {operation: "ReplicatorDeleteRemoteConsumerGroup"},
-		ReplicatorCreateExtentScope:      {operation: "ReplicatorCreateExtent"},
-		ReplicatorCreateRmtExtentScope:   {operation: "ReplicatorCreateRemoteExtent"},
-		ReplicatorReconcileScope:         {operation: "ReplicatorReconcile"},
+		OpenReplicationRemoteReadScope:      {operation: "OpenReplicationRemoteReadStream"},
+		OpenReplicationReadScope:            {operation: "OpenReplicationReadStream"},
+		ReplicatorCreateDestUUIDScope:       {operation: "ReplicatorCreateDestinationUUID"},
+		ReplicatorCreateRmtDestUUIDScope:    {operation: "ReplicatorCreateRemoteDestinationUUID"},
+		ReplicatorUpdateDestScope:           {operation: "ReplicatorUpdateDestination"},
+		ReplicatorUpdateRmtDestScope:        {operation: "ReplicatorUpdateRemoteDestination"},
+		ReplicatorDeleteDestScope:           {operation: "ReplicatorDeleteDestination"},
+		ReplicatorDeleteRmtDestScope:        {operation: "ReplicatorDeleteRemoteDestination"},
+		ReplicatorCreateCgUUIDScope:         {operation: "ReplicatorCreateConsumerGroupUUID"},
+		ReplicatorCreateRmtCgUUIDScope:      {operation: "ReplicatorCreateRemoteConsumerGroupUUID"},
+		ReplicatorUpdateCgScope:             {operation: "ReplicatorUpdateConsumerGroup"},
+		ReplicatorUpdateRmtCgScope:          {operation: "ReplicatorUpdateRemoteConsumerGroup"},
+		ReplicatorDeleteCgScope:             {operation: "ReplicatorDeleteConsumerGroup"},
+		ReplicatorDeleteRmtCgScope:          {operation: "ReplicatorDeleteRemoteConsumerGroup"},
+		ReplicatorCreateExtentScope:         {operation: "ReplicatorCreateExtent"},
+		ReplicatorCreateRmtExtentScope:      {operation: "ReplicatorCreateRemoteExtent"},
+		ReplicatorCreateCgExtentScope:       {operation: "ReplicatorCreateConsumerGroupExtent"},
+		ReplicatorCreateRmtCgExtentScope:    {operation: "ReplicatorCreateRemoteConsumerGroupExtent"},
+		ReplicatorSetAckOffsetScope:         {operation: "SetAckOffset"},
+		ReplicatorSetAckOffsetInRemoteScope: {operation: "SetAckOffsetInRemote"},
+		ReplicatorReconcileScope:            {operation: "ReplicatorReconcile"},
 	},
 
 	// Controller operation tag values as seen by the Metrics backend
@@ -614,6 +628,7 @@ var scopeDefs = map[ServiceIdx]map[int]scopeDefinition{
 		ControllerUpdateConsumerGroupScope:       {operation: "UpdateConsumerGroup"},
 		ControllerDeleteConsumerGroupScope:       {operation: "DeleteConsumerGroup"},
 		ControllerCreateRemoteZoneExtentScope:    {operation: "CreateRemoteZoneExtent"},
+		ControllerCreateRemoteZoneCgExtentScope:  {operation: "CreateRemoteZoneConsumerGroupExtent"},
 	},
 }
 
@@ -1042,6 +1057,16 @@ const (
 	ReplicatorReconcileDestExtentRemoteDeletedLocalNot
 	// ReplicatorReconcileDestExtentSuspectMissingExtents indicates the length of the suspect missing extent list
 	ReplicatorReconcileDestExtentSuspectMissingExtents
+	// ReplicatorReconcileCgExtentRun indicates the reconcile for cg extent runs
+	ReplicatorReconcileCgExtentRun
+	// ReplicatorReconcileCgExtentFail indicates the reconcile for cg extent fails
+	ReplicatorReconcileCgExtentFail
+	// ReplicatorReconcileCgExtentFoundMissing indicates the reconcile for cg extent found a missing cg extent
+	ReplicatorReconcileCgExtentFoundMissing
+	// ReplicatorReconcileCgExtentRemoteConsumedLocalMissing indicates the reconcile for cg extent found a cg extent that is consumed on remote side and local is missing
+	ReplicatorReconcileCgExtentRemoteConsumedLocalMissing
+	// ReplicatorReconcileCgExtentRemoteDeletedLocalMissing indicates the reconcile for cg extent found a cg extent that is deleted on remote side and local is missing
+	ReplicatorReconcileCgExtentRemoteDeletedLocalMissing
 
 	numMetrics
 )
@@ -1212,6 +1237,11 @@ var metricDefs = map[ServiceIdx]map[int]metricDefinition{
 		ReplicatorReconcileDestExtentRemoteDeletedLocalMissing:  {Gauge, "replicator.reconcile.destextent.remote-deleted-local-missing"},
 		ReplicatorReconcileDestExtentRemoteDeletedLocalNot:      {Gauge, "replicator.reconcile.destextent.remote-deleted-local-not"},
 		ReplicatorReconcileDestExtentSuspectMissingExtents:      {Gauge, "replicator.reconcile.destextent.suspect-missing-extent"},
+		ReplicatorReconcileCgExtentRun:                          {Gauge, "replicator.reconcile.cgextent.run"},
+		ReplicatorReconcileCgExtentFail:                         {Gauge, "replicator.reconcile.cgextent.fail"},
+		ReplicatorReconcileCgExtentFoundMissing:                 {Gauge, "replicator.reconcile.cgextent.foundmissing"},
+		ReplicatorReconcileCgExtentRemoteConsumedLocalMissing:   {Gauge, "replicator.reconcile.cgextent.remote-consumed-local-missing"},
+		ReplicatorReconcileCgExtentRemoteDeletedLocalMissing:    {Gauge, "replicator.reconcile.cgextent.remote-deleted-local-missing"},
 	},
 }
 

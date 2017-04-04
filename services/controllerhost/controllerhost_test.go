@@ -431,7 +431,7 @@ func (s *McpSuite) TestGetOutputHostsMaxOpenExtentsLimit() {
 
 		// assert that we don't assign more than maxExtents
 		// extents to the consumer group at any given point of time
-		cge, err := s.mClient.ReadConsumerGroupExtents(nil, &m.ReadConsumerGroupExtentsRequest{DestinationUUID: common.StringPtr(dstUUID), ConsumerGroupUUID: common.StringPtr(cgUUID), MaxResults: common.Int32Ptr(100)})
+		cge, err := s.mClient.ReadConsumerGroupExtents(nil, &shared.ReadConsumerGroupExtentsRequest{DestinationUUID: common.StringPtr(dstUUID), ConsumerGroupUUID: common.StringPtr(cgUUID), MaxResults: common.Int32Ptr(100)})
 		s.Nil(err, "Failed to find consumer group extent entry for outputhost")
 		if dstType == shared.DestinationType_TIMER {
 			s.Equal(maxExtents, len(cge.GetExtents()), "Wrong number of extents for consumer group dst=%v", path)
@@ -509,7 +509,7 @@ func (s *McpSuite) TestGetOutputHosts() {
 	s.Nil(err, "GetOutputHosts() returned invalid host")
 
 	cge, err := s.mClient.ReadConsumerGroupExtents(nil,
-		&m.ReadConsumerGroupExtentsRequest{DestinationUUID: common.StringPtr(dstUUID), ConsumerGroupUUID: common.StringPtr(cgUUID), OutputHostUUID: common.StringPtr(outputHost.UUID), MaxResults: common.Int32Ptr(10)})
+		&shared.ReadConsumerGroupExtentsRequest{DestinationUUID: common.StringPtr(dstUUID), ConsumerGroupUUID: common.StringPtr(cgUUID), OutputHostUUID: common.StringPtr(outputHost.UUID), MaxResults: common.Int32Ptr(10)})
 	s.Nil(err, "Failed to find consumer group extent entry for outputhost")
 	s.Equal(1, len(cge.GetExtents()), "GetOutputHosts() auto-created more than one extent")
 
@@ -529,11 +529,11 @@ func (s *McpSuite) TestGetOutputHosts() {
 
 	// mark the cge as consumed and make sure a new extent
 	// gets created
-	mReq := &m.SetAckOffsetRequest{
+	mReq := &shared.SetAckOffsetRequest{
 		ConsumerGroupUUID:  common.StringPtr(cgUUID),
 		ExtentUUID:         common.StringPtr(extentUUID),
 		OutputHostUUID:     common.StringPtr(outputHost.UUID),
-		Status:             common.MetadataConsumerGroupExtentStatusPtr(m.ConsumerGroupExtentStatus_CONSUMED),
+		Status:             common.MetadataConsumerGroupExtentStatusPtr(shared.ConsumerGroupExtentStatus_CONSUMED),
 		ConnectedStoreUUID: common.StringPtr(uuid.New()),
 	}
 	err = s.mClient.SetAckOffset(nil, mReq)
@@ -544,7 +544,7 @@ func (s *McpSuite) TestGetOutputHosts() {
 	s.Equal(1, len(resp.GetOutputHostIds()), "GetOutputHosts() returned more than one out host")
 
 	cge, err = s.mClient.ReadConsumerGroupExtents(nil,
-		&m.ReadConsumerGroupExtentsRequest{DestinationUUID: common.StringPtr(dstUUID), ConsumerGroupUUID: common.StringPtr(cgUUID), OutputHostUUID: common.StringPtr(outputHost.UUID), MaxResults: common.Int32Ptr(10)})
+		&shared.ReadConsumerGroupExtentsRequest{DestinationUUID: common.StringPtr(dstUUID), ConsumerGroupUUID: common.StringPtr(cgUUID), OutputHostUUID: common.StringPtr(outputHost.UUID), MaxResults: common.Int32Ptr(10)})
 	s.Nil(err, "Failed to find consumer group extent entry for outputhost")
 	s.Equal(2, len(cge.GetExtents()), "Wrong number of extents for consumer group")
 	for _, cge := range cge.Extents {
@@ -566,7 +566,7 @@ func (s *McpSuite) TestGetOutputHosts() {
 	resp, err = s.mcp.GetOutputHosts(nil, &c.GetOutputHostsRequest{DestinationUUID: common.StringPtr(dstUUID), ConsumerGroupUUID: common.StringPtr(cgUUID)})
 	s.Nil(err, "GetOutputHosts() failed")
 
-	cge, err = s.mClient.ReadConsumerGroupExtents(nil, &m.ReadConsumerGroupExtentsRequest{DestinationUUID: common.StringPtr(dstUUID), ConsumerGroupUUID: common.StringPtr(cgUUID), MaxResults: common.Int32Ptr(10)})
+	cge, err = s.mClient.ReadConsumerGroupExtents(nil, &shared.ReadConsumerGroupExtentsRequest{DestinationUUID: common.StringPtr(dstUUID), ConsumerGroupUUID: common.StringPtr(cgUUID), MaxResults: common.Int32Ptr(10)})
 	s.Nil(err, "Failed to find consumer group extent entry for outputhost")
 	s.Equal(3, len(cge.GetExtents()), "Wrong number of extents for consumer group")
 
@@ -597,7 +597,7 @@ func (s *McpSuite) TestGetOutputHosts() {
 
 	s.Nil(err, "GetOutputHosts() failed")
 
-	cge, err = s.mClient.ReadConsumerGroupExtents(nil, &m.ReadConsumerGroupExtentsRequest{DestinationUUID: common.StringPtr(dstUUID), ConsumerGroupUUID: common.StringPtr(cgUUID), MaxResults: common.Int32Ptr(10)})
+	cge, err = s.mClient.ReadConsumerGroupExtents(nil, &shared.ReadConsumerGroupExtentsRequest{DestinationUUID: common.StringPtr(dstUUID), ConsumerGroupUUID: common.StringPtr(cgUUID), MaxResults: common.Int32Ptr(10)})
 	s.Nil(err, "Failed to find consumer group extent entry for outputhost")
 	s.Equal(3, len(cge.GetExtents()), "Wrong number of extents for consumer group")
 
@@ -605,7 +605,7 @@ func (s *McpSuite) TestGetOutputHosts() {
 		_, ok := extents[e.GetExtentUUID()]
 		s.True(ok, "Unknown extent for consumer group")
 		ok = false
-		if e.GetStatus() != m.ConsumerGroupExtentStatus_OPEN {
+		if e.GetStatus() != shared.ConsumerGroupExtentStatus_OPEN {
 			continue
 		}
 		for _, h := range resp.GetOutputHostIds() {
@@ -744,7 +744,7 @@ func (s *McpSuite) TestCreateConsumerGroup() {
 	s.NotNil(cgDesc)
 
 	// verify local operation
-	cgDesc, err = s.mClient.ReadConsumerGroup(nil, &m.ReadConsumerGroupRequest{
+	cgDesc, err = s.mClient.ReadConsumerGroup(nil, &shared.ReadConsumerGroupRequest{
 		DestinationPath:   common.StringPtr(destPath),
 		ConsumerGroupName: common.StringPtr(cgName),
 	})
@@ -782,7 +782,7 @@ func (s *McpSuite) TestUpdateConsumerGroup() {
 	s.NotNil(cgDesc)
 
 	// verify local operation
-	cgDesc, err = s.mClient.ReadConsumerGroup(nil, &m.ReadConsumerGroupRequest{
+	cgDesc, err = s.mClient.ReadConsumerGroup(nil, &shared.ReadConsumerGroupRequest{
 		DestinationPath:   common.StringPtr(destPath),
 		ConsumerGroupName: common.StringPtr(cgName),
 	})
@@ -816,7 +816,7 @@ func (s *McpSuite) TestDeleteConsumerGroup() {
 	s.NoError(err)
 
 	// verify local operation
-	cgDesc, err := s.mClient.ReadConsumerGroup(nil, &m.ReadConsumerGroupRequest{
+	cgDesc, err := s.mClient.ReadConsumerGroup(nil, &shared.ReadConsumerGroupRequest{
 		DestinationPath:   common.StringPtr(destPath),
 		ConsumerGroupName: common.StringPtr(cgName),
 	})
@@ -865,6 +865,47 @@ func (s *McpSuite) TestCreateRemoteZoneExtent() {
 		}
 	}
 	s.True(primaryValid)
+}
+
+func (s *McpSuite) TestCreateRemoteZoneCgExtent() {
+	destUUID := uuid.New()
+	extentUUID := uuid.New()
+	cgUUID := uuid.New()
+	originZone := `zone1`
+
+	createExtentReq := &shared.CreateExtentRequest{
+		Extent: &shared.Extent{
+			DestinationUUID: common.StringPtr(destUUID),
+			ExtentUUID:      common.StringPtr(extentUUID),
+			OriginZone:      common.StringPtr(originZone),
+		},
+	}
+	// issue create extent request
+	res, err := s.mcp.CreateRemoteZoneExtent(nil, createExtentReq)
+	s.NoError(err)
+	s.NotNil(res)
+
+	createCgExtentReq := &shared.CreateConsumerGroupExtentRequest{
+		DestinationUUID:   common.StringPtr(destUUID),
+		ConsumerGroupUUID: common.StringPtr(cgUUID),
+		ExtentUUID:        common.StringPtr(extentUUID),
+	}
+	// issue create cg extent request
+	err = s.mcp.CreateRemoteZoneConsumerGroupExtent(nil, createCgExtentReq)
+	s.NoError(err)
+
+	// verify local operation
+	cgExtent, err := s.mClient.ReadConsumerGroupExtent(nil, &m.ReadConsumerGroupExtentRequest{
+		DestinationUUID:   common.StringPtr(destUUID),
+		ConsumerGroupUUID: common.StringPtr(cgUUID),
+		ExtentUUID:        common.StringPtr(extentUUID),
+	})
+	s.NoError(err)
+	s.NotNil(cgExtent)
+	s.Equal(extentUUID, cgExtent.GetExtent().GetExtentUUID())
+	s.Equal(cgUUID, cgExtent.GetExtent().GetConsumerGroupUUID())
+	s.True(cgExtent.GetExtent().IsSetOutputHostUUID())
+	s.Equal(shared.ConsumerGroupExtentStatus_OPEN, cgExtent.GetExtent().GetStatus())
 }
 
 func (s *McpSuite) TestGetDstType() {

@@ -143,7 +143,7 @@ type extentCache struct {
 // metrics are reported to the controller
 const extentLoadReportingInterval = 2 * time.Second
 
-func (extCache *extentCache) load(outputHostUUID string, cgUUID string, metaClient metadata.TChanMetadataService, cge *metadata.ConsumerGroupExtent) (err error) {
+func (extCache *extentCache) load(outputHostUUID string, cgUUID string, metaClient metadata.TChanMetadataService, cge *shared.ConsumerGroupExtent) (err error) {
 	// it is ok to take the local lock for this extent which will not affect
 	// others
 	extCache.cacheMutex.Lock()

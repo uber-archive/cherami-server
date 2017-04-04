@@ -288,11 +288,11 @@ func (_m *TChanMetadataExposable) ListStoreExtentsStats(ctx thrift.Context, requ
 }
 
 // ReadConsumerGroup provides a mock function with given fields: ctx, getRequest
-func (_m *TChanMetadataExposable) ReadConsumerGroup(ctx thrift.Context, getRequest *metadata.ReadConsumerGroupRequest) (*shared.ConsumerGroupDescription, error) {
+func (_m *TChanMetadataExposable) ReadConsumerGroup(ctx thrift.Context, getRequest *shared.ReadConsumerGroupRequest) (*shared.ConsumerGroupDescription, error) {
 	ret := _m.Called(ctx, getRequest)
 
 	var r0 *shared.ConsumerGroupDescription
-	if rf, ok := ret.Get(0).(func(thrift.Context, *metadata.ReadConsumerGroupRequest) *shared.ConsumerGroupDescription); ok {
+	if rf, ok := ret.Get(0).(func(thrift.Context, *shared.ReadConsumerGroupRequest) *shared.ConsumerGroupDescription); ok {
 		r0 = rf(ctx, getRequest)
 	} else {
 		if ret.Get(0) != nil {
@@ -301,7 +301,7 @@ func (_m *TChanMetadataExposable) ReadConsumerGroup(ctx thrift.Context, getReque
 	}
 
 	var r1 error
-	if rf, ok := ret.Get(1).(func(thrift.Context, *metadata.ReadConsumerGroupRequest) error); ok {
+	if rf, ok := ret.Get(1).(func(thrift.Context, *shared.ReadConsumerGroupRequest) error); ok {
 		r1 = rf(ctx, getRequest)
 	} else {
 		r1 = ret.Error(1)
@@ -311,11 +311,11 @@ func (_m *TChanMetadataExposable) ReadConsumerGroup(ctx thrift.Context, getReque
 }
 
 // ReadConsumerGroupByUUID provides a mock function with given fields: ctx, request
-func (_m *TChanMetadataExposable) ReadConsumerGroupByUUID(ctx thrift.Context, request *metadata.ReadConsumerGroupRequest) (*shared.ConsumerGroupDescription, error) {
+func (_m *TChanMetadataExposable) ReadConsumerGroupByUUID(ctx thrift.Context, request *shared.ReadConsumerGroupRequest) (*shared.ConsumerGroupDescription, error) {
 	ret := _m.Called(ctx, request)
 
 	var r0 *shared.ConsumerGroupDescription
-	if rf, ok := ret.Get(0).(func(thrift.Context, *metadata.ReadConsumerGroupRequest) *shared.ConsumerGroupDescription); ok {
+	if rf, ok := ret.Get(0).(func(thrift.Context, *shared.ReadConsumerGroupRequest) *shared.ConsumerGroupDescription); ok {
 		r0 = rf(ctx, request)
 	} else {
 		if ret.Get(0) != nil {
@@ -324,7 +324,7 @@ func (_m *TChanMetadataExposable) ReadConsumerGroupByUUID(ctx thrift.Context, re
 	}
 
 	var r1 error
-	if rf, ok := ret.Get(1).(func(thrift.Context, *metadata.ReadConsumerGroupRequest) error); ok {
+	if rf, ok := ret.Get(1).(func(thrift.Context, *shared.ReadConsumerGroupRequest) error); ok {
 		r1 = rf(ctx, request)
 	} else {
 		r1 = ret.Error(1)
@@ -357,20 +357,20 @@ func (_m *TChanMetadataExposable) ReadConsumerGroupExtent(ctx thrift.Context, re
 }
 
 // ReadConsumerGroupExtents provides a mock function with given fields: ctx, request
-func (_m *TChanMetadataExposable) ReadConsumerGroupExtents(ctx thrift.Context, request *metadata.ReadConsumerGroupExtentsRequest) (*metadata.ReadConsumerGroupExtentsResult_, error) {
+func (_m *TChanMetadataExposable) ReadConsumerGroupExtents(ctx thrift.Context, request *shared.ReadConsumerGroupExtentsRequest) (*shared.ReadConsumerGroupExtentsResult_, error) {
 	ret := _m.Called(ctx, request)
 
-	var r0 *metadata.ReadConsumerGroupExtentsResult_
-	if rf, ok := ret.Get(0).(func(thrift.Context, *metadata.ReadConsumerGroupExtentsRequest) *metadata.ReadConsumerGroupExtentsResult_); ok {
+	var r0 *shared.ReadConsumerGroupExtentsResult_
+	if rf, ok := ret.Get(0).(func(thrift.Context, *shared.ReadConsumerGroupExtentsRequest) *shared.ReadConsumerGroupExtentsResult_); ok {
 		r0 = rf(ctx, request)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(*metadata.ReadConsumerGroupExtentsResult_)
+			r0 = ret.Get(0).(*shared.ReadConsumerGroupExtentsResult_)
 		}
 	}
 
 	var r1 error
-	if rf, ok := ret.Get(1).(func(thrift.Context, *metadata.ReadConsumerGroupExtentsRequest) error); ok {
+	if rf, ok := ret.Get(1).(func(thrift.Context, *shared.ReadConsumerGroupExtentsRequest) error); ok {
 		r1 = rf(ctx, request)
 	} else {
 		r1 = ret.Error(1)

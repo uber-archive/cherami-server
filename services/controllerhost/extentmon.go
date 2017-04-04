@@ -105,7 +105,7 @@ const maxExtentStates = int(shared.ExtentStatus_DELETED) + 1
 
 // maxCGExtentStates gives the maximum number of unique states
 // that a consumer group extent can be during its lifetime
-const maxCGExtentStates = int(metadata.ConsumerGroupExtentStatus_DELETED) + 1
+const maxCGExtentStates = int(shared.ConsumerGroupExtentStatus_DELETED) + 1
 
 // newExtentStateMonitor creates and returns a new instance
 // of extentStateMonitor. extentStateMonitor is a background
@@ -356,12 +356,12 @@ func (monitor *extentStateMonitor) iterateConsumerGroupExtents(dstDesc *shared.D
 
 	dstID := dstDesc.GetDestinationUUID()
 	cgID := cgDesc.GetConsumerGroupUUID()
-	for _, status := range []metadata.ConsumerGroupExtentStatus{
-		metadata.ConsumerGroupExtentStatus_OPEN,
-		metadata.ConsumerGroupExtentStatus_CONSUMED,
+	for _, status := range []shared.ConsumerGroupExtentStatus{
+		shared.ConsumerGroupExtentStatus_OPEN,
+		shared.ConsumerGroupExtentStatus_CONSUMED,
 	} {
 
-		filterBy := []metadata.ConsumerGroupExtentStatus{status}
+		filterBy := []shared.ConsumerGroupExtentStatus{status}
 		extents, err := monitor.context.mm.ListExtentsByConsumerGroup(dstID, cgID, filterBy)
 		if err != nil {
 			monitor.ll.WithFields(bark.Fields{
@@ -375,7 +375,7 @@ func (monitor *extentStateMonitor) iterateConsumerGroupExtents(dstDesc *shared.D
 
 	nextExtent:
 		for _, ext := range extents {
-			if ext.GetStatus() == metadata.ConsumerGroupExtentStatus_DELETED {
+			if ext.GetStatus() == shared.ConsumerGroupExtentStatus_DELETED {
 				continue nextExtent
 			}
 			monitor.mi.publishEvent(eCnsmExtent, ext)
@@ -438,7 +438,7 @@ func (monitor *extentStateMonitor) deleteConsumerGroup(dstDesc *shared.Destinati
 	dstID := dstDesc.GetDestinationUUID()
 	cgID := cgDesc.GetConsumerGroupUUID()
 
-	filterBy := []metadata.ConsumerGroupExtentStatus{metadata.ConsumerGroupExtentStatus_OPEN}
+	filterBy := []shared.ConsumerGroupExtentStatus{shared.ConsumerGroupExtentStatus_OPEN}
 	extents, e := context.mm.ListExtentsByConsumerGroupLite(dstID, cgID, filterBy)
 	if e != nil {
 		monitor.ll.WithFields(bark.Fields{
@@ -483,7 +483,7 @@ func (monitor *extentStateMonitor) deleteConsumerGroup(dstDesc *shared.Destinati
 
 	outputHosts := make(map[string]struct{}, 4)
 	for _, ext := range extents {
-		if ext.GetStatus() != metadata.ConsumerGroupExtentStatus_OPEN {
+		if ext.GetStatus() != shared.ConsumerGroupExtentStatus_OPEN {
 			continue
 		}
 		outputHosts[ext.GetOutputHostUUID()] = struct{}{}
@@ -699,8 +699,8 @@ func (monitor *extentStateMonitor) emitLoopStats() {
 	m3Client.AddCounter(metrics.ExtentMonitorScope, metrics.ControllerNumOpenDLQExtents, stats.nDLQExtentsByStatus[int(shared.ExtentStatus_OPEN)])
 	m3Client.AddCounter(metrics.ExtentMonitorScope, metrics.ControllerNumSealedDLQExtents, stats.nDLQExtentsByStatus[int(shared.ExtentStatus_SEALED)])
 	m3Client.AddCounter(metrics.ExtentMonitorScope, metrics.ControllerNumConsumedDLQExtents, stats.nDLQExtentsByStatus[int(shared.ExtentStatus_CONSUMED)])
-	m3Client.AddCounter(metrics.ExtentMonitorScope, metrics.ControllerNumOpenCGExtents, stats.nCGExtentsByStatus[int(metadata.ConsumerGroupExtentStatus_OPEN)])
-	m3Client.AddCounter(metrics.ExtentMonitorScope, metrics.ControllerNumConsumedCGExtents, stats.nCGExtentsByStatus[int(metadata.ConsumerGroupExtentStatus_CONSUMED)])
+	m3Client.AddCounter(metrics.ExtentMonitorScope, metrics.ControllerNumOpenCGExtents, stats.nCGExtentsByStatus[int(shared.ConsumerGroupExtentStatus_OPEN)])
+	m3Client.AddCounter(metrics.ExtentMonitorScope, metrics.ControllerNumConsumedCGExtents, stats.nCGExtentsByStatus[int(shared.ConsumerGroupExtentStatus_CONSUMED)])
 }
 
 func (monitor *extentStateMonitor) isShutdown() bool {

@@ -727,7 +727,7 @@ func ReadDlq(c *cli.Context, mClient mcli.Client) {
 		ExitIfError(errors.New("no dlqConsumerGroupUUID for this destination. Please ensure it is a dlq destination"))
 	}
 
-	req := &metadata.ReadConsumerGroupRequest{
+	req := &shared.ReadConsumerGroupRequest{
 		ConsumerGroupUUID: &cgUUID,
 	}
 
@@ -838,7 +838,7 @@ func ReadConsumerGroup(c *cli.Context, mClient mcli.Client) {
 		path := c.Args()[0]
 		name := c.Args()[1]
 
-		cgDesc, err := mClient.ReadConsumerGroup(&metadata.ReadConsumerGroupRequest{
+		cgDesc, err := mClient.ReadConsumerGroup(&shared.ReadConsumerGroupRequest{
 			DestinationPath:   &path,
 			ConsumerGroupName: &name,
 		})
@@ -850,7 +850,7 @@ func ReadConsumerGroup(c *cli.Context, mClient mcli.Client) {
 	if len(c.Args()) == 1 {
 		cgUUID := c.Args()[0]
 
-		cgDesc, err := mClient.ReadConsumerGroupByUUID(&metadata.ReadConsumerGroupRequest{
+		cgDesc, err := mClient.ReadConsumerGroupByUUID(&shared.ReadConsumerGroupRequest{
 			ConsumerGroupUUID: common.StringPtr(cgUUID)})
 		ExitIfError(err)
 		printCG(cgDesc)

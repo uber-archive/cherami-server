@@ -1074,7 +1074,7 @@ func (mcp *Mcp) DeleteConsumerGroup(ctx thrift.Context, deleteRequest *shared.De
 		common.TagCnsPth: common.FmtCnsPth(deleteRequest.GetConsumerGroupName()),
 	})
 
-	readCGReq := &m.ReadConsumerGroupRequest{
+	readCGReq := &shared.ReadConsumerGroupRequest{
 		DestinationPath:   deleteRequest.DestinationPath,
 		DestinationUUID:   deleteRequest.DestinationUUID,
 		ConsumerGroupName: deleteRequest.ConsumerGroupName,
@@ -1174,4 +1174,60 @@ func (mcp *Mcp) CreateRemoteZoneExtent(ctx thrift.Context, createRequest *shared
 
 	lclLg.Info("Remote Zone Extent Created")
 	return res, nil
+}
+
+// CreateRemoteZoneConsumerGroupExtent creates an cg extent that originates from another zone
+func (mcp *Mcp) CreateRemoteZoneConsumerGroupExtent(ctx thrift.Context, createRequest *shared.CreateConsumerGroupExtentRequest) error {
+	if !mcp.isStarted() {
+		// this can happen because we listen on the tchannel
+		// endpoint before the context gets completely built
+		return &shared.InternalServiceError{Message: "Controller not started"}
+	}
+
+	context := mcp.context
+	context.m3Client.IncCounter(metrics.ControllerCreateRemoteZoneCgExtentScope, metrics.ControllerRequests)
+	sw := context.m3Client.StartTimer(metrics.ControllerCreateRemoteZoneCgExtentScope, metrics.ControllerLatencyTimer)
+	defer sw.Stop()
+
+	lclLg := context.log.WithFields(bark.Fields{
+		common.TagDst:  common.FmtDst(createRequest.GetDestinationUUID()),
+		common.TagCnsm: common.FmtCnsm(createRequest.GetConsumerGroupUUID()),
+		common.TagExt:  common.FmtExt(createRequest.GetExtentUUID()),
+	})
+
+	destExt, err := context.mm.ReadExtentStats(createRequest.GetDestinationUUID(), createRequest.GetExtentUUID())
+	if err != nil {
+		lclLg.WithField(common.TagErr, err).Error("CreateRemoteZoneConsumerGroupExtent: metadata ReadExtentStats failed")
+		context.m3Client.IncCounter(metrics.ControllerCreateRemoteZoneCgExtentScope, metrics.ControllerErrMetadataReadCounter)
+		return err
+	}
+	if !(destExt.GetStatus() == shared.ExtentStatus_OPEN) && !(destExt.GetStatus() == shared.ExtentStatus_SEALED) {
+		lclLg.WithField(common.TagErr, err).Error("CreateRemoteZoneConsumerGroupExtent: dest extent is neither open nor sealed")
+		context.m3Client.IncCounter(metrics.ControllerCreateRemoteZoneCgExtentScope, metrics.ControllerErrMetadataReadCounter)
+		return err
+	}
+
+	outhost, err := pickOutputHostForStoreHosts(context, destExt.GetExtent().GetStoreUUIDs())
+	if err != nil {
+		lclLg.WithField(common.TagErr, err).Error("CreateRemoteZoneConsumerGroupExtent: Failed to pick outhost for extent")
+		context.m3Client.IncCounter(metrics.ControllerCreateRemoteZoneCgExtentScope, metrics.ControllerErrPickOutHostCounter)
+		return err
+	}
+
+	err = context.mm.AddExtentToConsumerGroup(createRequest.GetDestinationUUID(), createRequest.GetConsumerGroupUUID(),
+		createRequest.GetExtentUUID(), outhost.UUID, destExt.GetExtent().GetStoreUUIDs())
+	if err != nil {
+		lclLg.WithField(common.TagErr, err).Warn("Failed to add cg extent to consumer group")
+		context.m3Client.IncCounter(metrics.ControllerCreateRemoteZoneCgExtentScope, metrics.ControllerErrMetadataUpdateCounter)
+		return err
+	}
+
+	// Schedule an async notification to outhost to
+	// load the newly created extent
+	event := NewConsGroupUpdatedEvent(createRequest.GetDestinationUUID(), createRequest.GetConsumerGroupUUID(),
+		createRequest.GetExtentUUID(), outhost.UUID)
+	context.eventPipeline.Add(event)
+
+	lclLg.Info("CreateRemoteZoneConsumerGroupExtent: Extent added to consumer group")
+	return nil
 }

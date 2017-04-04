@@ -820,6 +820,184 @@ func (s *ReplicatorSuite) TestCreateRemoteExtentFailure() {
 	mockReplicator.AssertExpectations(s.T())
 }
 
+func (s *ReplicatorSuite) TestCreateCgExtentSuccess() {
+	repliator, _ := NewReplicator("replicator-test", s.mockService, s.mockMeta, s.mockReplicatorClientFactory, s.cfg)
+	destUUID := uuid.New()
+	extentUUID := uuid.New()
+	cgUUID := uuid.New()
+	req := &shared.CreateConsumerGroupExtentRequest{
+		DestinationUUID:   common.StringPtr(destUUID),
+		ConsumerGroupUUID: common.StringPtr(cgUUID),
+		ExtentUUID:        common.StringPtr(extentUUID),
+	}
+
+	s.mockControllerClient.On("CreateRemoteZoneConsumerGroupExtent", mock.Anything, mock.Anything).Return(nil).Run(func(args mock.Arguments) {
+		createReq := args.Get(1).(*shared.CreateConsumerGroupExtentRequest)
+		s.Equal(req.GetDestinationUUID(), createReq.GetDestinationUUID())
+		s.Equal(req.GetExtentUUID(), createReq.GetExtentUUID())
+		s.Equal(req.GetConsumerGroupUUID(), createReq.GetConsumerGroupUUID())
+	})
+	err := repliator.CreateConsumerGroupExtent(nil, req)
+	s.NoError(err)
+	s.mockMeta.AssertExpectations(s.T())
+}
+
+func (s *ReplicatorSuite) TestCreateRemoteConsumerGroupExtentBadRequests() {
+	repliator, _ := NewReplicator("replicator-test", s.mockService, s.mockMeta, s.mockReplicatorClientFactory, s.cfg)
+	destUUID := uuid.New()
+	extentUUID := uuid.New()
+	cgUUID := uuid.New()
+
+	err := repliator.CreateRemoteConsumerGroupExtent(nil, shared.NewCreateConsumerGroupExtentRequest())
+	s.Error(err)
+	assert.IsType(s.T(), &shared.BadRequestError{}, err)
+
+	// No cg uuid
+	err = repliator.CreateRemoteConsumerGroupExtent(nil, &shared.CreateConsumerGroupExtentRequest{
+		ExtentUUID:      common.StringPtr(extentUUID),
+		DestinationUUID: common.StringPtr(destUUID),
+	})
+	s.Error(err)
+	assert.IsType(s.T(), &shared.BadRequestError{}, err)
+
+	singleZoneCg := &shared.ConsumerGroupDescription{
+		IsMultiZone: common.BoolPtr(false),
+	}
+	s.mockMeta.On("ReadConsumerGroup", mock.Anything, mock.Anything).Return(singleZoneCg, nil)
+	err = repliator.CreateRemoteConsumerGroupExtent(nil, &shared.CreateConsumerGroupExtentRequest{
+		ExtentUUID:        common.StringPtr(extentUUID),
+		DestinationUUID:   common.StringPtr(destUUID),
+		ConsumerGroupUUID: common.StringPtr(cgUUID),
+	})
+	s.Error(err)
+	assert.IsType(s.T(), &shared.BadRequestError{}, err)
+
+	noConfigZoneCg := &shared.ConsumerGroupDescription{
+		IsMultiZone: common.BoolPtr(true),
+		ZoneConfigs: []*shared.ConsumerGroupZoneConfig{},
+	}
+	s.mockMeta.On("ReadConsumerGroup", mock.Anything, mock.Anything).Return(noConfigZoneCg, nil)
+	err = repliator.CreateRemoteConsumerGroupExtent(nil, &shared.CreateConsumerGroupExtentRequest{
+		ExtentUUID:        common.StringPtr(extentUUID),
+		DestinationUUID:   common.StringPtr(destUUID),
+		ConsumerGroupUUID: common.StringPtr(cgUUID),
+	})
+	s.Error(err)
+	assert.IsType(s.T(), &shared.BadRequestError{}, err)
+}
+
+func (s *ReplicatorSuite) TestCreateRemoteConsumerGroupExtentSuccess() {
+	repliator, _ := NewReplicator("replicator-test", s.mockService, s.mockMeta, s.mockReplicatorClientFactory, s.cfg)
+	destUUID := uuid.New()
+	extentUUID := uuid.New()
+	cgUUID := uuid.New()
+	remoteZone := `zone2`
+
+	// setup mock
+	mockReplicator := new(mockreplicator.MockTChanReplicator)
+	mockReplicator.On("CreateConsumerGroupExtent", mock.Anything, mock.Anything).Return(nil).Run(func(args mock.Arguments) {
+		req := args.Get(1).(*shared.CreateConsumerGroupExtentRequest)
+		s.Equal(destUUID, req.GetDestinationUUID())
+		s.Equal(extentUUID, req.GetExtentUUID())
+		s.Equal(cgUUID, req.GetConsumerGroupUUID())
+	})
+	s.mockReplicatorClientFactory.On("GetReplicatorClient", mock.Anything).Return(mockReplicator, nil)
+
+	err := repliator.createCgExtentRemoteCall(remoteZone, repliator.logger, &shared.CreateConsumerGroupExtentRequest{
+		ExtentUUID:        common.StringPtr(extentUUID),
+		DestinationUUID:   common.StringPtr(destUUID),
+		ConsumerGroupUUID: common.StringPtr(cgUUID),
+	})
+	s.NoError(err)
+	s.mockReplicatorClientFactory.AssertExpectations(s.T())
+	mockReplicator.AssertExpectations(s.T())
+}
+
+func (s *ReplicatorSuite) TestCreateRemoteConsumerGroupExtentFailure() {
+	repliator, _ := NewReplicator("replicator-test", s.mockService, s.mockMeta, s.mockReplicatorClientFactory, s.cfg)
+	destUUID := uuid.New()
+	extentUUID := uuid.New()
+	cgUUID := uuid.New()
+	remoteZone := `zone2`
+
+	// setup mock
+	mockReplicator := new(mockreplicator.MockTChanReplicator)
+	mockReplicator.On("CreateConsumerGroupExtent", mock.Anything, mock.Anything).Return(&shared.BadRequestError{Message: "test2"})
+	s.mockReplicatorClientFactory.On("GetReplicatorClient", mock.Anything).Return(mockReplicator, nil)
+
+	err := repliator.createCgExtentRemoteCall(remoteZone, repliator.logger, &shared.CreateConsumerGroupExtentRequest{
+		ExtentUUID:        common.StringPtr(extentUUID),
+		DestinationUUID:   common.StringPtr(destUUID),
+		ConsumerGroupUUID: common.StringPtr(cgUUID),
+	})
+	s.Error(err)
+	s.mockReplicatorClientFactory.AssertExpectations(s.T())
+	mockReplicator.AssertExpectations(s.T())
+}
+
+func (s *ReplicatorSuite) TestSetAckOffset() {
+	repliator, _ := NewReplicator("replicator-test", s.mockService, s.mockMeta, s.mockReplicatorClientFactory, s.cfg)
+	extentUUID := uuid.New()
+	ackLevel := int64(20)
+	req := &shared.SetAckOffsetRequest{
+		ExtentUUID:      common.StringPtr(extentUUID),
+		AckLevelAddress: common.Int64Ptr(ackLevel),
+	}
+
+	s.mockMeta.On("SetAckOffset", mock.Anything, mock.Anything).Return(nil).Run(func(args mock.Arguments) {
+		req := args.Get(1).(*shared.SetAckOffsetRequest)
+		s.Equal(extentUUID, req.GetExtentUUID())
+		s.Equal(ackLevel, req.GetAckLevelAddress())
+	})
+	err := repliator.SetAckOffset(nil, req)
+	s.NoError(err)
+	s.mockMeta.AssertExpectations(s.T())
+}
+
+func (s *ReplicatorSuite) TestRemoteSetAckOffsetFailed() {
+	repliator, _ := NewReplicator("replicator-test", s.mockService, s.mockMeta, s.mockReplicatorClientFactory, s.cfg)
+	extentUUID := uuid.New()
+	ackLevel := int64(20)
+	req := &shared.SetAckOffsetRequest{
+		ExtentUUID:      common.StringPtr(extentUUID),
+		AckLevelAddress: common.Int64Ptr(ackLevel),
+	}
+
+	// setup mock
+	mockReplicator := new(mockreplicator.MockTChanReplicator)
+	mockReplicator.On("SetAckOffset", mock.Anything, mock.Anything).Return(&shared.InternalServiceError{Message: "test2"})
+	s.mockReplicatorClientFactory.On("GetReplicatorClient", mock.Anything).Return(mockReplicator, nil)
+
+	err := repliator.setAckOffsetRemoteCall(`zone1`, repliator.logger, req)
+	s.Error(err)
+	s.mockReplicatorClientFactory.AssertExpectations(s.T())
+	mockReplicator.AssertExpectations(s.T())
+}
+
+func (s *ReplicatorSuite) TestRemoteSetAckOffsetSuccess() {
+	repliator, _ := NewReplicator("replicator-test", s.mockService, s.mockMeta, s.mockReplicatorClientFactory, s.cfg)
+	extentUUID := uuid.New()
+	ackLevel := int64(20)
+	req := &shared.SetAckOffsetRequest{
+		ExtentUUID:      common.StringPtr(extentUUID),
+		AckLevelAddress: common.Int64Ptr(ackLevel),
+	}
+
+	// setup mock
+	mockReplicator := new(mockreplicator.MockTChanReplicator)
+	mockReplicator.On("SetAckOffset", mock.Anything, mock.Anything).Return(nil).Run(func(args mock.Arguments) {
+		req := args.Get(1).(*shared.SetAckOffsetRequest)
+		s.Equal(extentUUID, req.GetExtentUUID())
+		s.Equal(ackLevel, req.GetAckLevelAddress())
+	})
+	s.mockReplicatorClientFactory.On("GetReplicatorClient", mock.Anything).Return(mockReplicator, nil)
+
+	err := repliator.setAckOffsetRemoteCall(`zone1`, repliator.logger, req)
+	s.NoError(err)
+	s.mockReplicatorClientFactory.AssertExpectations(s.T())
+	mockReplicator.AssertExpectations(s.T())
+}
+
 // local zone is missing one destination compared to remote. Expect to create the missing destination
 func (s *ReplicatorSuite) TestDestMetadataReconcileLocalMissing() {
 	localZone := `zone2`
@@ -1336,4 +1514,168 @@ func (s *ReplicatorSuite) TestDestExtentMetadataReconcileRemoteGoneLocalNot() {
 	s.mockMeta.AssertExpectations(s.T())
 	s.mockStoreClient.AssertExpectations(s.T())
 	s.Equal(0, len(reconciler.suspectMissingExtents))
+}
+
+// local zone is missing one consumer group extent compared to remote. Expect to create the missing consumer group extent
+func (s *ReplicatorSuite) TestCgExtentMetadataReconcileLocalMissing() {
+	localZone := `zone2`
+	remoteZone := `zone1`
+	missingExtent := uuid.New()
+	dest := uuid.New()
+	cg := uuid.New()
+
+	repliator, _ := NewReplicator("replicator-test", s.mockService, s.mockMeta, s.mockReplicatorClientFactory, s.cfg)
+	reconciler, _ := NewMetadataReconciler(repliator.metaClient, repliator, localZone, repliator.logger, repliator.m3Client).(*metadataReconciler)
+
+	// setup mock
+	s.mockControllerClient.On("CreateRemoteZoneConsumerGroupExtent", mock.Anything, mock.Anything).Return(nil).Run(func(args mock.Arguments) {
+		req := args.Get(1).(*shared.CreateConsumerGroupExtentRequest)
+		s.Equal(missingExtent, req.GetExtentUUID())
+		s.Equal(dest, req.GetDestinationUUID())
+		s.Equal(cg, req.GetConsumerGroupUUID())
+	})
+
+	localExtents := make(map[string]*shared.ConsumerGroupExtent)
+	remoteExtents := make(map[string]*shared.ConsumerGroupExtent)
+	remoteExtents[missingExtent] = &shared.ConsumerGroupExtent{
+		ExtentUUID:        common.StringPtr(missingExtent),
+		ConsumerGroupUUID: common.StringPtr(cg),
+	}
+	reconciler.reconcileCgExtent(dest, cg, localExtents, remoteExtents, remoteZone)
+	s.mockControllerClient.AssertExpectations(s.T())
+}
+
+// local zone is missing one consumer group extent compared to remote but remote is consumed. Expect no action
+func (s *ReplicatorSuite) TestCgExtentMetadataReconcileLocalMissingConsumedExtent() {
+	localZone := `zone2`
+	remoteZone := `zone1`
+	missingExtent := uuid.New()
+	dest := uuid.New()
+	cg := uuid.New()
+
+	repliator, _ := NewReplicator("replicator-test", s.mockService, s.mockMeta, s.mockReplicatorClientFactory, s.cfg)
+	reconciler, _ := NewMetadataReconciler(repliator.metaClient, repliator, localZone, repliator.logger, repliator.m3Client).(*metadataReconciler)
+
+	localExtents := make(map[string]*shared.ConsumerGroupExtent)
+	remoteExtents := make(map[string]*shared.ConsumerGroupExtent)
+	remoteExtents[missingExtent] = &shared.ConsumerGroupExtent{
+		ExtentUUID:        common.StringPtr(missingExtent),
+		ConsumerGroupUUID: common.StringPtr(cg),
+		Status:            common.CheramiConsumerGroupExtentStatusPtr(shared.ConsumerGroupExtentStatus_CONSUMED),
+	}
+	reconciler.reconcileCgExtent(dest, cg, localExtents, remoteExtents, remoteZone)
+	s.mockControllerClient.AssertExpectations(s.T())
+}
+
+// both local and remote zone has no consumer group extent. Expect no creation request is generated
+func (s *ReplicatorSuite) TestCgExtentMetadataReconcileLocalAndRemoteEmpty() {
+	localZone := `zone2`
+	remoteZone := `zone1`
+	dest := uuid.New()
+	cg := uuid.New()
+
+	repliator, _ := NewReplicator("replicator-test", s.mockService, s.mockMeta, s.mockReplicatorClientFactory, s.cfg)
+	reconciler, _ := NewMetadataReconciler(repliator.metaClient, repliator, localZone, repliator.logger, repliator.m3Client).(*metadataReconciler)
+
+	localExtents := make(map[string]*shared.ConsumerGroupExtent)
+	remoteExtents := make(map[string]*shared.ConsumerGroupExtent)
+	reconciler.reconcileCgExtent(dest, cg, localExtents, remoteExtents, remoteZone)
+	s.mockControllerClient.AssertExpectations(s.T())
+}
+
+// Extent consumed in remote but not in local. Expect a request to update the status
+func (s *ReplicatorSuite) TestCgExtentMetadataReconcileInconsistentStatus() {
+	localZone := `zone2`
+	remoteZone := `zone1`
+	extent := uuid.New()
+	dest := uuid.New()
+	cg := uuid.New()
+
+	repliator, _ := NewReplicator("replicator-test", s.mockService, s.mockMeta, s.mockReplicatorClientFactory, s.cfg)
+	reconciler, _ := NewMetadataReconciler(repliator.metaClient, repliator, localZone, repliator.logger, repliator.m3Client).(*metadataReconciler)
+
+	// setup mock
+	s.mockMeta.On("UpdateConsumerGroupExtentStatus", mock.Anything, mock.Anything).Return(nil, nil).Run(func(args mock.Arguments) {
+		req := args.Get(1).(*shared.UpdateConsumerGroupExtentStatusRequest)
+		s.Equal(cg, req.GetConsumerGroupUUID())
+		s.Equal(extent, req.GetExtentUUID())
+		s.Equal(shared.ConsumerGroupExtentStatus_CONSUMED, req.GetStatus())
+	})
+
+	localExtents := make(map[string]*shared.ConsumerGroupExtent)
+	remoteExtents := make(map[string]*shared.ConsumerGroupExtent)
+	remoteExtents[extent] = &shared.ConsumerGroupExtent{
+		ExtentUUID:        common.StringPtr(extent),
+		ConsumerGroupUUID: common.StringPtr(cg),
+		Status:            common.CheramiConsumerGroupExtentStatusPtr(shared.ConsumerGroupExtentStatus_CONSUMED),
+	}
+	localExtents[extent] = &shared.ConsumerGroupExtent{
+		ExtentUUID:        common.StringPtr(extent),
+		ConsumerGroupUUID: common.StringPtr(cg),
+		Status:            common.CheramiConsumerGroupExtentStatusPtr(shared.ConsumerGroupExtentStatus_OPEN),
+	}
+	reconciler.reconcileCgExtent(dest, cg, localExtents, remoteExtents, remoteZone)
+	s.mockMeta.AssertExpectations(s.T())
+}
+
+// Remote ack level is less than local, expect no update
+func (s *ReplicatorSuite) TestCgExtentMetadataReconcileAcklevelNoUpdate() {
+	localZone := `zone2`
+	remoteZone := `zone1`
+	extent := uuid.New()
+	dest := uuid.New()
+	cg := uuid.New()
+
+	repliator, _ := NewReplicator("replicator-test", s.mockService, s.mockMeta, s.mockReplicatorClientFactory, s.cfg)
+	reconciler, _ := NewMetadataReconciler(repliator.metaClient, repliator, localZone, repliator.logger, repliator.m3Client).(*metadataReconciler)
+
+	localExtents := make(map[string]*shared.ConsumerGroupExtent)
+	remoteExtents := make(map[string]*shared.ConsumerGroupExtent)
+	remoteExtents[extent] = &shared.ConsumerGroupExtent{
+		ExtentUUID:        common.StringPtr(extent),
+		ConsumerGroupUUID: common.StringPtr(cg),
+		AckLevelOffset:    common.Int64Ptr(10),
+	}
+	localExtents[extent] = &shared.ConsumerGroupExtent{
+		ExtentUUID:        common.StringPtr(extent),
+		ConsumerGroupUUID: common.StringPtr(cg),
+		AckLevelOffset:    common.Int64Ptr(20),
+	}
+	reconciler.reconcileCgExtent(dest, cg, localExtents, remoteExtents, remoteZone)
+	s.mockMeta.AssertExpectations(s.T())
+}
+
+// Remote ack level is greater than local, expect a request to update ack level
+func (s *ReplicatorSuite) TestCgExtentMetadataReconcileAcklevelUpdate() {
+	localZone := `zone2`
+	remoteZone := `zone1`
+	extent := uuid.New()
+	dest := uuid.New()
+	cg := uuid.New()
+
+	repliator, _ := NewReplicator("replicator-test", s.mockService, s.mockMeta, s.mockReplicatorClientFactory, s.cfg)
+	reconciler, _ := NewMetadataReconciler(repliator.metaClient, repliator, localZone, repliator.logger, repliator.m3Client).(*metadataReconciler)
+
+	// setup mock
+	s.mockMeta.On("SetAckOffset", mock.Anything, mock.Anything).Return(nil, nil).Run(func(args mock.Arguments) {
+		req := args.Get(1).(*shared.SetAckOffsetRequest)
+		s.Equal(cg, req.GetConsumerGroupUUID())
+		s.Equal(extent, req.GetExtentUUID())
+		s.Equal(int64(20), req.GetAckLevelAddress())
+	})
+
+	localExtents := make(map[string]*shared.ConsumerGroupExtent)
+	remoteExtents := make(map[string]*shared.ConsumerGroupExtent)
+	remoteExtents[extent] = &shared.ConsumerGroupExtent{
+		ExtentUUID:        common.StringPtr(extent),
+		ConsumerGroupUUID: common.StringPtr(cg),
+		AckLevelOffset:    common.Int64Ptr(20),
+	}
+	localExtents[extent] = &shared.ConsumerGroupExtent{
+		ExtentUUID:        common.StringPtr(extent),
+		ConsumerGroupUUID: common.StringPtr(cg),
+		AckLevelOffset:    common.Int64Ptr(10),
+	}
+	reconciler.reconcileCgExtent(dest, cg, localExtents, remoteExtents, remoteZone)
+	s.mockMeta.AssertExpectations(s.T())
 }
