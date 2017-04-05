@@ -600,7 +600,7 @@ func refreshOutputHostsForConsGroup(context *Context,
 		context.m3Client.IncCounter(m3Scope, metrics.ControllerFailures)
 		return nil, err
 	}
-	if err := validatCGStatus(cgDesc); err != nil {
+	if err = validatCGStatus(cgDesc); err != nil {
 		return nil, err
 	}
 

@@ -97,8 +97,8 @@ func (r *TestReporter) UpdateGauge(name string, tags map[string]string, value in
 
 func (r *TestReporter) executeHandler(name string, tags map[string]string, value int64) {
 	handlerMutex.RLock()
-	 _, ok0 := handlers[``]
-	 _, ok1 := handlers[name]
+	_, ok0 := handlers[``]
+	_, ok1 := handlers[name]
 	if ok0 || ok1 {
 		if allHandler2, ok2 := handlers[``][``]; ok2 { // Global handler
 			allHandler2(name, r.tags, tags, value)

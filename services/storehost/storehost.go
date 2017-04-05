@@ -989,7 +989,7 @@ func (t *StoreHost) PurgeMessages(ctx thrift.Context, req *store.PurgeMessagesRe
 		sealExtentKey := x.constructSealExtentKey(x.getSealSeqNum())
 
 		// look for a message with a key that is immediately before sealExtentKey, if any
-		if endAddr, _, err := x.storeSeekFloor(sealExtentKey - 1); err == nil {
+		if endAddr, _, err2 := x.storeSeekFloor(sealExtentKey - 1); err2 == nil {
 
 			_, _, err = x.storePurge(storage.Address(endAddr))
 
@@ -1001,7 +1001,7 @@ func (t *StoreHost) PurgeMessages(ctx thrift.Context, req *store.PurgeMessagesRe
 
 		} else {
 
-			log.WithField("context", fmt.Sprintf("key=%x err=%v", sealExtentKey-1, err)).
+			log.WithField("context", fmt.Sprintf("key=%x err=%v", sealExtentKey-1, err2)).
 				Error("PurgeMessages: error storeSeekFloor of sealKey-1")
 			// ignore error and continue ..
 		}
