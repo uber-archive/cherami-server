@@ -50,7 +50,7 @@ INTEG_TEST_DIRS := $(filter $(INTEG_TEST_ROOT)%,$(ALL_TEST_DIRS))
 #   Packages are specified as import paths.
 GOCOVERPKG_ARG := -coverpkg="$(PROJECT_ROOT)/common/...,$(PROJECT_ROOT)/services/...,$(PROJECT_ROOT)/clients/..."
 
-test: bins
+test: lint bins
 	@for dir in $(ALL_TEST_DIRS); do \
 		go test $(EMBED) "$$dir" $(TEST_NO_RACE_ARG) $(shell glide nv); \
 	done;
@@ -122,3 +122,7 @@ clean:
 	rm -f cherami-server cherami-replicator-server cherami-cli cherami-admin cherami-replicator-tool cherami-cassandra-tool
 	rm -Rf vendor/*
 	rm -Rf $(BUILD)
+
+lint:
+	gofmt -l $(ALL_SRC)
+	go tool vet -all -printfuncs=Info,Infof,Debug,Debugf,Warn,Warnf,Panic,Panicf $(ALL_TEST_DIRS)

@@ -123,8 +123,8 @@ func (r *metadataReconciler) run() {
 	var localCgs []*shared.ConsumerGroupDescription
 	if r.localZone != r.replicator.getAuthoritativeZone() {
 		r.m3Client.UpdateGauge(metrics.ReplicatorReconcileScope, metrics.ReplicatorReconcileDestRun, 1)
-		localDests, remoteDests, err := r.reconcileDestMetadata()
-		if err != nil {
+		localDests, remoteDests, err2 := r.reconcileDestMetadata()
+		if err2 != nil {
 			r.m3Client.UpdateGauge(metrics.ReplicatorReconcileScope, metrics.ReplicatorReconcileDestFail, 1)
 			return
 		}

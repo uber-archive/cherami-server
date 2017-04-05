@@ -490,7 +490,7 @@ func GetConsumerGroupState(c *cli.Context) {
 }
 
 type cgStateJSONOutput struct {
-	CgUUID             string `json""cgUUID"`
+	CgUUID             string `json:"cgUUID"`
 	NumOutstandingMsgs int32  `json:"numOutstandingMsgs"`
 	MsgChSize          int64  `json:"msgChSize"`
 	MsgCacheChSize     int64  `json:"msgCacheChSize"`
@@ -595,7 +595,7 @@ func GetDestinationState(c *cli.Context) {
 }
 
 type destStateJSONOutput struct {
-	DestUUID       string `json""destUUID"`
+	DestUUID       string `json:"destUUID"`
 	MsgsChSize     int64  `json:"msgsChSize"`
 	NumConnections int64  `json:"numConnections"`
 	NumMsgsIn      int64  `json:"numMsgsIn"`
@@ -1384,8 +1384,8 @@ iterate_listdestinations_pages:
 		iterate_listextents_pages:
 			for {
 				if veryVerbose {
-					fmt.Printf("querying metadata: ListExtentsStats(dest=%v status=%v localextentsonly=%v)\n",
-						listExtentsStats, shared.ExtentStatus_SEALED)
+					fmt.Printf("querying metadata: ListExtentsStats(dest=%v status=%v LocalOnly=%v Limit=%v)",
+						destUUID, shared.ExtentStatus_SEALED, true, DefaultPageSize)
 				}
 
 				listExtentStatsResult, err1 := mClient.ListExtentsStats(listExtentsStats)
@@ -1448,7 +1448,7 @@ iterate_listdestinations_pages:
 							// now seal the extent
 							if seal {
 
-								fmt.Printf("sealing extent on replica: ", destUUID, extentUUID, storeUUID)
+								fmt.Printf("sealing extent on replica: %v %v %v", destUUID, extentUUID, storeUUID)
 
 								req := store.NewSealExtentRequest()
 								req.ExtentUUID = common.StringPtr(string(extentUUID))
