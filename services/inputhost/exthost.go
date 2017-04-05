@@ -169,6 +169,9 @@ const (
 
 	// extLoadReportingInterval is the interval destination extent load is reported to controller
 	extLoadReportingInterval = 2 * time.Second
+
+	// drainIdleTimeout is the idle timeout for checking whether we have already drained or not
+	drainIdleTimeout = 5 * time.Second
 )
 
 var (
@@ -629,11 +632,16 @@ func (conn *extHost) aggregateAndSendReplies(numReplicas int) {
 	perMsgTimer := common.NewTimer(msgAckTimeout)
 	defer perMsgTimer.Stop()
 
+	// Drain idle timer
+	drainTimer := common.NewTimer(drainIdleTimeout)
+	defer drainTimer.Stop()
+
 	if conn.lastSuccessSeqNoCh != nil {
 		defer close(conn.lastSuccessSeqNoCh)
 	}
 
 	for {
+		drainTimer.Reset(drainIdleTimeout)
 		select {
 		case resCh, ok := <-conn.replyClientCh: // resCh is a writeResponse; each replica has a copy of this structure that it will use to send us ACK's through the appendMsgAck channel
 			if ok {
@@ -736,6 +744,13 @@ func (conn *extHost) aggregateAndSendReplies(numReplicas int) {
 			} else {
 				// we are closing the connection.
 				return
+			}
+		case <-drainTimer.C:
+			// if there are no inflight messages or if we have already drained all the things,
+			// we need to check here
+			if conn.isDrained(atomic.LoadInt64(&conn.lastSuccessSeqNo)) {
+				// just call close
+				go conn.close()
 			}
 		case <-conn.streamClosedChannel:
 			return
@@ -884,7 +899,7 @@ func (conn *extHost) getState() *admin.InputDestExtent {
 
 // stopWritePump is used to stop the write pump if the extent is active or has
 // been prepped for drain and  mark the extHost as "Draining"
-func (conn *extHost) stopWritePump() {
+func (conn *extHost) stopWritePump() bool {
 	if conn.state <= extHostPrepClose {
 		close(conn.closeChannel)
 		// wait for the write pump to drain for some timeout period
@@ -892,7 +907,10 @@ func (conn *extHost) stopWritePump() {
 			conn.logger.Fatalf("unable to stop write pump; wait group timeout")
 		}
 		conn.state = extHostCloseWrite
+		return true
 	}
+
+	return false
 }
 
 // isDrained returns true if the following conditions are true:
@@ -909,6 +927,9 @@ func (conn *extHost) isDrained(replySeqNo int64) bool {
 
 	ret := false
 	if atomic.LoadInt64(&conn.seqNo) == replySeqNo {
+		conn.logger.WithFields(bark.Fields{
+			`drainedSeqNo`: replySeqNo,
+		}).Info("extent drained completely")
 		ret = true
 	}
 
@@ -929,10 +950,29 @@ func (conn *extHost) prepForClose() bool {
 	return true
 }
 
+// waitForDrain is needed to wait for the actual drain to finish.
+// if we simply return without this, the controller will immediately
+// seal the extents since this drain API is synchronous
+func (conn *extHost) waitForDrain(drainTimeout time.Duration) {
+	drainTimer := common.NewTimer(drainTimeout)
+	defer drainTimer.Stop()
+	select {
+	// after we drain, we close the exthost which closes this channel as well
+	case <-conn.streamClosedChannel:
+		return
+	case <-drainTimer.C:
+		// timedout.. simply close
+		go conn.close()
+	}
+}
+
 // drain simply stops the write pump and marks the state as such
-func (conn *extHost) stopWrite() error {
+func (conn *extHost) stopWrite(drainTimeout time.Duration) error {
 	conn.lk.Lock()
-	conn.stopWritePump()
+	stopped := conn.stopWritePump()
 	conn.lk.Unlock()
+	if stopped {
+		conn.waitForDrain(drainTimeout)
+	}
 	return nil
 }
