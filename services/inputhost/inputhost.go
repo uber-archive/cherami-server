@@ -810,7 +810,7 @@ func (h *InputHost) DrainExtent(ctx thrift.Context, request *admin.DrainExtentsR
 			extentUUID = req.GetExtentUUID()
 			if pathCache.isActiveNoLock() {
 				drainWG.Add(1)
-				go pathCache.drainExtent(extentUUID, updateUUID, &drainWG)
+				go pathCache.drainExtent(extentUUID, updateUUID, &drainWG, timeoutTime)
 			} else {
 				intErr = errPathCacheUnloading
 			}

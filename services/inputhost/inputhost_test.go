@@ -1438,9 +1438,14 @@ func (s *InputHostSuite) TestInputExtHostDrain() {
 	drainReq.ExtentUUID = common.StringPtr(connection.extUUID)
 	req.Extents = append(req.Extents, drainReq)
 
-	err := inputHost.DrainExtent(ctx, req)
-	s.NoError(err)
+	dCtx, dCancel := thrift.NewContext(2 * time.Second)
+	defer dCancel()
+	err := inputHost.DrainExtent(dCtx, req)
+	s.Error(err)
+	// Note: we will timeout here since the store connections are mocked to block above
+	assert.IsType(s.T(), ErrDrainTimedout, err)
 
+	// we should have definitely stopped the write pump at this point
 	drained := false
 	select {
 	case <-connection.closeChannel:
