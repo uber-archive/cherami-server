@@ -63,6 +63,9 @@ type NetIntegrationSuiteParallelC struct {
 type NetIntegrationSuiteParallelD struct {
 	testBase
 }
+type NetIntegrationSuiteParallelE struct {
+	testBase
+}
 type NetIntegrationSuiteSerial struct {
 	testBase
 }
@@ -87,6 +90,12 @@ func TestNetIntegrationSuiteParallelC(t *testing.T) {
 }
 func TestNetIntegrationSuiteParallelD(t *testing.T) {
 	s := new(NetIntegrationSuiteParallelD)
+	s.testBase.SetupSuite(t)
+	t.Parallel()
+	suite.Run(t, s)
+}
+func TestNetIntegrationSuiteParallelE(t *testing.T) {
+	s := new(NetIntegrationSuiteParallelE)
 	s.testBase.SetupSuite(t)
 	t.Parallel()
 	suite.Run(t, s)
@@ -286,7 +295,7 @@ ReadLoop2:
 	consumerTest.Close()
 }
 
-func (s *NetIntegrationSuiteParallelC) TestWriteEndToEndSuccessWithCassandra() {
+func (s *NetIntegrationSuiteParallelE) TestWriteEndToEndSuccessWithCassandra() {
 	destPath := "/dest/testWriteEndToEndCassandra"
 	cgPath := "/cg/testWriteEndToEndCassandra"
 	testMsgCount := 100
@@ -426,7 +435,7 @@ ReadLoop:
 	s.Nil(err, "Failed to delete destination")
 }
 
-func (s *NetIntegrationSuiteParallelC) TestWriteWithDrain() {
+func (s *NetIntegrationSuiteParallelE) TestWriteWithDrain() {
 	destPath := "/dest/testWriteDrain"
 	cgPath := "/cg/testWriteDrain"
 	testMsgCount := 1000
@@ -472,7 +481,7 @@ func (s *NetIntegrationSuiteParallelC) TestWriteWithDrain() {
 	// Publish messages
 	// Make the doneCh to be a minimum size so that we don't
 	// fill up immediately
-	doneCh := make(chan *client.PublisherReceipt, 1)
+	doneCh := make(chan *client.PublisherReceipt, 500)
 	var wg sync.WaitGroup
 
 	for i := 0; i < testMsgCount; i++ {
@@ -506,7 +515,7 @@ func (s *NetIntegrationSuiteParallelC) TestWriteWithDrain() {
 	drainReq.ExtentUUID = common.StringPtr(receiptParts[0])
 	dReq.Extents = append(dReq.Extents, drainReq)
 
-	ctx, _ := thrift.NewContext(2 * time.Minute)
+	ctx, _ := thrift.NewContext(1 * time.Minute)
 	err = ih.DrainExtent(ctx, dReq)
 	s.Nil(err)
 
@@ -2002,7 +2011,7 @@ ReadLoop2_TheReloopening:
 
 }
 
-func (s *NetIntegrationSuiteParallelC) TestStartFromWithCassandra() {
+func (s *NetIntegrationSuiteParallelE) TestStartFromWithCassandra() {
 	destPath := "/dest/TestStartFromWithCassandra"
 	cgPathEverything := "/cg/TestStartFromWithCassandraEverything"
 	cgPathStartFrom := "/cg/TestStartFromWithCassandra"
