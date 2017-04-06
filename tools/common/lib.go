@@ -73,6 +73,9 @@ const (
 	ConsumerGroupType = "CG"
 	// MinUnconsumedMessagesRetentionForMultiZoneDest is the minimum unconsumed retention allowed
 	MinUnconsumedMessagesRetentionForMultiZoneDest = 3 * 24 * 3600
+
+	// Kafka prefix is a required prefix for all Kafka type destinations and consumer groups
+	kafkaPrefix = `/kafka_`
 )
 
 const (
@@ -86,6 +89,8 @@ const (
 	strWrongReplicaCount           = "Replica count must be within 1 to 3"
 	strWrongZoneConfigCount        = "Multi zone destination must have at least 2 zone configs"
 	strUnconsumedRetentionTooSmall = "Unconsumed retention period for multi zone destination should be at least 3 days"
+	strKafkaNaming                 = "Kafka destinations and consumer groups must begin with \"" + kafkaPrefix + "\""
+	strKafkaNotEnoughArgs          = "Kafka destinations must specify the Kafka cluster and at least one topic"
 )
 
 var uuidRegex, _ = regexp.Compile(`^[[:xdigit:]]{8}-[[:xdigit:]]{4}-[[:xdigit:]]{4}-[[:xdigit:]]{4}-[[:xdigit:]]{12}$`)
@@ -188,12 +193,24 @@ func CreateDestination(c *cli.Context, cClient ccli.Client, cliHelper common.Cli
 	if len(c.Args()) < 1 {
 		ExitIfError(errors.New(strNotEnoughArgs))
 	}
+	path := c.Args().First()
+	kafkaCluster := c.String("kafka_cluster")
+	kafkaTopics := c.StringSlice("kafka_topics")
+
 	dType := cherami.DestinationType_PLAIN
 	if c.String("type") == "timer" {
 		dType = cherami.DestinationType_TIMER
 	}
+	if c.String("type") == "kafka" { // Kafka type, check Kafka params
+		dType = cherami.DestinationType_KAFKA
+		if !strings.HasPrefix(path, kafkaPrefix) {
+			ExitIfError(errors.New(strKafkaNaming))
+		}
+		if kafkaCluster == `` || common.ContainsEmpty(kafkaTopics) || len(kafkaTopics) == 0 { // Server will also check this
+			ExitIfError(errors.New(strKafkaNotEnoughArgs))
+		}
+	} 
 
-	path := c.Args().First()
 	consumedMessagesRetention := int32(c.Int("consumed_messages_retention"))
 	unconsumedMessagesRetention := int32(c.Int("unconsumed_messages_retention"))
 	checksumOption := getChecksumOptionParam(string(c.String("checksum_option")))
@@ -252,6 +269,8 @@ func CreateDestination(c *cli.Context, cClient ccli.Client, cliHelper common.Cli
 		OwnerEmail:                  &ownerEmail,
 		IsMultiZone:                 common.BoolPtr(len(zoneConfigs.Configs) > 0),
 		ZoneConfigs:                 &zoneConfigs,
+		KafkaCluster:                &kafkaCluster,
+		KafkaTopics:                 kafkaTopics,
 	})
 
 	ExitIfError(err)
@@ -332,6 +351,12 @@ func CreateConsumerGroup(c *cli.Context, cClient ccli.Client, cliHelper common.C
 
 	path := c.Args()[0]
 	name := c.Args()[1]
+
+	// For Kafka-type destinations, verify that the consumer group has the prefix, too
+	if strings.HasPrefix(path, kafkaPrefix) && !strings.HasPrefix(name, kafkaPrefix) {
+		ExitIfError(errors.New(strKafkaNaming))
+	}
+
 	// StartFrom is a 64-bit value with nano-second precision
 	startTime := int64(c.Int("start_time")) * 1e9
 	lockTimeout := int32(c.Int("lock_timeout_seconds"))
@@ -634,6 +659,8 @@ type destDescJSONOutputFields struct {
 	DLQMergeBefore              int64                           `json:"dlq_merge_before"`
 	IsMultiZone                 bool                            `json:"is_multi_zone"`
 	ZoneConfigs                 []*shared.DestinationZoneConfig `json:"zone_configs"`
+	KafkaCluster                string                          `json:"kafka_cluster"`
+	KafkaTopics                 []string                        `json:"kafka_topics"`
 }
 
 func printDest(dest *shared.DestinationDescription) {
@@ -650,6 +677,8 @@ func printDest(dest *shared.DestinationDescription) {
 		DLQMergeBefore:              dest.GetDLQMergeBefore(),
 		IsMultiZone:                 dest.GetIsMultiZone(),
 		ZoneConfigs:                 dest.GetZoneConfigs(),
+		KafkaCluster:                dest.GetKafkaCluster(),
+		KafkaTopics:                 dest.GetKafkaTopics(),
 	}
 
 	switch dest.GetChecksumOption() {
