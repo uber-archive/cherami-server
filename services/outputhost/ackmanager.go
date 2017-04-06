@@ -32,10 +32,12 @@ import (
 	"github.com/uber/cherami-server/common/metrics"
 	"github.com/uber/cherami-thrift/.generated/go/admin"
 	"github.com/uber/cherami-thrift/.generated/go/metadata"
+	"github.com/uber/cherami-thrift/.generated/go/shared"
 )
 
 const ackLevelInterval = 5 * time.Second
 const metaContextTimeout = 10 * time.Second
+const replicatorCallTimeout = 20 * time.Second
 
 type storeHostAddress int64
 
@@ -63,6 +65,7 @@ type (
 		sealed             bool                                   // ‡
 		outputHostUUID     string
 		cgUUID             string
+		isMultiZoneCg      bool
 		extUUID            string
 		connectedStoreUUID *string
 		*levels                    // ‡ the current levels
@@ -71,6 +74,7 @@ type (
 		closeChannel       chan struct{}
 		waitConsumed       chan<- bool // waitConsumed is the channel which will signal if the extent is completely consumed given by extentCache
 		metaclient         metadata.TChanMetadataService
+		tClients 	   common.ClientFactory
 		doneWG             sync.WaitGroup
 		logger             bark.Logger
 		sessionID          uint16
@@ -81,17 +85,19 @@ type (
 	}
 )
 
-func newAckManager(cgCache *consumerGroupCache, ackMgrID uint32, outputHostUUID string, cgUUID string, extUUID string, connectedStoreUUID *string, waitConsumedCh chan<- bool, cge *metadata.ConsumerGroupExtent, metaclient metadata.TChanMetadataService, logger bark.Logger) *ackManager {
+func newAckManager(cgCache *consumerGroupCache, ackMgrID uint32, outputHostUUID string, cgUUID string, isMultiZoneCg bool, extUUID string, connectedStoreUUID *string, waitConsumedCh chan<- bool, cge *shared.ConsumerGroupExtent, metaclient metadata.TChanMetadataService, tClients common.ClientFactory, logger bark.Logger) *ackManager {
 	ackMgr := &ackManager{
 		addrs:              make(map[common.SequenceNumber]*internalMsg),
 		cgCache:            cgCache,
 		outputHostUUID:     outputHostUUID,
 		cgUUID:             cgUUID,
+		isMultiZoneCg:      isMultiZoneCg,
 		extUUID:            extUUID,
 		connectedStoreUUID: connectedStoreUUID,
 		sessionID:          cgCache.sessionID, //sessionID,
 		ackMgrID:           uint16(ackMgrID),  //ackMgrID,
 		metaclient:         metaclient,
+		tClients:           tClients,
 		ackLevelTicker:     time.NewTicker(ackLevelInterval),
 		waitConsumed:       waitConsumedCh,
 		logger:             logger.WithField(common.TagModule, `ackMgr`),
@@ -241,7 +247,7 @@ func (ackMgr *ackManager) notifySealed() {
 func (ackMgr *ackManager) updateAckLevel() {
 	update := false
 	consumed := false
-	var oReq *metadata.SetAckOffsetRequest
+	var oReq *shared.SetAckOffsetRequest
 
 	ackMgr.lk.Lock()
 
@@ -282,7 +288,7 @@ func (ackMgr *ackManager) updateAckLevel() {
 
 	if update {
 		ackMgr.asOf = common.Now()
-		oReq = &metadata.SetAckOffsetRequest{
+		oReq = &shared.SetAckOffsetRequest{
 			OutputHostUUID:     common.StringPtr(ackMgr.outputHostUUID),
 			ConsumerGroupUUID:  common.StringPtr(ackMgr.cgUUID),
 			ExtentUUID:         common.StringPtr(ackMgr.extUUID),
@@ -295,12 +301,12 @@ func (ackMgr *ackManager) updateAckLevel() {
 
 		// check if we can set the status as consumed
 		if consumed {
-			oReq.Status = common.CheramiConsumerGroupExtentStatusPtr(metadata.ConsumerGroupExtentStatus_CONSUMED)
+			oReq.Status = common.CheramiConsumerGroupExtentStatusPtr(shared.ConsumerGroupExtentStatus_CONSUMED)
 			// Rates are forced to zero in the consumed case
 			oReq.AckLevelSeqNoRate = common.Float64Ptr(0e0)
 			oReq.ReadLevelSeqNoRate = common.Float64Ptr(0e0)
 		} else {
-			oReq.Status = common.CheramiConsumerGroupExtentStatusPtr(metadata.ConsumerGroupExtentStatus_OPEN)
+			oReq.Status = common.CheramiConsumerGroupExtentStatusPtr(shared.ConsumerGroupExtentStatus_OPEN)
 			oReq.AckLevelSeqNoRate = common.Float64Ptr(common.CalculateRate(ackMgr.prev.ackLevel, ackMgr.ackLevel, ackMgr.prev.asOf, ackMgr.asOf))
 			oReq.ReadLevelSeqNoRate = common.Float64Ptr(common.CalculateRate(ackMgr.prev.readLevel, ackMgr.readLevel, ackMgr.prev.asOf, ackMgr.asOf))
 		}
@@ -330,6 +336,12 @@ func (ackMgr *ackManager) updateAckLevel() {
 				`ackLevelAddress`: oReq.GetAckLevelAddress(),
 			}).Error(`error updating ackLevel`)
 		} else {
+			if ackMgr.isMultiZoneCg {
+				// update the ack offset in remote zone.
+				// Failure is fine as a reconciliation process between replicators(slow path) will fix the inconsistency eventually
+				ackMgr.SetAckOffsetInRemote(oReq)
+			}
+
 			// Updating metadata succeeded; report some metrics and mark the extent as consumed if necessary
 			// report the count of updates we did this round
 			ackMgr.cgCache.consumerM3Client.UpdateGauge(metrics.ConsConnectionScope, metrics.OutputhostCGAckMgrLevelUpdate, int64(count))
@@ -353,6 +365,27 @@ func (ackMgr *ackManager) updateAckLevel() {
 	// Report the size of the ackMgr map, if greater than 0
 	if updatedSize > 0 {
 		ackMgr.cgCache.consumerM3Client.UpdateGauge(metrics.ConsConnectionScope, metrics.OutputhostCGAckMgrSize, int64(updatedSize))
+	}
+}
+
+func (ackMgr *ackManager) SetAckOffsetInRemote(setAckLevelRequest *shared.SetAckOffsetRequest) {
+	// send to local replicator to fan out
+	localReplicator, err := ackMgr.tClients.GetReplicatorClient()
+	if err != nil {
+		ackMgr.logger.WithField(common.TagErr, err).Error(`SetAckOffsetInRemote: GetReplicatorClient failed`)
+		return
+	}
+
+	// empty the output host and store uuid as these apply to local zone only
+	setAckLevelRequest.OutputHostUUID = nil
+	setAckLevelRequest.ConnectedStoreUUID = nil
+
+	ctx, cancel := thrift.NewContext(replicatorCallTimeout)
+	defer cancel()
+	err = localReplicator.SetAckOffsetInRemote(ctx, setAckLevelRequest)
+	if err != nil {
+		ackMgr.logger.WithField(common.TagErr, err).Error(`SetAckOffsetInRemote: SetAckOffsetInRemote failed from replicator`)
+		return
 	}
 }
 

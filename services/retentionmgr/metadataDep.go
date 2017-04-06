@@ -318,10 +318,10 @@ func (t *metadataDepImpl) MarkExtentConsumed(destID destinationID, extID extentI
 
 func (t *metadataDepImpl) DeleteConsumerGroupExtent(cgID consumerGroupID, extID extentID) error {
 
-	req := metadata.NewUpdateConsumerGroupExtentStatusRequest()
+	req := shared.NewUpdateConsumerGroupExtentStatusRequest()
 	req.ExtentUUID = common.StringPtr(string(extID))
 	req.ConsumerGroupUUID = common.StringPtr(string(cgID))
-	req.Status = common.MetadataConsumerGroupExtentStatusPtr(metadata.ConsumerGroupExtentStatus_DELETED)
+	req.Status = common.MetadataConsumerGroupExtentStatusPtr(shared.ConsumerGroupExtentStatus_DELETED)
 
 	ctx, cancel := thrift.NewContext(2 * time.Second)
 	defer cancel()
@@ -396,15 +396,15 @@ func (t *metadataDepImpl) GetAckLevel(destID destinationID, extID extentID, cgID
 
 	switch resp.GetExtent().GetStatus() {
 
-	case metadata.ConsumerGroupExtentStatus_OPEN:
+	case shared.ConsumerGroupExtentStatus_OPEN:
 		// return the ack-level from metadata
 		ackLevel = resp.GetExtent().GetAckLevelOffset()
 
-	case metadata.ConsumerGroupExtentStatus_CONSUMED:
+	case shared.ConsumerGroupExtentStatus_CONSUMED:
 		// 'ADDR_SEAL' indicates to the caller that this CG has fully consumed the extent
 		ackLevel = store.ADDR_SEAL
 
-	case metadata.ConsumerGroupExtentStatus_DELETED:
+	case shared.ConsumerGroupExtentStatus_DELETED:
 		// set to 'ADDR_BEGIN' if cg-extent is deleted
 		ackLevel = store.ADDR_BEGIN
 

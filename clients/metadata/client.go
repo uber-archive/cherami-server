@@ -186,7 +186,7 @@ func (c *clientImpl) ReadConsumerGroupExtentsByExtUUID(request *m.ReadConsumerGr
 	return c.client.ReadConsumerGroupExtentsByExtUUID(ctx, request)
 }
 
-func (c *clientImpl) ReadConsumerGroupExtents(request *m.ReadConsumerGroupExtentsRequest) (*m.ReadConsumerGroupExtentsResult_, error) {
+func (c *clientImpl) ReadConsumerGroupExtents(request *shared.ReadConsumerGroupExtentsRequest) (*shared.ReadConsumerGroupExtentsResult_, error) {
 	ctx, cancel := c.createContext()
 	defer cancel()
 
@@ -200,7 +200,7 @@ func (c *clientImpl) ReadConsumerGroupExtent(request *m.ReadConsumerGroupExtentR
 	return c.client.ReadConsumerGroupExtent(ctx, request)
 }
 
-func (c *clientImpl) ReadConsumerGroup(request *m.ReadConsumerGroupRequest) (*shared.ConsumerGroupDescription, error) {
+func (c *clientImpl) ReadConsumerGroup(request *shared.ReadConsumerGroupRequest) (*shared.ConsumerGroupDescription, error) {
 
 	ctx, cancel := c.createContext()
 	defer cancel()
@@ -208,7 +208,7 @@ func (c *clientImpl) ReadConsumerGroup(request *m.ReadConsumerGroupRequest) (*sh
 	return c.client.ReadConsumerGroup(ctx, request)
 }
 
-func (c *clientImpl) ReadConsumerGroupByUUID(request *m.ReadConsumerGroupRequest) (*shared.ConsumerGroupDescription, error) {
+func (c *clientImpl) ReadConsumerGroupByUUID(request *shared.ReadConsumerGroupRequest) (*shared.ConsumerGroupDescription, error) {
 
 	ctx, cancel := c.createContext()
 	defer cancel()

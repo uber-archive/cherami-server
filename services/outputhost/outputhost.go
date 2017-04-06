@@ -119,7 +119,7 @@ var ErrCgAlreadyUnloaded = &cherami.InternalServiceError{Message: "Consumer Grou
 var ErrLimit = &cherami.InternalServiceError{Message: "Outputhost cons connection limit exceeded"}
 
 func (h *OutputHost) getConsumerGroup(ctx thrift.Context, path string, cgName string, rejectDisabled bool) (*shared.ConsumerGroupDescription, metrics.ErrorClass, error) {
-	mGetRequest := metadata.ReadConsumerGroupRequest{
+	mGetRequest := shared.ReadConsumerGroupRequest{
 		DestinationPath:   common.StringPtr(path),
 		ConsumerGroupName: common.StringPtr(cgName),
 	}
@@ -884,7 +884,7 @@ func (h *OutputHost) ReadCgState(ctx thrift.Context, req *admin.ReadConsumerGrou
 // XXX: This should not be used anywhere else other than the test.
 func (h *OutputHost) UtilGetPickedStore(cgName string, path string) (connStore string) {
 	// First get the UUID
-	mGetRequest := metadata.ReadConsumerGroupRequest{
+	mGetRequest := shared.ReadConsumerGroupRequest{
 		DestinationPath:   common.StringPtr(path),
 		ConsumerGroupName: common.StringPtr(cgName),
 	}

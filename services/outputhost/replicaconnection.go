@@ -29,6 +29,7 @@ import (
 	"github.com/uber-common/bark"
 
 	"github.com/uber/cherami-server/common"
+	"github.com/uber/cherami-server/common/metrics"
 	"github.com/uber/cherami-server/services/outputhost/load"
 	storeStream "github.com/uber/cherami-server/stream"
 	"github.com/uber/cherami-thrift/.generated/go/cherami"
@@ -75,28 +76,31 @@ type (
 		// for concurrent access
 		sentCreds int64 // total credits sent
 		recvMsgs  int64 // total messages received
+
+		// consumerM3Client for metrics per consumer group
+		consumerM3Client metrics.Client
 	}
 )
 
-func newReplicaConnection(stream storeStream.BStoreOpenReadStreamOutCall, msgsCh chan<- *cherami.ConsumerMessage,
-	initialCredits int32, replicaCloseCh chan<- error, extCache *extentCache, cancel context.CancelFunc,
-	shutdownWG *sync.WaitGroup, replicaConnectionName string, logger bark.Logger,
-	startingSequence common.SequenceNumber) *replicaConnection {
+func newReplicaConnection(stream storeStream.BStoreOpenReadStreamOutCall, extCache *extentCache, cancel context.CancelFunc,
+	replicaConnectionName string, logger bark.Logger, startingSequence common.SequenceNumber) *replicaConnection {
+
 	conn := &replicaConnection{
 		call:                stream,
-		msgsCh:              msgsCh,
-		initialCredits:      initialCredits,
+		msgsCh:              extCache.msgsCh,
+		initialCredits:      extCache.initialCredits,
 		cancel:              cancel,
-		shutdownWG:          shutdownWG,
+		shutdownWG:          extCache.shutdownWG,
 		closeChannel:        make(chan struct{}),
 		readMsgsCh:          make(chan int32, replicaConnectionCreditsChBuffer),
-		connectionsClosedCh: replicaCloseCh,
+		connectionsClosedCh: extCache.notifyReplicaCloseCh,
 		extCache:            extCache,
 		name:                replicaConnectionName,
 		creditNotifyCh:      extCache.creditNotifyCh,
 		localCreditCh:       make(chan int32, 5),
 		logger:              logger.WithFields(bark.Fields{common.TagModule: `replConn`}),
 		startingSequence:    startingSequence,
+		consumerM3Client:    extCache.consumerM3Client,
 	}
 
 	return conn
@@ -159,6 +163,7 @@ func (conn *replicaConnection) updateSuccessfulSendToMsgsCh(localMsgs *int32, le
 	conn.extCache.loadMetrics.Increment(load.ExtentMetricMsgsOut)
 	conn.extCache.loadMetrics.Add(load.ExtentMetricBytesOut, length)
 	conn.recvMsgs++
+	conn.consumerM3Client.AddCounter(metrics.ConsConnectionScope, metrics.OutputhostCGMessageReceivedBytes, length)
 }
 
 // grantCredits is called by the redelivery cache to grant credits just for this

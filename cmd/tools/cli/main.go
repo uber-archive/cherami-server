@@ -53,7 +53,7 @@ func main() {
 	})
 	app.Name = "cherami"
 	app.Usage = "A command-line tool for cherami users"
-	app.Version = "1.1.7"
+	app.Version = "1.1.8"
 	app.Flags = []cli.Flag{
 		cli.BoolTFlag{
 			Name:  "hyperbahn",
@@ -96,15 +96,13 @@ func main() {
 						cli.StringFlag{
 							Name:  "type, t",
 							Value: "plain",
-							Usage: "Type of the destination: 'plain' or 'timer'",
+							Usage: "Type of the destination: 'plain', 'timer', or 'kafka'",
 						},
-
 						cli.IntFlag{
 							Name:  "consumed_messages_retention, cr",
 							Value: 3600,
 							Usage: "Consumed messages retention period specified in seconds. Default is 1 hour.",
 						},
-
 						cli.IntFlag{
 							Name:  "unconsumed_messages_retention, ur",
 							Value: 7200,
@@ -123,6 +121,14 @@ func main() {
 						cli.StringSliceFlag{
 							Name:  "zone_config, zc",
 							Usage: "Zone configs for multi_zone destinations. Format for each zone should be \"ZoneName,AllowPublish,AllowConsume,ReplicaCount\". For example: \"zone1,true,true,3\"",
+						},
+						cli.StringFlag{
+							Name:  "kafka_cluster, kc",
+							Usage: "Name of the Kafka cluster to attach to",
+						},
+						cli.StringSliceFlag{
+							Name:  "kafka_topics, kt",
+							Usage: "List of kafka topics to subscribe to. Use multiple times, e.g. \"--kafka_topics topic_a --kafka_topics topic_b\"",
 						},
 					},
 					Action: func(c *cli.Context) {

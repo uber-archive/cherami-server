@@ -789,7 +789,7 @@ func (s *FrontendHostSuite) TestFrontendHostCreateConsumerGroupStartFrom() {
 	testCG := s.generateKey("/bar/CGName")
 	frontendHost, ctx := s.utilGetContextAndFrontend()
 
-	testStartFrom := func(startFrom int64, willError bool) (startFromReturn int64, err error) {
+	testStartFrom := func(startFrom int64, willFail bool) (startFromReturn int64, err error) {
 
 		startFromReturn = math.MaxInt64
 
@@ -807,12 +807,9 @@ func (s *FrontendHostSuite) TestFrontendHostCreateConsumerGroupStartFrom() {
 			DestinationUUID: common.StringPtr(uuid.New()),
 		}
 
-		if !willError {
-			s.resetMocks()
-			// create destination is needed because of dlq destination been created at time of consumer group creation
-			s.mockController.On("CreateDestination", mock.Anything, mock.Anything).Return(destDesc, nil).Run(func(args mock.Arguments) {
-				s.Equal(dlqPath, args.Get(1).(*shared.CreateDestinationRequest).GetPath())
-			})
+		if !willFail {
+
+			s.mockController.On("CreateDestination", mock.Anything, mock.Anything).Return(destDesc, nil)
 
 			s.mockController.On("CreateConsumerGroup", mock.Anything, mock.Anything).Once().Return(cgDesc, nil).Run(func(args mock.Arguments) {
 				startFromReturn = args.Get(1).(*shared.CreateConsumerGroupRequest).GetStartFrom()
@@ -823,6 +820,8 @@ func (s *FrontendHostSuite) TestFrontendHostCreateConsumerGroupStartFrom() {
 		req.StartFrom = common.Int64Ptr(startFrom)
 
 		_, err = frontendHost.CreateConsumerGroup(ctx, req)
+
+		s.resetMocks() // reset mocks before the next test
 
 		return
 	}

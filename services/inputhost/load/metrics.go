@@ -57,6 +57,9 @@ const (
 	DstMetricNumOpenConns = iota
 	// DstMetricNumOpenExtents represents number of open extents per dst
 	DstMetricNumOpenExtents
+	// DstMetricNumWritableExtents represents number of open and *writable* extents per dst
+	// A draining extent will decrement this and this is used to trigger client connection drain
+	DstMetricNumWritableExtents
 	// DstMetricMsgsIn represents count of incoming messages per dst
 	DstMetricMsgsIn
 	// DstMetricBytesIn represents count of incoming bytes per dst

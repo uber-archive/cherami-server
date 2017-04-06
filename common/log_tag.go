@@ -156,6 +156,9 @@ const TagState = `state`
 // TagExtentStatus is for extent status
 const TagExtentStatus = `extStatus`
 
+// TagCGExtentStatus is for cg extent status
+const TagCGExtentStatus = `cgExtStatus`
+
 // TagSeq is for sequence number
 const TagSeq = `seq`
 
@@ -363,5 +366,10 @@ func FmtAddr(i int64) string {
 
 // FmtExtentStatus formats ExtentStatus to be used with TagExtentStatus
 func FmtExtentStatus(status shared.ExtentStatus) string {
+	return fmt.Sprintf("%v", status.String())
+}
+
+// FmtCGExtentStatus formats ConsumerGroupExtent to be used with TagCGExtentStatus
+func FmtCGExtentStatus(status shared.ConsumerGroupExtentStatus) string {
 	return fmt.Sprintf("%v", status.String())
 }

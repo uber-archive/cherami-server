@@ -244,6 +244,8 @@ const (
 	ListLoadedDestinationsScope
 	// ReadDestStateScope represents ReadDestState API
 	ReadDestStateScope
+	// DrainExtentsScope represents DrainExtentsScope API
+	DrainExtentsScope
 
 	// -- Operation scopes for OutputHost --
 
@@ -330,6 +332,8 @@ const (
 	ControllerDeleteConsumerGroupScope
 	// ControllerCreateRemoteZoneExtentScope represents controller CreateRemoteZoneExtent API
 	ControllerCreateRemoteZoneExtentScope
+	// ControllerCreateRemoteZoneCgExtentScope represents controller CreateRemoteZoneConsumerGroupExtent API
+	ControllerCreateRemoteZoneCgExtentScope
 	// QueueDepthBacklogCGScope represents metrics within queuedepth per consumer group
 	QueueDepthBacklogCGScope
 
@@ -436,6 +440,14 @@ const (
 	ReplicatorCreateExtentScope
 	// ReplicatorCreateRmtExtentScope represents replicator CreateRemoteExtent API
 	ReplicatorCreateRmtExtentScope
+	// ReplicatorCreateCgExtentScope represents replicator CreateConsumerGroupExtent API
+	ReplicatorCreateCgExtentScope
+	// ReplicatorCreateRmtCgExtentScope represents replicator CreateRemoteConsumerGroupExtent API
+	ReplicatorCreateRmtCgExtentScope
+	// ReplicatorSetAckOffsetScope represents replicator SetAckOffset API
+	ReplicatorSetAckOffsetScope
+	// ReplicatorSetAckOffsetInRemoteScope represents replicator SetAckOffsetInRemote API
+	ReplicatorSetAckOffsetInRemoteScope
 	// ReplicatorReconcileScope represents replicator's reconcile process
 	ReplicatorReconcileScope
 )
@@ -528,6 +540,7 @@ var scopeDefs = map[ServiceIdx]map[int]scopeDefinition{
 		UnloadDestinationsScope:       {operation: "UnloadDestinations"},
 		ListLoadedDestinationsScope:   {operation: "ListLoadedDestinations"},
 		ReadDestStateScope:            {operation: "ReadDestState"},
+		DrainExtentsScope:             {operation: "DrainExtentsScope"},
 	},
 
 	// Outputhost operation tag values as seen by the Metrics backend
@@ -558,23 +571,27 @@ var scopeDefs = map[ServiceIdx]map[int]scopeDefinition{
 
 	// Replicator operation tag values as seen by the Metrics backend
 	Replicator: {
-		OpenReplicationRemoteReadScope:   {operation: "OpenReplicationRemoteReadStream"},
-		OpenReplicationReadScope:         {operation: "OpenReplicationReadStream"},
-		ReplicatorCreateDestUUIDScope:    {operation: "ReplicatorCreateDestinationUUID"},
-		ReplicatorCreateRmtDestUUIDScope: {operation: "ReplicatorCreateRemoteDestinationUUID"},
-		ReplicatorUpdateDestScope:        {operation: "ReplicatorUpdateDestination"},
-		ReplicatorUpdateRmtDestScope:     {operation: "ReplicatorUpdateRemoteDestination"},
-		ReplicatorDeleteDestScope:        {operation: "ReplicatorDeleteDestination"},
-		ReplicatorDeleteRmtDestScope:     {operation: "ReplicatorDeleteRemoteDestination"},
-		ReplicatorCreateCgUUIDScope:      {operation: "ReplicatorCreateConsumerGroupUUID"},
-		ReplicatorCreateRmtCgUUIDScope:   {operation: "ReplicatorCreateRemoteConsumerGroupUUID"},
-		ReplicatorUpdateCgScope:          {operation: "ReplicatorUpdateConsumerGroup"},
-		ReplicatorUpdateRmtCgScope:       {operation: "ReplicatorUpdateRemoteConsumerGroup"},
-		ReplicatorDeleteCgScope:          {operation: "ReplicatorDeleteConsumerGroup"},
-		ReplicatorDeleteRmtCgScope:       {operation: "ReplicatorDeleteRemoteConsumerGroup"},
-		ReplicatorCreateExtentScope:      {operation: "ReplicatorCreateExtent"},
-		ReplicatorCreateRmtExtentScope:   {operation: "ReplicatorCreateRemoteExtent"},
-		ReplicatorReconcileScope:         {operation: "ReplicatorReconcile"},
+		OpenReplicationRemoteReadScope:      {operation: "OpenReplicationRemoteReadStream"},
+		OpenReplicationReadScope:            {operation: "OpenReplicationReadStream"},
+		ReplicatorCreateDestUUIDScope:       {operation: "ReplicatorCreateDestinationUUID"},
+		ReplicatorCreateRmtDestUUIDScope:    {operation: "ReplicatorCreateRemoteDestinationUUID"},
+		ReplicatorUpdateDestScope:           {operation: "ReplicatorUpdateDestination"},
+		ReplicatorUpdateRmtDestScope:        {operation: "ReplicatorUpdateRemoteDestination"},
+		ReplicatorDeleteDestScope:           {operation: "ReplicatorDeleteDestination"},
+		ReplicatorDeleteRmtDestScope:        {operation: "ReplicatorDeleteRemoteDestination"},
+		ReplicatorCreateCgUUIDScope:         {operation: "ReplicatorCreateConsumerGroupUUID"},
+		ReplicatorCreateRmtCgUUIDScope:      {operation: "ReplicatorCreateRemoteConsumerGroupUUID"},
+		ReplicatorUpdateCgScope:             {operation: "ReplicatorUpdateConsumerGroup"},
+		ReplicatorUpdateRmtCgScope:          {operation: "ReplicatorUpdateRemoteConsumerGroup"},
+		ReplicatorDeleteCgScope:             {operation: "ReplicatorDeleteConsumerGroup"},
+		ReplicatorDeleteRmtCgScope:          {operation: "ReplicatorDeleteRemoteConsumerGroup"},
+		ReplicatorCreateExtentScope:         {operation: "ReplicatorCreateExtent"},
+		ReplicatorCreateRmtExtentScope:      {operation: "ReplicatorCreateRemoteExtent"},
+		ReplicatorCreateCgExtentScope:       {operation: "ReplicatorCreateConsumerGroupExtent"},
+		ReplicatorCreateRmtCgExtentScope:    {operation: "ReplicatorCreateRemoteConsumerGroupExtent"},
+		ReplicatorSetAckOffsetScope:         {operation: "SetAckOffset"},
+		ReplicatorSetAckOffsetInRemoteScope: {operation: "SetAckOffsetInRemote"},
+		ReplicatorReconcileScope:            {operation: "ReplicatorReconcile"},
 	},
 
 	// Controller operation tag values as seen by the Metrics backend
@@ -611,6 +628,7 @@ var scopeDefs = map[ServiceIdx]map[int]scopeDefinition{
 		ControllerUpdateConsumerGroupScope:       {operation: "UpdateConsumerGroup"},
 		ControllerDeleteConsumerGroupScope:       {operation: "DeleteConsumerGroup"},
 		ControllerCreateRemoteZoneExtentScope:    {operation: "CreateRemoteZoneExtent"},
+		ControllerCreateRemoteZoneCgExtentScope:  {operation: "CreateRemoteZoneConsumerGroupExtent"},
 	},
 }
 
@@ -764,6 +782,10 @@ const (
 	OutputhostLatencyTimer
 	// OutputhostCGMessageSent records the count of messages sent per consumer group
 	OutputhostCGMessageSent
+	// OutputhostCGMessageSentBytes records the total size of messages sent per consumer-group
+	OutputhostCGMessageSentBytes
+	// OutputhostCGMessageReceivedBytes records the total size of message received from replica per CG
+	OutputhostCGMessageReceivedBytes
 	// OutputhostCGMessageFailures records the count of messages sent failures per consumer group
 	OutputhostCGMessageFailures
 	// OutputhostCGCreditsReceived indicates the count of the credits per consumer group
@@ -919,6 +941,8 @@ const (
 	ControllerErrBadRequestCounter
 	// ControllerErrBadEntityCounter indicates either an entity not exists or disabled error
 	ControllerErrBadEntityCounter
+	// ControllerErrDrainFailed indicates that a drain command issued to input failed
+	ControllerErrDrainFailed
 
 	// ControllerEventsDropped indicates an event drop due to queue full
 	ControllerEventsDropped
@@ -1033,6 +1057,16 @@ const (
 	ReplicatorReconcileDestExtentRemoteDeletedLocalNot
 	// ReplicatorReconcileDestExtentSuspectMissingExtents indicates the length of the suspect missing extent list
 	ReplicatorReconcileDestExtentSuspectMissingExtents
+	// ReplicatorReconcileCgExtentRun indicates the reconcile for cg extent runs
+	ReplicatorReconcileCgExtentRun
+	// ReplicatorReconcileCgExtentFail indicates the reconcile for cg extent fails
+	ReplicatorReconcileCgExtentFail
+	// ReplicatorReconcileCgExtentFoundMissing indicates the reconcile for cg extent found a missing cg extent
+	ReplicatorReconcileCgExtentFoundMissing
+	// ReplicatorReconcileCgExtentRemoteConsumedLocalMissing indicates the reconcile for cg extent found a cg extent that is consumed on remote side and local is missing
+	ReplicatorReconcileCgExtentRemoteConsumedLocalMissing
+	// ReplicatorReconcileCgExtentRemoteDeletedLocalMissing indicates the reconcile for cg extent found a cg extent that is deleted on remote side and local is missing
+	ReplicatorReconcileCgExtentRemoteDeletedLocalMissing
 
 	numMetrics
 )
@@ -1151,6 +1185,7 @@ var metricDefs = map[ServiceIdx]map[int]metricDefinition{
 		ControllerErrNoRetryWorkers:                {Counter, "controller.errors.no-retry-workers"},
 		ControllerErrBadRequestCounter:             {Counter, "controller.errors.bad-requests"},
 		ControllerErrBadEntityCounter:              {Counter, "controller.errors.bad-entity"},
+		ControllerErrDrainFailed:                   {Counter, "controller.errors.drain-failed"},
 		ControllerEventsDropped:                    {Counter, "controller.events-dropped"},
 		ControllerRequests:                         {Counter, "controller.requests"},
 		ControllerFailures:                         {Counter, "controller.errors"},
@@ -1202,6 +1237,11 @@ var metricDefs = map[ServiceIdx]map[int]metricDefinition{
 		ReplicatorReconcileDestExtentRemoteDeletedLocalMissing:  {Gauge, "replicator.reconcile.destextent.remote-deleted-local-missing"},
 		ReplicatorReconcileDestExtentRemoteDeletedLocalNot:      {Gauge, "replicator.reconcile.destextent.remote-deleted-local-not"},
 		ReplicatorReconcileDestExtentSuspectMissingExtents:      {Gauge, "replicator.reconcile.destextent.suspect-missing-extent"},
+		ReplicatorReconcileCgExtentRun:                          {Gauge, "replicator.reconcile.cgextent.run"},
+		ReplicatorReconcileCgExtentFail:                         {Gauge, "replicator.reconcile.cgextent.fail"},
+		ReplicatorReconcileCgExtentFoundMissing:                 {Gauge, "replicator.reconcile.cgextent.foundmissing"},
+		ReplicatorReconcileCgExtentRemoteConsumedLocalMissing:   {Gauge, "replicator.reconcile.cgextent.remote-consumed-local-missing"},
+		ReplicatorReconcileCgExtentRemoteDeletedLocalMissing:    {Gauge, "replicator.reconcile.cgextent.remote-deleted-local-missing"},
 	},
 }
 
@@ -1224,6 +1264,8 @@ var dynamicMetricDefs = map[ServiceIdx]map[int]metricDefinition{
 	// definitions for Outputhost metrics
 	Outputhost: {
 		OutputhostCGMessageSent:           {Counter, "outputhost.message.sent.cg"},
+		OutputhostCGMessageSentBytes:      {Counter, "outputhost.message.sent.bytes.cg"},
+		OutputhostCGMessageReceivedBytes:  {Counter, "outputhost.message.received.bytes.cg"},
 		OutputhostCGMessageFailures:       {Counter, "outputhost.message.errors.cg"},
 		OutputhostCGCreditsReceived:       {Counter, "outputhost.credit-received.cg"},
 		OutputhostCGDLQMessageRequests:    {Counter, "outputhost.message.sent-dlq.cg"},

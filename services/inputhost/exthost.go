@@ -110,6 +110,8 @@ type (
 
 		maxSizeBytes  int64 // max size for this extent; TODO: Make this dynamically configurable?
 		currSizeBytes int64 // current size of this extent
+
+		state extHostState // state of this extHost
 	}
 
 	// Holds a particular extent for use by multiple publisher connections.
@@ -136,8 +138,14 @@ type (
 		sendTimer *common.Timer
 	}
 
-	extCacheClosedCb   func(string)
-	extCacheUnloadedCb func(string)
+	extHostState int
+)
+
+const (
+	extHostActive     extHostState = iota
+	extHostPrepClose               // used by the pathcache to determine if the connections need to be torn down or not
+	extHostCloseWrite              // used when the actual drain is happening
+	extHostInactive                // used when the extent is closed
 )
 
 const (
@@ -161,6 +169,9 @@ const (
 
 	// extLoadReportingInterval is the interval destination extent load is reported to controller
 	extLoadReportingInterval = 2 * time.Second
+
+	// drainIdleTimeout is the idle timeout for checking whether we have already drained or not
+	drainIdleTimeout = 5 * time.Second
 )
 
 var (
@@ -275,14 +286,16 @@ func (conn *extHost) close() {
 
 	conn.closed = true
 
+	// make sure the number of writable extents is updated just once
+	if conn.state == extHostActive {
+		conn.dstMetrics.Decrement(load.DstMetricNumWritableExtents)
+	}
 	// Shutdown order:
 	// 1. stop the write pump to replicas and wait for the pump to close
 	// 2. close the replica streams
 	// 3. stop the read pump from replicas
-	close(conn.closeChannel)
-	if ok := common.AwaitWaitGroup(&conn.waitWriteWG, defaultWGTimeout); !ok {
-		conn.logger.Fatal("waitWriteGroup timed out")
-	}
+	conn.stopWritePump()
+
 	for _, stream := range conn.streams {
 		stream.conn.close()
 		// stop the timer as well so that it gets gc'ed
@@ -303,7 +316,10 @@ func (conn *extHost) close() {
 			}
 		}
 	}
+	conn.state = extHostInactive
+	conn.lk.Unlock() // no longer need the lock
 
+	// wait for the read pump to stop
 	if ok := common.AwaitWaitGroup(&conn.waitReadWG, defaultWGTimeout); !ok {
 		conn.logger.Fatal("waitReadGroup timed out")
 	}
@@ -312,8 +328,6 @@ func (conn *extHost) close() {
 	if err := conn.sealExtent(); err != nil {
 		conn.logger.Warn("seal extent notify failed during closed")
 	}
-
-	conn.lk.Unlock() // no longer need the lock
 
 	conn.logger.WithFields(bark.Fields{
 		`sentSeqNo`:        conn.seqNo,
@@ -525,6 +539,15 @@ func (conn *extHost) writeMessagesPump() {
 	}
 }
 
+// It is ok to do a non-blocking send of the acks here during shutdown because we will
+// be failing all messages anyway.
+func (conn *extHost) writeAckToPubConn(putMsgAckCh chan *cherami.PutMessageAck, putMsgAck *cherami.PutMessageAck) {
+	select {
+	case putMsgAckCh <- putMsgAck:
+	case <-conn.forceUnloadCh:
+	}
+}
+
 func (conn *extHost) sendMessage(pr *inPutMessage, extSendTimer *common.Timer, watermark *int64) {
 	// make sure we can satisfy the rate, if needed
 	if conn.limitsEnabled {
@@ -535,12 +558,13 @@ func (conn *extHost) sendMessage(pr *inPutMessage, extSendTimer *common.Timer, w
 				Warn("inputhost: extHost: rate exceeded. throttling the message")
 			// Immediately send throttled status back to the client so that
 			// the client can throttle
-			pr.putMsgAckCh <- &cherami.PutMessageAck{
+			putMsgAck := &cherami.PutMessageAck{
 				ID:          common.StringPtr(pr.putMsg.GetID()),
 				UserContext: pr.putMsg.GetUserContext(),
 				Status:      common.CheramiStatusPtr(cherami.Status_THROTTLED),
 				Message:     common.StringPtr("throttling: inputhost rate exceeded"),
 			}
+			conn.writeAckToPubConn(pr.putMsgAckCh, putMsgAck)
 			return
 		}
 	}
@@ -557,13 +581,13 @@ func (conn *extHost) sendMessage(pr *inPutMessage, extSendTimer *common.Timer, w
 			Warn("inputhost: extHost: message delay exceeds minimum allowed; rejecting message")
 
 		// n-ack message, since it exceeds minimum allowed delay
-		pr.putMsgAckCh <- &cherami.PutMessageAck{
+		putMsgAck := &cherami.PutMessageAck{
 			ID:          common.StringPtr(pr.putMsg.GetID()),
 			UserContext: pr.putMsg.GetUserContext(),
 			Status:      common.CheramiStatusPtr(cherami.Status_FAILED),
 			Message:     common.StringPtr("delay exceeds minimum allowed"),
 		}
-
+		conn.writeAckToPubConn(pr.putMsgAckCh, putMsgAck)
 		return
 	}
 
@@ -571,13 +595,14 @@ func (conn *extHost) sendMessage(pr *inPutMessage, extSendTimer *common.Timer, w
 	if err != nil {
 		// For now, lets reply Status_FAILED immediately and
 		// close the connection if we got an error.
-		// this will result in the creation of a new extent, probably.
-		pr.putMsgAckCh <- &cherami.PutMessageAck{
+		// this will result in the creation of a new extent, probably
+		putMsgAck := &cherami.PutMessageAck{
 			ID:          common.StringPtr(pr.putMsg.GetID()),
 			UserContext: pr.putMsg.GetUserContext(),
 			Status:      common.CheramiStatusPtr(cherami.Status_FAILED),
 			Message:     common.StringPtr(err.Error()),
 		}
+		conn.writeAckToPubConn(pr.putMsgAckCh, putMsgAck)
 		go conn.close()
 		return
 	}
@@ -607,11 +632,16 @@ func (conn *extHost) aggregateAndSendReplies(numReplicas int) {
 	perMsgTimer := common.NewTimer(msgAckTimeout)
 	defer perMsgTimer.Stop()
 
+	// Drain idle timer
+	drainTimer := common.NewTimer(drainIdleTimeout)
+	defer drainTimer.Stop()
+
 	if conn.lastSuccessSeqNoCh != nil {
 		defer close(conn.lastSuccessSeqNoCh)
 	}
 
 	for {
+		drainTimer.Reset(drainIdleTimeout)
 		select {
 		case resCh, ok := <-conn.replyClientCh: // resCh is a writeResponse; each replica has a copy of this structure that it will use to send us ACK's through the appendMsgAck channel
 			if ok {
@@ -705,9 +735,22 @@ func (conn *extHost) aggregateAndSendReplies(numReplicas int) {
 					conn.logger.WithField(common.TagAckID, resCh.ackID).Error(`sending ack back to the client timed out`)
 				}
 				delete(inflightMessages, resCh.seqNo)
+
+				// check if we drained completely
+				if conn.isDrained(resCh.seqNo) {
+					// just call close and that will take care of the rest
+					go conn.close()
+				}
 			} else {
 				// we are closing the connection.
 				return
+			}
+		case <-drainTimer.C:
+			// if there are no inflight messages or if we have already drained all the things,
+			// we need to check here
+			if conn.isDrained(atomic.LoadInt64(&conn.lastSuccessSeqNo)) {
+				// just call close
+				go conn.close()
 			}
 		case <-conn.streamClosedChannel:
 			return
@@ -852,4 +895,84 @@ func (conn *extHost) getState() *admin.InputDestExtent {
 	}
 
 	return ext
+}
+
+// stopWritePump is used to stop the write pump if the extent is active or has
+// been prepped for drain and  mark the extHost as "Draining"
+func (conn *extHost) stopWritePump() bool {
+	if conn.state <= extHostPrepClose {
+		close(conn.closeChannel)
+		// wait for the write pump to drain for some timeout period
+		if ret := common.AwaitWaitGroup(&conn.waitWriteWG, defaultWGTimeout); !ret {
+			conn.logger.Fatalf("unable to stop write pump; wait group timeout")
+		}
+		conn.state = extHostCloseWrite
+		return true
+	}
+
+	return false
+}
+
+// isDrained returns true if the following conditions are true:
+// 	(1) extHost state is "extHostCloseWrite"
+//	(2) we have seen the reply for the last sent sequence number
+// if not, it returns false
+// Note: RLock() is sufficient here.
+func (conn *extHost) isDrained(replySeqNo int64) bool {
+	conn.lk.RLock()
+	if conn.state != extHostCloseWrite {
+		conn.lk.RUnlock()
+		return false
+	}
+
+	ret := false
+	if atomic.LoadInt64(&conn.seqNo) == replySeqNo {
+		conn.logger.WithFields(bark.Fields{
+			`drainedSeqNo`: replySeqNo,
+		}).Info("extent drained completely")
+		ret = true
+	}
+
+	conn.lk.RUnlock()
+	return ret
+}
+
+// prepForClose just decrements the number of writable extents for this destination
+func (conn *extHost) prepForClose() bool {
+	conn.lk.Lock()
+	if conn.state != extHostActive {
+		conn.lk.Unlock()
+		return false
+	}
+	conn.state = extHostPrepClose
+	conn.dstMetrics.Decrement(load.DstMetricNumWritableExtents)
+	conn.lk.Unlock()
+	return true
+}
+
+// waitForDrain is needed to wait for the actual drain to finish.
+// if we simply return without this, the controller will immediately
+// seal the extents since this drain API is synchronous
+func (conn *extHost) waitForDrain(drainTimeout time.Duration) {
+	drainTimer := common.NewTimer(drainTimeout)
+	defer drainTimer.Stop()
+	select {
+	// after we drain, we close the exthost which closes this channel as well
+	case <-conn.streamClosedChannel:
+		return
+	case <-drainTimer.C:
+		// timedout.. simply close
+		go conn.close()
+	}
+}
+
+// drain simply stops the write pump and marks the state as such
+func (conn *extHost) stopWrite(drainTimeout time.Duration) error {
+	conn.lk.Lock()
+	stopped := conn.stopWritePump()
+	conn.lk.Unlock()
+	if stopped {
+		conn.waitForDrain(drainTimeout)
+	}
+	return nil
 }

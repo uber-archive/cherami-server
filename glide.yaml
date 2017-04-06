@@ -64,3 +64,6 @@ import:
   - context
 - package: gopkg.in/validator.v2
 - package: gopkg.in/yaml.v2
+- package: github.com/Shopify/sarama
+  version: ^1.11.0
+  repo: http://github.com/Shopify/sarama

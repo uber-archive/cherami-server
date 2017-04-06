@@ -74,7 +74,7 @@ func (s *InClientImpl) UnloadDestinations(req *admin.UnloadDestinationsRequest) 
 }
 
 // ListLoadedDestinations lists all the loaded destinations from the inputhost
-func (s *InClientImpl) ListLoadedDestinations() (*admin.ListDestinationsResult_, error) {
+func (s *InClientImpl) ListLoadedDestinations() (*admin.ListLoadedDestinationsResult_, error) {
 	ctx, cancel := tcthrift.NewContext(defaultThriftTimeout)
 	defer cancel()
 

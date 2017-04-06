@@ -382,3 +382,77 @@ func (m *MockTChanReplicator) ListConsumerGroups(ctx thrift.Context, listRequest
 
 	return r0, r1
 }
+
+func (m *MockTChanReplicator) ReadConsumerGroupExtents(ctx thrift.Context, listRequest *shared.ReadConsumerGroupExtentsRequest) (*shared.ReadConsumerGroupExtentsResult_, error) {
+	ret := m.Called(ctx, listRequest)
+
+	var r0 *shared.ReadConsumerGroupExtentsResult_
+	if rf, ok := ret.Get(0).(func(thrift.Context, *shared.ReadConsumerGroupExtentsRequest) *shared.ReadConsumerGroupExtentsResult_); ok {
+		r0 = rf(ctx, listRequest)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*shared.ReadConsumerGroupExtentsResult_)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(thrift.Context, *shared.ReadConsumerGroupExtentsRequest) error); ok {
+		r1 = rf(ctx, listRequest)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+func (m *MockTChanReplicator) CreateConsumerGroupExtent(ctx thrift.Context, createRequest *shared.CreateConsumerGroupExtentRequest) error {
+	ret := m.Called(ctx, createRequest)
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(thrift.Context, *shared.CreateConsumerGroupExtentRequest) error); ok {
+		r0 = rf(ctx, createRequest)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+func (m *MockTChanReplicator) CreateRemoteConsumerGroupExtent(ctx thrift.Context, createRequest *shared.CreateConsumerGroupExtentRequest) error {
+	ret := m.Called(ctx, createRequest)
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(thrift.Context, *shared.CreateConsumerGroupExtentRequest) error); ok {
+		r0 = rf(ctx, createRequest)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+func (m *MockTChanReplicator) SetAckOffset(ctx thrift.Context, request *shared.SetAckOffsetRequest) error {
+	ret := m.Called(ctx, request)
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(thrift.Context, *shared.SetAckOffsetRequest) error); ok {
+		r0 = rf(ctx, request)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+func (m *MockTChanReplicator) SetAckOffsetInRemote(ctx thrift.Context, request *shared.SetAckOffsetRequest) error {
+	ret := m.Called(ctx, request)
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(thrift.Context, *shared.SetAckOffsetRequest) error); ok {
+		r0 = rf(ctx, request)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}

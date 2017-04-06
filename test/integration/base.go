@@ -350,6 +350,14 @@ func (tb *testBase) GetOutput() *outputhost.OutputHost {
 	return nil
 }
 
+// GetInput returns a random input host instance
+func (tb *testBase) GetInput() *inputhost.InputHost {
+	for _, ih := range tb.InputHosts {
+		return ih
+	}
+	return nil
+}
+
 // GetController returns a random controller
 // instance object from the set of controllers
 // configured for this test. This method asssumes

@@ -52,7 +52,7 @@ type (
 		// ReadStoreExtentStats returns the extent stats for the given extent and store
 		ReadStoreExtentStats(extentID string, storeID string) (*shared.ExtentStats, error)
 		// ReadConsumerGroupExtent returns the consumer group extent stats corresponding to the given dst/cg/ext.
-		ReadConsumerGroupExtent(dstID string, cgID string, extentID string) (*m.ConsumerGroupExtent, error)
+		ReadConsumerGroupExtent(dstID string, cgID string, extentID string) (*shared.ConsumerGroupExtent, error)
 		// ListDestinations returns an list of adestinations
 		ListDestinations() ([]*shared.DestinationDescription, error)
 		// ListDestinationsPage returns an list of adestinations
@@ -72,11 +72,11 @@ type (
 		// ListExtentsByReplicationStatus lists extents by storeID/ReplicationStatus
 		ListExtentsByReplicationStatus(storeID string, status *shared.ExtentReplicaReplicationStatus) ([]*shared.ExtentStats, error)
 		// ListExtentsByConsumerGroup lists all extents for the given destination / consumer group
-		ListExtentsByConsumerGroup(dstID string, cgID string, filterByStatus []m.ConsumerGroupExtentStatus) ([]*m.ConsumerGroupExtent, error)
+		ListExtentsByConsumerGroup(dstID string, cgID string, filterByStatus []shared.ConsumerGroupExtentStatus) ([]*shared.ConsumerGroupExtent, error)
 		// ListExtentsByConsumerGroupLite lists all extents for the given destination / consumer group
 		// this api only returns a few interesting columns for each consumer group extent in the
 		// result. For detailed info, see ListExtentsByConsumerGroup
-		ListExtentsByConsumerGroupLite(dstID string, cgID string, filterByStatus []m.ConsumerGroupExtentStatus) ([]*m.ConsumerGroupExtentLite, error)
+		ListExtentsByConsumerGroupLite(dstID string, cgID string, filterByStatus []shared.ConsumerGroupExtentStatus) ([]*m.ConsumerGroupExtentLite, error)
 		// CreateExtent creates a new extent for the given destination and marks the status as OPEN
 		CreateExtent(dstID string, extentID string, inhostID string, storeIDs []string) (*shared.CreateExtentResult_, error)
 		// CreateRemoteZoneExtent creates a new remote zone extent for the given destination and marks the status as OPEN
@@ -106,7 +106,7 @@ type (
 		// UpdateRemoteExtentPrimaryStore updates remoteExtentPrimaryStore
 		UpdateRemoteExtentPrimaryStore(dstID string, extentID string, remoteExtentPrimaryStore string) (*m.UpdateExtentStatsResult_, error)
 		// UpdateConsumerGroupExtentStatus updates the status of a consumer group extent
-		UpdateConsumerGroupExtentStatus(cgID, extID string, status m.ConsumerGroupExtentStatus) error
+		UpdateConsumerGroupExtentStatus(cgID, extID string, status shared.ConsumerGroupExtentStatus) error
 		// DeleteDestination marks a destination to be deleted
 		DeleteDestination(dstID string) error
 	}
@@ -355,7 +355,7 @@ func (mm *metadataMgrImpl) ListExtentsByReplicationStatus(storeID string, status
 	return resp.GetExtentStatsList(), nil
 }
 
-func (mm *metadataMgrImpl) ListExtentsByConsumerGroupLite(dstID string, cgID string, filterByStatus []m.ConsumerGroupExtentStatus) ([]*m.ConsumerGroupExtentLite, error) {
+func (mm *metadataMgrImpl) ListExtentsByConsumerGroupLite(dstID string, cgID string, filterByStatus []shared.ConsumerGroupExtentStatus) ([]*m.ConsumerGroupExtentLite, error) {
 
 	mReq := &m.ReadConsumerGroupExtentsLiteRequest{
 		DestinationUUID:   common.StringPtr(dstID),
@@ -412,9 +412,9 @@ func (mm *metadataMgrImpl) ListExtentsByConsumerGroupLite(dstID string, cgID str
 	return result, nil
 }
 
-func (mm *metadataMgrImpl) ListExtentsByConsumerGroup(dstID string, cgID string, filterByStatus []m.ConsumerGroupExtentStatus) ([]*m.ConsumerGroupExtent, error) {
+func (mm *metadataMgrImpl) ListExtentsByConsumerGroup(dstID string, cgID string, filterByStatus []shared.ConsumerGroupExtentStatus) ([]*shared.ConsumerGroupExtent, error) {
 
-	mReq := &m.ReadConsumerGroupExtentsRequest{
+	mReq := &shared.ReadConsumerGroupExtentsRequest{
 		DestinationUUID:   common.StringPtr(dstID),
 		ConsumerGroupUUID: common.StringPtr(cgID),
 		MaxResults:        common.Int32Ptr(defaultPageSize),
@@ -438,7 +438,7 @@ func (mm *metadataMgrImpl) ListExtentsByConsumerGroup(dstID string, cgID string,
 		}
 	}()
 
-	var result []*m.ConsumerGroupExtent
+	var result []*shared.ConsumerGroupExtent
 	for {
 		mResp, err := mm.mClient.ReadConsumerGroupExtents(nil, mReq)
 		if err != nil {
@@ -501,7 +501,7 @@ func (mm *metadataMgrImpl) createExtentInternal(dstID string, extentID string, i
 
 func (mm *metadataMgrImpl) AddExtentToConsumerGroup(dstID string, cgID string, extentID string, outHostID string, storeIDs []string) error {
 
-	mReq := &m.CreateConsumerGroupExtentRequest{
+	mReq := &shared.CreateConsumerGroupExtentRequest{
 		DestinationUUID:   common.StringPtr(dstID),
 		ExtentUUID:        common.StringPtr(extentID),
 		ConsumerGroupUUID: common.StringPtr(cgID),
@@ -570,7 +570,7 @@ func (mm *metadataMgrImpl) ReadExtentStats(dstID string, extentID string) (*shar
 	return result.GetExtentStats(), nil
 }
 
-func (mm *metadataMgrImpl) ReadConsumerGroupExtent(dstID string, cgID string, extentID string) (*m.ConsumerGroupExtent, error) {
+func (mm *metadataMgrImpl) ReadConsumerGroupExtent(dstID string, cgID string, extentID string) (*shared.ConsumerGroupExtent, error) {
 
 	mReq := &m.ReadConsumerGroupExtentRequest{
 		DestinationUUID:   common.StringPtr(dstID),
@@ -620,7 +620,7 @@ func (mm *metadataMgrImpl) DeleteConsumerGroup(dstID string, cgName string) erro
 
 func (mm *metadataMgrImpl) ReadConsumerGroup(dstID, dstPath, cgUUID, cgName string) (cgDesc *shared.ConsumerGroupDescription, err error) {
 
-	mReq := &m.ReadConsumerGroupRequest{}
+	mReq := &shared.ReadConsumerGroupRequest{}
 
 	if len(dstID) > 0 {
 		mReq.DestinationUUID = common.StringPtr(dstID)
@@ -648,7 +648,7 @@ func (mm *metadataMgrImpl) ReadConsumerGroup(dstID, dstPath, cgUUID, cgName stri
 
 func (mm *metadataMgrImpl) ReadConsumerGroupByUUID(cgUUID string) (cgDesc *shared.ConsumerGroupDescription, err error) {
 
-	mReq := &m.ReadConsumerGroupRequest{
+	mReq := &shared.ReadConsumerGroupRequest{
 		ConsumerGroupUUID: common.StringPtr(cgUUID),
 	}
 
@@ -724,12 +724,12 @@ func (mm *metadataMgrImpl) UpdateRemoteExtentPrimaryStore(dstID string, extentID
 	return mm.mClient.UpdateExtentStats(nil, mReq)
 }
 
-func (mm *metadataMgrImpl) UpdateConsumerGroupExtentStatus(cgID, extID string, status m.ConsumerGroupExtentStatus) error {
+func (mm *metadataMgrImpl) UpdateConsumerGroupExtentStatus(cgID, extID string, status shared.ConsumerGroupExtentStatus) error {
 
-	mReq := &m.UpdateConsumerGroupExtentStatusRequest{
+	mReq := &shared.UpdateConsumerGroupExtentStatusRequest{
 		ConsumerGroupUUID: common.StringPtr(cgID),
 		ExtentUUID:        common.StringPtr(extID),
-		Status:            m.ConsumerGroupExtentStatusPtr(status),
+		Status:            shared.ConsumerGroupExtentStatusPtr(status),
 	}
 
 	return mm.mClient.UpdateConsumerGroupExtentStatus(nil, mReq)
