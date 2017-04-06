@@ -1107,7 +1107,7 @@ func (mcp *Mcp) DeleteConsumerGroup(ctx thrift.Context, deleteRequest *shared.De
 			return nil
 		}
 
-		replicatorErr = localReplicator.DeleteConsumerGroup(ctx, deleteRequest)
+		replicatorErr = localReplicator.DeleteRemoteConsumerGroup(ctx, deleteRequest)
 		if replicatorErr != nil {
 			lclLg.WithField(common.TagErr, err).Error("DeleteConsumerGroup: DeleteRemoteConsumerGroup failed")
 			context.m3Client.IncCounter(metrics.ControllerDeleteConsumerGroupScope, metrics.ControllerErrCallReplicatorCounter)

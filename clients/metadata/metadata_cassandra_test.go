@@ -2389,6 +2389,97 @@ func (s *CassandraSuite) TestSetAckOffset() {
 	}
 }
 
+func (s *CassandraSuite) TestSetAckOffsetWithoutOutputAndStore() {
+	assert := s.Require()
+
+	destUUID := uuid.New()
+	cgUUID := uuid.New()
+	extUUID := uuid.New()
+	outputHost := uuid.New()
+	connectedStore := uuid.New()
+	storeUUIDs := make([]string, 0, 3)
+	for i := 0; i < 3; i++ {
+		storeUUIDs = append(storeUUIDs, uuid.New())
+	}
+
+	// First create the cg extent
+	createReq := &shared.CreateConsumerGroupExtentRequest{
+		DestinationUUID:   common.StringPtr(destUUID),
+		ExtentUUID:        common.StringPtr(extUUID),
+		ConsumerGroupUUID: common.StringPtr(cgUUID),
+		OutputHostUUID:    common.StringPtr(outputHost),
+		StoreUUIDs:        storeUUIDs,
+	}
+
+	err := s.client.CreateConsumerGroupExtent(nil, createReq)
+	assert.Nil(err, "CreateConsumerGroupExtent() call failed")
+
+	// set ack level
+	setAckReq := &shared.SetAckOffsetRequest{
+		ExtentUUID:         common.StringPtr(extUUID),
+		ConsumerGroupUUID:  common.StringPtr(cgUUID),
+		OutputHostUUID:     common.StringPtr(outputHost),
+		ConnectedStoreUUID: common.StringPtr(connectedStore),
+		Status:             common.CheramiConsumerGroupExtentStatusPtr(shared.ConsumerGroupExtentStatus_OPEN),
+		AckLevelAddress:    common.Int64Ptr(1234),
+		AckLevelSeqNo:      common.Int64Ptr(2345),
+		AckLevelSeqNoRate:  common.Float64Ptr(34.56),
+		ReadLevelAddress:   common.Int64Ptr(4567),
+		ReadLevelSeqNo:     common.Int64Ptr(5678),
+		ReadLevelSeqNoRate: common.Float64Ptr(67.89),
+	}
+
+	err = s.client.SetAckOffset(nil, setAckReq)
+	assert.Nil(err, "SetAckOffset failed")
+
+	expected := &shared.ConsumerGroupExtent{
+		ConsumerGroupUUID:  common.StringPtr(cgUUID),
+		ExtentUUID:         common.StringPtr(extUUID),
+		OutputHostUUID:     common.StringPtr(outputHost),
+		Status:             common.MetadataConsumerGroupExtentStatusPtr(shared.ConsumerGroupExtentStatus_OPEN),
+		StoreUUIDs:         storeUUIDs,
+		ConnectedStoreUUID: common.StringPtr(connectedStore),
+		AckLevelOffset:     common.Int64Ptr(setAckReq.GetAckLevelAddress()),
+		AckLevelSeqNo:      common.Int64Ptr(setAckReq.GetAckLevelSeqNo()),
+		AckLevelSeqNoRate:  common.Float64Ptr(setAckReq.GetAckLevelSeqNoRate()),
+		ReadLevelOffset:    common.Int64Ptr(setAckReq.GetReadLevelAddress()),
+		ReadLevelSeqNo:     common.Int64Ptr(setAckReq.GetReadLevelSeqNo()),
+		ReadLevelSeqNoRate: common.Float64Ptr(setAckReq.GetReadLevelSeqNoRate()),
+	}
+
+	readReq := &m.ReadConsumerGroupExtentRequest{
+		DestinationUUID:   common.StringPtr(destUUID),
+		ExtentUUID:        common.StringPtr(extUUID),
+		ConsumerGroupUUID: common.StringPtr(cgUUID),
+	}
+	var got *m.ReadConsumerGroupExtentResult_
+	got, err = s.client.ReadConsumerGroupExtent(nil, readReq)
+	assert.Nil(err, "SetAckOffset failed to update consumer group extent")
+	assertConsumerGroupExtentEqual(s, expected, got.GetExtent())
+
+	// set ack without output host and connected store
+	*setAckReq.AckLevelAddress = 1111
+	setAckReq.OutputHostUUID = nil
+	setAckReq.ConnectedStoreUUID = nil
+	err = s.client.SetAckOffset(nil, setAckReq)
+	assert.Nil(err, "SetAckOffset failed")
+
+	expected.AckLevelOffset = common.Int64Ptr(setAckReq.GetAckLevelAddress())
+	got, err = s.client.ReadConsumerGroupExtent(nil, readReq)
+	assert.Nil(err, "SetAckOffset failed to update consumer group extent")
+	assertConsumerGroupExtentEqual(s, expected, got.GetExtent())
+
+	// set ack again, still without output host and connected store, but only the status
+	setAckReq.Status = common.MetadataConsumerGroupExtentStatusPtr(shared.ConsumerGroupExtentStatus_CONSUMED)
+	err = s.client.SetAckOffset(nil, setAckReq)
+	assert.Nil(err, "SetAckOffset failed")
+
+	expected.Status = common.MetadataConsumerGroupExtentStatusPtr(shared.ConsumerGroupExtentStatus_CONSUMED)
+	got, err = s.client.ReadConsumerGroupExtent(nil, readReq)
+	assert.Nil(err, "SetAckOffset failed to update consumer group extent")
+	assertConsumerGroupExtentEqual(s, expected, got.GetExtent())
+}
+
 func (s *CassandraSuite) TestGetConsumerGroupExtents() {
 
 	assert := s.Require()
