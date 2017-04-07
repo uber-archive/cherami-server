@@ -168,8 +168,8 @@ func (s *KafkaStreamSuite) WithTestMessages(count int, fn func(chan *sarama.Cons
 		sMsg := &sarama.ConsumerMessage{
 			Key:       []byte(strconv.Itoa(10*i + 1)),
 			Value:     []byte(strconv.Itoa(10*i + 5)),
-			Topic:     strconv.Itoa(10*i + 2),
-			Partition: int32(10*i + 3),
+			Topic:     strconv.Itoa((10*i + 2) % 100),
+			Partition: int32(10*i+3) % 100,
 			Offset:    int64(10*i + 4),
 			Timestamp: time.Now(),
 		}
@@ -183,7 +183,7 @@ func (s *KafkaStreamSuite) WithTestMessages(count int, fn func(chan *sarama.Cons
 }
 
 func (s *KafkaStreamSuite) WithKafkaStream(c chan *sarama.ConsumerMessage, fn func(stream.BStoreOpenReadStreamOutCall)) {
-	k := OpenKafkaStream(c)
+	k := OpenKafkaStream(c, common.GetDefaultLogger())
 	s.NotNil(k)
 	fn(k)
 	s.NoError(k.Flush())
@@ -220,8 +220,8 @@ func (s *KafkaStreamSuite) ValidateMessage(msg *store.ReadMessageContent) {
 
 	userContext := putMsg.GetUserContext()
 	s.Equal(strconv.Itoa(10*i+1), userContext[`key`])
-	s.Equal(strconv.Itoa(10*i+2), userContext[`topic`])
-	s.Equal(strconv.Itoa(10*i+3), userContext[`partition`])
+	s.Equal(strconv.Itoa((10*i+2)%100), userContext[`topic`])
+	s.Equal(strconv.Itoa((10*i+3)%100), userContext[`partition`])
 	s.Equal(strconv.Itoa(10*i+4), userContext[`offset`])
 	s.Equal(strconv.Itoa(10*i+5), string(putMsg.GetData()))
 }
