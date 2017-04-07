@@ -688,6 +688,7 @@ func (r *Replicator) UpdateConsumerGroup(ctx thrift.Context, updateRequest *shar
 
 	r.logger.WithFields(bark.Fields{
 		common.TagCnsPth: common.FmtCnsPth(updateRequest.GetConsumerGroupName()),
+		common.TagCnsm:   common.FmtCnsm(cgDesc.GetConsumerGroupUUID()),
 		common.TagDstPth: common.FmtDstPth(updateRequest.GetDestinationPath()),
 		common.TagDst:    common.FmtDst(cgDesc.GetDestinationUUID()),
 		common.TagDLQID:  common.FmtDLQID(cgDesc.GetDeadLetterQueueDestinationUUID()),
@@ -777,6 +778,11 @@ func (r *Replicator) DeleteConsumerGroup(ctx thrift.Context, deleteRequest *shar
 		r.m3Client.IncCounter(metrics.ReplicatorDeleteCgScope, metrics.ReplicatorFailures)
 		return err
 	}
+
+	r.logger.WithFields(bark.Fields{
+		common.TagCnsPth: common.FmtCnsPth(deleteRequest.GetConsumerGroupName()),
+		common.TagDstPth: common.FmtDstPth(deleteRequest.GetDestinationPath()),
+	}).Info(`Deleted cg`)
 
 	return nil
 }

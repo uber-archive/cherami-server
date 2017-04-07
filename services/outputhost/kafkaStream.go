@@ -21,9 +21,9 @@
 package outputhost
 
 import (
+	"sync/atomic"
 	"errors"
 	"strconv"
-	"sync/atomic"
 
 	s "github.com/Shopify/sarama"
 	"github.com/uber-common/bark"
@@ -85,9 +85,10 @@ func (k *kafkaStream) ResponseHeaders() (map[string]string, error) {
  * Setup & Utility
  */
 
-func OpenKafkaStream(c <-chan *s.ConsumerMessage) stream.BStoreOpenReadStreamOutCall {
+func OpenKafkaStream(c <-chan *s.ConsumerMessage, logger bark.Logger) stream.BStoreOpenReadStreamOutCall {
 	k := &kafkaStream{
 		kafkaMsgsCh: c,
+		logger: logger,
 	}
 	return k
 }
@@ -98,7 +99,7 @@ func (s *kafkaStream) convertKafkaMessageToCherami(k *s.ConsumerMessage, logger 
 	}
 
 	c.Message = &store.ReadMessage{
-		Address: common.Int64Ptr(42), /*
+		Address: common.Int64Ptr(
 			int64(kafkaAddresser.GetStoreAddress(
 				&topicPartition{
 					Topic:     k.Topic,
@@ -112,7 +113,7 @@ func (s *kafkaStream) convertKafkaMessageToCherami(k *s.ConsumerMessage, logger 
 						`partition`: k.Partition,
 					})
 				},
-			))), */
+			))),
 	}
 
 	c.Message.Message = &store.AppendMessage{
