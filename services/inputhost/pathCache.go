@@ -560,5 +560,8 @@ func (pathCache *inPathCache) drainExtent(extUUID string, updateUUID string, dra
 		// do best effort waiting to notify all connections here
 		common.AwaitWaitGroup(&connDrainWG, connWGTimeout)
 		extCache.connection.stopWrite(drainTimeout)
+	} else {
+		// we need to unlock the lock held above
+		pathCache.RUnlock()
 	}
 }
