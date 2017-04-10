@@ -116,7 +116,7 @@ func (p *DistancePlacement) pickHosts(service string, poolHosts, sourceHosts []*
 
 // Helper function to pick hosts with fallback predicates
 func (p *DistancePlacement) pickHostsWithFallback(service string, minDistance, maxDistance, minFallback, maxFallback uint16, storeHosts []*common.HostInfo) (*common.HostInfo, error) {
-	if hosts, err := p.context.rpm.GetHosts(service); err == nil {
+	if hosts, err := p.getHealthyHosts(service); err == nil {
 		if maxDistance <= minDistance {
 			maxDistance = distance.InfiniteDistance
 		}
@@ -251,12 +251,28 @@ func (p *DistancePlacement) doesStoreMeetConstraints(host *common.HostInfo) bool
 	return true
 }
 
+func (p *DistancePlacement) getHealthyHosts(service string) ([]*common.HostInfo, error) {
+	hosts, err := p.context.rpm.GetHosts(service)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]*common.HostInfo, 0, len(hosts))
+	for _, h := range hosts {
+		state, _ := p.context.failureDetector.GetHostState(service, h.UUID)
+		if state == dfddHostStateGoingDown { // ignore hosts in GoingDown state from placement
+			continue
+		}
+		result = append(result, h)
+	}
+	return result, nil
+}
+
 // findEligibleStoreHosts gets all store hosts and
 // filters them based on AdminStatus. Only returns
 // administratively enabled store hosts
 func (p *DistancePlacement) findEligibleStoreHosts() ([]*common.HostInfo, error) {
 
-	storeHosts, err := p.context.rpm.GetHosts(common.StoreServiceName)
+	storeHosts, err := p.getHealthyHosts(common.StoreServiceName)
 	if err != nil {
 		return nil, err
 	}

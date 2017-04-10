@@ -209,7 +209,7 @@ func (mcp *Mcp) Start(thriftService []thrift.TChanServer) {
 	context.loadMetrics.Start()
 	context.cfgMgr.Start()
 
-	context.failureDetector = NewDfdd(context)
+	context.failureDetector = NewDfdd(context, common.NewRealTimeSource())
 	context.failureDetector.Start()
 
 	context.retMgr = newRetMgrRunner(&retMgrRunnerContext{
@@ -543,6 +543,14 @@ func (mcp *Mcp) ReportNodeMetric(ctx thrift.Context, request *c.ReportNodeMetric
 	}
 	if metrics.IsSetOutgoingBytesCounter() {
 		loadMetrics.Put(hostID, load.EmptyTag, load.BytesOutPerSec, metrics.GetOutgoingBytesCounter(), timestamp)
+	}
+	if metrics.IsSetNodeStatus() && request.IsSetRole() {
+		switch request.GetRole() {
+		case c.Role_IN:
+			context.failureDetector.ReportHostGoingDown(common.InputServiceName, hostID)
+		case c.Role_STORE:
+			context.failureDetector.ReportHostGoingDown(common.StoreServiceName, hostID)
+		}
 	}
 
 	return nil

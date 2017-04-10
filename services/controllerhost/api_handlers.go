@@ -88,6 +88,13 @@ func isExtentBeingSealed(context *Context, extentID string) bool {
 	return context.extentSeals.inProgress.Contains(extentID) || context.extentSeals.failed.Contains(extentID)
 }
 
+// isInputGoingDown returns true if the specified input host
+// is going down for planned maintenance or deployment
+func isInputGoingDown(context *Context, hostID string) bool {
+	state, _ := context.failureDetector.GetHostState(common.InputServiceName, hostID)
+	return state == dfddHostStateGoingDown
+}
+
 func getLockTimeout(result *resultCacheReadResult) time.Duration {
 	if len(result.cachedResult) < 1 {
 		return time.Second
@@ -255,6 +262,13 @@ func getInputAddrIfExtentIsWritable(context *Context, extent *m.DestinationExten
 			WithField(common.TagIn, common.FmtIn(extent.GetInputHostUUID())).
 			Info("Found unhealthy extent, input unhealthy")
 		return "", err
+	}
+	if isInputGoingDown(context, extent.GetInputHostUUID()) {
+		context.log.
+			WithField(common.TagExt, common.FmtExt(extent.GetExtentUUID())).
+			WithField(common.TagIn, common.FmtIn(extent.GetInputHostUUID())).
+			Info("input host is in going down state, treating extent as unwritable")
+		return "", errNoInputHosts
 	}
 	if !areExtentStoresHealthy(context, extent) {
 		return "", errNoStoreHosts

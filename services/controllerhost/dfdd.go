@@ -25,7 +25,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/uber-common/bark"
+	"errors"
 	"github.com/uber/cherami-server/common"
 )
 
@@ -37,15 +37,19 @@ type (
 	// detection logic (on top of Ringpop) must go.
 	Dfdd interface {
 		common.Daemon
-
-		// override the durations, used for testing
-		OverrideHostDownPeriodForStage2(period time.Duration)
-		OverrideHealthCheckInterval(period time.Duration)
+		// ReportHostGoingDown reports a host as going down
+		// for planned deployment or maintenance
+		ReportHostGoingDown(service string, hostID string)
+		// GetHostState returns a tuple representing the current
+		// dfdd host state and the duration for which the host
+		// has been in that state
+		GetHostState(service string, hostID string) (dfddHostState, time.Duration)
 	}
 
-	// serviceID is an enum for identifying
-	// cherami service [input/output/store]
-	serviceID int
+	dfddHost struct {
+		state               dfddHostState
+		lastStateChangeTime int64
+	}
 
 	dfddImpl struct {
 		started    int32
@@ -58,46 +62,54 @@ type (
 		inputListenerCh chan *common.RingpopListenerEvent
 		storeListenerCh chan *common.RingpopListenerEvent
 
-		healthCheckTicker   *time.Ticker
-		healthCheckInterval time.Duration
+		inputHosts atomic.Value
+		storeHosts atomic.Value
 
-		unhealthyStores     map[string]time.Time
-		unhealthyStoresLock sync.RWMutex
-
-		unhealthyInputs     map[string]time.Time
-		unhealthyInputsLock sync.RWMutex
-
-		hostDownPeriodForStage2 time.Duration
+		timeSource common.TimeSource
 	}
 )
 
-const (
-	inputServiceID serviceID = iota
-	outputServiceID
-	storeServiceID
-)
+var errUnknownService = errors.New("dfdd: unknown service")
 
 const (
 	listenerChannelSize = 32
-
-	healthCheckInterval = time.Duration(1 * time.Minute)
 )
 
+type dfddHostState int
+
+/*
+ * State Transitions
+ *
+ *          Unknown  -- rp.HostAddedEvent           --> UP
+ *               UP  -- loadReporter.HostGoingDown  --> GoingDown
+ *               UP  -- rp.HostRemovedEvent         --> Down
+ *        GoingDown  -- rp.HostRemovedEvent         --> Down
+ *  Down (storeHost) -- 2 hours                     --> Forgotten/Removed
+ *  Down (inputHost) -- 0 hours                     --> Forgotten/Removed
+ */
 const (
-	hostDownPeriodForStage2 = time.Duration(3 * time.Minute)
+	dfddHostStateUnknown dfddHostState = iota
+	dfddHostStateUP
+	dfddHostStateGoingDown
+	dfddHostStateDown
+	dfddHostStateForgotten
 )
 
-// different stages of host being down
-// stage 1: host is just removed from ringpop. Any service restart or deployment can trigger it
-// stage 2: host is removed from ringpop for hostDownPeriodForStage2. For example a machine reboot can trigger it
-// stage 3: host is removed form ringpop for hostDownPeriodForStage3(for example: 24 hrs). Most likely the machine is down and needs manual repair.
-// Note currently stage 3 is not being handled yet
-type hostDownStage int
+// state that represents that the host is about to
+// go down for planned deployment or maintenance
+const hostGoingDownEvent common.RingpopEventType = 99
 
-const (
-	hostDownStage1 hostDownStage = iota
-	hostDownStage2
-)
+// how long remains in down state before its forgotten forever
+const downToForgottenDuration = int64(time.Hour * 2)
+
+// max time host can be down during deployments / restarts etc
+const maxHostRestartDuration = 5 * time.Minute
+
+// initial capacity of the hosts map
+const hostMapInitialCapacity = 8
+
+// periodic ticker interval for the dfdd state machine
+var stateMachineTickerInterval = time.Minute * 5
 
 // NewDfdd creates and returns an instance of discovery
 // and failure detection daemon. Dfdd will monitor
@@ -105,68 +117,104 @@ const (
 // Input/Output/StoreHostFailedEvent for every host
 // that failed. It currently does not maintain a list
 // of healthy hosts for every service, thats a WIP.
-func NewDfdd(context *Context) Dfdd {
-	return &dfddImpl{
-		context:                 context,
-		shutdownC:               make(chan struct{}),
-		inputListenerCh:         make(chan *common.RingpopListenerEvent, listenerChannelSize),
-		storeListenerCh:         make(chan *common.RingpopListenerEvent, listenerChannelSize),
-		unhealthyStores:         make(map[string]time.Time),
-		unhealthyInputs:         make(map[string]time.Time),
-		hostDownPeriodForStage2: hostDownPeriodForStage2,
-		healthCheckInterval:     healthCheckInterval,
+func NewDfdd(context *Context, timeSource common.TimeSource) Dfdd {
+	dfdd := &dfddImpl{
+		context:         context,
+		timeSource:      timeSource,
+		shutdownC:       make(chan struct{}),
+		inputListenerCh: make(chan *common.RingpopListenerEvent, listenerChannelSize),
+		storeListenerCh: make(chan *common.RingpopListenerEvent, listenerChannelSize),
 	}
+	dfdd.inputHosts.Store(make(map[string]dfddHost, 8))
+	dfdd.storeHosts.Store(make(map[string]dfddHost, 8))
+	return dfdd
 }
 
 func (dfdd *dfddImpl) Start() {
-	if !atomic.CompareAndSwapInt32(&dfdd.started, 0, 1) {
-		dfdd.context.log.Fatal("Attempt to start failure detector twice")
-	}
 
-	dfdd.healthCheckTicker = time.NewTicker(dfdd.healthCheckInterval)
+	if !atomic.CompareAndSwapInt32(&dfdd.started, 0, 1) {
+		dfdd.context.log.Fatal("dfdd daemon already started")
+	}
 
 	rpm := dfdd.context.rpm
 
 	err := rpm.AddListener(common.InputServiceName, buildListenerName(common.InputServiceName), dfdd.inputListenerCh)
 	if err != nil {
-		dfdd.context.log.WithField(common.TagErr, err).Fatal(`AddListener(inputhost) failed`)
+		dfdd.context.log.WithField(common.TagErr, err).Fatal(`rpm.addListener(inputhost) failed`)
 		return
 	}
 
 	err = rpm.AddListener(common.StoreServiceName, buildListenerName(common.StoreServiceName), dfdd.storeListenerCh)
 	if err != nil {
-		dfdd.context.log.WithField(common.TagErr, err).Fatal(`AddListener(storehost) failed`)
+		dfdd.context.log.WithField(common.TagErr, err).Fatal(`rpm.addListener(storehost) failed`)
 		return
 	}
 
 	dfdd.shutdownWG.Add(1)
-
 	go dfdd.run()
-
-	go dfdd.healthCheck()
-
-	dfdd.context.log.Info("Failure Detector Daemon started")
+	dfdd.context.log.Info("dfdd daemon started")
 }
 
 func (dfdd *dfddImpl) Stop() {
 	close(dfdd.shutdownC)
 	if !common.AwaitWaitGroup(&dfdd.shutdownWG, time.Second) {
-		dfdd.context.log.Error("Timeoud out waiting for failure detector to stop")
+		dfdd.context.log.Error("timed out waiting for dfdd daemon to stop")
 	}
+	dfdd.context.log.Info("dfdd daemon stopped")
+}
 
-	dfdd.context.log.Info("Failure Detector Daemon stopped")
+// GetHostState returns a tuple representing the current
+// dfdd host state and the duration for which the host
+// has been in that state
+func (dfdd *dfddImpl) GetHostState(service string, hostID string) (dfddHostState, time.Duration) {
+	hosts, err := dfdd.getHosts(service)
+	if err != nil {
+		return dfddHostStateUnknown, time.Duration(0)
+	}
+	if curr, ok := hosts[hostID]; ok {
+		now := dfdd.timeSource.Now().UnixNano()
+		return curr.state, time.Duration(now - curr.lastStateChangeTime)
+	}
+	return dfddHostStateUnknown, time.Duration(0)
+}
+
+// ReportHostGoingDown reports a host as going down
+// for planned deployment or maintenance
+func (dfdd *dfddImpl) ReportHostGoingDown(service string, hostID string) {
+	event := &common.RingpopListenerEvent{
+		Key:  hostID,
+		Type: hostGoingDownEvent,
+	}
+	switch service {
+	case common.InputServiceName:
+		dfdd.inputListenerCh <- event
+		dfdd.context.log.WithField(common.TagIn, hostID).
+			Info("input host reported as going down for planned maintenance")
+	case common.StoreServiceName:
+		dfdd.storeListenerCh <- event
+		dfdd.context.log.WithField(common.TagStor, hostID).
+			Info("store host reported as going down for planned maintenance")
+	default:
+		return
+	}
 }
 
 // run is the main event loop that receives
 // events from RingpopMonitor and triggers
 // node failed events to the event pipeline
 func (dfdd *dfddImpl) run() {
+
+	ticker := common.NewTimer(stateMachineTickerInterval)
+
 	for {
 		select {
 		case e := <-dfdd.inputListenerCh:
-			dfdd.handleListenerEvent(inputServiceID, e)
+			dfdd.handleListenerEvent(common.InputServiceName, e)
 		case e := <-dfdd.storeListenerCh:
-			dfdd.handleListenerEvent(storeServiceID, e)
+			dfdd.handleListenerEvent(common.StoreServiceName, e)
+		case <-ticker.C:
+			dfdd.handleTicker()
+			ticker.Reset(stateMachineTickerInterval)
 		case <-dfdd.shutdownC:
 			dfdd.shutdownWG.Done()
 			return
@@ -174,130 +222,143 @@ func (dfdd *dfddImpl) run() {
 	}
 }
 
-func (dfdd *dfddImpl) OverrideHostDownPeriodForStage2(period time.Duration) {
-	dfdd.hostDownPeriodForStage2 = period
-}
-
-func (dfdd *dfddImpl) OverrideHealthCheckInterval(period time.Duration) {
-	dfdd.healthCheckInterval = period
-}
-
-func (dfdd *dfddImpl) healthCheckRoutine() {
-	var unhealthyInputList []string
-	{
-		dfdd.unhealthyInputsLock.RLock()
-		currentTime := time.Now().UTC()
-		for host, lastSeenTime := range dfdd.unhealthyInputs {
-			if currentTime.Sub(lastSeenTime) > dfdd.hostDownPeriodForStage2 {
-				dfdd.context.log.WithFields(bark.Fields{
-					common.TagIn:     common.FmtIn(host),
-					`last seen time`: lastSeenTime,
-				}).Info("Input host is down(stage 2)")
-				unhealthyInputList = append(unhealthyInputList, host)
+func (dfdd *dfddImpl) handleTicker() {
+	now := dfdd.timeSource.Now().UnixNano()
+	hosts, _ := dfdd.getHosts(common.StoreServiceName)
+	forgotten := make(map[string]struct{}, 4)
+	for k, v := range hosts {
+		if v.state == dfddHostStateDown {
+			diff := now - v.lastStateChangeTime
+			if diff >= int64(downToForgottenDuration) {
+				forgotten[k] = struct{}{}
+				continue
 			}
 		}
-		dfdd.unhealthyInputsLock.RUnlock()
-	}
-	for _, host := range unhealthyInputList {
-		// report unhealthy here(which will reset the timestamp to now) so that the actions can be triggered again
-		// in next cycle(after hostDownPeriodForStage2) if the host still doesn't come back
-		dfdd.reportHostUnhealthy(inputServiceID, host)
 	}
 
-	var unhealthyStoreList []string
-	{
-		dfdd.unhealthyStoresLock.RLock()
-		currentTime := time.Now().UTC()
-		for host, lastSeenTime := range dfdd.unhealthyStores {
-			if currentTime.Sub(lastSeenTime) > dfdd.hostDownPeriodForStage2 {
-				dfdd.context.log.WithFields(bark.Fields{
-					common.TagStor:   common.FmtStor(host),
-					`last seen time`: lastSeenTime,
-				}).Info("Store host is down(stage2)")
-
-				event := NewStoreHostFailedEvent(host, hostDownStage2)
-				if !dfdd.context.eventPipeline.Add(event) {
-					dfdd.context.log.WithField(common.TagStor, common.FmtStor(host)).Error("Failed to enqueue StoreHostFailedEvent(stage 2)")
-				}
-				unhealthyStoreList = append(unhealthyStoreList, host)
-			}
-		}
-		dfdd.unhealthyStoresLock.RUnlock()
-	}
-	for _, host := range unhealthyStoreList {
-		// report unhealthy here(which will reset the timestamp to now) so that the actions can be triggered again
-		// in next cycle(after hostDownPeriodForStage2) if the host still doesn't come back
-		dfdd.reportHostUnhealthy(storeServiceID, host)
+	if len(forgotten) == 0 {
+		return
 	}
 
-	return
+	copy := deepCopyMap(hosts)
+	for k := range forgotten {
+		delete(copy, k)
+	}
+	dfdd.putHosts(common.StoreServiceName, copy)
 }
 
-func (dfdd *dfddImpl) healthCheck() {
-	for {
-		select {
-		case <-dfdd.healthCheckTicker.C:
-			dfdd.healthCheckRoutine()
-		case <-dfdd.shutdownC:
+func (dfdd *dfddImpl) handleHostAddedEvent(service string, event *common.RingpopListenerEvent) {
+	hosts, err := dfdd.getHosts(service)
+	if err != nil {
+		return
+	}
+	if curr, ok := hosts[event.Key]; ok {
+		if curr.state == dfddHostStateUP {
 			return
 		}
 	}
+	copy := deepCopyMap(hosts)
+	copy[event.Key] = newDFDDHost(dfddHostStateUP, dfdd.timeSource)
+	dfdd.putHosts(service, copy)
 }
 
-func (dfdd *dfddImpl) reportHostUnhealthy(id serviceID, hostUUID string) {
-	switch id {
-	case inputServiceID:
-		dfdd.context.log.WithField(common.TagIn, common.FmtIn(hostUUID)).Info("report input unhealthy")
-		dfdd.unhealthyInputsLock.Lock()
-		defer dfdd.unhealthyInputsLock.Unlock()
-		dfdd.unhealthyInputs[hostUUID] = time.Now().UTC()
-	case storeServiceID:
-		dfdd.context.log.WithField(common.TagStor, common.FmtStor(hostUUID)).Info("report store unhealthy")
-		dfdd.unhealthyStoresLock.Lock()
-		defer dfdd.unhealthyStoresLock.Unlock()
-		dfdd.unhealthyStores[hostUUID] = time.Now().UTC()
-	}
-}
+func (dfdd *dfddImpl) handleHostRemovedEvent(service string, event *common.RingpopListenerEvent) {
 
-func (dfdd *dfddImpl) reportHostHealthy(id serviceID, hostUUID string) {
-	switch id {
-	case inputServiceID:
-		dfdd.unhealthyInputsLock.Lock()
-		defer dfdd.unhealthyInputsLock.Unlock()
-		delete(dfdd.unhealthyInputs, hostUUID)
-	case storeServiceID:
-		dfdd.unhealthyStoresLock.Lock()
-		defer dfdd.unhealthyStoresLock.Unlock()
-		delete(dfdd.unhealthyStores, hostUUID)
-	}
-}
-
-func (dfdd *dfddImpl) handleListenerEvent(id serviceID, listenerEvent *common.RingpopListenerEvent) {
-
-	if listenerEvent.Type == common.HostAddedEvent {
-		dfdd.reportHostHealthy(id, listenerEvent.Key)
+	hosts, err := dfdd.getHosts(service)
+	if err != nil {
 		return
 	}
 
-	dfdd.reportHostUnhealthy(id, listenerEvent.Key)
+	curr, ok := hosts[event.Key]
+	if !ok || curr.state >= dfddHostStateDown {
+		return
+	}
 
-	var event Event
+	var failedEvent Event
+	copy := deepCopyMap(hosts)
+	switch service {
+	case common.InputServiceName:
+		delete(copy, event.Key)
+		failedEvent = NewInputHostFailedEvent(event.Key)
+	case common.StoreServiceName:
+		dfddHost := newDFDDHost(dfddHostStateDown, dfdd.timeSource)
+		copy[event.Key] = dfddHost
+		failedEvent = NewStoreHostFailedEvent(event.Key)
+	}
 
-	switch id {
-	case inputServiceID:
-		dfdd.context.log.WithField(common.TagIn, common.FmtIn(listenerEvent.Key)).Info("InputHostFailed")
-		event = NewInputHostFailedEvent(listenerEvent.Key)
-	case storeServiceID:
-		dfdd.context.log.WithField(common.TagStor, common.FmtStor(listenerEvent.Key)).Info("StoreHostFailed")
-		event = NewStoreHostFailedEvent(listenerEvent.Key, hostDownStage1)
+	dfdd.putHosts(service, copy)
+	if !dfdd.context.eventPipeline.Add(failedEvent) {
+		dfdd.context.log.WithField(common.TagEvent, event).Error("failed to enqueue event")
+	}
+}
+
+func (dfdd *dfddImpl) handleHostGoingDownEvent(service string, event *common.RingpopListenerEvent) {
+
+	hosts, err := dfdd.getHosts(service)
+	if err != nil {
+		return
+	}
+
+	curr, ok := hosts[event.Key]
+	if !ok || curr.state != dfddHostStateUP {
+		return
+	}
+
+	copy := deepCopyMap(hosts)
+	copy[event.Key] = newDFDDHost(dfddHostStateGoingDown, dfdd.timeSource)
+	dfdd.putHosts(service, copy)
+}
+
+func (dfdd *dfddImpl) handleListenerEvent(service string, event *common.RingpopListenerEvent) {
+	switch event.Type {
+	case common.HostAddedEvent:
+		dfdd.handleHostAddedEvent(service, event)
+	case common.HostRemovedEvent:
+		dfdd.handleHostRemovedEvent(service, event)
+	case hostGoingDownEvent:
+		dfdd.handleHostGoingDownEvent(service, event)
+	}
+}
+
+func (dfdd *dfddImpl) getHosts(service string) (map[string]dfddHost, error) {
+	switch service {
+	case common.InputServiceName:
+		return dfdd.inputHosts.Load().(map[string]dfddHost), nil
+	case common.StoreServiceName:
+		return dfdd.storeHosts.Load().(map[string]dfddHost), nil
 	default:
-		dfdd.context.log.Error("ListenerEvent for unknown service")
+		return nil, errUnknownService
+	}
+}
+
+func (dfdd *dfddImpl) putHosts(service string, hosts map[string]dfddHost) {
+	switch service {
+	case common.InputServiceName:
+		dfdd.inputHosts.Store(hosts)
+	case common.StoreServiceName:
+		dfdd.storeHosts.Store(hosts)
+	default:
 		return
 	}
+}
 
-	if !dfdd.context.eventPipeline.Add(event) {
-		dfdd.context.log.WithField(common.TagEvent, event).Error("Failed to enqueue event")
+func newDFDDHost(state dfddHostState, timeSource common.TimeSource) dfddHost {
+	return dfddHost{
+		state:               state,
+		lastStateChangeTime: timeSource.Now().UnixNano(),
 	}
+}
+
+// creates a new map and copies the key/values from the
+// given map into the new map. The capacity of the new
+// map will the max(hostMapInitialCapacity, len(src))
+// This is to avoid map reallocations later
+func deepCopyMap(src map[string]dfddHost) map[string]dfddHost {
+	copy := make(map[string]dfddHost, common.MaxInt(len(src), hostMapInitialCapacity))
+	for k, v := range src {
+		copy[k] = v
+	}
+	return copy
 }
 
 func buildListenerName(prefix string) string {

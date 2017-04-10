@@ -41,6 +41,7 @@ type (
 		eventPipeline *testEventPipelineImpl
 		context       *Context
 		dfdd          Dfdd
+		timeSource    *common.MockTimeSource
 	}
 )
 
@@ -52,18 +53,19 @@ func (s *DfddTestSuite) SetupTest() {
 	s.Assertions = require.New(s.T()) // Have to define our overridden assertions in the test setup. If we did it earlier, s.T() will return nil
 	s.rpm = newTestRpm()
 	s.eventPipeline = newTestEventPipeline()
+	s.timeSource = common.NewMockTimeSource()
 
 	s.context = &Context{
 		log:           bark.NewLoggerFromLogrus(log.New()).WithField("testName", "DfddTest"),
 		rpm:           s.rpm,
 		eventPipeline: s.eventPipeline,
 	}
-	s.dfdd = NewDfdd(s.context)
+	s.dfdd = NewDfdd(s.context, s.timeSource)
 }
 
 func (s *DfddTestSuite) TestFailureDetection() {
-	s.dfdd.OverrideHostDownPeriodForStage2(time.Duration(1 * time.Second))
-	s.dfdd.OverrideHealthCheckInterval(time.Duration(1 * time.Second))
+	oldStateMachineInterval := stateMachineTickerInterval
+	stateMachineTickerInterval = time.Second
 	s.dfdd.Start()
 	inHostIDs := []string{uuid.New(), uuid.New(), uuid.New()}
 	storeIDs := []string{uuid.New(), uuid.New(), uuid.New()}
@@ -78,62 +80,93 @@ func (s *DfddTestSuite) TestFailureDetection() {
 	}
 
 	cond := func() bool {
-		return (s.eventPipeline.inHostFailureCount() == len(inHostIDs) &&
-			s.eventPipeline.storeHostFailureStage1Count() == len(storeIDs) &&
-			s.eventPipeline.storeHostFailureStage2Count() == len(storeIDs))
+		return s.eventPipeline.numInputHostFailedEvents() == len(inHostIDs) &&
+			s.eventPipeline.numStoreHostFailedEvents() == len(storeIDs)
 	}
 
 	succ := common.SpinWaitOnCondition(cond, 10*time.Second)
 	s.True(succ, "Dfdd failed to detect failure within timeout")
+	s.Equal(0, s.eventPipeline.numStoreRemoteExtentReplicatorDownEvents(), "unexpected events generated")
 
 	for _, h := range inHostIDs {
-		s.True(s.eventPipeline.isHostFailed(h), "Dfdd failed to detect in host failure")
+		state, _ := s.dfdd.GetHostState(common.InputServiceName, h)
+		s.True(s.eventPipeline.isInputHostFailed(h), "Dfdd failed to detect in host failure")
+		s.Equal(dfddHostStateUnknown, state, "dfdd failed to delete failed input host entry")
 	}
 
+	s.timeSource.Advance(time.Duration(downToForgottenDuration) - time.Millisecond)
 	for _, h := range storeIDs {
-		s.True(s.eventPipeline.isHostFailed(h), "Dfdd failed to detect store host failure")
-		s.True(s.eventPipeline.isStoreFailedStage2(h), "Dfdd failed to detect store host stage 2 failure")
+		state, d := s.dfdd.GetHostState(common.StoreServiceName, h)
+		s.True(s.eventPipeline.isStoreHostFailed(h), "Dfdd failed to detect store host failure")
+		s.Equal(dfddHostStateDown, state, "dfdd forgot about a storehost pre-maturely")
+		s.Equal(time.Duration(downToForgottenDuration)-time.Millisecond, d, "getHostState() returned wrong duration")
 	}
+
+	s.timeSource.Advance(time.Millisecond)
+	for _, h := range storeIDs {
+		cond := func() bool { s, _ := s.dfdd.GetHostState(common.StoreServiceName, h); return s == dfddHostStateUnknown }
+		succ := common.SpinWaitOnCondition(cond, time.Second*10)
+		s.True(succ, "dfdd failed to remove store host entry after downToForgottenDuration")
+	}
+
+	// now test hostGoingDown state
+	s.rpm.NotifyListeners(common.InputServiceName, inHostIDs[0], common.HostAddedEvent)
+	s.rpm.NotifyListeners(common.StoreServiceName, storeIDs[0], common.HostAddedEvent)
+	succ = common.SpinWaitOnCondition(func() bool {
+		h1, _ := s.dfdd.GetHostState(common.InputServiceName, inHostIDs[0])
+		h2, _ := s.dfdd.GetHostState(common.StoreServiceName, storeIDs[0])
+		return h1 == dfddHostStateUP && h2 == dfddHostStateUP
+	}, 10*time.Second)
+	s.True(succ, "dfdd failed to discover new hosts")
+
+	s.dfdd.ReportHostGoingDown(common.InputServiceName, inHostIDs[0])
+	s.dfdd.ReportHostGoingDown(common.StoreServiceName, storeIDs[0])
+	succ = common.SpinWaitOnCondition(func() bool {
+		h1, _ := s.dfdd.GetHostState(common.InputServiceName, inHostIDs[0])
+		h2, _ := s.dfdd.GetHostState(common.StoreServiceName, storeIDs[0])
+		return h1 == dfddHostStateGoingDown && h2 == dfddHostStateGoingDown
+	}, 10*time.Second)
+	s.True(succ, "dfdd failed to discover new hosts")
+
+	s.context.failureDetector = s.dfdd
+	succ = isInputGoingDown(s.context, inHostIDs[0])
+	s.True(succ, "isInputGoingDown() failed")
 
 	s.dfdd.Stop()
+	stateMachineTickerInterval = oldStateMachineInterval
 }
 
 type testEventPipelineImpl struct {
-	inHostFailures          int
-	storeHostStage1Failures int
-	storeHostStage2Failures int
-	failedHosts             map[string]bool
-	failedStage2Stores      map[string]bool
-	mutex                   sync.Mutex
+	sync.Mutex
+	nInputHostFailedEvents                 int
+	nStoreHostFailedEvents                 int
+	nStoreRemoteExtentReplicatorDownEvents int
+	failedInputs                           map[string]struct{}
+	failedStores                           map[string]struct{}
 }
 
 func newTestEventPipeline() *testEventPipelineImpl {
 	return &testEventPipelineImpl{
-		failedHosts:        make(map[string]bool),
-		failedStage2Stores: make(map[string]bool),
+		failedInputs: make(map[string]struct{}, 4),
+		failedStores: make(map[string]struct{}, 4),
 	}
 }
 
 func (ep *testEventPipelineImpl) Start() {}
 func (ep *testEventPipelineImpl) Stop()  {}
 func (ep *testEventPipelineImpl) Add(event Event) bool {
-	ep.mutex.Lock()
+	ep.Lock()
 	switch event.(type) {
 	case *InputHostFailedEvent:
-		ep.inHostFailures++
+		ep.nInputHostFailedEvents++
 		e, _ := event.(*InputHostFailedEvent)
-		ep.failedHosts[e.hostUUID] = true
+		ep.failedInputs[e.hostUUID] = struct{}{}
 	case *StoreHostFailedEvent:
 		e, _ := event.(*StoreHostFailedEvent)
-		if e.stage == hostDownStage1 {
-			ep.storeHostStage1Failures++
-			ep.failedHosts[e.hostUUID] = true
-		} else if e.stage == hostDownStage2 {
-			ep.storeHostStage2Failures++
-			ep.failedStage2Stores[e.hostUUID] = true
-		}
+		ep.nStoreHostFailedEvents++
+		ep.failedStores[e.hostUUID] = struct{}{}
 	}
-	ep.mutex.Unlock()
+	ep.Unlock()
 	return true
 }
 
@@ -141,43 +174,43 @@ func (ep *testEventPipelineImpl) GetRetryableEventExecutor() RetryableEventExecu
 	return nil
 }
 
-func (ep *testEventPipelineImpl) isHostFailed(uuid string) bool {
+func (ep *testEventPipelineImpl) isInputHostFailed(uuid string) bool {
 	ok := false
-	ep.mutex.Lock()
-	_, ok = ep.failedHosts[uuid]
-	ep.mutex.Unlock()
+	ep.Lock()
+	_, ok = ep.failedInputs[uuid]
+	ep.Unlock()
 	return ok
 }
 
-func (ep *testEventPipelineImpl) isStoreFailedStage2(uuid string) bool {
+func (ep *testEventPipelineImpl) isStoreHostFailed(uuid string) bool {
 	ok := false
-	ep.mutex.Lock()
-	_, ok = ep.failedStage2Stores[uuid]
-	ep.mutex.Unlock()
+	ep.Lock()
+	_, ok = ep.failedStores[uuid]
+	ep.Unlock()
 	return ok
 }
 
-func (ep *testEventPipelineImpl) storeHostFailureStage1Count() int {
+func (ep *testEventPipelineImpl) numInputHostFailedEvents() int {
 	count := 0
-	ep.mutex.Lock()
-	count = ep.storeHostStage1Failures
-	ep.mutex.Unlock()
+	ep.Lock()
+	count = ep.nInputHostFailedEvents
+	ep.Unlock()
 	return count
 }
 
-func (ep *testEventPipelineImpl) storeHostFailureStage2Count() int {
+func (ep *testEventPipelineImpl) numStoreHostFailedEvents() int {
 	count := 0
-	ep.mutex.Lock()
-	count = ep.storeHostStage2Failures
-	ep.mutex.Unlock()
+	ep.Lock()
+	count = ep.nStoreHostFailedEvents
+	ep.Unlock()
 	return count
 }
 
-func (ep *testEventPipelineImpl) inHostFailureCount() int {
+func (ep *testEventPipelineImpl) numStoreRemoteExtentReplicatorDownEvents() int {
 	count := 0
-	ep.mutex.Lock()
-	count = ep.inHostFailures
-	ep.mutex.Unlock()
+	ep.Lock()
+	count = ep.nStoreRemoteExtentReplicatorDownEvents
+	ep.Unlock()
 	return count
 }
 

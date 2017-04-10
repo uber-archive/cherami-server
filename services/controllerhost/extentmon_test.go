@@ -206,6 +206,69 @@ func (s *ExtentStateMonitorSuite) TestStoreExtentStatusOutOfSync() {
 	s.False(stores[2].isSealed(extentID), "SealExtent() call landed on store host unexpectedly")
 }
 
+func (s *ExtentStateMonitorSuite) TestStoreRemoteExtentReplicatorDownTrigger() {
+
+	path := s.generateName("/storedown/remote")
+	desc, err := s.createDestination(path)
+	s.Nil(err, "failed to create destination")
+
+	extentID := uuid.New()
+	inHostID := uuid.New()
+	storeIDs := []string{uuid.New(), uuid.New(), uuid.New()}
+
+	context := s.mcp.context
+	_, err = context.mm.CreateRemoteZoneExtent(desc.GetDestinationUUID(), extentID, inHostID, storeIDs, "origin", storeIDs[0])
+	s.Nil(err, "failed to create remote zone extent")
+
+	// just have one store as healthy
+	rpm := common.NewMockRingpopMonitor()
+	rpm.Add(common.StoreServiceName, storeIDs[2], "127.0.0.1:0")
+
+	context.rpm = rpm
+	timeSource := common.NewMockTimeSource()
+	context.failureDetector = NewDfdd(s.mcp.context, timeSource)
+	dfdd := context.failureDetector.(*dfddImpl)
+
+	// make dfdd think that store0 is failed,
+	// store1 is unknown and store2 is healthy
+	for i := range []int{0, 2} {
+		event := &common.RingpopListenerEvent{
+			Key:  storeIDs[i],
+			Type: common.HostAddedEvent,
+		}
+		dfdd.handleHostAddedEvent(common.StoreServiceName, event)
+	}
+
+	event := &common.RingpopListenerEvent{Key: storeIDs[0], Type: common.HostRemovedEvent}
+	dfdd.handleHostRemovedEvent(common.StoreServiceName, event)
+	timeSource.Advance(maxHostRestartDuration)
+
+	// now invoke the extent monitor to make sure it enqueues the right event
+	s.mcp.context.extentMonitor.mi.publishEvent(eIterStart, nil)
+	s.mcp.context.extentMonitor.mi.publishEvent(eDestStart, desc)
+	s.mcp.context.extentMonitor.mi.publishEvent(eExtentIterStart, nil)
+	s.mcp.context.extentMonitor.handleDestinationExtent(desc, false, &m.DestinationExtent{
+		Status:        common.MetadataExtentStatusPtr(shared.ExtentStatus_OPEN),
+		ExtentUUID:    common.StringPtr(extentID),
+		InputHostUUID: common.StringPtr(inHostID),
+		StoreUUIDs:    storeIDs,
+		OriginZone:    common.StringPtr("origin"),
+	})
+	s.mcp.context.extentMonitor.mi.publishEvent(eExtentIterEnd, nil)
+	s.mcp.context.extentMonitor.mi.publishEvent(eDestEnd, desc)
+	s.mcp.context.extentMonitor.mi.publishEvent(eIterEnd, nil)
+
+	cond := func() bool {
+		stats, err := context.mm.ReadExtentStats(desc.GetDestinationUUID(), extentID)
+		if err != nil {
+			return false
+		}
+		return stats.GetExtent().GetRemoteExtentPrimaryStore() == storeIDs[2] // only healthy store
+	}
+	succ := common.SpinWaitOnCondition(cond, 60*time.Second)
+	s.True(succ, "timed out waiting for extentMon to fix remoteZoneReplicationJob")
+}
+
 func (s *ExtentStateMonitorSuite) TestExtentMonitor() {
 
 	var err error

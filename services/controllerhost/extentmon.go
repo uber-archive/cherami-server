@@ -501,16 +501,18 @@ func (monitor *extentStateMonitor) handleDestinationExtent(dstDesc *shared.Desti
 		monitor.loopStats.nDLQExtentsByStatus[int(extent.GetStatus())]++
 	}
 
+	context := monitor.context
+
 	switch extent.GetStatus() {
 	case shared.ExtentStatus_OPEN:
-		if !common.IsRemoteZoneExtent(extent.GetOriginZone(), monitor.context.localZone) && (dstDesc.GetStatus() == shared.DestinationStatus_DELETING || !monitor.isExtentHealthy(dstDesc, extent)) {
+		if !common.IsRemoteZoneExtent(extent.GetOriginZone(), context.localZone) && (dstDesc.GetStatus() == shared.DestinationStatus_DELETING || !monitor.isExtentHealthy(dstDesc, extent)) {
 			// rate limit extent seals to limit the
 			// amount of work generated during a given
 			// interval
 			if !monitor.rateLimiter.Consume(1, 2*time.Second) {
 				return
 			}
-			addExtentDownEvent(monitor.context, 0, dstDesc.GetDestinationUUID(), extent.GetExtentUUID())
+			addExtentDownEvent(context, 0, dstDesc.GetDestinationUUID(), extent.GetExtentUUID())
 		}
 	default:
 		// from a store perspective, an extent is either sealed or
@@ -522,6 +524,41 @@ func (monitor *extentStateMonitor) handleDestinationExtent(dstDesc *shared.Desti
 		lastUpdateTime := time.Unix(0, extent.GetStatusUpdatedTimeMillis()*int64(time.Millisecond))
 		if time.Since(lastUpdateTime) > 2*extentCacheTTL {
 			monitor.fixOutOfSyncStoreExtents(dstDesc.GetDestinationUUID(), extent)
+		}
+	}
+
+	if common.IsRemoteZoneExtent(extent.GetOriginZone(), context.localZone) {
+		monitor.handleRemoteZoneDestinationExtent(dstDesc, extent)
+	}
+}
+
+// handleRemoteZoneDestinationExtent is the local handler for remote destination extent
+// this handler kicks off an event if the primary store for the extent is down
+func (monitor *extentStateMonitor) handleRemoteZoneDestinationExtent(dstDesc *shared.DestinationDescription, extent *metadata.DestinationExtent) {
+	context := monitor.context
+	// handle remote zone extent replication job failures
+	var failedStores []string
+	for _, storeID := range extent.GetStoreUUIDs() {
+		state, duration := context.failureDetector.GetHostState(common.StoreServiceName, storeID)
+		switch state {
+		case dfddHostStateUnknown:
+			failedStores = append(failedStores, storeID)
+		case dfddHostStateDown:
+			if duration >= maxHostRestartDuration {
+				failedStores = append(failedStores, storeID)
+			}
+		}
+	}
+	if len(failedStores) > 0 {
+		stats, err := context.mm.ReadExtentStats(dstDesc.GetDestinationUUID(), extent.GetExtentUUID())
+		if err != nil {
+			return
+		}
+		for _, s := range failedStores {
+			if s == stats.GetExtent().GetRemoteExtentPrimaryStore() {
+				event := NewRemoteExtentPrimaryStoreDownEvent(s, extent.GetExtentUUID())
+				context.eventPipeline.Add(event)
+			}
 		}
 	}
 }

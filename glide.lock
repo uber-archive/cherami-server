@@ -1,5 +1,5 @@
 hash: c030fd31744214281169c11cb15164a7b22ea8aab5f29c9cbceff50aee2ed8d6
-updated: 2017-03-31T16:09:33.820595835-07:00
+updated: 2017-04-07T07:39:38.461819205-07:00
 imports:
 - name: github.com/apache/thrift
   version: b2a4d4ae21c789b689dd162deb819665567f481c
@@ -38,7 +38,7 @@ imports:
 - name: github.com/benbjohnson/clock
   version: 7dc76406b6d3c05b5f71a86293cbcf3c4ea03b19
 - name: github.com/bsm/sarama-cluster
-  version: 82cfa5798a3898e4cf7d913f4a448911af83c3f5
+  version: 82cfa5798a3898e4cf7d913f4a448911af83c3f5  
 - name: github.com/cactus/go-statsd-client
   version: d8eabe07bc70ff9ba6a56836cde99d1ea3d005f7
   subpackages:
@@ -134,7 +134,7 @@ imports:
   - common/websocket
   - stream
 - name: github.com/uber/cherami-thrift
-  version: 861f8bd62edd6b89c8e200c230a6611647fecab8
+  version: b745766cbb5398b92f532daf4ac8f7c0fa9555ac
   subpackages:
   - .generated/go/admin
   - .generated/go/cherami

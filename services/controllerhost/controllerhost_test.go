@@ -121,6 +121,7 @@ func (s *McpSuite) startController() {
 	context.channel = s.mcp.GetTChannel()
 	context.eventPipeline = NewEventPipeline(context, nEventPipelineWorkers)
 	context.eventPipeline.Start()
+	context.failureDetector = NewDfdd(context, common.NewRealTimeSource())
 	s.mcp.started = 1
 }
 
