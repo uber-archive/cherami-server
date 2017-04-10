@@ -557,7 +557,7 @@ func (s *NetIntegrationSuiteParallelE) TestWriteWithDrain() {
 		Path:              destPath,
 		ConsumerGroupName: cgPath,
 		ConsumerName:      "TestConsumerName",
-		PrefetchCount:     1,
+		PrefetchCount:     50,
 		Options:           &client.ClientOptions{Timeout: time.Second * 30}, // this is the thrift context timeout
 	}
 
@@ -565,7 +565,7 @@ func (s *NetIntegrationSuiteParallelE) TestWriteWithDrain() {
 	s.NotNil(consumerTest)
 
 	// Open the consumer channel
-	delivery := make(chan client.Delivery, 1)
+	delivery := make(chan client.Delivery, 50)
 	delivery, err = consumerTest.Open(delivery)
 	s.NoError(err)
 
