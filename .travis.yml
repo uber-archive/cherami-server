@@ -57,6 +57,7 @@ install:
   - go get github.com/axw/gocov/gocov
   - go get github.com/mattn/goveralls
   - go get golang.org/x/tools/cmd/cover
+  - go get github.com/golang/lint/golint
   - ccm create test -v 2.2.8 -n 1 -s
   - sudo ln -sf /home/travis/.local/bin/cqlsh /usr/local/bin/cqlsh
   - wget https://github.com/uber/cherami-server/releases/download/rocksdb-5.0.2-trusty/librocksdb.so.5.0.2

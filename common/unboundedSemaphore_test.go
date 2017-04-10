@@ -293,7 +293,7 @@ func (s *UnboundedSemaphoreSuite) TestConcurrentReleases() {
 		u.Release(contentionScale * contentionScale)
 	case <-closeCh:
 	}
-	
+
 	closeCh = make(chan struct{}, 0)
 	go acquireAndClose(1, closeCh)
 	select {

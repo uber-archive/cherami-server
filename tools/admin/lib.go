@@ -728,20 +728,20 @@ type extentJSONOutputFields struct {
 }
 
 type cgExtentJSONOutputFields struct {
-	ExtentUUID         string                             `json:"extent_uuid"`
-	CGName             string                             `json:"consumer_group_name"`
-	CGUUID             string                             `json:"consumer_group_uuid"`
-	CGEmail            string                             `json:"owner_email"`
-	CGDlq              string                             `json:"dlq_uuid"`
-	OutputHostAddr     string                             `json:"outputhost_addr"`
-	OutputHostUUID     string                             `json:"outputhost_uuid"`
+	ExtentUUID         string                           `json:"extent_uuid"`
+	CGName             string                           `json:"consumer_group_name"`
+	CGUUID             string                           `json:"consumer_group_uuid"`
+	CGEmail            string                           `json:"owner_email"`
+	CGDlq              string                           `json:"dlq_uuid"`
+	OutputHostAddr     string                           `json:"outputhost_addr"`
+	OutputHostUUID     string                           `json:"outputhost_uuid"`
 	Status             shared.ConsumerGroupExtentStatus `json:"status"`
-	AckLevelOffset     int64                              `json:"ack_level_offset"`
-	AckLevelSeqNo      int64                              `json:"ack_level_seq_no"`
-	AckLeverSeqNoRate  float64                            `json:"ack_level_seq_no_rate"`
-	ReadLevelOffset    int64                              `json:"read_level_offset"`
-	ReadLevelSeqNo     int64                              `json:"read_level_seq_no"`
-	ReadLevelSeqNoRate float64                            `json:"read_level_seq_no_rate"`
+	AckLevelOffset     int64                            `json:"ack_level_offset"`
+	AckLevelSeqNo      int64                            `json:"ack_level_seq_no"`
+	AckLeverSeqNoRate  float64                          `json:"ack_level_seq_no_rate"`
+	ReadLevelOffset    int64                            `json:"read_level_offset"`
+	ReadLevelSeqNo     int64                            `json:"read_level_seq_no"`
+	ReadLevelSeqNoRate float64                          `json:"read_level_seq_no_rate"`
 }
 
 // ListExtents lists all the extents of a destination

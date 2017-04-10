@@ -121,7 +121,7 @@ func (k *kafkaTopicPartitionAddresser) GetStoreAddress(tp *topicPartition, offse
 		`offset`:    offset,
 		`tpInt`:     k.nextTP,
 	}).Info(`New assignment`)
-	
+
 	return calc(k.nextTP, offset)
 }
 

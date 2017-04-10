@@ -25,14 +25,15 @@ import (
 	"sync"
 )
 
-// Committer is an interface that wraps the internals of how offsets/acklevels are committed for a given queueing
-// system (e.g. Kafka or Cherami)
 type (
+	// CommitterLevel binds a logical and store address together for committing
 	CommitterLevel struct {
 		seqNo   common.SequenceNumber // Logical sequence number of the ack manager
 		address storeHostAddress      // storage system address in the message
 	}
 
+	// Committer is an interface that wraps the internals of how offsets/acklevels are committed for a given queueing
+	// system (e.g. Kafka or Cherami)
 	Committer interface {
 		// SetCommitLevel indicates that work up to and including the message specified by the sequence number and address
 		// has been acknowledged. Not guaranteed to be persisted until a successful call to Flush()
@@ -46,7 +47,7 @@ type (
 		// to be communicated/persisted until a successful call to Flush()
 		SetFinalLevel(l CommitterLevel)
 
-		// UnlockAndFlush copies accumulated commit/read state, unlocks the provided lock, and then commits 
+		// UnlockAndFlush copies accumulated commit/read state, unlocks the provided lock, and then commits
 		// the levels to durable storage, e.g. Kafka offset storage or Cherami-Cassandra AckLevel storage
 		UnlockAndFlush(l sync.Locker) error
 

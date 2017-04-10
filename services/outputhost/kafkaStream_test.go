@@ -137,7 +137,7 @@ func (s *KafkaStreamSuite) TestChannelCloseReadFallthrough() {
 				} else {
 					s.Error(err)
 					s.Nil(msg)
-					s.Equal(kafkaErrClosed.Error(), err.Error())
+					s.Equal(errKafkaClosed.Error(), err.Error())
 				}
 			}
 

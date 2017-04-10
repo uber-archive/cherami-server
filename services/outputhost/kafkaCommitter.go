@@ -30,8 +30,8 @@ import (
 	"github.com/uber/cherami-thrift/.generated/go/metadata"
 )
 
-// kafkaCommitter is commits ackLevels to Cassandra through the TChanMetadataClient interface
-type kafkaCommitter struct {
+// KafkaCommitter is commits ackLevels to Cassandra through the TChanMetadataClient interface
+type KafkaCommitter struct {
 	connectedStoreUUID *string
 	commitLevel        CommitterLevel
 	readLevel          CommitterLevel
@@ -41,7 +41,7 @@ type kafkaCommitter struct {
 	*sc.Consumer
 	KafkaOffsetMetadata
 	metadataString string // JSON version of KafkaOffsetMetadata
-	logger bark.Logger
+	logger         bark.Logger
 }
 
 // KafkaOffsetMetadata is a structure used for JSON encoding/decoding of the metadata stored for
@@ -64,7 +64,7 @@ const kafkaOffsetMetadataVersion = uint(0) // Current version of the KafkaOffset
  */
 
 // SetCommitLevel just updates the next Cherami ack level that will be flushed
-func (c *kafkaCommitter) SetCommitLevel(l CommitterLevel) {
+func (c *KafkaCommitter) SetCommitLevel(l CommitterLevel) {
 	c.commitLevel = l
 	tp, offset := kafkaAddresser.GetTopicPartitionOffset(l.address, c.getLogFn())
 	if tp != nil {
@@ -73,17 +73,17 @@ func (c *kafkaCommitter) SetCommitLevel(l CommitterLevel) {
 }
 
 // SetReadLevel just updates the next Cherami read level that will be flushed
-func (c *kafkaCommitter) SetReadLevel(l CommitterLevel) {
+func (c *KafkaCommitter) SetReadLevel(l CommitterLevel) {
 	c.readLevel = l
 }
 
 // SetFinalLevel just updates the last possible read level
-func (c *kafkaCommitter) SetFinalLevel(l CommitterLevel) {
+func (c *KafkaCommitter) SetFinalLevel(l CommitterLevel) {
 	c.finalLevel = l
 }
 
 // UnlockAndFlush pushes our commit and read levels to Cherami metadata, using SetAckOffset
-func (c *kafkaCommitter) UnlockAndFlush(l sync.Locker) error {
+func (c *KafkaCommitter) UnlockAndFlush(l sync.Locker) error {
 	os := c.OffsetStash
 	c.OffsetStash = sc.NewOffsetStash()
 	l.Unlock() // MarkOffsets may take some time, so we unlock the thread that owns us
@@ -92,13 +92,13 @@ func (c *kafkaCommitter) UnlockAndFlush(l sync.Locker) error {
 }
 
 // GetReadLevel returns the next readlevel that will be flushed
-func (c *kafkaCommitter) GetReadLevel() (l CommitterLevel) {
+func (c *KafkaCommitter) GetReadLevel() (l CommitterLevel) {
 	l = c.readLevel
 	return
 }
 
 // GetCommitLevel returns the next commit level that will be flushed
-func (c *kafkaCommitter) GetCommitLevel() (l CommitterLevel) {
+func (c *KafkaCommitter) GetCommitLevel() (l CommitterLevel) {
 	l = c.commitLevel
 	return
 }
@@ -107,13 +107,13 @@ func (c *kafkaCommitter) GetCommitLevel() (l CommitterLevel) {
  * Setup & Utility
  */
 
-// NewkafkaCommitter instantiates a kafkaCommitter
-func NewkafkaCommitter(metaclient metadata.TChanMetadataService,
+// NewKafkaCommitter instantiates a KafkaCommitter
+func NewKafkaCommitter(metaclient metadata.TChanMetadataService,
 	outputHostUUID string,
 	cgUUID string,
 	extUUID string,
 	connectedStoreUUID *string,
-	logger bark.Logger) *kafkaCommitter {
+	logger bark.Logger) *KafkaCommitter {
 	meta := KafkaOffsetMetadata{
 		Version:        kafkaOffsetMetadataVersion,
 		OutputHostUUID: outputHostUUID,
@@ -121,20 +121,20 @@ func NewkafkaCommitter(metaclient metadata.TChanMetadataService,
 	}
 
 	metaJSON, _ := json.Marshal(meta)
-	return &kafkaCommitter{
+	return &KafkaCommitter{
 		metaclient:          metaclient,
 		connectedStoreUUID:  connectedStoreUUID,
 		OffsetStash:         sc.NewOffsetStash(),
 		metadataString:      string(metaJSON),
 		KafkaOffsetMetadata: meta,
-		logger: logger,
+		logger:              logger,
 	}
 }
 
-func (c *kafkaCommitter) getLogFn() func() bark.Logger {
+func (c *KafkaCommitter) getLogFn() func() bark.Logger {
 	return func() bark.Logger {
 		return c.logger.WithFields(bark.Fields{
-			`module`:       `kafkaCommitter`,
+			`module`:       `KafkaCommitter`,
 			common.TagOut:  common.FmtOut(c.OutputHostUUID),
 			common.TagCnsm: common.FmtCnsm(c.CGUUID),
 		})

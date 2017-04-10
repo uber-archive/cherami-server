@@ -209,7 +209,7 @@ func CreateDestination(c *cli.Context, cClient ccli.Client, cliHelper common.Cli
 		if kafkaCluster == `` || common.ContainsEmpty(kafkaTopics) || len(kafkaTopics) == 0 { // Server will also check this
 			ExitIfError(errors.New(strKafkaNotEnoughArgs))
 		}
-	} 
+	}
 
 	consumedMessagesRetention := int32(c.Int("consumed_messages_retention"))
 	unconsumedMessagesRetention := int32(c.Int("unconsumed_messages_retention"))

@@ -21,9 +21,9 @@
 package outputhost
 
 import (
-	"sync/atomic"
 	"errors"
 	"strconv"
+	"sync/atomic"
 
 	s "github.com/Shopify/sarama"
 	"github.com/uber-common/bark"
@@ -42,8 +42,8 @@ type kafkaStream struct {
 	seqNo           int64
 }
 
-var kafkaErrNilControlFlow = errors.New(`nil or non-positive controlFlow passed to Write()`)
-var kafkaErrClosed = errors.New(`closed`)
+var errKafkaNilControlFlow = errors.New(`nil or non-positive controlFlow passed to Write()`)
+var errKafkaClosed = errors.New(`closed`)
 
 /*
  * BStoreOpenReadStreamOutCall Interface
@@ -52,7 +52,7 @@ var kafkaErrClosed = errors.New(`closed`)
 // Write grants credits to the Read call
 func (k *kafkaStream) Write(arg *cherami.ControlFlow) error {
 	if arg == nil || arg.GetCredits() <= 0 {
-		return kafkaErrNilControlFlow
+		return errKafkaNilControlFlow
 	}
 	k.creditSemaphore.Release(int(arg.GetCredits()))
 	return nil
@@ -70,7 +70,7 @@ func (k *kafkaStream) Done() error { return nil }
 func (k *kafkaStream) Read() (*store.ReadMessageContent, error) {
 	m, ok := <-k.kafkaMsgsCh
 	if !ok {
-		return nil, kafkaErrClosed
+		return nil, errKafkaClosed
 	}
 	k.creditSemaphore.Acquire(1) // TODO: Size-based credits
 	return k.convertKafkaMessageToCherami(m, k.logger), nil
@@ -85,15 +85,16 @@ func (k *kafkaStream) ResponseHeaders() (map[string]string, error) {
  * Setup & Utility
  */
 
+// OpenKafkaStream opens a store call simulated from the given sarama message stream
 func OpenKafkaStream(c <-chan *s.ConsumerMessage, logger bark.Logger) stream.BStoreOpenReadStreamOutCall {
 	k := &kafkaStream{
 		kafkaMsgsCh: c,
-		logger: logger,
+		logger:      logger,
 	}
 	return k
 }
 
-func (s *kafkaStream) convertKafkaMessageToCherami(k *s.ConsumerMessage, logger bark.Logger) (c *store.ReadMessageContent) {
+func (k *kafkaStream) convertKafkaMessageToCherami(m *s.ConsumerMessage, logger bark.Logger) (c *store.ReadMessageContent) {
 	c = &store.ReadMessageContent{
 		Type: store.ReadMessageContentTypePtr(store.ReadMessageContentType_MESSAGE),
 	}
@@ -102,32 +103,32 @@ func (s *kafkaStream) convertKafkaMessageToCherami(k *s.ConsumerMessage, logger 
 		Address: common.Int64Ptr(
 			int64(kafkaAddresser.GetStoreAddress(
 				&topicPartition{
-					Topic:     k.Topic,
-					Partition: k.Partition,
+					Topic:     m.Topic,
+					Partition: m.Partition,
 				},
-				k.Offset,
+				m.Offset,
 				func() bark.Logger {
 					return logger.WithFields(bark.Fields{
 						`module`:    `kafkaStream`,
-						`topic`:     k.Topic,
-						`partition`: k.Partition,
+						`topic`:     m.Topic,
+						`partition`: m.Partition,
 					})
 				},
 			))),
 	}
 
 	c.Message.Message = &store.AppendMessage{
-		SequenceNumber: common.Int64Ptr(atomic.AddInt64(&s.seqNo, 1)),
-		EnqueueTimeUtc: common.Int64Ptr(k.Timestamp.UnixNano()),
+		SequenceNumber: common.Int64Ptr(atomic.AddInt64(&k.seqNo, 1)),
+		EnqueueTimeUtc: common.Int64Ptr(m.Timestamp.UnixNano()),
 	}
 
 	c.Message.Message.Payload = &cherami.PutMessage{
-		Data: k.Value,
+		Data: m.Value,
 		UserContext: map[string]string{
-			`key`:       string(k.Key),
-			`topic`:     k.Topic,
-			`partition`: strconv.Itoa(int(k.Partition)),
-			`offset`:    strconv.Itoa(int(k.Offset)),
+			`key`:       string(m.Key),
+			`topic`:     m.Topic,
+			`partition`: strconv.Itoa(int(m.Partition)),
+			`offset`:    strconv.Itoa(int(m.Offset)),
 		},
 		// TODO: Checksum?
 	}

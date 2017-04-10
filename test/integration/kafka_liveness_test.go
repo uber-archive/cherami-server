@@ -21,12 +21,12 @@
 package integration
 
 import (
-	"github.com/stretchr/testify/suite"
 	"github.com/Shopify/sarama"
-	"testing"
-	"log"
-	"time"
 	"github.com/pborman/uuid"
+	"github.com/stretchr/testify/suite"
+	"log"
+	"testing"
+	"time"
 )
 
 // Note: you need to start ZooKeeper/Kafka on your local machine to run following tests.
@@ -90,7 +90,8 @@ func (s *KafkaLivenessIntegrationSuite) TestKafkaLiveness() {
 	s.Assert().Nil(err)
 
 	var receivedMessage = false
-	FOR: for {
+FOR:
+	for {
 		select {
 		case err := <-partitionConsumer.Errors():
 			log.Printf("Failed to receive message: %s\n", err)

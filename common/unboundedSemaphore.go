@@ -28,9 +28,9 @@ import "sync"
 // See also: https://godoc.org/github.com/dropbox/godropbox/sync2#NewUnboundedSemaphore
 //
 type UnboundedSemaphore struct {
-	resCount    int
-	once        sync.Once
-	c           *sync.Cond
+	resCount        int
+	once            sync.Once
+	c               *sync.Cond
 	m               sync.Mutex // need to name this so it's not exported. Don't use this directly, use through s.c.L
 	accumulatorLock sync.Mutex // Used by acquirer for credit accumulation
 }
@@ -72,7 +72,7 @@ func (s *UnboundedSemaphore) Acquire(n int) {
 	s.c.L.Lock()
 	for n > 0 { // While we are waiting for more resources
 		for s.resCount <= 0 { // Wait for resources to be available
-		//	fmt.Println(`Waiting to acummulate `, n)
+			//	fmt.Println(`Waiting to acummulate `, n)
 			s.c.Wait()
 		}
 		if n >= s.resCount { // If we have just enough or too few resources, grab them all and maybe keep accumulating
