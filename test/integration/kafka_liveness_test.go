@@ -22,6 +22,7 @@ package integration
 
 import (
 	"github.com/Shopify/sarama"
+	"github.com/bsm/sarama-cluster"
 	"github.com/pborman/uuid"
 	"github.com/stretchr/testify/suite"
 	"log"
@@ -43,16 +44,10 @@ func TestKafkaLivenessSuite(t *testing.T) {
 	suite.Run(t, s)
 }
 
-func (s *KafkaLivenessIntegrationSuite) TestKafkaLiveness() {
-	config := sarama.NewConfig()
-	config.Producer.RequiredAcks = sarama.WaitForAll
-	config.Producer.Return.Successes = true
+func (s *KafkaLivenessIntegrationSuite) TestKafkaLivenessBySarama() {
+	msgValue := "testing message " + uuid.New()
 
-	brokers := []string{"localhost:9092"}
-
-	producer, err := sarama.NewSyncProducer(brokers, config)
-	s.Assert().Nil(err)
-
+	producer, partition, err := s.produceKafkaMessage(msgValue)
 	if err != nil {
 		return
 	}
@@ -62,19 +57,10 @@ func (s *KafkaLivenessIntegrationSuite) TestKafkaLiveness() {
 		s.Assert().Nil(err)
 	}()
 
+	brokers := []string{"localhost:9092"}
 	topic := "test_topic_01"
-	msgValue := "testing message " + uuid.New()
 
-	msg := &sarama.ProducerMessage{Topic: topic, Value: sarama.StringEncoder(msgValue)}
-	partition, offset, err := producer.SendMessage(msg)
-	if err != nil {
-		log.Printf("Failed to send message: %s\n", err)
-	} else {
-		log.Printf("Sent message to partition %d at offset %d: %s\n", partition, offset, msgValue)
-	}
-	s.Assert().Nil(err)
-
-	consumer, err := sarama.NewConsumer(brokers, config)
+	consumer, err := sarama.NewConsumer(brokers, nil)
 	s.Assert().Nil(err)
 
 	if err != nil {
@@ -106,4 +92,89 @@ FOR:
 		}
 	}
 	s.Assert().True(receivedMessage)
+}
+
+func (s *KafkaLivenessIntegrationSuite) TestKafkaLivenessBySaramaCluster() {
+	msgValue := "testing message " + uuid.New()
+
+	producer, partition, err := s.produceKafkaMessage(msgValue)
+	if err != nil {
+		return
+	}
+
+	defer func() {
+		err := producer.Close()
+		s.Assert().Nil(err)
+	}()
+
+	brokers := []string{"localhost:9092"}
+	topics := []string{"test_topic_01"}
+
+	config := cluster.NewConfig()
+	config.Consumer.Return.Errors = true
+	config.Group.Return.Notifications = true
+	config.Consumer.Offsets.Initial = sarama.OffsetOldest
+
+	consumer, err := cluster.NewConsumer(brokers, "/kafka/consumer/group/"+uuid.New(), topics, config)
+	s.Assert().Nil(err)
+
+	if err != nil {
+		return
+	}
+
+	defer func() {
+		err := consumer.Close()
+		s.Assert().Nil(err)
+	}()
+
+	var receivedMessage = false
+FOR:
+	for {
+		select {
+		case err := <-consumer.Errors():
+			log.Printf("Failed to receive message: %s\n", err)
+		case msg, ok := <-consumer.Messages():
+			if ok && string(msg.Value) == msgValue {
+				receivedMessage = true
+				log.Printf("Received message at partition %d at offset %d: %s\n", msg.Partition, msg.Offset, string(msg.Value))
+				s.Assert().Equal(partition, msg.Partition)
+				break FOR
+			}
+		case ntf, ok := <-consumer.Notifications():
+			if ok {
+				log.Printf("Got notification: %+v\n", ntf)
+			}
+		case <-time.After(time.Second * 3):
+			break FOR
+		}
+	}
+	s.Assert().True(receivedMessage)
+}
+
+func (s *KafkaLivenessIntegrationSuite) produceKafkaMessage(msgValue string) (producer sarama.SyncProducer, partition int32, err error) {
+	config := sarama.NewConfig()
+	config.Producer.RequiredAcks = sarama.WaitForAll
+	config.Producer.Return.Successes = true
+
+	brokers := []string{"localhost:9092"}
+
+	producer, err = sarama.NewSyncProducer(brokers, config)
+	s.Assert().Nil(err)
+
+	if err != nil {
+		return nil, 0, err
+	}
+
+	topic := "test_topic_01"
+
+	msg := &sarama.ProducerMessage{Topic: topic, Value: sarama.StringEncoder(msgValue)}
+	partition, offset, err := producer.SendMessage(msg)
+	if err != nil {
+		log.Printf("Failed to send message: %s\n", err)
+	} else {
+		log.Printf("Sent message to partition %d at offset %d: %s\n", partition, offset, msgValue)
+	}
+	s.Assert().Nil(err)
+
+	return producer, partition, err
 }
