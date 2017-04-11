@@ -172,14 +172,15 @@ func CreateHyperbahnClient(ch *tchannel.Channel, bootstrapFile string) *hyperbah
 }
 
 // ServiceLoop runs the http admin endpoints. This is a blocking call.
-func ServiceLoop(port int, cfg configure.CommonAppConfig, service *Service) {
+func ServiceLoop(port int, cfg configure.CommonAppConfig, service SCommon) {
 	httpHandlers := NewHTTPHandler(cfg, service)
 	mux := http.NewServeMux()
 	httpHandlers.Register(mux)
 
+	log.Infof("Registering upgrade handler>>")
 	listenAddress := `127.0.0.1`
-	if service.cfg.GetListenAddress().IsLoopback() { // If we have a particular loopback listen address, override the default
-		listenAddress = service.cfg.GetListenAddress().String()
+	if service.GetConfig().GetListenAddress().IsLoopback() { // If we have a particular loopback listen address, override the default
+		listenAddress = service.GetConfig().GetListenAddress().String()
 	}
 	log.Info(fmt.Sprintf("Diagnostic http endpoint listening on %s:%d", listenAddress, port))
 	log.Panic(http.ListenAndServe(fmt.Sprintf("%s:%d", listenAddress, port), mux))

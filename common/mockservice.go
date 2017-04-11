@@ -21,6 +21,8 @@
 package common
 
 import (
+	"net/http"
+
 	"github.com/uber/cherami-server/common/configure"
 	dconfig "github.com/uber/cherami-server/common/dconfigclient"
 	"github.com/uber/cherami-server/common/metrics"
@@ -122,6 +124,12 @@ func (m *MockService) GetLoadReporterDaemonFactory() LoadReporterDaemonFactory {
 // Report is the implementation for reporting host specific load to controller
 func (m *MockService) Report(reporter LoadReporter) {
 	m.Called(reporter)
+	return
+}
+
+// UpgradeHandler is the implementation for upgrade handler
+func (m *MockService) UpgradeHandler(w http.ResponseWriter, r *http.Request) {
+	m.Called(w, r)
 	return
 }
 

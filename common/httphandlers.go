@@ -37,7 +37,7 @@ import (
 // for controller
 type HTTPHandler struct {
 	cfg     configure.CommonAppConfig
-	service *Service
+	service SCommon
 }
 
 const (
@@ -49,7 +49,7 @@ var serviceNames = []string{InputServiceName, OutputServiceName, StoreServiceNam
 // NewHTTPHandler returns a new instance of
 // http handler. This call must be followed
 // by a call to httpHandler.Register().
-func NewHTTPHandler(cfg configure.CommonAppConfig, service *Service) *HTTPHandler {
+func NewHTTPHandler(cfg configure.CommonAppConfig, service SCommon) *HTTPHandler {
 	return &HTTPHandler{
 		cfg:     cfg,
 		service: service,
@@ -74,6 +74,9 @@ func (handler *HTTPHandler) Register(mux *http.ServeMux) {
 	mux.Handle("/debug/pprof/profile", http.HandlerFunc(pprof.Profile))
 	mux.Handle("/debug/pprof/symbol", http.HandlerFunc(pprof.Symbol))
 	mux.Handle("/debug/pprof/trace", http.HandlerFunc(pprof.Trace))
+
+	// Register service specific upgrade handlers
+	mux.Handle("/upgrade", http.HandlerFunc(handler.service.UpgradeHandler))
 }
 
 // Help is the http handler for /help

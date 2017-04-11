@@ -981,6 +981,13 @@ func (h *InputHost) RegisterWSHandler() *http.ServeMux {
 	return mux
 }
 
+// UpgradeHandler implements the upgrade end point
+func (h *InputHost) UpgradeHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	fmt.Fprintf(w, "Upgrade called!!!!\n")
+	// perform upgrade here
+}
+
 //
 // NewInputHost is the constructor for BIn
 func NewInputHost(serviceName string, sVice common.SCommon, mClient metadata.TChanMetadataService, opts *InOptions) (*InputHost, []thrift.TChanServer) {

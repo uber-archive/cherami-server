@@ -79,7 +79,7 @@ func StartInputHostService() {
 		cfg.GetServiceConfig(serviceName).GetWebsocketPort(), h)
 
 	// start diagnosis local http server
-	common.ServiceLoop(cfg.GetServiceConfig(serviceName).GetPort()+diagnosticPortOffset, cfg, sCommon)
+	common.ServiceLoop(cfg.GetServiceConfig(serviceName).GetPort()+diagnosticPortOffset, cfg, h)
 }
 
 //StartControllerService starts the controller service of cherami
