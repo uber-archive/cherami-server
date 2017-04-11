@@ -55,6 +55,8 @@ const (
 var nilRequestError = &c.BadRequestError{Message: `request must not be nil`}
 var badRequestKafkaConfigError = &c.BadRequestError{Message: `kafka destination must set kafka cluster and topic, and may not be multi-zone`}
 var badRequestNonKafkaConfigError = &c.BadRequestError{Message: `non-Kafka destination must not set kafka cluster and topic`}
+var badRequestRecvOnlyPublishError = &c.BadRequestError{Message: `Cannot publish to RECEIVEONLY destinations`}
+var badRequestKafkaPublishError = &c.BadRequestError{Message: `Cannot publish to Kafka destinations`}
 
 // destinationUUID is the UUID as a string for a destination
 type destinationUUID string
@@ -469,7 +471,7 @@ func (h *Frontend) getUUIDForDestination(ctx thrift.Context, path string, reject
 	}
 
 	if destDesc != nil { // i.e. err == nil
-		if rejectDisabled && destDesc.GetStatus() != shared.DestinationStatus_ENABLED {
+		if rejectDisabled && destDesc.GetStatus() == shared.DestinationStatus_DISABLED {
 			h.logger.WithField(common.TagDst, common.FmtDst(destDesc.GetDestinationUUID())).
 				WithField(common.TagDstPth, common.FmtDstPth(destDesc.GetPath())).
 				WithField(`Status`, destDesc.GetStatus()).Error(`Couldn't return UUID for destination: not enabled`)
@@ -724,6 +726,18 @@ func (h *Frontend) ReadPublisherOptions(ctx thrift.Context, r *c.ReadPublisherOp
 		return nil, err
 	}
 
+	// Fail ReadPublisherOptions for Kafka destinations
+	if destDesc.GetType() == shared.DestinationType_KAFKA {
+		lclLg.Error(`Rejecting ReadPublisherOptions on a Kafka destination`)
+		return nil, badRequestKafkaPublishError
+	}
+
+	// Fail ReadPublisherOptions for receive-only destinations
+	if destDesc.GetStatus() == shared.DestinationStatus_RECEIVEONLY {
+		lclLg.Error(`Rejecting ReadPublisherOptions on a RECEIVEONLY destination`)
+		return nil, badRequestRecvOnlyPublishError
+	}
+
 	checksumOption := destDesc.GetChecksumOption()
 
 	lclLg = lclLg.WithField(common.TagDst, common.FmtDst(destUUID))
@@ -794,6 +808,25 @@ func (h *Frontend) ReadDestinationHosts(ctx thrift.Context, r *c.ReadDestination
 			lclLg.WithField(common.TagErr, err).Error(`Couldn't read destination hosts`)
 			return nil, err
 		}
+	}
+
+	readDestRequest := shared.ReadDestinationRequest{Path: common.StringPtr(r.GetPath())}
+	var destDesc *shared.DestinationDescription
+	destDesc, err = h.metaClnt.ReadDestination(ctx, &readDestRequest)
+	if err != nil {
+		return nil, err
+	}
+
+	// Fail ReadPublisherOptions for Kafka destinations
+	if destDesc.GetType() == shared.DestinationType_KAFKA {
+		lclLg.Error(`Rejecting ReadDestinationHosts on a Kafka destination`)
+		return nil, badRequestKafkaPublishError
+	}
+
+	// Fail ReadPublisherOptions for receive-only destinations
+	if destDesc.GetStatus() == shared.DestinationStatus_RECEIVEONLY {
+		lclLg.Error(`Rejecting ReadPublisherOptions on a RECEIVEONLY destination`)
+		return nil, badRequestRecvOnlyPublishError
 	}
 
 	lclLg = lclLg.WithField(common.TagDst, common.FmtDst(destUUID))

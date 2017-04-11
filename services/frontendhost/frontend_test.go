@@ -597,6 +597,51 @@ func (s *FrontendHostSuite) TestFrontendHostReadPublisherOptionsNoExistPath() {
 	assert.IsType(s.T(), &c.EntityNotExistsError{}, err)
 }
 
+// TestFrontendHostReadPublisherOptionsKafka tests that ReadPublisherOptions fail for Kafka destinations
+func (s *FrontendHostSuite) TestFrontendHostReadPublisherOptionsKafka() {
+	testPath := s.generateKey("/foo/bar")
+	testUUID := uuid.New()
+
+	frontendHost, ctx := s.utilGetContextAndFrontend()
+	s.mockMeta.On("ReadDestination", mock.Anything, mock.Anything).Return(&shared.DestinationDescription{
+		Path:            common.StringPtr(testPath),
+		DestinationUUID: common.StringPtr(testUUID),
+		Type:            common.InternalDestinationTypePtr(shared.DestinationType_KAFKA),
+	}, nil)
+
+	req := c.NewReadPublisherOptionsRequest()
+	req.Path = common.StringPtr(testPath)
+
+	dst, err := frontendHost.ReadPublisherOptions(ctx, req)
+
+	s.Error(err)
+	s.Nil(dst)
+	assert.IsType(s.T(), &c.BadRequestError{}, err)
+}
+
+// TestFrontendHostReadPublisherOptionsReceiveOnly tests that ReadPublisherOptions fail for receive-only destinations
+func (s *FrontendHostSuite) TestFrontendHostReadPublisherOptionsReceiveOnly() {
+	testPath := s.generateKey("/foo/bar")
+	testUUID := uuid.New()
+
+	frontendHost, ctx := s.utilGetContextAndFrontend()
+	s.mockMeta.On("ReadDestination", mock.Anything, mock.Anything).Return(&shared.DestinationDescription{
+		Path:            common.StringPtr(testPath),
+		DestinationUUID: common.StringPtr(testUUID),
+		Type:            common.InternalDestinationTypePtr(shared.DestinationType_PLAIN),
+		Status:          common.InternalDestinationStatusPtr(shared.DestinationStatus_RECEIVEONLY),
+	}, nil)
+
+	req := c.NewReadPublisherOptionsRequest()
+	req.Path = common.StringPtr(testPath)
+
+	dst, err := frontendHost.ReadPublisherOptions(ctx, req)
+
+	s.Error(err)
+	s.Nil(dst)
+	assert.IsType(s.T(), &c.BadRequestError{}, err)
+}
+
 // TestFrontendHostReadPublisherOptions tests that no hosts can be retrieved for a newly created destination
 func (s *FrontendHostSuite) TestFrontendHostReadPublisherOptions() {
 	testPath := s.generateKey("/foo/bar")
@@ -649,6 +694,51 @@ func (s *FrontendHostSuite) TestFrontendHostReadDestinationHostsNoExistPath() {
 	s.Error(err)
 	s.Nil(dst)
 	assert.IsType(s.T(), &c.EntityNotExistsError{}, err)
+}
+
+// TestFrontendHostReadDestinationHostsKafka tests that ReadDestinationHosts fail for Kafka destinations
+func (s *FrontendHostSuite) TestFrontendHostReadDestinationHostsKafka() {
+	testPath := s.generateKey("/foo/bar")
+	testUUID := uuid.New()
+
+	frontendHost, ctx := s.utilGetContextAndFrontend()
+	s.mockMeta.On("ReadDestination", mock.Anything, mock.Anything).Return(&shared.DestinationDescription{
+		Path:            common.StringPtr(testPath),
+		DestinationUUID: common.StringPtr(testUUID),
+		Type:            common.InternalDestinationTypePtr(shared.DestinationType_KAFKA),
+	}, nil)
+
+	req := c.NewReadDestinationHostsRequest()
+	req.Path = common.StringPtr(testPath)
+
+	hosts, err := frontendHost.ReadDestinationHosts(ctx, req)
+
+	s.Error(err)
+	s.Nil(hosts)
+	assert.IsType(s.T(), &c.BadRequestError{}, err)
+}
+
+// TestFrontendHostReadDestinationHostsReceiveOnly tests that ReadDestinationHosts fail for receive-only destinations
+func (s *FrontendHostSuite) TestFrontendHostReadDestinationHostsReceiveOnly() {
+	testPath := s.generateKey("/foo/bar")
+	testUUID := uuid.New()
+
+	frontendHost, ctx := s.utilGetContextAndFrontend()
+	s.mockMeta.On("ReadDestination", mock.Anything, mock.Anything).Return(&shared.DestinationDescription{
+		Path:            common.StringPtr(testPath),
+		DestinationUUID: common.StringPtr(testUUID),
+		Type:            common.InternalDestinationTypePtr(shared.DestinationType_PLAIN),
+		Status:          common.InternalDestinationStatusPtr(shared.DestinationStatus_RECEIVEONLY),
+	}, nil)
+
+	req := c.NewReadDestinationHostsRequest()
+	req.Path = common.StringPtr(testPath)
+
+	hosts, err := frontendHost.ReadDestinationHosts(ctx, req)
+
+	s.Error(err)
+	s.Nil(hosts)
+	assert.IsType(s.T(), &c.BadRequestError{}, err)
 }
 
 // TestFrontendHostReadDestinationHosts tests that no hosts can be retrieved for a newly created destination

@@ -324,11 +324,17 @@ func (mcp *Mcp) GetInputHosts(ctx thrift.Context, inReq *c.GetInputHostsRequest)
 	hostIDs, err := refreshInputHostsForDst(context, dstUUID, now)
 	context.dstLock.Unlock(dstUUID)
 	if err != nil {
-		if isEntityError(err) {
+
+		switch {
+		case isEntityError(err):
 			context.m3Client.IncCounter(metrics.GetInputHostsScope, metrics.ControllerErrBadEntityCounter)
 			return nil, err
+		case isBadRequestError(err):
+			context.m3Client.IncCounter(metrics.GetInputHostsScope, metrics.ControllerErrBadRequestCounter)
+			return nil, err
+		default:
+			return response(&shared.InternalServiceError{Message: err.Error()})
 		}
-		return response(&shared.InternalServiceError{Message: err.Error()})
 	}
 
 	return &c.GetInputHostsResult_{InputHostIds: hostIDs}, nil

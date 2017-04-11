@@ -121,7 +121,7 @@ func (s *McpSuite) startController() {
 	context.channel = s.mcp.GetTChannel()
 	context.eventPipeline = NewEventPipeline(context, nEventPipelineWorkers)
 	context.eventPipeline.Start()
-	context.failureDetector = NewDfdd(context, common.NewRealTimeSource())
+	context.failureDetector = NewDfdd(s.mcp.context, common.NewRealTimeSource())
 	s.mcp.started = 1
 }
 
@@ -386,6 +386,37 @@ func (s *McpSuite) TestGetInputHosts() {
 	s.Equal(1, len(resp.GetInputHostIds()), "GetInputHosts() must return only one value")
 	extentStats, err = s.listExtents(dstUUID)
 	s.Equal(1+sealedExtents+minOpenExtentsForDst(s.mcp.context, `/`, dstTypePlain), len(extentStats), "Wrong number of extents for destination")
+}
+
+func (s *McpSuite) TestGetInputHostsForKafkaDest() {
+
+	dstPath := s.generateName("/cherami/mcp-test")
+	dstDesc, err := s.createDestination(dstPath, shared.DestinationType_KAFKA)
+	s.Nil(err, "Failed to create destination")
+
+	_, err = s.mcp.GetInputHosts(nil, &c.GetInputHostsRequest{DestinationUUID: dstDesc.DestinationUUID})
+	s.NotNil(err, "GetInputHosts should fail for Kafka destination")
+	s.Equal(ErrPublishToKafkaDestination, err, "Expected ErrPublishToKafkaDestination")
+}
+
+func (s *McpSuite) TestGetInputHostsForReceiveOnlyDest() {
+
+	dstPath := s.generateName("/cherami/mcp-test")
+	dstDesc, err := s.createDestination(dstPath, shared.DestinationType_PLAIN)
+	s.Nil(err, "Failed to create destination")
+
+	updateReq := &shared.UpdateDestinationRequest{
+		DestinationUUID: dstDesc.DestinationUUID,
+		Status:          shared.DestinationStatusPtr(shared.DestinationStatus_RECEIVEONLY),
+	}
+
+	_, err = s.mClient.UpdateDestination(nil, updateReq)
+	s.Nil(err, "Failed to update destination to receive-only")
+
+	_, err = s.mcp.GetInputHosts(nil, &c.GetInputHostsRequest{DestinationUUID: dstDesc.DestinationUUID})
+	s.NotNil(err, "GetInputHosts should fail for receive-only destination")
+
+	s.Equal(ErrPublishToReceiveOnlyDestination, err, "Expected ErrPublishToReceiveOnlyDestination")
 }
 
 func (s *McpSuite) TestGetOutputHostsMaxOpenExtentsLimit() {

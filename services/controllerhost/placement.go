@@ -258,6 +258,7 @@ func (p *DistancePlacement) getHealthyHosts(service string) ([]*common.HostInfo,
 	}
 	result := make([]*common.HostInfo, 0, len(hosts))
 	for _, h := range hosts {
+
 		state, _ := p.context.failureDetector.GetHostState(service, h.UUID)
 		if state == dfddHostStateGoingDown { // ignore hosts in GoingDown state from placement
 			continue
