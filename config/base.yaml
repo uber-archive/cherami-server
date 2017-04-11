@@ -88,6 +88,10 @@ ReplicatorConfig:
     zone1: 192.168.0.1
     zone2: 192.168.0.2
 
+# KafkaConfig specifies
+KafkaConfig:
+  kafkaClusterConfigFile: "./config/local_kafka_clusters.yaml"
+
 # Logging configuration
 logging:
   level: error

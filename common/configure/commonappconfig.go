@@ -30,6 +30,7 @@ type AppConfig struct {
 	FrontendConfig       *FrontendConfig           `yaml:"FrontendConfig"`
 	StorageConfig        *StorageConfig            `yaml:"StorageConfig"`
 	ReplicatorConfig     *ReplicatorConfig         `yaml:"ReplicatorConfig"`
+	KafkaConfig          *KafkaConfig              `yaml:"KafkaConfig"`
 
 	DefaultDestinationConfig *DestinationConfig `yaml:"DefaultDestinationConfig"`
 }
@@ -46,6 +47,7 @@ func NewCommonAppConfig() CommonAppConfig {
 		StorageConfig:            NewCommonStorageConfig(),
 		ReplicatorConfig:         NewCommonReplicatorConfig(),
 		DefaultDestinationConfig: NewDestinationConfig(),
+		KafkaConfig:              NewCommonKafkaConfig(),
 	}
 }
 
@@ -99,4 +101,9 @@ func (r *AppConfig) SetServiceConfig(sName string, sCfg CommonServiceConfig) {
 // GetDefaultServiceConfig returns the default service config
 func (r *AppConfig) GetDefaultServiceConfig() CommonServiceConfig {
 	return r.DefaultServiceConfig
+}
+
+// GetKafkaConfig returns the default service config
+func (r *AppConfig) GetKafkaConfig() CommonKafkaConfig {
+	return r.KafkaConfig
 }

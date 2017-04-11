@@ -1,0 +1,16 @@
+clusters:
+  local:
+    brokers:
+      - localhost
+    zookeepers:
+      - localhost
+    chroot:
+
+  test:
+    brokers:
+      - server1
+      - server2
+    zookeepers:
+      - server3
+      - server4
+    chroot: test

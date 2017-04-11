@@ -222,4 +222,10 @@ type (
 		// GetReplicas returns the no: of replicas to be used for destinations
 		GetReplicas() int16
 	}
+
+	// CommonKafkaConfig holds the Kafka-related config
+	CommonKafkaConfig interface {
+		GetKafkaClusters() []string
+		GetKafkaClusterConfig(cluster string) (ClusterConfig, bool)
+	}
 )
