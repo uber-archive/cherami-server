@@ -176,9 +176,9 @@ func CreateHyperbahnClient(ch *tchannel.Channel, bootstrapFile string) *hyperbah
 	return hClient
 }
 
-// GetHttpListenAddress is a utlility routine to give out the appropriate
+// GetHTTPListenAddress is a utlility routine to give out the appropriate
 // listen address for the http endpoint
-func GetHttpListenAddress(cfgListenAddress net.IP) string {
+func GetHTTPListenAddress(cfgListenAddress net.IP) string {
 	listenAddress := `127.0.0.1`
 	if cfgListenAddress.IsLoopback() { // If we have a particular loopback listen address, override the default
 		listenAddress = cfgListenAddress.String()
@@ -193,7 +193,7 @@ func ServiceLoop(port int, cfg configure.CommonAppConfig, service SCommon) {
 	mux := http.NewServeMux()
 	httpHandlers.Register(mux)
 
-	listenAddress := GetHttpListenAddress(service.GetConfig().GetListenAddress())
+	listenAddress := GetHTTPListenAddress(service.GetConfig().GetListenAddress())
 	log.Info(fmt.Sprintf("Diagnostic http endpoint listening on %s:%d", listenAddress, port))
 	log.Panic(http.ListenAndServe(fmt.Sprintf("%s:%d", listenAddress, port), mux))
 }

@@ -779,7 +779,7 @@ func getDrainTimeout(ctx thrift.Context) time.Duration {
 	return defaultDrainTimeout
 }
 
-// DrainExtents is the implementation of the thrift handler for the inputhost
+// DrainExtent is the implementation of the thrift handler for the inputhost
 func (h *InputHost) DrainExtent(ctx thrift.Context, request *admin.DrainExtentsRequest) (err error) {
 	defer atomic.AddInt32(&h.loadShutdownRef, -1)
 	sw := h.m3Client.StartTimer(metrics.DrainExtentsScope, metrics.InputhostLatencyTimer)
