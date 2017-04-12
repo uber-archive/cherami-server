@@ -265,6 +265,11 @@ func (p *DistancePlacement) getHealthyHosts(service string) ([]*common.HostInfo,
 		}
 		result = append(result, h)
 	}
+
+	// if no hosts are found error out; could happen if all the hosts are "going down"
+	if len(result) == 0 {
+		return nil, errNoHosts
+	}
 	return result, nil
 }
 

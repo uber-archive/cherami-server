@@ -555,7 +555,7 @@ func (mcp *Mcp) ReportNodeMetric(ctx thrift.Context, request *c.ReportNodeMetric
 	if metrics.IsSetOutgoingBytesCounter() {
 		loadMetrics.Put(hostID, load.EmptyTag, load.BytesOutPerSec, metrics.GetOutgoingBytesCounter(), timestamp)
 	}
-	if metrics.IsSetNodeStatus() && request.IsSetRole() {
+	if metrics.IsSetNodeStatus() && request.IsSetRole() && metrics.GetNodeStatus() == c.NodeStatus_GOING_DOWN {
 		switch request.GetRole() {
 		case c.Role_IN:
 			context.failureDetector.ReportHostGoingDown(common.InputServiceName, hostID)
