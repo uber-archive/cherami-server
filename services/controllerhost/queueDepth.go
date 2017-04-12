@@ -119,6 +119,12 @@ func (qdc *queueDepthCalculator) GetQueueDepthResult(cgUUID string) (QueueDepthC
 
 // handleEvent handles an event from the metadata iterator
 func (qdc *queueDepthCalculator) handleEvent(e *mIteratorEvent) {
+
+	// ignore Kafka destinations; we do not support queue-depth for Kafka destinations
+	if e.dest != nil && e.dest.GetType() == shared.DestinationType_KAFKA {
+		return
+	}
+
 	switch e.t {
 	case eDestStart:
 		qdc.handleDestinationStart(e.dest)
