@@ -270,7 +270,7 @@ func (tb *testBase) SetUp(clusterSz map[string]int, numReplicas int) {
 		reporter := common.NewTestMetricsReporter()
 		dClient := dconfig.NewDconfigClient(configure.NewCommonServiceConfig(), common.ControllerServiceName)
 		sVice := common.NewService(serviceName, uuid.New(), cfg.ServiceConfig[serviceName], tb.UUIDResolver, hwInfoReader, reporter, dClient)
-		ch, tc := controllerhost.NewController(cfg, sVice, tb.mClient)
+		ch, tc := controllerhost.NewController(cfg, sVice, tb.mClient, common.NewDummyZoneFailoverManager())
 		ch.Start(tc)
 		tb.Controllers[hostID] = ch
 	}

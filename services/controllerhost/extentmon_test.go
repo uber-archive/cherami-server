@@ -91,7 +91,7 @@ func (s *ExtentStateMonitorSuite) SetupTest() {
 
 	sVice := common.NewService(serviceName, uuid.New(), serviceConfig, common.NewUUIDResolver(s.mClient), common.NewHostHardwareInfoReader(s.mClient), reporter, dClient)
 
-	mcp, _ := NewController(s.cfg, sVice, s.mClient)
+	mcp, _ := NewController(s.cfg, sVice, s.mClient, common.NewDummyZoneFailoverManager())
 	mcp.context.m3Client = &MockM3Metrics{}
 	s.mcp = mcp
 	ch, err := tchannel.NewChannel("extent-state-monitor-test", nil)

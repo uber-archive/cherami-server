@@ -110,7 +110,7 @@ func (s *McpSuite) startController() {
 
 	sVice := common.NewService(serviceName, uuid.New(), serviceConfig, common.NewUUIDResolver(s.mClient), common.NewHostHardwareInfoReader(s.mClient), reporter, dClient)
 	//serviceConfig.SetRingHosts(
-	mcp, tc := NewController(s.cfg, sVice, s.mClient)
+	mcp, tc := NewController(s.cfg, sVice, s.mClient, common.NewDummyZoneFailoverManager())
 	s.mcp = mcp
 
 	context := s.mcp.context

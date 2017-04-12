@@ -100,26 +100,27 @@ type (
 	}
 	// Context holds the run-time context for controller
 	Context struct {
-		hostID          string
-		localZone       string
-		mm              MetadataMgr
-		rpm             common.RingpopMonitor
-		failureDetector Dfdd
-		log             bark.Logger
-		dstLock         LockMgr
-		eventPipeline   EventPipeline
-		resultCache     *resultCache
-		extentMonitor   *extentStateMonitor
-		timeSource      common.TimeSource
-		channel         *tchannel.Channel
-		clientFactory   common.ClientFactory
-		retMgr          *retMgrRunner
-		appConfig       configure.CommonAppConfig
-		m3Client        metrics.Client
-		cfgMgr          dconfig.ConfigManager
-		loadMetrics     load.MetricsAggregator
-		placement       Placement
-		extentSeals     struct {
+		hostID              string
+		localZone           string
+		mm                  MetadataMgr
+		rpm                 common.RingpopMonitor
+		zoneFailoverManager common.ZoneFailoverManager
+		failureDetector     Dfdd
+		log                 bark.Logger
+		dstLock             LockMgr
+		eventPipeline       EventPipeline
+		resultCache         *resultCache
+		extentMonitor       *extentStateMonitor
+		timeSource          common.TimeSource
+		channel             *tchannel.Channel
+		clientFactory       common.ClientFactory
+		retMgr              *retMgrRunner
+		appConfig           configure.CommonAppConfig
+		m3Client            metrics.Client
+		cfgMgr              dconfig.ConfigManager
+		loadMetrics         load.MetricsAggregator
+		placement           Placement
+		extentSeals         struct {
 			// set of extents for which seal is in progress
 			// if an extent exist in this set, some worker
 			// is guaranteed to be working on this extent
@@ -147,7 +148,7 @@ type (
 var _ c.TChanController = (*Mcp)(nil)
 
 // NewController creates and returns a new instance of Mcp controller
-func NewController(cfg configure.CommonAppConfig, sVice *common.Service, metadataClient m.TChanMetadataService) (*Mcp, []thrift.TChanServer) {
+func NewController(cfg configure.CommonAppConfig, sVice *common.Service, metadataClient m.TChanMetadataService, zoneFailoverManager common.ZoneFailoverManager) (*Mcp, []thrift.TChanServer) {
 	hostID := uuid.New()
 
 	instance := new(Mcp)
@@ -169,6 +170,7 @@ func NewController(cfg configure.CommonAppConfig, sVice *common.Service, metadat
 	}
 
 	context.localZone, _ = common.GetLocalClusterInfo(strings.ToLower(deploymentName))
+	context.zoneFailoverManager = zoneFailoverManager
 
 	context.dstLock = lockMgr
 	context.m3Client = metrics.NewClient(instance.Service.GetMetricsReporter(), metrics.Controller)
@@ -203,6 +205,8 @@ func (mcp *Mcp) Start(thriftService []thrift.TChanServer) {
 	context.channel = mcp.GetTChannel()
 	context.rpm = mcp.GetRingpopMonitor()
 
+	context.zoneFailoverManager.Start()
+
 	context.eventPipeline = NewEventPipeline(context, nEventPipelineWorkers)
 	context.eventPipeline.Start()
 
@@ -235,6 +239,7 @@ func (mcp *Mcp) Start(thriftService []thrift.TChanServer) {
 // Stop stops the controller service
 func (mcp *Mcp) Stop() {
 	mcp.hostIDHeartbeater.Stop()
+	mcp.context.zoneFailoverManager.Stop()
 	mcp.context.extentMonitor.Stop()
 	mcp.context.retMgr.Stop()
 	mcp.context.failureDetector.Stop()

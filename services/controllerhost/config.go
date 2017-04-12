@@ -50,10 +50,16 @@ type (
 		AdminStatus string `name:"adminStatus" default:"enabled"`
 	}
 
+	// ControllerDynamicConfig contains the config
+	// parameters needed for controller
 	ControllerDynamicConfig struct {
 		NumPublisherExtentsByPath      []string `name:"numPublisherExtentsByPath" default:"/=4"`
 		NumConsumerExtentsByPath       []string `name:"numConsumerExtentsByPath" default:"/=8"`
 		NumRemoteConsumerExtentsByPath []string `name:"numRemoteConsumerExtentsByPath" default:"/=4"`
+
+		// configs for multi_zone consumer group
+		ActiveZone   string `name:"activeZone" default:""`
+		FailoverMode string `name:"failoverMode" default:"disabled"`
 	}
 )
 
