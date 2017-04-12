@@ -80,7 +80,7 @@ type (
 		// CreateExtent creates a new extent for the given destination and marks the status as OPEN
 		CreateExtent(dstID string, extentID string, inhostID string, storeIDs []string) (*shared.CreateExtentResult_, error)
 		// CreateRemoteZoneExtent creates a new remote zone extent for the given destination and marks the status as OPEN
-		CreateRemoteZoneExtent(dstID string, extentID string, inhostID string, storeIDs []string, originZone string, remoteExtentPrimaryStore string) (*shared.CreateExtentResult_, error)
+		CreateRemoteZoneExtent(dstID string, extentID string, inhostID string, storeIDs []string, originZone string, remoteExtentPrimaryStore string, consumerGroupVisibility string) (*shared.CreateExtentResult_, error)
 		// AddExtentToConsumerGroup adds an open extent to consumer group for consumption
 		AddExtentToConsumerGroup(dstID string, cgID string, extentID string, outHostID string, storeIDs []string) error
 		// ListConsumerGroupsByDstID lists all consumer groups for a given destination uuid
@@ -471,15 +471,15 @@ func (mm *metadataMgrImpl) ListExtentsByConsumerGroup(dstID string, cgID string,
 
 // CreateExtent creates a new extent for the given destination and marks the status as OPEN
 func (mm *metadataMgrImpl) CreateExtent(dstID string, extentID string, inhostID string, storeIDs []string) (*shared.CreateExtentResult_, error) {
-	return mm.createExtentInternal(dstID, extentID, inhostID, storeIDs, ``, ``)
+	return mm.createExtentInternal(dstID, extentID, inhostID, storeIDs, ``, ``, ``)
 }
 
 // CreateRemoteZoneExtent creates a new remote zone extent for the given destination and marks the status as OPEN
-func (mm *metadataMgrImpl) CreateRemoteZoneExtent(dstID string, extentID string, inhostID string, storeIDs []string, originZone string, remoteExtentPrimaryStore string) (*shared.CreateExtentResult_, error) {
-	return mm.createExtentInternal(dstID, extentID, inhostID, storeIDs, originZone, remoteExtentPrimaryStore)
+func (mm *metadataMgrImpl) CreateRemoteZoneExtent(dstID string, extentID string, inhostID string, storeIDs []string, originZone string, remoteExtentPrimaryStore string, consumerGroupVisibility string) (*shared.CreateExtentResult_, error) {
+	return mm.createExtentInternal(dstID, extentID, inhostID, storeIDs, originZone, remoteExtentPrimaryStore, consumerGroupVisibility)
 }
 
-func (mm *metadataMgrImpl) createExtentInternal(dstID string, extentID string, inhostID string, storeIDs []string, originZone string, remoteExtentPrimaryStore string) (*shared.CreateExtentResult_, error) {
+func (mm *metadataMgrImpl) createExtentInternal(dstID string, extentID string, inhostID string, storeIDs []string, originZone string, remoteExtentPrimaryStore string, consumerGroupVisibility string) (*shared.CreateExtentResult_, error) {
 
 	extent := &shared.Extent{
 		ExtentUUID:               common.StringPtr(extentID),
@@ -490,6 +490,9 @@ func (mm *metadataMgrImpl) createExtentInternal(dstID string, extentID string, i
 		RemoteExtentPrimaryStore: common.StringPtr(remoteExtentPrimaryStore),
 	}
 	mReq := &shared.CreateExtentRequest{Extent: extent}
+	if len(consumerGroupVisibility) > 0 {
+		mReq.ConsumerGroupVisibility = common.StringPtr(consumerGroupVisibility)
+	}
 
 	res, err := mm.mClient.CreateExtent(nil, mReq)
 	if err != nil {

@@ -91,7 +91,7 @@ func (s *ExtentStateMonitorSuite) SetupTest() {
 
 	sVice := common.NewService(serviceName, uuid.New(), serviceConfig, common.NewUUIDResolver(s.mClient), common.NewHostHardwareInfoReader(s.mClient), reporter, dClient)
 
-	mcp, _ := NewController(s.cfg, sVice, s.mClient)
+	mcp, _ := NewController(s.cfg, sVice, s.mClient, common.NewDummyZoneFailoverManager())
 	mcp.context.m3Client = &MockM3Metrics{}
 	s.mcp = mcp
 	ch, err := tchannel.NewChannel("extent-state-monitor-test", nil)
@@ -217,7 +217,7 @@ func (s *ExtentStateMonitorSuite) TestStoreRemoteExtentReplicatorDownTrigger() {
 	storeIDs := []string{uuid.New(), uuid.New(), uuid.New()}
 
 	context := s.mcp.context
-	_, err = context.mm.CreateRemoteZoneExtent(desc.GetDestinationUUID(), extentID, inHostID, storeIDs, "origin", storeIDs[0])
+	_, err = context.mm.CreateRemoteZoneExtent(desc.GetDestinationUUID(), extentID, inHostID, storeIDs, "origin", storeIDs[0], ``)
 	s.Nil(err, "failed to create remote zone extent")
 
 	// just have one store as healthy

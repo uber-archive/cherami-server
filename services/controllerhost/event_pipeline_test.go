@@ -90,7 +90,7 @@ func (s *EventPipelineSuite) SetupTest() {
 	reporter := common.NewMetricReporterWithHostname(configure.NewCommonServiceConfig())
 	dClient := dconfig.NewDconfigClient(serviceConfig, common.ControllerServiceName)
 	sVice := common.NewService(serviceName, uuid.New(), serviceConfig, common.NewUUIDResolver(s.mClient), common.NewHostHardwareInfoReader(s.mClient), reporter, dClient)
-	mcp, _ := NewController(s.cfg, sVice, s.mClient)
+	mcp, _ := NewController(s.cfg, sVice, s.mClient, common.NewDummyZoneFailoverManager())
 	mcp.context.m3Client = &MockM3Metrics{}
 	s.mcp = mcp
 	ch, err := tchannel.NewChannel("event-pipeline-test", nil)
@@ -314,7 +314,7 @@ func (s *EventPipelineSuite) TestRemoteExtentPrimaryStoreDownEvent() {
 	originZone := `zone1`
 
 	for i := 0; i < len(extentIDs); i++ {
-		_, err := s.mcp.context.mm.CreateRemoteZoneExtent(dstID, extentIDs[i], inHostIDs[i], storeIDs, originZone, storeIDs[primaryStoreIdx])
+		_, err := s.mcp.context.mm.CreateRemoteZoneExtent(dstID, extentIDs[i], inHostIDs[i], storeIDs, originZone, storeIDs[primaryStoreIdx], ``)
 		s.Nil(err, "Failed to create extent")
 	}
 
