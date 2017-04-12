@@ -384,25 +384,25 @@ func (mcp *Mcp) GetOutputHosts(ctx thrift.Context, inReq *c.GetOutputHostsReques
 		return nil, ErrMalformedUUID
 	}
 
-	response := func(err error) (*c.GetOutputHostsResult_, error) {
-		if len(result.cachedResult) < 1 {
+	response := func(outputHostIDs []string, err error) (*c.GetOutputHostsResult_, error) {
+		if len(outputHostIDs) < 1 {
 			// only count as failure if our answer contains no endpoints at all
 			context.m3Client.IncCounter(metrics.GetOutputHostsScope, metrics.ControllerFailures)
-			return nil, ErrUnavailable
+			return nil, err
 		}
-		return &c.GetOutputHostsResult_{OutputHostIds: result.cachedResult}, nil
+		return &c.GetOutputHostsResult_{OutputHostIds: outputHostIDs}, nil
 	}
 
 	var now = context.timeSource.Now().UnixNano()
 
 	result = context.resultCache.readOutputHosts(cgUUID, now)
 	if result.cacheHit && !result.refreshCache {
-		return response(ErrUnavailable)
+		return response(result.cachedResult, ErrUnavailable)
 	}
 
 	if !context.dstLock.TryLock(dstUUID, getLockTimeout(result)) {
 		context.m3Client.IncCounter(metrics.GetOutputHostsScope, metrics.ControllerErrTryLockCounter)
-		return response(ErrTryLock)
+		return response(result.cachedResult, ErrTryLock)
 	}
 
 	// With the lock being held, make sure someone else did not already
@@ -410,7 +410,7 @@ func (mcp *Mcp) GetOutputHosts(ctx thrift.Context, inReq *c.GetOutputHostsReques
 	result = context.resultCache.readOutputHosts(cgUUID, now)
 	if result.cacheHit && !result.refreshCache {
 		context.dstLock.Unlock(dstUUID)
-		return response(ErrUnavailable)
+		return response(result.cachedResult, ErrUnavailable)
 	}
 
 	hostIDs, err := refreshOutputHostsForConsGroup(context, dstUUID, cgUUID, *result, now)
@@ -420,10 +420,10 @@ func (mcp *Mcp) GetOutputHosts(ctx thrift.Context, inReq *c.GetOutputHostsReques
 			context.m3Client.IncCounter(metrics.GetOutputHostsScope, metrics.ControllerErrBadEntityCounter)
 			return nil, err
 		}
-		return response(&shared.InternalServiceError{Message: err.Error()})
+		return response(result.cachedResult, &shared.InternalServiceError{Message: err.Error()})
 	}
 
-	return &c.GetOutputHostsResult_{OutputHostIds: hostIDs}, nil
+	return response(hostIDs, nil)
 }
 
 // GetQueueDepthInfo to return queue depth backlog infor for consumer group

@@ -42,15 +42,18 @@ const (
 )
 
 const (
-	minOpenExtentsForDstDLQ                      = 1
-	maxExtentsToConsumeForDstDLQ                 = 2
-	minOpenExtentsForDstTimer                    = 2
 	defaultMinOpenPublishExtents                 = 2 // Only used if the extent configuration can't be retrieved
 	defaultRemoteExtents                         = 2
 	defaultMinConsumeExtents                     = defaultMinOpenPublishExtents * 2
-	maxExtentsToConsumeForDstTimer               = 64 // timer dst need to consume from all open extents
-	minExtentsToConsumeForSingleCGVisibleExtents = 1
 	replicatorCallTimeout                        = 20 * time.Second
+	minOpenExtentsForDstDLQ                      = 1
+	maxExtentsToConsumeForDstDLQ                 = 2
+	minOpenExtentsForDstTimer                    = 2
+	maxExtentsToConsumeForDstTimer               = 64 // timer dst need to consume from all open extents
+	numKafkaExtentsForDstKafka                   = 2
+	maxDlqExtentsForDstKafka                     = 2
+	maxExtentsToConsumeForDstKafka               = numKafkaExtentsForDstKafka + maxDlqExtentsForDstKafka
+	minExtentsToConsumeForSingleCGVisibleExtents = 1
 )
 
 var (
@@ -108,6 +111,13 @@ func getLockTimeout(result *resultCacheReadResult) time.Duration {
 }
 
 func isAnyStoreHealthy(context *Context, storeIDs []string) bool {
+
+	// special-case for Kafka destinations that do not really have
+	// a physical store (in Cherami), indicated by a placeholder.
+	if len(storeIDs) == 1 && storeIDs[0] == kafkaPhantomStoreUUID {
+		return true
+	}
+
 	for _, id := range storeIDs {
 		if context.rpm.IsHostHealthy(common.StoreServiceName, id) {
 			return true

@@ -51,6 +51,23 @@ func (s *McpSuite) TestCGExtentSelectorWithNoExtents() {
 	s.Equal(1, avail, "Extent not created when no consummable extent")
 }
 
+func (s *McpSuite) TestCGExtentSelectorWithNoExtentsKafka() {
+	dstPath := s.generateName("/test/selector")
+	dstDesc, err := s.createDestination(dstPath, shared.DestinationType_KAFKA)
+	s.Nil(err, "Failed to create destination")
+
+	cgPath := s.generateName("/test/selector-cg")
+	cgDesc, err := s.createConsumerGroup(dstPath, cgPath)
+	s.Nil(err, "Failed to create consumer group")
+
+	context := s.mcp.context
+	cgExtents := newCGExtentsByCategory()
+	extents, avail, err := selectNextExtentsToConsumeKafka(context, dstDesc, cgDesc, cgExtents, metrics.GetOutputHostsScope)
+	s.Nil(err, "selectNextExtentsToConsumeKafka() error")
+	s.Equal(numKafkaExtentsForDstKafka, len(extents), "Extent not created when no consummable extent")
+	s.Equal(numKafkaExtentsForDstKafka, avail, "Extent not created when no consummable extent")
+}
+
 func (s *McpSuite) TestCGExtentSelectorWithNoConsumableExtents() {
 	dstPath := s.generateName("/test/selector")
 	dstDesc, err := s.createDestination(dstPath, shared.DestinationType_PLAIN)
@@ -97,6 +114,53 @@ func (s *McpSuite) TestCGExtentSelectorWithNoConsumableExtents() {
 	s.Equal(1, avail, "Extent not created when no consummable extent")
 }
 
+func (s *McpSuite) TestCGExtentSelectorWithNoConsumableExtentsKafka() {
+	dstPath := s.generateName("/test/selector")
+	dstDesc, err := s.createDestination(dstPath, shared.DestinationType_KAFKA)
+	s.Nil(err, "Failed to create destination")
+
+	cgPath := s.generateName("/test/selector-cg")
+	cgDesc, err := s.createConsumerGroup(dstPath, cgPath)
+	s.Nil(err, "Failed to create consumer group")
+
+	stores := []string{uuid.New(), uuid.New(), uuid.New()}
+	for _, id := range stores {
+		s.mockrpm.Add(common.StoreServiceName, id, "127.2.2.2:0")
+	}
+
+	nExtents := 0
+	context := s.mcp.context
+	dstID := dstDesc.GetDestinationUUID()
+	inhosts, _ := s.mockrpm.GetHosts(common.InputServiceName)
+
+	// add some DLQ extents with unhealthy store
+	for i := 0; i < 5; i++ {
+		extID := uuid.New()
+		storeIDs := []string{uuid.New(), uuid.New(), uuid.New()}
+		context.mm.CreateExtent(dstID, extID, inhosts[0].UUID, storeIDs)
+		context.mm.SealExtent(dstID, extID)
+		context.mm.MoveExtent(dstID, dstID, extID, cgDesc.GetConsumerGroupUUID())
+		nExtents++
+	}
+
+	cgExtents := newCGExtentsByCategory()
+
+	// add some healthy consumed DLQ extents
+	for i := 0; i < 2; i++ {
+		extID := uuid.New()
+		storeIDs := []string{stores[0], stores[1], stores[2]}
+		context.mm.CreateExtent(dstID, extID, inhosts[0].UUID, storeIDs)
+		context.mm.SealExtent(dstID, extID)
+		context.mm.MoveExtent(dstID, dstID, extID, cgDesc.GetConsumerGroupUUID())
+		cgExtents.consumed[extID] = struct{}{}
+	}
+
+	extents, avail, err := selectNextExtentsToConsumeKafka(context, dstDesc, cgDesc, cgExtents, metrics.GetOutputHostsScope)
+	s.Nil(err, "selectNextExtentsToConsume() error")
+	s.Equal(numKafkaExtentsForDstKafka, len(extents), "Extent not created when no consummable DLQ extent")
+	s.Equal(numKafkaExtentsForDstKafka, avail, "Extent not created when no consummable DLQ extent")
+}
+
 func (s *McpSuite) TestCGExtentSelectorHonorsCreatedTime() {
 	dstPath := s.generateName("/test/selector")
 	dstDesc, err := s.createDestination(dstPath, shared.DestinationType_PLAIN)
@@ -138,6 +202,58 @@ func (s *McpSuite) TestCGExtentSelectorHonorsCreatedTime() {
 	for i := 0; i < len(gotExtents); i++ {
 		s.Equal(extents[i], gotExtents[i].GetExtentUUID(), "Extents not served in time order")
 	}
+}
+
+func (s *McpSuite) TestCGExtentSelectorHonorsCreatedTimeKafka() {
+	dstPath := s.generateName("/test/selector")
+	dstDesc, err := s.createDestination(dstPath, shared.DestinationType_KAFKA)
+	s.Nil(err, "Failed to create destination")
+
+	cgPath := s.generateName("/test/selector-cg")
+	cgDesc, err := s.createConsumerGroup(dstPath, cgPath)
+	s.Nil(err, "Failed to create consumer group")
+
+	hosts, _ := s.mockrpm.GetHosts(common.StoreServiceName)
+	stores := []string{hosts[0].UUID, hosts[1].UUID, hosts[2].UUID}
+	inhosts, _ := s.mockrpm.GetHosts(common.InputServiceName)
+
+	nExtents := 0
+	context := s.mcp.context
+	dstID := dstDesc.GetDestinationUUID()
+	extents := make([]string, 0, 10)
+
+	for i := 0; i < 5; i++ {
+		extID := uuid.New()
+		context.mm.CreateExtent(dstID, extID, inhosts[0].UUID, stores)
+		context.mm.SealExtent(dstID, extID)
+		context.mm.MoveExtent(dstID, dstID, extID, cgDesc.GetConsumerGroupUUID())
+		extents = append(extents, extID)
+		// sleep to advance createdTime for next extent
+		time.Sleep(2 * time.Millisecond)
+		nExtents++
+	}
+
+	cgExtents := newCGExtentsByCategory()
+
+	gotExtents, avail, err := selectNextExtentsToConsumeKafka(context, dstDesc, cgDesc, cgExtents, metrics.GetOutputHostsScope)
+	s.Nil(err, "selectNextExtentsToConsume() error")
+
+	s.Equal(maxExtentsToConsumeForDstKafka, len(gotExtents), "Wrong number of next extents to consume")
+	s.Equal(numKafkaExtentsForDstKafka+nExtents, avail, "Wrong number of available extents")
+
+	var nPhantom, nDlq int
+	for _, x := range gotExtents {
+		if x.GetStoreUUIDs()[0] == kafkaPhantomStoreUUID {
+			nPhantom++
+		} else {
+			s.Equal(extents[nDlq], x.GetExtentUUID(), "Extents not served in time order")
+			nDlq++
+		}
+	}
+
+	// ensure that the number of extents picked are within bounds
+	s.Equal(numKafkaExtentsForDstKafka, nPhantom, "Wrong number of phantom extents")
+	s.Equal(maxDlqExtentsForDstKafka, nDlq, "Wrong number of phantom extents")
 }
 
 func (s *McpSuite) TestCGExtentSelectorHonorsDlqQuota() {

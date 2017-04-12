@@ -24,6 +24,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pborman/uuid"
 	"github.com/uber-common/bark"
 	"github.com/uber/cherami-server/common"
 	"github.com/uber/cherami-server/common/metrics"
@@ -41,6 +42,10 @@ var (
 	// We can keep serving stale entries for up to an hour,
 	// when we cannot refresh the cache (say, due to cassandra failure)
 	outputCacheTTL = 5 * time.Second
+
+	// Define phantom store/inputhost for extents belonging to Kafka destinations
+	kafkaPhantomStoreUUID = "00000000-0000-0000-0000-000000000000"
+	kafkaPhantomInputUUID = "00000000-0000-0000-0000-000000000000"
 )
 
 type cgExtentsByCategory struct {
@@ -76,6 +81,10 @@ func maxExtentsToConsumeForDst(context *Context, dstPath, cgName string, dstType
 		return maxExtentsToConsumeForDstTimer
 	case dstTypeDLQ:
 		return maxExtentsToConsumeForDstDLQ
+	case dstTypeKafka:
+		return maxExtentsToConsumeForDstKafka
+	default:
+		// fall through to using dynamic config, etc (below)
 	}
 
 	logFn := func() bark.Logger {
@@ -130,6 +139,12 @@ func hostInfoMapToSlice(hosts map[string]*common.HostInfo) ([]string, []string) 
 }
 
 func pickOutputHostForStoreHosts(context *Context, storeUUIDs []string) (*common.HostInfo, error) {
+
+	// special-case kafka phantom extents, that don't use Cherami stores
+	if len(storeUUIDs) == 1 && storeUUIDs[0] == kafkaPhantomStoreUUID {
+		return context.placement.PickOutputHost(nil)
+	}
+
 	var storeHosts []*common.HostInfo
 	for _, uuid := range storeUUIDs {
 		if addr, err := context.rpm.ResolveUUID(common.StoreServiceName, uuid); err != nil {
@@ -225,10 +240,8 @@ func repairExtentsAndUpdateOutputHosts(
 	m3Scope int) int {
 
 	nRepaired := 0
-	for i := 0; i < len(cgExtents.openBad); i++ {
-		toRepair := cgExtents.openBad[i]
-		outHost := reassignOutHost(context, dstUUID, cgUUID, toRepair, m3Scope)
-		if outHost != nil {
+	for _, toRepair := range cgExtents.openBad {
+		if outHost := reassignOutHost(context, dstUUID, cgUUID, toRepair, m3Scope); outHost != nil {
 			outputHosts[outHost.UUID] = outHost
 			event := NewOutputHostNotificationEvent(dstUUID, cgUUID, outHost.UUID,
 				notifyExtentRepaired, toRepair.GetExtentUUID(), a.NotificationType_HOST)
@@ -406,7 +419,7 @@ func findConsumableExtents(context *Context, dstUUID, cgUUID string,
 			continue
 		}
 
-		// skip, if DLQ and not visibible
+		// skip, if DLQ and not visible
 		visibility := ext.GetConsumerGroupVisibility()
 		if len(visibility) > 0 && visibility != cgUUID {
 			continue
@@ -438,6 +451,35 @@ func createDestExtent(context *Context, dstDesc *shared.DestinationDescription, 
 	ext = &m.DestinationExtent{
 		ExtentUUID: common.StringPtr(extentID),
 		StoreUUIDs: storeUUIDs,
+	}
+
+	return
+}
+
+func createKafkaPhantomExtent(context *Context, dstUUID string, m3Scope int) (ext *m.DestinationExtent, err error) {
+
+	extentUUID := uuid.New()
+	inputhostUUID := kafkaPhantomInputUUID
+	storeUUIDs := []string{kafkaPhantomStoreUUID}
+
+	// create a 'phantom' extent and assign given inputhost/stores
+	if _, err = context.mm.CreateExtent(dstUUID, extentUUID, inputhostUUID, storeUUIDs); err != nil {
+		context.m3Client.IncCounter(m3Scope, metrics.ControllerErrCreateExtentCounter)
+		context.m3Client.IncCounter(m3Scope, metrics.ControllerErrMetadataUpdateCounter)
+		return
+	}
+
+	context.log.WithFields(bark.Fields{
+		common.TagDst:  common.FmtDst(dstUUID),
+		common.TagExt:  common.FmtExt(extentUUID),
+		common.TagIn:   inputhostUUID,
+		common.TagStor: storeUUIDs,
+	}).Info("created kafka phantom extent")
+
+	ext = &m.DestinationExtent{
+		ExtentUUID:    common.StringPtr(extentUUID),
+		InputHostUUID: common.StringPtr(inputhostUUID),
+		StoreUUIDs:    storeUUIDs,
 	}
 
 	return
@@ -578,6 +620,89 @@ func selectNextExtentsToConsume(
 	return result, nAvailable, nil
 }
 
+// selectNextExtentsToConsumeKafka returns a list of extents to consume from; it looks at the
+// currently open/sealed extents that are not already open/consumed, creates necessary kafka
+// phantom-extents and picks dlq extents, based on thresholds.
+func selectNextExtentsToConsumeKafka(
+	context *Context,
+	dstDesc *shared.DestinationDescription,
+	cgDesc *shared.ConsumerGroupDescription,
+	cgExtents *cgExtentsByCategory,
+	m3Scope int) ([]*m.DestinationExtent, int, error) {
+
+	dstID := dstDesc.GetDestinationUUID()
+	cgID := cgDesc.GetConsumerGroupUUID()
+
+	log := context.log.WithFields(bark.Fields{
+		common.TagDst:  common.FmtDst(dstID),
+		common.TagCnsm: common.FmtCnsm(cgID),
+	})
+
+	// get list of extents that are consumable by this CG; since this queries all open/sealed
+	// extents that are not currently open/consumed by CG, all the extents that are returned
+	// would be DLQ extents.
+	dstExtents, nDlqOpen, err := findConsumableExtents(context, dstID, cgID, cgExtents.open, cgExtents.consumed, m3Scope)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	// all open non-dlq extents should be Kafka phantom extents
+	nKafkaOpen := common.MaxInt(0, len(cgExtents.open)-nDlqOpen)
+
+	// create list of extents to add
+	var addExtents []*m.DestinationExtent
+
+	// first, ensure we have enough phantom kafka extents available; and
+	// create as many create phantom extents as necessary.
+	for n := nKafkaOpen; n < numKafkaExtentsForDstKafka; n++ {
+
+		// create phantom kafka extent
+		ext, e := createKafkaPhantomExtent(context, dstID, m3Scope)
+		if e != nil {
+			log.WithField(common.TagExt, e).Errorf("error creating kafka phantom extent")
+			return nil, 0, e
+		}
+
+		addExtents = append(addExtents, ext)
+	}
+
+	// compute number of available extents
+	nAvailable := len(dstExtents) + len(addExtents)
+
+	// fill out rest of the available capacity with unassigned DLQ extents
+	maxExtentsToConsume := maxExtentsToConsumeForDst(context, dstDesc.GetPath(), cgDesc.GetConsumerGroupName(), getDstType(dstDesc), dstDesc.GetZoneConfigs())
+	availCap := maxExtentsToConsume - nKafkaOpen - nDlqOpen - len(addExtents)
+
+	if availCap < 0 {
+
+		log.WithFields(bark.Fields{
+			`maxExtentsToConsumeForDstKafka`: maxExtentsToConsumeForDstKafka,
+			`nKafkaOpen`:                     nKafkaOpen,
+			`nDlqOpen`:                       nDlqOpen,
+			`new-kafka-extents`:              len(addExtents),
+		}).Errorf("selectNextExtentsToConsumeKafka: extents allocated over capacity")
+
+		return addExtents, nAvailable, nil
+	}
+
+	// pick as many dlq-extents from the consumable list to fill in available capacity
+	availCap = common.MinInt(availCap, len(dstExtents))
+
+	for _, ext := range dstExtents {
+
+		if availCap == 0 {
+			break
+		}
+
+		if len(ext.GetConsumerGroupVisibility()) > 0 {
+			addExtents = append(addExtents, ext)
+			availCap--
+		}
+	}
+
+	return addExtents, nAvailable, nil
+}
+
 func refreshCGExtents(context *Context,
 	dstDesc *shared.DestinationDescription,
 	cgDesc *shared.ConsumerGroupDescription,
@@ -600,9 +725,19 @@ func refreshCGExtents(context *Context,
 		cgExtents.consumed[ext.GetExtentUUID()] = struct{}{}
 	}
 
-	newExtents, _, err := selectNextExtentsToConsume(context, dstDesc, cgDesc, cgExtents, m3Scope)
-	if err != nil {
-		return 0, err
+	var newExtents []*m.DestinationExtent
+
+	switch getDstType(dstDesc) {
+	case dstTypeKafka:
+		newExtents, _, err = selectNextExtentsToConsumeKafka(context, dstDesc, cgDesc, cgExtents, m3Scope)
+		if err != nil {
+			return 0, err
+		}
+	default:
+		newExtents, _, err = selectNextExtentsToConsume(context, dstDesc, cgDesc, cgExtents, m3Scope)
+		if err != nil {
+			return 0, err
+		}
 	}
 
 	return addExtentsToConsumerGroup(context, dstID, cgID, cgDesc.GetIsMultiZone(), newExtents, outputHosts, m3Scope), nil

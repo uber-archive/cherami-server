@@ -421,7 +421,7 @@ func (s *McpSuite) TestGetInputHostsForReceiveOnlyDest() {
 
 func (s *McpSuite) TestGetOutputHostsMaxOpenExtentsLimit() {
 
-	dstTypes := []shared.DestinationType{shared.DestinationType_PLAIN, shared.DestinationType_TIMER}
+	dstTypes := []shared.DestinationType{shared.DestinationType_PLAIN, shared.DestinationType_TIMER, shared.DestinationType_KAFKA}
 
 	for _, dstType := range dstTypes {
 
@@ -445,7 +445,7 @@ func (s *McpSuite) TestGetOutputHostsMaxOpenExtentsLimit() {
 		}
 		inhost, _ := s.mcp.context.placement.PickInputHost(storehosts)
 
-		extents := make(map[string]bool)
+		extents := make(map[string]struct{})
 
 		maxExtents := maxExtentsToConsumeForDst(s.mcp.context, `/`, `/`, getDstType(dstDesc), nil)
 
@@ -453,7 +453,16 @@ func (s *McpSuite) TestGetOutputHostsMaxOpenExtentsLimit() {
 			extentUUID := uuid.New()
 			_, err = s.mcp.context.mm.CreateExtent(dstUUID, extentUUID, inhost.UUID, storeids)
 			s.Nil(err, "Failed to create new extent")
-			extents[extentUUID] = true
+
+			// for kafka destinations, make these DLQ extents
+			if dstType == shared.DestinationType_KAFKA {
+				err = s.mcp.context.mm.SealExtent(dstUUID, extentUUID)
+				s.Nil(err, fmt.Sprintf("SealExtent failed: %v", err))
+				err = s.mcp.context.mm.MoveExtent(dstUUID, dstUUID, extentUUID, cgUUID)
+				s.Nil(err, fmt.Sprintf("MoveExtent failed: %v", err))
+			}
+
+			extents[extentUUID] = struct{}{}
 		}
 
 		for i := 0; i < maxExtents+2; i++ {
@@ -465,8 +474,27 @@ func (s *McpSuite) TestGetOutputHostsMaxOpenExtentsLimit() {
 		// extents to the consumer group at any given point of time
 		cge, err := s.mClient.ReadConsumerGroupExtents(nil, &shared.ReadConsumerGroupExtentsRequest{DestinationUUID: common.StringPtr(dstUUID), ConsumerGroupUUID: common.StringPtr(cgUUID), MaxResults: common.Int32Ptr(100)})
 		s.Nil(err, "Failed to find consumer group extent entry for outputhost")
-		if dstType == shared.DestinationType_TIMER {
+
+		switch dstType {
+		case shared.DestinationType_TIMER:
 			s.Equal(maxExtents, len(cge.GetExtents()), "Wrong number of extents for consumer group dst=%v", path)
+
+		case shared.DestinationType_KAFKA:
+			s.Equal(maxExtents, len(cge.GetExtents()), "Wrong number of extents for consumer group dst=%v", path)
+
+			var phantomExtents, dlqExtents int
+			for _, cgx := range cge.GetExtents() {
+
+				if _, ok := extents[cgx.GetExtentUUID()]; ok {
+					dlqExtents++
+				} else {
+					s.Equal(1, len(cgx.GetStoreUUIDs()), "Expected one phantom store")
+					s.Equal(kafkaPhantomStoreUUID, cgx.GetStoreUUIDs()[0], "Expected phantom store")
+					phantomExtents++
+				}
+			}
+
+			s.Equal(numKafkaExtentsForDstKafka, phantomExtents, "Wrong number of kafka phantom extents for consumer group dst=%v", path)
 		}
 	}
 }
@@ -534,7 +562,7 @@ func (s *McpSuite) TestGetOutputHosts() {
 	extents := make(map[string]bool)
 
 	resp, err := s.mcp.GetOutputHosts(nil, &c.GetOutputHostsRequest{DestinationUUID: common.StringPtr(dstUUID), ConsumerGroupUUID: common.StringPtr(cgUUID)})
-	s.Nil(err, "GetOutputHosts() failed on a new consumer group")
+	s.Nil(err, fmt.Sprintf("GetOutputHosts() failed on a new consumer group: %v", err))
 	s.Equal(1, len(resp.GetOutputHostIds()), "GetOutputHosts() returned more than one out host")
 
 	outputHost, err := s.mockrpm.FindHostForAddr(common.OutputServiceName, resp.OutputHostIds[0])
@@ -650,6 +678,318 @@ func (s *McpSuite) TestGetOutputHosts() {
 		}
 		s.True(ok, "Unknown out host %v found in consumer group extent table", e.GetOutputHostUUID())
 	}
+}
+
+func (s *McpSuite) createDlqExtent(dstUUID, cgUUID string) (extentUUID string) {
+
+	storehosts, _ := s.mcp.context.placement.PickStoreHosts(3)
+	storeids := make([]string, 3)
+	for i := 0; i < 3; i++ {
+		storeids[i] = storehosts[i].UUID
+	}
+	inhost, _ := s.mcp.context.placement.PickInputHost(storehosts)
+
+	extentUUID = uuid.New()
+	_, err := s.mcp.context.mm.CreateExtent(dstUUID, extentUUID, inhost.UUID, storeids)
+	s.Nil(err, "Failed to create new extent")
+
+	// for kafka destinations, make these DLQ extents
+	err = s.mcp.context.mm.SealExtent(dstUUID, extentUUID)
+	s.Nil(err, fmt.Sprintf("SealExtent failed: %v", err))
+	err = s.mcp.context.mm.MoveExtent(dstUUID, dstUUID, extentUUID, cgUUID)
+	s.Nil(err, fmt.Sprintf("MoveExtent failed: %v", err))
+
+	return
+}
+
+// simple set of strings
+type stringSet struct {
+	m map[string]struct{}
+}
+
+func newStringSet() *stringSet {
+	return &stringSet{m: make(map[string]struct{})}
+}
+
+func (t *stringSet) clear() {
+	t.m = make(map[string]struct{})
+}
+
+func (t *stringSet) empty() bool {
+	return len(t.m) == 0
+}
+
+func (t *stringSet) insert(key string) {
+	t.m[key] = struct{}{}
+}
+
+func (t *stringSet) contains(key string) bool {
+	_, ok := t.m[key]
+	return ok
+}
+
+func (t *stringSet) remove(key string) {
+	delete(t.m, key)
+}
+
+func (t *stringSet) keys() map[string]struct{} {
+	return t.m
+}
+
+func (t *stringSet) equals(o *stringSet) bool {
+
+	if len(o.m) != len(t.m) {
+		return false
+	}
+
+	for k := range t.m {
+		_, ok := o.m[k]
+		if !ok {
+			return false
+		}
+	}
+
+	return true
+}
+
+func (t *stringSet) subset(o *stringSet) bool {
+
+	if len(o.m) < len(t.m) {
+		return false
+	}
+
+	for k := range t.m {
+		_, ok := o.m[k]
+		if !ok {
+			return false
+		}
+	}
+
+	return true
+}
+
+func (s *McpSuite) TestGetOutputHostsKafka() {
+
+	path := s.generateName("/cherami/mcp-test-kafka")
+	dstDesc, err := s.createDestination(path, shared.DestinationType_KAFKA)
+	s.Nil(err, "Failed to create destination")
+	s.Equal(common.UUIDStringLength, len(dstDesc.GetDestinationUUID()), "Invalid destination uuid")
+
+	cgName := s.generateName("/cherami/mcp-test-kafka-cg")
+	cgDesc, err := s.createConsumerGroup(path, cgName)
+	s.Nil(err, "Failed to create consumer group")
+
+	dstUUID := dstDesc.GetDestinationUUID()
+	cgUUID := cgDesc.GetConsumerGroupUUID()
+
+	cgExtents := make(map[string]*shared.ConsumerGroupExtent)
+	cgOutputHosts := newStringSet()
+	outputHosts := newStringSet()
+	dlqExtents := newStringSet()
+
+	originOutputCacheTTL := outputCacheTTL
+	outputCacheTTL = time.Microsecond
+
+	// verify GetOutputHosts returns valid outputhosts
+	outputHosts.clear()
+	resp, err := s.mcp.GetOutputHosts(nil, &c.GetOutputHostsRequest{DestinationUUID: common.StringPtr(dstUUID), ConsumerGroupUUID: common.StringPtr(cgUUID)})
+	s.Nil(err, fmt.Sprintf("GetOutputHosts() failed on a new consumer group: %v", err))
+	s.True(len(resp.GetOutputHostIds()) <= numKafkaExtentsForDstKafka, "GetOutputHosts() returned more than expected number of outhosts")
+
+	for _, hostID := range resp.GetOutputHostIds() {
+		host, err := s.mockrpm.FindHostForAddr(common.OutputServiceName, hostID)
+		s.Nil(err, "GetOutputHosts() returned invalid host")
+		outputHosts.insert(host.UUID)
+	}
+
+	// verify GetOutputHosts created phantom extents
+	cgOutputHosts.clear()
+	cge, err := s.mClient.ReadConsumerGroupExtents(nil,
+		&shared.ReadConsumerGroupExtentsRequest{
+			DestinationUUID:   common.StringPtr(dstUUID),
+			ConsumerGroupUUID: common.StringPtr(cgUUID),
+			MaxResults:        common.Int32Ptr(10),
+		})
+	s.Nil(err, fmt.Sprintf("ReadConsumerGroupExtents failed: %v", err))
+	s.Equal(numKafkaExtentsForDstKafka, len(cge.GetExtents()), "GetOutputHosts() did not auto-create more than one extent")
+
+	for _, cgx := range cge.GetExtents() {
+		extentUUID := cgx.GetExtentUUID()
+		cgExtents[extentUUID] = cgx
+		cgOutputHosts.insert(cgx.GetOutputHostUUID())
+		_, err = s.mClient.ReadExtentStats(nil, &m.ReadExtentStatsRequest{DestinationUUID: common.StringPtr(dstUUID), ExtentUUID: common.StringPtr(extentUUID)})
+		s.Nil(err, "Failed to find extent created by GetOutputHosts()")
+
+		// validate all returned extents are 'phantom' extents
+		s.Equal(1, len(cgx.GetStoreUUIDs()), "Expected one phantom store")
+		s.Equal(kafkaPhantomStoreUUID, cgx.GetStoreUUIDs()[0], "Expected phantom store")
+	}
+
+	s.True(outputHosts.subset(cgOutputHosts), "invalid outputhost returned")
+
+	// - create one DLQ extent
+	dlqExtents.insert(s.createDlqExtent(dstUUID, cgUUID))
+
+	// - do GetOutputHosts, that triggers assignment of the newly available DLQ extent
+	outputHosts.clear()
+	resp, err = s.mcp.GetOutputHosts(nil, &c.GetOutputHostsRequest{DestinationUUID: common.StringPtr(dstUUID), ConsumerGroupUUID: common.StringPtr(cgUUID)})
+	s.Nil(err, fmt.Sprintf("GetOutputHosts() failed on a new consumer group: %v", err))
+	s.True(len(resp.GetOutputHostIds()) <= maxExtentsToConsumeForDstKafka, "GetOutputHosts() returned more than expected number of outhosts")
+
+	for _, hostID := range resp.GetOutputHostIds() {
+		host, err := s.mockrpm.FindHostForAddr(common.OutputServiceName, hostID)
+		s.Nil(err, "GetOutputHosts() returned invalid host")
+		outputHosts.insert(host.UUID)
+	}
+
+	// - do ReadConsumerGroupExtents to update map of assigned cg-extents
+	cgOutputHosts.clear()
+	cge, err = s.mClient.ReadConsumerGroupExtents(nil,
+		&shared.ReadConsumerGroupExtentsRequest{
+			DestinationUUID:   common.StringPtr(dstUUID),
+			ConsumerGroupUUID: common.StringPtr(cgUUID),
+			MaxResults:        common.Int32Ptr(10),
+		})
+	s.Nil(err, fmt.Sprintf("ReadConsumerGroupExtents failed: %v", err))
+	s.Equal(numKafkaExtentsForDstKafka+1, len(cge.GetExtents()), "GetOutputHosts() did not assign all possible extents")
+
+	var nPhantom, nDlq int
+
+	nPhantom, nDlq = 0, 0
+	for _, cgx := range cge.GetExtents() {
+		extentUUID := cgx.GetExtentUUID()
+		cgExtents[extentUUID] = cgx
+		cgOutputHosts.insert(cgx.GetOutputHostUUID())
+		_, err = s.mClient.ReadExtentStats(nil, &m.ReadExtentStatsRequest{DestinationUUID: common.StringPtr(dstUUID), ExtentUUID: common.StringPtr(extentUUID)})
+		s.Nil(err, "Failed to find extent created by GetOutputHosts()")
+
+		// count extent by type
+		if dlqExtents.contains(extentUUID) {
+			nDlq++
+		} else {
+			s.Equal(1, len(cgx.GetStoreUUIDs()), "Expected one phantom store")
+			s.Equal(kafkaPhantomStoreUUID, cgx.GetStoreUUIDs()[0], "Expected phantom store")
+			nPhantom++
+		}
+	}
+
+	s.Equal(1, nDlq, "Did not assign the one DLQ extent")
+	s.Equal(numKafkaExtentsForDstKafka, nPhantom, "Did not create/assign expected phanom extents")
+
+	s.True(outputHosts.subset(cgOutputHosts), "invalid outputhost returned")
+
+	// - create a few more DLQ extents (totally one more than maxDlqExtentsForDstKafka)
+	for i := 0; i < maxDlqExtentsForDstKafka; i++ {
+		dlqExtents.insert(s.createDlqExtent(dstUUID, cgUUID))
+	}
+
+	// - do GetOutputHosts, that triggers assignment of the newly available DLQ extent
+	outputHosts.clear()
+	resp, err = s.mcp.GetOutputHosts(nil, &c.GetOutputHostsRequest{DestinationUUID: common.StringPtr(dstUUID), ConsumerGroupUUID: common.StringPtr(cgUUID)})
+	s.Nil(err, fmt.Sprintf("GetOutputHosts() failed on a new consumer group: %v", err))
+	s.True(len(resp.GetOutputHostIds()) <= maxExtentsToConsumeForDstKafka, "GetOutputHosts() returned more than expected number of outhosts")
+
+	for _, hostID := range resp.GetOutputHostIds() {
+		host, err := s.mockrpm.FindHostForAddr(common.OutputServiceName, hostID)
+		s.Nil(err, "GetOutputHosts() returned invalid host")
+		outputHosts.insert(host.UUID)
+	}
+
+	// - do ReadConsumerGroupExtents to update map of assigned cg-extents
+	cgOutputHosts.clear()
+	cge, err = s.mClient.ReadConsumerGroupExtents(nil,
+		&shared.ReadConsumerGroupExtentsRequest{
+			DestinationUUID:   common.StringPtr(dstUUID),
+			ConsumerGroupUUID: common.StringPtr(cgUUID),
+			MaxResults:        common.Int32Ptr(10),
+		})
+	s.Nil(err, fmt.Sprintf("ReadConsumerGroupExtents failed: %v", err))
+	s.Equal(maxExtentsToConsumeForDstKafka, len(cge.GetExtents()), "GetOutputHosts() did not assign all possible extents")
+
+	nPhantom, nDlq = 0, 0
+	for _, cgx := range cge.GetExtents() {
+		extentUUID := cgx.GetExtentUUID()
+		cgExtents[extentUUID] = cgx
+		outputHosts.insert(cgx.GetOutputHostUUID())
+		_, err = s.mClient.ReadExtentStats(nil, &m.ReadExtentStatsRequest{DestinationUUID: common.StringPtr(dstUUID), ExtentUUID: common.StringPtr(extentUUID)})
+		s.Nil(err, "Failed to find extent created by GetOutputHosts()")
+
+		// count extent by type
+		if dlqExtents.contains(extentUUID) {
+			nDlq++
+		} else {
+			s.Equal(1, len(cgx.GetStoreUUIDs()), "Expected one phantom store")
+			s.Equal(kafkaPhantomStoreUUID, cgx.GetStoreUUIDs()[0], "Expected phantom store")
+			nPhantom++
+		}
+	}
+
+	s.Equal(numKafkaExtentsForDstKafka, nPhantom, "Did not create/assign expected phanom extents")
+	s.Equal(maxDlqExtentsForDstKafka, nDlq, "Did not assign all possible DLQ extents")
+
+	// pick a random DLQ extent and mark it consumed; this should trigger a new extent to be placed on a GetOutputHosts
+	var pickDlqExtent0 string
+
+	for extentUUID := range dlqExtents.keys() {
+		pickDlqExtent0 = extentUUID
+		break
+	}
+
+	err = s.mClient.SetAckOffset(nil, &shared.SetAckOffsetRequest{
+		ConsumerGroupUUID:  common.StringPtr(cgUUID),
+		ExtentUUID:         common.StringPtr(pickDlqExtent0),
+		OutputHostUUID:     cgExtents[pickDlqExtent0].OutputHostUUID,
+		Status:             common.MetadataConsumerGroupExtentStatusPtr(shared.ConsumerGroupExtentStatus_CONSUMED),
+		ConnectedStoreUUID: common.StringPtr(cgExtents[pickDlqExtent0].StoreUUIDs[0]),
+	})
+	s.Nil(err, "Failed to update ack offset for consumer group extent")
+
+	// - do GetOutputHosts, that should trigger assignment of a new DLQ extent
+	outputHosts.clear()
+	resp, err = s.mcp.GetOutputHosts(nil, &c.GetOutputHostsRequest{DestinationUUID: common.StringPtr(dstUUID), ConsumerGroupUUID: common.StringPtr(cgUUID)})
+	s.Nil(err, fmt.Sprintf("GetOutputHosts() failed on a new consumer group: %v", err))
+	s.True(len(resp.GetOutputHostIds()) <= maxExtentsToConsumeForDstKafka, "GetOutputHosts() returned more than expected number of outhosts")
+
+	for _, hostID := range resp.GetOutputHostIds() {
+		host, err := s.mockrpm.FindHostForAddr(common.OutputServiceName, hostID)
+		s.Nil(err, "GetOutputHosts() returned invalid host")
+		outputHosts.insert(host.UUID)
+	}
+
+	// - do ReadConsumerGroupExtents to update map of assigned cg-extents
+	cgOutputHosts.clear()
+	cge, err = s.mClient.ReadConsumerGroupExtents(nil,
+		&shared.ReadConsumerGroupExtentsRequest{
+			DestinationUUID:   common.StringPtr(dstUUID),
+			ConsumerGroupUUID: common.StringPtr(cgUUID),
+			MaxResults:        common.Int32Ptr(10),
+		})
+	s.Nil(err, fmt.Sprintf("ReadConsumerGroupExtents failed: %v", err))
+	s.Equal(maxExtentsToConsumeForDstKafka, len(cge.GetExtents()), "GetOutputHosts() did not assign all possible extents")
+
+	nPhantom, nDlq = 0, 0
+	for _, cgx := range cge.GetExtents() {
+		extentUUID := cgx.GetExtentUUID()
+		cgExtents[extentUUID] = cgx
+		outputHosts.insert(cgx.GetOutputHostUUID())
+		_, err = s.mClient.ReadExtentStats(nil, &m.ReadExtentStatsRequest{DestinationUUID: common.StringPtr(dstUUID), ExtentUUID: common.StringPtr(extentUUID)})
+		s.Nil(err, "Failed to find extent created by GetOutputHosts()")
+
+		// count extent by type
+		if dlqExtents.contains(extentUUID) {
+			nDlq++
+		} else {
+			s.Equal(1, len(cgx.GetStoreUUIDs()), "Expected one phantom store")
+			s.Equal(kafkaPhantomStoreUUID, cgx.GetStoreUUIDs()[0], "Expected phantom store")
+			nPhantom++
+		}
+	}
+
+	s.Equal(numKafkaExtentsForDstKafka, nPhantom, "Did not create/assign expected phanom extents")
+	s.Equal(maxDlqExtentsForDstKafka, nDlq, "Did not assign all possible DLQ extents")
+	s.True(outputHosts.subset(cgOutputHosts), "invalid outputhost returned")
+
+	outputCacheTTL = originOutputCacheTTL
 }
 
 func (s *McpSuite) TestMultiZoneDestCUD() {
