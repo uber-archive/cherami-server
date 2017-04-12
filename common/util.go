@@ -29,8 +29,10 @@ import (
 	"io/ioutil"
 	"math"
 	"math/rand"
+	"net"
 	"net/http"
 	"os"
+	"os/signal"
 	"regexp"
 	"strconv"
 	"strings"
@@ -69,6 +71,9 @@ const (
 	outputHostAdminChannelName = "outputhost-admin-client"
 	storeHostClientChannelName = "storehost-client"
 )
+
+// HandleSignalFunc is the callback which gets called when a signal is trapped
+type HandleSignalFunc func(sig os.Signal, hostport string, endpoint string, timeout time.Duration)
 
 // Utlity routines for ringpop..
 func buildRingpopHosts(ipaddr string, port int) []string {
@@ -171,17 +176,24 @@ func CreateHyperbahnClient(ch *tchannel.Channel, bootstrapFile string) *hyperbah
 	return hClient
 }
 
+// GetHttpListenAddress is a utlility routine to give out the appropriate
+// listen address for the http endpoint
+func GetHttpListenAddress(cfgListenAddress net.IP) string {
+	listenAddress := `127.0.0.1`
+	if cfgListenAddress.IsLoopback() { // If we have a particular loopback listen address, override the default
+		listenAddress = cfgListenAddress.String()
+	}
+
+	return listenAddress
+}
+
 // ServiceLoop runs the http admin endpoints. This is a blocking call.
 func ServiceLoop(port int, cfg configure.CommonAppConfig, service SCommon) {
 	httpHandlers := NewHTTPHandler(cfg, service)
 	mux := http.NewServeMux()
 	httpHandlers.Register(mux)
 
-	log.Infof("Registering upgrade handler>>")
-	listenAddress := `127.0.0.1`
-	if service.GetConfig().GetListenAddress().IsLoopback() { // If we have a particular loopback listen address, override the default
-		listenAddress = service.GetConfig().GetListenAddress().String()
-	}
+	listenAddress := GetHttpListenAddress(service.GetConfig().GetListenAddress())
 	log.Info(fmt.Sprintf("Diagnostic http endpoint listening on %s:%d", listenAddress, port))
 	log.Panic(http.ListenAndServe(fmt.Sprintf("%s:%d", listenAddress, port), mux))
 }
@@ -760,4 +772,19 @@ func StringSetEqual(a, b []string) bool {
 		return true
 	}
 	return StringSetEqual(b, a) // Above we checked only that all A are in B; check all B in A
+}
+
+// HandleSignal handles the passed in signal and calls the upgrade endpoint
+func HandleSignal(sig os.Signal, hostPort string, endpoint string, timeout time.Duration, handleFunc HandleSignalFunc) {
+	lcLg := GetDefaultLogger()
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, sig)
+	go func() {
+		// block until the signal is received
+		lcLg.WithField(`signal`, sig).Info("set up signal handler and waiting")
+		<-c
+		lcLg.WithField(`signal`, sig).Info("signal trapped; calling handler")
+		// call the appropriate signal handler
+		handleFunc(sig, hostPort, endpoint, timeout)
+	}()
 }
