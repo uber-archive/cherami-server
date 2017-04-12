@@ -299,6 +299,7 @@ func createExtent(context *Context, dstUUID string, isMultiZoneDest bool, m3Scop
 
 	storehosts, err = context.placement.PickStoreHosts(nReplicasPerExtent)
 	if err != nil {
+		context.m3Client.IncCounter(m3Scope, metrics.ControllerErrCreateExtentCounter)
 		context.m3Client.IncCounter(m3Scope, metrics.ControllerErrPickStoreHostCounter)
 		return
 	}
@@ -310,6 +311,7 @@ func createExtent(context *Context, dstUUID string, isMultiZoneDest bool, m3Scop
 
 	inhost, err = context.placement.PickInputHost(storehosts)
 	if err != nil {
+		context.m3Client.IncCounter(m3Scope, metrics.ControllerErrCreateExtentCounter)
 		context.m3Client.IncCounter(m3Scope, metrics.ControllerErrPickInHostCounter)
 		return
 	}
@@ -317,6 +319,7 @@ func createExtent(context *Context, dstUUID string, isMultiZoneDest bool, m3Scop
 	extentUUID = uuid.New()
 	_, err = context.mm.CreateExtent(dstUUID, extentUUID, inhost.UUID, storeids)
 	if err != nil {
+		context.m3Client.IncCounter(m3Scope, metrics.ControllerErrCreateExtentCounter)
 		context.m3Client.IncCounter(m3Scope, metrics.ControllerErrMetadataUpdateCounter)
 		return
 	}
@@ -349,6 +352,7 @@ func createExtent(context *Context, dstUUID string, isMultiZoneDest bool, m3Scop
 		localReplicator, replicatorErr := context.clientFactory.GetReplicatorClient()
 		if replicatorErr != nil {
 			lclLg.WithField(common.TagErr, replicatorErr).Error("createExtent: GetReplicatorClient failed")
+			context.m3Client.IncCounter(m3Scope, metrics.ControllerErrCreateExtentCounter)
 			context.m3Client.IncCounter(m3Scope, metrics.ControllerErrCallReplicatorCounter)
 			return
 		}
@@ -358,6 +362,7 @@ func createExtent(context *Context, dstUUID string, isMultiZoneDest bool, m3Scop
 		replicatorErr = localReplicator.CreateRemoteExtent(ctx, req)
 		if replicatorErr != nil {
 			lclLg.WithField(common.TagErr, replicatorErr).Error("createExtent: CreateRemoteExtent failed")
+			context.m3Client.IncCounter(m3Scope, metrics.ControllerErrCreateExtentCounter)
 			context.m3Client.IncCounter(m3Scope, metrics.ControllerErrCallReplicatorCounter)
 			return
 		}

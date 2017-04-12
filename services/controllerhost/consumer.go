@@ -363,6 +363,85 @@ func fetchClassifyOpenCGExtents(context *Context, dstUUID string, cgUUID string,
 	return
 }
 
+// findConsumableExtents returns the list of extents for the destination that are
+// consumable by this CG -- this looks at only extents that are in open or sealed
+// state and excludes those that are not already open/consumed by this CG.
+func findConsumableExtents(context *Context, dstUUID, cgUUID string,
+	openCGExtents, consumedCGExtents map[string]struct{}, m3Scope int) ([]*m.DestinationExtent, int, error) {
+
+	// get list of open/sealed extents
+	filterBy := []shared.ExtentStatus{shared.ExtentStatus_SEALED, shared.ExtentStatus_OPEN}
+	dstExtents, err := context.mm.ListDestinationExtentsByStatus(dstUUID, filterBy)
+	if err != nil {
+		context.m3Client.IncCounter(m3Scope, metrics.ControllerErrMetadataReadCounter)
+		return nil, 0, err
+	}
+
+	var consExtents []*m.DestinationExtent
+	var nOpenDlqExtents int
+
+	dedup := make(map[string]struct{})
+
+	for _, ext := range dstExtents {
+
+		extID := ext.GetExtentUUID()
+
+		// skip, if already processed
+		if _, ok := dedup[extID]; ok {
+			continue
+		}
+		dedup[extID] = struct{}{}
+
+		// skip, if already consumed
+		if !canConsumeDstExtent(context, ext, consumedCGExtents) {
+			continue
+		}
+
+		// skip, if already open
+		if _, ok := openCGExtents[extID]; ok {
+			if len(ext.GetConsumerGroupVisibility()) > 0 {
+				nOpenDlqExtents++
+			}
+			continue
+		}
+
+		// skip, if DLQ and not visibible
+		visibility := ext.GetConsumerGroupVisibility()
+		if len(visibility) > 0 && visibility != cgUUID {
+			continue
+		}
+
+		// add to list of consumable extents
+		consExtents = append(consExtents, ext)
+	}
+
+	// sort extents by created time
+	sortExtentStatsByTime(consExtents)
+
+	return consExtents, nOpenDlqExtents, nil
+}
+
+// creates extent for the given destination and returns the 'DestinationExtent'
+func createDestExtent(context *Context, dstDesc *shared.DestinationDescription, m3Scope int) (ext *m.DestinationExtent, err error) {
+
+	extentID, _, storehosts, err := createExtent(context, dstDesc.GetDestinationUUID(), dstDesc.GetIsMultiZone(), m3Scope)
+	if err != nil {
+		return nil, err
+	}
+
+	storeUUIDs := make([]string, len(storehosts))
+	for i := 0; i < len(storehosts); i++ {
+		storeUUIDs[i] = storehosts[i].UUID
+	}
+
+	ext = &m.DestinationExtent{
+		ExtentUUID: common.StringPtr(extentID),
+		StoreUUIDs: storeUUIDs,
+	}
+
+	return
+}
+
 // Given the set of current open consumer_group_extents,
 // this method picks the next set of extents to consume
 // for the given consumer group. It does the following:
@@ -402,49 +481,20 @@ func selectNextExtentsToConsume(
 	dstID := dstDesc.GetDestinationUUID()
 	cgID := cgDesc.GetConsumerGroupUUID()
 
-	filterBy := []shared.ExtentStatus{shared.ExtentStatus_SEALED, shared.ExtentStatus_OPEN}
-	dstExtents, err := context.mm.ListDestinationExtentsByStatus(dstID, filterBy)
+	// get list of extents that are consumable by this CG
+	dstExtents, nCGDlqExtents, err := findConsumableExtents(context, dstID, cgID, cgExtents.open, cgExtents.consumed, m3Scope)
 	if err != nil {
-		context.m3Client.IncCounter(m3Scope, metrics.ControllerErrMetadataReadCounter)
-		return []*m.DestinationExtent{}, 0, err
+		return nil, 0, err
 	}
 
-	dedupMap := make(map[string]struct{})
-
-	var nCGDlqExtents int
 	var dstDlqExtents []*m.DestinationExtent
 	dstExtentsCount := 0
 	dstExtentsByZone := make(map[string][]*m.DestinationExtent)
 
-	sortExtentStatsByTime(dstExtents)
-
 	for _, ext := range dstExtents {
 
-		extID := ext.GetExtentUUID()
-
-		if _, ok := dedupMap[extID]; ok {
-			continue
-		}
-
-		dedupMap[extID] = struct{}{}
-
-		if !canConsumeDstExtent(context, ext, cgExtents.consumed) {
-			continue
-		}
-
-		visibility := ext.GetConsumerGroupVisibility()
-
-		if _, ok := cgExtents.open[extID]; ok {
-			if len(visibility) > 0 {
-				nCGDlqExtents++
-			}
-			continue
-		}
-
-		if len(visibility) > 0 {
-			if visibility == cgID {
-				dstDlqExtents = append(dstDlqExtents, ext)
-			}
+		if len(ext.GetConsumerGroupVisibility()) > 0 {
+			dstDlqExtents = append(dstDlqExtents, ext)
 			continue
 		}
 
@@ -468,15 +518,14 @@ func selectNextExtentsToConsume(
 	capacity = common.MaxInt(0, capacity-len(cgExtents.openHealthy))
 	capacity = common.MinInt(capacity, nConsumable)
 
-	if capacity == 0 {
-		if nCGDlqExtents == 0 && len(dstDlqExtents) > 0 {
-			// there is no room for new cgextents, however,
-			// we have a dlq extent available now (and there
-			// is none currently consumed). So pick the
-			// dlq extent and bail out
-			return []*m.DestinationExtent{dstDlqExtents[0]}, nAvailable, nil
-		}
-		return []*m.DestinationExtent{}, nAvailable, nil
+	if capacity == 0 && nCGDlqExtents == 0 && len(dstDlqExtents) > 0 {
+
+		// there is no room for new cgextents, however,
+		// we have a dlq extent available now (and there
+		// is none currently consumed). So pick the
+		// dlq extent and bail out
+
+		return []*m.DestinationExtent{dstDlqExtents[0]}, nAvailable, nil
 	}
 
 	nZone := 0
@@ -511,6 +560,20 @@ func selectNextExtentsToConsume(
 		}
 	}
 
+	if len(cgExtents.openHealthy) == 0 && len(result) == 0 {
+
+		nBacklog := nAvailable + len(cgExtents.open)
+		maxExtentsToConsume := maxExtentsToConsumeForDst(context, dstDesc.GetPath(), cgDesc.GetConsumerGroupName(), getDstType(dstDesc), dstDesc.GetZoneConfigs())
+
+		if nBacklog < maxExtentsToConsume {
+			// No consumable extents for this destination, create one
+			if ext, err := createDestExtent(context, dstDesc, m3Scope); err == nil {
+				result = append(result, ext)
+				nAvailable++ // new extent is 'available'
+			}
+		}
+	}
+
 	return result, nAvailable, nil
 }
 
@@ -536,33 +599,9 @@ func refreshCGExtents(context *Context,
 		cgExtents.consumed[ext.GetExtentUUID()] = struct{}{}
 	}
 
-	newExtents, nAvailable, err := selectNextExtentsToConsume(context, dstDesc, cgDesc, cgExtents, m3Scope)
+	newExtents, _, err := selectNextExtentsToConsume(context, dstDesc, cgDesc, cgExtents, m3Scope)
 	if err != nil {
 		return 0, err
-	}
-
-	if len(cgExtents.openHealthy) == 0 && len(newExtents) == 0 {
-
-		nBacklog := nAvailable + len(cgExtents.open)
-		maxExtentsToConsume := maxExtentsToConsumeForDst(context, dstDesc.GetPath(), cgDesc.GetConsumerGroupName(), getDstType(dstDesc), dstDesc.GetZoneConfigs())
-
-		if nBacklog < maxExtentsToConsume {
-			// No consumable extents for this destination, create one
-			extentID, _, storehosts, e := createExtent(context, dstID, dstDesc.GetIsMultiZone(), m3Scope)
-			if e != nil {
-				context.m3Client.IncCounter(m3Scope, metrics.ControllerErrCreateExtentCounter)
-				return 0, e
-			}
-			storeids := make([]string, len(storehosts))
-			for i := 0; i < len(storehosts); i++ {
-				storeids[i] = storehosts[i].UUID
-			}
-			ext := &m.DestinationExtent{
-				ExtentUUID: common.StringPtr(extentID),
-				StoreUUIDs: storeids,
-			}
-			newExtents = append(newExtents, ext)
-		}
 	}
 
 	return addExtentsToConsumerGroup(context, dstID, cgID, cgDesc.GetIsMultiZone(), newExtents, outputHosts, m3Scope), nil
