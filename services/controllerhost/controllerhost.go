@@ -1175,7 +1175,8 @@ func (mcp *Mcp) CreateRemoteZoneExtent(ctx thrift.Context, createRequest *shared
 	inputHost := common.InputHostForRemoteExtent
 
 	res, err := context.mm.CreateRemoteZoneExtent(createRequest.GetExtent().GetDestinationUUID(),
-		createRequest.GetExtent().GetExtentUUID(), inputHost, storeids, createRequest.GetExtent().GetOriginZone(), remoteExtentPrimaryStore)
+		createRequest.GetExtent().GetExtentUUID(), inputHost, storeids, createRequest.GetExtent().GetOriginZone(),
+		remoteExtentPrimaryStore, createRequest.GetConsumerGroupVisibility())
 	if err != nil {
 		lclLg.WithField(common.TagErr, err).Error("CreateRemoteZoneExtent: metadata CreateRemoteZoneExtent failed")
 		context.m3Client.IncCounter(metrics.ControllerCreateRemoteZoneExtentScope, metrics.ControllerErrMetadataUpdateCounter)

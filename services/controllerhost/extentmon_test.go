@@ -217,7 +217,7 @@ func (s *ExtentStateMonitorSuite) TestStoreRemoteExtentReplicatorDownTrigger() {
 	storeIDs := []string{uuid.New(), uuid.New(), uuid.New()}
 
 	context := s.mcp.context
-	_, err = context.mm.CreateRemoteZoneExtent(desc.GetDestinationUUID(), extentID, inHostID, storeIDs, "origin", storeIDs[0])
+	_, err = context.mm.CreateRemoteZoneExtent(desc.GetDestinationUUID(), extentID, inHostID, storeIDs, "origin", storeIDs[0], ``)
 	s.Nil(err, "failed to create remote zone extent")
 
 	// just have one store as healthy

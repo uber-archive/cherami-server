@@ -314,7 +314,7 @@ func (s *EventPipelineSuite) TestRemoteExtentPrimaryStoreDownEvent() {
 	originZone := `zone1`
 
 	for i := 0; i < len(extentIDs); i++ {
-		_, err := s.mcp.context.mm.CreateRemoteZoneExtent(dstID, extentIDs[i], inHostIDs[i], storeIDs, originZone, storeIDs[primaryStoreIdx])
+		_, err := s.mcp.context.mm.CreateRemoteZoneExtent(dstID, extentIDs[i], inHostIDs[i], storeIDs, originZone, storeIDs[primaryStoreIdx], ``)
 		s.Nil(err, "Failed to create extent")
 	}
 

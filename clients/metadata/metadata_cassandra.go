@@ -1210,6 +1210,7 @@ const (
 		` WHERE ` + columnDestinationUUID + `=? and ` + columnName + `=?`
 )
 
+// CreateConsumerGroup creates a consumer group.
 func (s *CassandraMetadataService) CreateConsumerGroup(ctx thrift.Context, request *shared.CreateConsumerGroupRequest) (*shared.ConsumerGroupDescription, error) {
 	uuidRequest := shared.NewCreateConsumerGroupUUIDRequest()
 	uuidRequest.Request = request
@@ -2141,7 +2142,11 @@ func (s *CassandraMetadataService) CreateExtent(ctx thrift.Context, request *sha
 		}
 	}
 
-	epochMillisNow := s.createExtentImpl(extent, shared.ExtentStatus_OPEN, replicaStatsList, nil, batch)
+	var consumerGroupVisibility *string
+	if len(request.GetConsumerGroupVisibility()) > 0 {
+		consumerGroupVisibility = common.StringPtr(request.GetConsumerGroupVisibility())
+	}
+	epochMillisNow := s.createExtentImpl(extent, shared.ExtentStatus_OPEN, replicaStatsList, consumerGroupVisibility, batch)
 	if err := s.session.ExecuteBatch(batch); err != nil {
 		return nil, &shared.InternalServiceError{
 			Message: "CreateExtent: " + err.Error(),

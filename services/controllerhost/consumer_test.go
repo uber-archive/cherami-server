@@ -258,7 +258,7 @@ func (s *McpSuite) TestCGExtentSelectorHonorsRemoteExtent() {
 		if i%2 == 0 {
 			zone = `zone1`
 		}
-		context.mm.CreateRemoteZoneExtent(dstID, extID, inhosts[0].UUID, stores, zone, stores[0])
+		context.mm.CreateRemoteZoneExtent(dstID, extID, inhosts[0].UUID, stores, zone, stores[0], ``)
 		extents = append(extents, extID)
 		nExtents++
 	}
