@@ -1291,11 +1291,76 @@ func (s *McpSuite) TestGetDstType() {
 	}
 
 	s.Equal(dstTypePlain, getDstType(dstDesc), "getDstType(PLAIN) failed")
+
 	dstType = shared.DestinationType_TIMER
 	s.Equal(dstTypeTimer, getDstType(dstDesc), "getDstType(TIMER) failed")
+
+	dstType = shared.DestinationType_KAFKA
+	s.Equal(dstTypeKafka, getDstType(dstDesc), "getDstType(KAFKA) failed")
 
 	// test dlq
 	dstType = shared.DestinationType_PLAIN
 	dstDesc.Path = common.StringPtr("/unit/desttype.dlq")
 	s.Equal(dstTypeDLQ, getDstType(dstDesc), "getDstType(TIMER) failed")
+}
+
+func (s *McpSuite) TestKafkaPhantomExtentChecks() {
+
+	context := s.mcp.context
+
+	// setup a Kafka extent with 'phatom' input/stores
+	inputUUID := kafkaPhantomInputUUID
+	storeUUIDs := []string{kafkaPhantomStoreUUID}
+
+	kafkaExt := &m.DestinationExtent{
+		ExtentUUID:    common.StringPtr(uuid.New()),
+		InputHostUUID: common.StringPtr(inputUUID),
+		StoreUUIDs:    storeUUIDs,
+	}
+
+	// stores/input for Kafka extents should be assumed to be "healthy"
+	s.True(isInputHealthy(context, kafkaExt))
+	s.True(isAnyStoreHealthy(context, kafkaExt.GetStoreUUIDs()))
+	s.True(areExtentStoresHealthy(context, kafkaExt))
+
+	// setup an extent with 'invalid' input/stores
+	inputUUID = uuid.New()
+	storeUUIDs = []string{uuid.New(), uuid.New(), uuid.New()}
+
+	dlqExt := &m.DestinationExtent{
+		ExtentUUID:              common.StringPtr(uuid.New()),
+		InputHostUUID:           common.StringPtr(inputUUID),
+		StoreUUIDs:              storeUUIDs,
+		ConsumerGroupVisibility: common.StringPtr(uuid.New()),
+	}
+
+	s.False(isInputHealthy(context, dlqExt))
+	s.False(isAnyStoreHealthy(context, dlqExt.GetStoreUUIDs()))
+	s.False(areExtentStoresHealthy(context, dlqExt))
+
+	storehosts, _ := s.mcp.context.placement.PickStoreHosts(3)
+	inputhost, _ := s.mcp.context.placement.PickInputHost(storehosts)
+
+	// make input healthy
+	dlqExt.InputHostUUID = common.StringPtr(inputhost.UUID)
+
+	s.True(isInputHealthy(context, dlqExt))
+	s.False(isAnyStoreHealthy(context, dlqExt.GetStoreUUIDs()))
+	s.False(areExtentStoresHealthy(context, dlqExt))
+
+	// make one store healthy
+	dlqExt.StoreUUIDs[0] = storehosts[0].UUID
+
+	s.True(isInputHealthy(context, dlqExt))
+	s.True(isAnyStoreHealthy(context, dlqExt.GetStoreUUIDs()))
+	s.False(areExtentStoresHealthy(context, dlqExt))
+
+	// make all three stores healthy
+	for i := 0; i < 3; i++ {
+		dlqExt.StoreUUIDs[i] = storehosts[i].UUID
+	}
+
+	s.True(isInputHealthy(context, dlqExt))
+	s.True(isAnyStoreHealthy(context, dlqExt.GetStoreUUIDs()))
+	s.True(areExtentStoresHealthy(context, dlqExt))
 }

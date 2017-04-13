@@ -505,7 +505,9 @@ func (monitor *extentStateMonitor) handleDestinationExtent(dstDesc *shared.Desti
 
 	switch extent.GetStatus() {
 	case shared.ExtentStatus_OPEN:
-		if !common.IsRemoteZoneExtent(extent.GetOriginZone(), context.localZone) && (dstDesc.GetStatus() == shared.DestinationStatus_DELETING || !monitor.isExtentHealthy(dstDesc, extent)) {
+		if !common.IsRemoteZoneExtent(extent.GetOriginZone(), context.localZone) &&
+			(dstDesc.GetStatus() == shared.DestinationStatus_DELETING ||
+				!monitor.isExtentHealthy(dstDesc, extent)) {
 			// rate limit extent seals to limit the
 			// amount of work generated during a given
 			// interval
