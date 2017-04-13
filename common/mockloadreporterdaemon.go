@@ -40,3 +40,9 @@ func (m *MockLoadReporterDaemon) Stop() {
 	m.Called()
 	return
 }
+
+// GetReporter is the mock implementation for GetReporter function on common.LoadReporterDaemon
+func (m *MockLoadReporterDaemon) GetReporter() LoadReporter {
+	m.Called()
+	return nil
+}

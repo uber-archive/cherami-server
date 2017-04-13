@@ -21,6 +21,7 @@
 package inputhost
 
 import (
+	"sync"
 	"time"
 
 	"github.com/uber-common/bark"
@@ -207,6 +208,20 @@ func (h *InputHost) unloadAll() {
 		go pathCache.unload()
 	}
 	h.pathMutex.Unlock()
+}
+
+func (h *InputHost) drainAll() {
+	h.pathMutex.RLock()
+	defer h.pathMutex.RUnlock()
+	var drainWG sync.WaitGroup
+	for _, pathCache := range h.pathCache {
+		drainWG.Add(1)
+		go pathCache.drain(&drainWG)
+	}
+
+	if ok := common.AwaitWaitGroup(&drainWG, defaultUpgradeTimeout); !ok {
+		h.logger.Warn("inputhost: drain all timed out")
+	}
 }
 
 // updateExtTokenBucket update the token bucket for the extents msgs limit rate per second

@@ -21,8 +21,12 @@
 package common
 
 import (
+	"os"
+	"os/signal"
 	"sync"
+	"syscall"
 	"testing"
+	"time"
 
 	"github.com/Sirupsen/logrus"
 	"github.com/stretchr/testify/require"
@@ -216,4 +220,43 @@ func (s *UtilSuite) TestStringSetEqual() {
 	s.True(StringSetEqual(nil, []string{}))
 	s.True(StringSetEqual(nil, nil))
 
+}
+
+func (s *UtilSuite) TestHandleSignal() {
+	// Let's register a call back function which should get called when
+	// we get a signal. Let's use SIGHUP as the signal which we are watching
+	testSignal := syscall.SIGHUP
+	testHostPort := "127.0.0.2:8888"
+	testEndpoint := "test"
+	testTimeout := time.Second
+	waitCh := make(chan struct{})
+
+	// setup the handler
+	handleHupSig := func(sig os.Signal, hostport string, endpoint string, timeout time.Duration) {
+		s.Equal(sig, testSignal)
+		s.Equal(hostport, testHostPort)
+		s.Equal(endpoint, testEndpoint)
+		s.Equal(timeout.String(), testTimeout.String())
+		close(waitCh)
+	}
+	// register the signal handler
+	SetupSignalHandler(testSignal, testHostPort, testEndpoint, testTimeout, handleHupSig)
+
+	// send SIGHUP
+	syscall.Kill(syscall.Getpid(), testSignal)
+
+	// wait for the handler to close the channel
+	called := false
+	timeoutTimer := time.NewTimer(10 * time.Millisecond)
+	defer timeoutTimer.Stop()
+	select {
+	case <-waitCh:
+		called = true
+	case <-timeoutTimer.C:
+	}
+
+	s.Equal(called, true)
+
+	// reset the signal so that we don't unnecessarily catch signals
+	signal.Reset(testSignal)
 }

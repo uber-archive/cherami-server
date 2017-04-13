@@ -206,6 +206,11 @@ func RolePtr(role controller.Role) *controller.Role {
 	return &role
 }
 
+// NodeStatusPtr makes a copy and returns the pointer to a NodeStatus.
+func NodeStatusPtr(status controller.NodeStatus) *controller.NodeStatus {
+	return &status
+}
+
 // NodeMetricsPtr makes a copy and returns the pointer to
 // a NodeMetrics.
 func NodeMetricsPtr(nodeMetrics controller.NodeMetrics) *controller.NodeMetrics {

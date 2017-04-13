@@ -23,6 +23,7 @@ package inputhost
 import (
 	"fmt"
 	"net/http"
+	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -74,6 +75,12 @@ const (
 	// connWGTimeout is the timeout to wait after we send the drain command and
 	// before we start the drain
 	connWGTimeout = 5 * time.Second
+
+	// defaultUpgradeTimeout is the timeout to wait for upgrade
+	defaultUpgradeTimeout = 10 * time.Second
+
+	// drainAllUUID is the UUID used during drainAll
+	drainAllUUID = "D3A9C5DC-AE62-4465-9898-7FE71BD1FCA"
 )
 
 var (
@@ -103,7 +110,8 @@ type (
 		extMsgsLimitPerSecond  int32
 		connMsgsLimitPerSecond int32
 		hostMetrics            *load.HostMetrics
-		lastLoadReportedTime   int64 // unix nanos when the last load report was sent
+		lastLoadReportedTime   int64        // unix nanos when the last load report was sent
+		nodeStatus             atomic.Value // status of the node
 		common.SCommon
 	}
 
@@ -779,7 +787,7 @@ func getDrainTimeout(ctx thrift.Context) time.Duration {
 	return defaultDrainTimeout
 }
 
-// DrainExtents is the implementation of the thrift handler for the inputhost
+// DrainExtent is the implementation of the thrift handler for the inputhost
 func (h *InputHost) DrainExtent(ctx thrift.Context, request *admin.DrainExtentsRequest) (err error) {
 	defer atomic.AddInt32(&h.loadShutdownRef, -1)
 	sw := h.m3Client.StartTimer(metrics.DrainExtentsScope, metrics.InputhostLatencyTimer)
@@ -845,15 +853,7 @@ func (h *InputHost) DrainExtent(ctx thrift.Context, request *admin.DrainExtentsR
 	return
 }
 
-// Report is the implementation for reporting host specific load to controller
-func (h *InputHost) Report(reporter common.LoadReporter) {
-
-	now := time.Now().UnixNano()
-	intervalSecs := (now - h.lastLoadReportedTime) / int64(time.Second)
-	if intervalSecs < 1 {
-		return
-	}
-
+func (h *InputHost) reportHostMetric(reporter common.LoadReporter, intervalSecs int64) int64 {
 	msgsInPerSec := h.hostMetrics.GetAndReset(load.HostMetricMsgsIn) / intervalSecs
 	// We just report the delta for the bytes in counter. so get the value and
 	// reset it.
@@ -864,13 +864,26 @@ func (h *InputHost) Report(reporter common.LoadReporter) {
 		NumberOfConnections:     common.Int64Ptr(h.hostMetrics.Get(load.HostMetricNumOpenConns)),
 		IncomingMessagesCounter: common.Int64Ptr(msgsInPerSec),
 		IncomingBytesCounter:    common.Int64Ptr(bytesInSinceLastReport),
+		NodeStatus:              common.NodeStatusPtr(h.GetNodeStatus()),
 	}
 
 	reporter.ReportHostMetric(hostMetrics)
+	return *(hostMetrics.NumberOfConnections)
+}
+
+// Report is the implementation for reporting host specific load to controller
+func (h *InputHost) Report(reporter common.LoadReporter) {
+
+	now := time.Now().UnixNano()
+	intervalSecs := (now - h.lastLoadReportedTime) / int64(time.Second)
+	if intervalSecs < 1 {
+		return
+	}
+
+	numConns := h.reportHostMetric(reporter, intervalSecs)
 	h.lastLoadReportedTime = now
 
 	// Also update the metrics reporter to make sure the connection gauge is incremented
-	numConns := *(hostMetrics.NumberOfConnections)
 	h.m3Client.UpdateGauge(metrics.PubConnectionStreamScope, metrics.InputhostPubConnection, numConns)
 }
 
@@ -943,6 +956,16 @@ func (h *InputHost) GetNumConnections() int {
 	return int(h.hostMetrics.Get(load.HostMetricNumOpenConns))
 }
 
+// GetNodeStatus is the current status of this host
+func (h *InputHost) GetNodeStatus() controller.NodeStatus {
+	return h.nodeStatus.Load().(controller.NodeStatus)
+}
+
+// SetNodeStatus sets the status of this host
+func (h *InputHost) SetNodeStatus(status controller.NodeStatus) {
+	h.nodeStatus.Store(status)
+}
+
 // Shutdown shutsdown all the InputHost cleanly
 func (h *InputHost) Shutdown() {
 	// make sure we have atleast loaded everything
@@ -981,7 +1004,19 @@ func (h *InputHost) RegisterWSHandler() *http.ServeMux {
 	return mux
 }
 
-//
+// UpgradeHandler implements the upgrade end point
+func (h *InputHost) UpgradeHandler(w http.ResponseWriter, r *http.Request) {
+	h.logger.Info("Upgrade endpoint called on inputhost")
+	h.SetNodeStatus(controller.NodeStatus_GOING_DOWN)
+	reporter := h.loadReporter.GetReporter()
+	// report as down
+	go h.reportHostMetric(reporter, 1)
+	// start draining everything
+	h.drainAll()
+	// at this point, we have marked ourself as down and drained everything. Exit since we are no longer useful
+	os.Exit(0)
+}
+
 // NewInputHost is the constructor for BIn
 func NewInputHost(serviceName string, sVice common.SCommon, mClient metadata.TChanMetadataService, opts *InOptions) (*InputHost, []thrift.TChanServer) {
 
@@ -1018,6 +1053,7 @@ func NewInputHost(serviceName string, sVice common.SCommon, mClient metadata.TCh
 	// manage uconfig, regiester handerFunc and verifyFunc for uConfig values
 	bs.dConfigClient = sVice.GetDConfigClient()
 	bs.dynamicConfigManage()
+	bs.SetNodeStatus(controller.NodeStatus_UP)
 	return &bs, []thrift.TChanServer{cherami.NewTChanBInServer(&bs), admin.NewTChanInputHostAdminServer(&bs)}
 }
 

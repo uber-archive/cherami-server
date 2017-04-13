@@ -113,5 +113,8 @@ type (
 
 		// IsLimitsEnabled is used to see if we need to enforce limits on this service
 		IsLimitsEnabled() bool
+
+		// UpgradeHandler is the handler for the upgrade end point for this service
+		UpgradeHandler(w http.ResponseWriter, r *http.Request)
 	}
 )

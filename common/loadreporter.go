@@ -34,7 +34,7 @@ import (
 
 var (
 	// ErrLoadReportThrottled is the error returned by LoadReporter when it runs out of tokens to serve the request
-	ErrLoadReportThrottled = errors.New("Too many load reports from the host.")
+	ErrLoadReportThrottled = errors.New("too many load reports from the host")
 )
 
 type (
@@ -46,6 +46,7 @@ type (
 	// LoadReporterDaemon is used for periodically reporting load to controller
 	LoadReporterDaemon interface {
 		Daemon
+		GetReporter() LoadReporter
 	}
 
 	// LoadReporterDaemonFactory is used to create a daemon task for reporting load to controller
@@ -152,6 +153,11 @@ func (d *loadReporterDaemonImpl) Stop() {
 	}
 
 	d.logger.Info("Load reporter stopped.")
+}
+
+// GetReporter is used to get the underneath load reporter
+func (d *loadReporterDaemonImpl) GetReporter() LoadReporter {
+	return d.reporter
 }
 
 func (d *loadReporterDaemonImpl) reporterPump() {

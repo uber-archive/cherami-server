@@ -23,6 +23,7 @@ package common
 import (
 	"fmt"
 	"math/rand"
+	"net/http"
 	"os"
 	"strings"
 	"time"
@@ -241,6 +242,11 @@ func (h *Service) Stop() {
 // Report is used for reporting Host specific load to controller
 func (h *Service) Report(reporter LoadReporter) {
 	// TODO: Report Host specific load here like CPU, Memory and Diskspace
+}
+
+// UpgradeHandler is used to implement the upgrade endpoint
+func (h *Service) UpgradeHandler(w http.ResponseWriter, r *http.Request) {
+	// register service specific upgrade handler
 }
 
 // IsDevelopmentEnvironment detects if we are running in a development environment

@@ -565,3 +565,15 @@ func (pathCache *inPathCache) drainExtent(extUUID string, updateUUID string, dra
 		pathCache.RUnlock()
 	}
 }
+
+func (pathCache *inPathCache) drain(drainWG *sync.WaitGroup) {
+	defer drainWG.Done() // for this routine
+	pathCache.RLock()
+	defer pathCache.RUnlock()
+
+	// drain all extents
+	for extUUID := range pathCache.extentCache {
+		drainWG.Add(1) //for all the extents
+		go pathCache.drainExtent(string(extUUID), drainAllUUID, drainWG, defaultUpgradeTimeout)
+	}
+}
