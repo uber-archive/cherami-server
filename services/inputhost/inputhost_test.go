@@ -1559,9 +1559,11 @@ func (s *InputHostSuite) TestInputExtHostDrainDuplicate() {
 
 	s.Equal(true, drained)
 
+	dNewCtx, dNewCancel := thrift.NewContext(2 * time.Second)
+	defer dNewCancel()
 	// send another drain request
 	// this should just bail out, since we have already started drain above
-	err = inputHost.DrainExtent(dCtx, req)
+	err = inputHost.DrainExtent(dNewCtx, req)
 	s.NoError(err)
 
 	// try to get the pathCacheLock, it should succeed

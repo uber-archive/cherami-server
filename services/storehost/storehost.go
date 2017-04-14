@@ -206,6 +206,9 @@ type (
 		// unix nanos when the host level metrics were last reported
 		// to the controller
 		lastLoadReportedTime int64
+
+		// status of the node
+		nodeStatus atomic.Value
 	}
 )
 
@@ -286,6 +289,9 @@ func (t *StoreHost) Start(thriftService []thrift.TChanServer) {
 
 	t.replicationJobRunner = NewReplicationJobRunner(t.mClient, t, t.logger, t.m3Client)
 	go t.replicationJobRunner.Start()
+
+	// set the status as UP
+	t.SetNodeStatus(controller.NodeStatus_UP)
 
 	loadReporterDaemonfactory := t.GetLoadReporterDaemonFactory()
 	t.xMgr.loadReporterFactory = loadReporterDaemonfactory
@@ -1273,16 +1279,7 @@ func (t *StoreHost) RegisterWSHandler() *http.ServeMux {
 	return mux
 }
 
-// Report is used for reporting Host specific load to controller
-func (t *StoreHost) Report(reporter common.LoadReporter) {
-
-	now := time.Now().UnixNano()
-	diffSecs := (now - t.lastLoadReportedTime) / int64(time.Second)
-
-	if diffSecs == 0 {
-		return
-	}
-
+func (t *StoreHost) reportHostMetric(reporter common.LoadReporter, diffSecs int64) {
 	msgsInPerSec := t.hostMetrics.GetAndReset(load.HostMetricMsgsWritten) / diffSecs
 	msgsOutPerSec := t.hostMetrics.GetAndReset(load.HostMetricMsgsRead) / diffSecs
 	bytesInPerSec := t.hostMetrics.GetAndReset(load.HostMetricBytesWritten) / diffSecs
@@ -1295,6 +1292,7 @@ func (t *StoreHost) Report(reporter common.LoadReporter) {
 		IncomingBytesCounter:    common.Int64Ptr(bytesInPerSec),
 		OutgoingBytesCounter:    common.Int64Ptr(bytesOutPerSec),
 		NumberOfConnections:     common.Int64Ptr(numConns),
+		NodeStatus:              common.NodeStatusPtr(t.GetNodeStatus()),
 	}
 
 	remDiskSpaceBytes := t.hostMetrics.Get(load.HostMetricFreeDiskSpaceBytes)
@@ -1308,8 +1306,21 @@ func (t *StoreHost) Report(reporter common.LoadReporter) {
 		hostMetrics.RemainingDiskSpace = common.Int64Ptr(remDiskSpaceBytes)
 	}
 
-	t.lastLoadReportedTime = now
 	reporter.ReportHostMetric(hostMetrics)
+}
+
+// Report is used for reporting Host specific load to controller
+func (t *StoreHost) Report(reporter common.LoadReporter) {
+
+	now := time.Now().UnixNano()
+	diffSecs := (now - t.lastLoadReportedTime) / int64(time.Second)
+
+	if diffSecs == 0 {
+		return
+	}
+
+	t.reportHostMetric(reporter, diffSecs)
+	t.lastLoadReportedTime = now
 }
 
 // resolveReplica finds the websocket host-port to connect to for re-replication
@@ -1595,4 +1606,30 @@ func (t *StoreHost) ListExtents(tCtx thrift.Context) (res *store.ListExtentsResu
 	}
 
 	return res, nil
+}
+
+// UpgradeHandler implements the upgrade end point
+func (t *StoreHost) UpgradeHandler(w http.ResponseWriter, r *http.Request) {
+	t.logger.Info("Upgrade endpoint called on storehost")
+	// just report to controller as GOING_DOWN
+	t.SetNodeStatus(controller.NodeStatus_GOING_DOWN)
+	reporter := t.loadReporter.GetReporter()
+	// report as down
+	t.reportHostMetric(reporter, 1)
+
+	// wait for upgrade timeout
+	time.Sleep(common.DefaultUpgradeTimeout)
+
+	// at this point, we have marked ourself as down and waited for the timeout period. Exit since we are no longer useful
+	os.Exit(0)
+}
+
+// GetNodeStatus is the current status of this host
+func (t *StoreHost) GetNodeStatus() controller.NodeStatus {
+	return t.nodeStatus.Load().(controller.NodeStatus)
+}
+
+// SetNodeStatus sets the status of this host
+func (t *StoreHost) SetNodeStatus(status controller.NodeStatus) {
+	t.nodeStatus.Store(status)
 }

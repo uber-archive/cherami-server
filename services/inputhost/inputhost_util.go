@@ -219,7 +219,7 @@ func (h *InputHost) drainAll() {
 		go pathCache.drain(&drainWG)
 	}
 
-	if ok := common.AwaitWaitGroup(&drainWG, defaultUpgradeTimeout); !ok {
+	if ok := common.AwaitWaitGroup(&drainWG, common.DefaultUpgradeTimeout); !ok {
 		h.logger.Warn("inputhost: drain all timed out")
 	}
 }

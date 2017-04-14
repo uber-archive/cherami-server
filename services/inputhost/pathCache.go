@@ -574,6 +574,6 @@ func (pathCache *inPathCache) drain(drainWG *sync.WaitGroup) {
 	// drain all extents
 	for extUUID := range pathCache.extentCache {
 		drainWG.Add(1) //for all the extents
-		go pathCache.drainExtent(string(extUUID), drainAllUUID, drainWG, defaultUpgradeTimeout)
+		go pathCache.drainExtent(string(extUUID), drainAllUUID, drainWG, common.DefaultUpgradeTimeout)
 	}
 }

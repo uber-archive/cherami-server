@@ -76,9 +76,6 @@ const (
 	// before we start the drain
 	connWGTimeout = 5 * time.Second
 
-	// defaultUpgradeTimeout is the timeout to wait for upgrade
-	defaultUpgradeTimeout = 10 * time.Second
-
 	// drainAllUUID is the UUID used during drainAll
 	drainAllUUID = "D3A9C5DC-AE62-4465-9898-7FE71BD1FCA"
 )

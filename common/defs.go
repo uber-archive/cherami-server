@@ -22,6 +22,7 @@ package common
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/uber/cherami-thrift/.generated/go/store"
 )
@@ -46,6 +47,9 @@ var services = []string{InputServiceName, OutputServiceName, StoreServiceName, C
 const (
 	// UUIDStringLength is the length of an UUID represented as a hex string
 	UUIDStringLength = 36 // xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+
+	// DefaultUpgradeTimeout is the timeout to wait in the upgrade handler
+	DefaultUpgradeTimeout = 10 * time.Second
 )
 
 // HostInfo is a type that contains the info about a cherami host
