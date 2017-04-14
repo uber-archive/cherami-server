@@ -910,7 +910,7 @@ func (s *McpSuite) TestGetOutputHostsKafka() {
 	for _, cgx := range cge.GetExtents() {
 		extentUUID := cgx.GetExtentUUID()
 		cgExtents[extentUUID] = cgx
-		outputHosts.insert(cgx.GetOutputHostUUID())
+		cgOutputHosts.insert(cgx.GetOutputHostUUID())
 		_, err = s.mClient.ReadExtentStats(nil, &m.ReadExtentStatsRequest{DestinationUUID: common.StringPtr(dstUUID), ExtentUUID: common.StringPtr(extentUUID)})
 		s.Nil(err, "Failed to find extent created by GetOutputHosts()")
 
