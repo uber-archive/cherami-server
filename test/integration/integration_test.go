@@ -528,7 +528,7 @@ func (s *NetIntegrationSuiteParallelE) TestWriteWithDrain() {
 			log.Infof("client: acking id %s", receipt.Receipt)
 			if receipt.Error != nil {
 				s.InDelta(testMsgCount, i, 500)
-				consumeCount = i + 1
+				consumeCount = i + 2 // we read one message above and we start from 0 here as well
 			} else {
 				break
 			}
@@ -564,7 +564,7 @@ func (s *NetIntegrationSuiteParallelE) TestWriteWithDrain() {
 		Path:              destPath,
 		ConsumerGroupName: cgPath,
 		ConsumerName:      "TestConsumerName",
-		PrefetchCount:     50,
+		PrefetchCount:     500,
 		Options:           &client.ClientOptions{Timeout: time.Second * 30}, // this is the thrift context timeout
 	}
 
@@ -572,7 +572,7 @@ func (s *NetIntegrationSuiteParallelE) TestWriteWithDrain() {
 	s.NotNil(consumerTest)
 
 	// Open the consumer channel
-	delivery := make(chan client.Delivery, 50)
+	delivery := make(chan client.Delivery, 500)
 	delivery, err = consumerTest.Open(delivery)
 	s.NoError(err)
 
@@ -1010,7 +1010,7 @@ ReadLoop2:
 	consumerTest.Close()
 }
 
-func (s *NetIntegrationSuiteParallelC) TestDLQWithCassandra() {
+func (s *NetIntegrationSuiteParallelA) TestDLQWithCassandra() {
 	const (
 		destPath                = `/test.runner.SmartRetry/TestDLQWithCassandra` // This path ensures that throttling is limited for this test
 		cgPath                  = `/test.runner.SmartRetry/TestDLQWithCassandraCG`
