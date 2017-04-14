@@ -24,6 +24,7 @@ import (
 	"crypto/sha1"
 	"encoding/base64"
 	"fmt"
+	"math"
 	"net"
 	"reflect"
 	"regexp"
@@ -307,26 +308,40 @@ func convertCGZoneConfigToInternal(cgZoneCfg *c.ConsumerGroupZoneConfig) *shared
 	return internalCGZoneCfg
 }
 
+const overflowThreshold = math.MaxInt64 / 1000
+
 // interpretTimeNanos converts the given timestamp to nanosecond units after
 // interpreting its units based on what yields the nearest time to 'now'.
 func interpretTimeNanos(ts int64) int64 {
 
-	// tsNanos, tsMicros, tsMillis and tsSeconds are what 'ts' would be
-	// would be if it were assumed to be in {nano,micro,milli,}seconds
-	// respectively and they are each converted to nanosecond units.  we
-	// use the timestamp that is closest to 'now' as the most reasonable
-	// interpretation of the given 'ts'. we can safely ignore potential
-	// overflows in our computations, because that would result in a
-	// negative number that would push it further from the 'now' timestamp.
-
-	tsNanos, tsMicros, tsMillis, tsSeconds := ts, ts*1e3, ts*1e6, ts*1e9
-
-	// 'now' in unix-nanos
 	now := time.Now().UnixNano()
 
-	// the time that is nearest to 'now' (in nanoseconds), would be the most
-	// reasonable interpretation of 'ts'
-	return common.FindNearestInt(now, tsNanos, tsMicros, tsMillis, tsSeconds)
+	var nearest, minΔ int64 = math.MaxInt64, math.MaxInt64
+
+	// try in {nano,micro,milli,}seconds
+	for i := 0; i < 4; i++ {
+
+		var Δ int64
+
+		if ts > now {
+			Δ = ts - now
+		} else {
+			Δ = now - ts
+		}
+
+		if Δ < minΔ {
+			minΔ = Δ
+			nearest = ts
+		}
+
+		if ts >= overflowThreshold {
+			break
+		}
+
+		ts *= 1000
+	}
+
+	return nearest
 }
 
 // convertCreateCGRequestToInternal converts Cherami CreateConsumerGroupRequest to internal shared CreateConsumerGroupRequest
