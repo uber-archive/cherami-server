@@ -23,8 +23,13 @@ import:
   - mock
   - require
   - suite
+
 - package: github.com/tecbot/gorocksdb
+  version: 17991d3138a879b166adebf86f7c84da3c1517a7
 - package: github.com/cockroachdb/c-jemalloc
+  version: 2582439cfbace368ad093c71209ad72efef8aa4d
+- package: github.com/cockroachdb/c-rocksdb
+  version: 09d6d520b61160d194c06768ed85415cd8abee57
 - package: github.com/uber-common/bark
 - package: github.com/uber/cherami-client-go
   subpackages:
