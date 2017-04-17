@@ -243,7 +243,7 @@ func (s *McpSuite) TestCGExtentSelectorHonorsCreatedTimeKafka() {
 
 	var nPhantom, nDlq int
 	for _, x := range gotExtents {
-		if x.GetStoreUUIDs()[0] == kafkaPhantomStoreUUID {
+		if common.AreKafkaPhantomStores(x.GetStoreUUIDs()) {
 			nPhantom++
 		} else {
 			s.Equal(extents[nDlq], x.GetExtentUUID(), "Extents not served in time order")

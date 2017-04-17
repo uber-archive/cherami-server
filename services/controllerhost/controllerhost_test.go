@@ -488,8 +488,7 @@ func (s *McpSuite) TestGetOutputHostsMaxOpenExtentsLimit() {
 				if _, ok := extents[cgx.GetExtentUUID()]; ok {
 					dlqExtents++
 				} else {
-					s.Equal(1, len(cgx.GetStoreUUIDs()), "Expected one phantom store")
-					s.Equal(kafkaPhantomStoreUUID, cgx.GetStoreUUIDs()[0], "Expected phantom store")
+					s.True(common.AreKafkaPhantomStores(cgx.GetStoreUUIDs()), "expected phantom stores")
 					phantomExtents++
 				}
 			}
@@ -821,8 +820,7 @@ func (s *McpSuite) TestGetOutputHostsKafka() {
 		s.Nil(err, "Failed to find extent created by GetOutputHosts()")
 
 		// validate all returned extents are 'phantom' extents
-		s.Equal(1, len(cgx.GetStoreUUIDs()), "Expected one phantom store")
-		s.Equal(kafkaPhantomStoreUUID, cgx.GetStoreUUIDs()[0], "Expected phantom store")
+		s.True(common.AreKafkaPhantomStores(cgx.GetStoreUUIDs()), "expected phantom stores")
 	}
 
 	s.True(outputHosts.subset(cgOutputHosts), "invalid outputhost returned")
@@ -867,8 +865,7 @@ func (s *McpSuite) TestGetOutputHostsKafka() {
 		if dlqExtents.contains(extentUUID) {
 			nDlq++
 		} else {
-			s.Equal(1, len(cgx.GetStoreUUIDs()), "Expected one phantom store")
-			s.Equal(kafkaPhantomStoreUUID, cgx.GetStoreUUIDs()[0], "Expected phantom store")
+			s.True(common.AreKafkaPhantomStores(cgx.GetStoreUUIDs()), "expected phantom stores")
 			nPhantom++
 		}
 	}
@@ -918,8 +915,7 @@ func (s *McpSuite) TestGetOutputHostsKafka() {
 		if dlqExtents.contains(extentUUID) {
 			nDlq++
 		} else {
-			s.Equal(1, len(cgx.GetStoreUUIDs()), "Expected one phantom store")
-			s.Equal(kafkaPhantomStoreUUID, cgx.GetStoreUUIDs()[0], "Expected phantom store")
+			s.True(common.AreKafkaPhantomStores(cgx.GetStoreUUIDs()), "expected phantom stores")
 			nPhantom++
 		}
 	}
@@ -982,8 +978,7 @@ func (s *McpSuite) TestGetOutputHostsKafka() {
 		if dlqExtents.contains(extentUUID) {
 			nDlq++
 		} else {
-			s.Equal(1, len(cgx.GetStoreUUIDs()), "Expected one phantom store")
-			s.Equal(kafkaPhantomStoreUUID, cgx.GetStoreUUIDs()[0], "Expected phantom store")
+			s.True(common.AreKafkaPhantomStores(cgx.GetStoreUUIDs()), "expected phantom stores")
 			nPhantom++
 		}
 	}
@@ -1311,9 +1306,9 @@ func (s *McpSuite) TestKafkaPhantomExtentChecks() {
 
 	context := s.mcp.context
 
-	// setup a Kafka extent with 'phatom' input/stores
-	inputUUID := kafkaPhantomInputUUID
-	storeUUIDs := []string{kafkaPhantomStoreUUID}
+	// setup a Kafka extent with 'phantom' input/stores
+	inputUUID := common.KafkaPhantomExtentInputhost
+	storeUUIDs := []string{common.KafkaPhantomExtentStorehost}
 
 	kafkaExt := &m.DestinationExtent{
 		ExtentUUID:    common.StringPtr(uuid.New()),

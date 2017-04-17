@@ -788,3 +788,17 @@ func SetupSignalHandler(sig os.Signal, hostPort string, endpoint string, timeout
 		handleFunc(sig, hostPort, endpoint, timeout)
 	}()
 }
+
+// IsKafkaPhantomInput determines whether the given inputhost-uuid for
+// an extent indicates that this is a Kafka 'phantom' extent.
+func IsKafkaPhantomInput(inputUUID string) bool {
+
+	return inputUUID == KafkaPhantomExtentInputhost
+}
+
+// AreKafkaPhantomStores determines whether the given list of storehost-uuids
+// for an extent indicates that this is a Kafka 'phantom' extent.
+func AreKafkaPhantomStores(storeUUIDs []string) bool {
+
+	return len(storeUUIDs) == 1 && storeUUIDs[0] == KafkaPhantomExtentStorehost
+}

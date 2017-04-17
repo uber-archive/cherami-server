@@ -42,10 +42,6 @@ var (
 	// We can keep serving stale entries for up to an hour,
 	// when we cannot refresh the cache (say, due to cassandra failure)
 	outputCacheTTL = 5 * time.Second
-
-	// Define phantom store/inputhost for extents belonging to Kafka destinations
-	kafkaPhantomStoreUUID = "00000000-0000-0000-0000-000000000000"
-	kafkaPhantomInputUUID = "00000000-0000-0000-0000-000000000000"
 )
 
 type cgExtentsByCategory struct {
@@ -141,7 +137,7 @@ func hostInfoMapToSlice(hosts map[string]*common.HostInfo) ([]string, []string) 
 func pickOutputHostForStoreHosts(context *Context, storeUUIDs []string) (*common.HostInfo, error) {
 
 	// special-case kafka phantom extents, that don't use Cherami stores
-	if len(storeUUIDs) == 1 && storeUUIDs[0] == kafkaPhantomStoreUUID {
+	if common.AreKafkaPhantomStores(storeUUIDs) {
 		return context.placement.PickOutputHost(nil)
 	}
 
@@ -459,8 +455,8 @@ func createDestExtent(context *Context, dstDesc *shared.DestinationDescription, 
 func createKafkaPhantomExtent(context *Context, dstUUID string, m3Scope int) (ext *m.DestinationExtent, err error) {
 
 	extentUUID := uuid.New()
-	inputhostUUID := kafkaPhantomInputUUID
-	storeUUIDs := []string{kafkaPhantomStoreUUID}
+	inputhostUUID := common.KafkaPhantomExtentInputhost
+	storeUUIDs := []string{common.KafkaPhantomExtentStorehost}
 
 	// create a 'phantom' extent and assign given inputhost/stores
 	if _, err = context.mm.CreateExtent(dstUUID, extentUUID, inputhostUUID, storeUUIDs); err != nil {

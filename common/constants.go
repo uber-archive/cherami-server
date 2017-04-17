@@ -63,4 +63,10 @@ const (
 
 	// InputHostForRemoteExtent is a special (and fake) input host ID for remote extent
 	InputHostForRemoteExtent = "88888888-8888-8888-8888-888888888888"
+
+	// KafkaPhantomExtentInputhost is placeholder/phantom inputhost uuid used for Kafka extents
+	KafkaPhantomExtentInputhost = "00000000-0000-0000-0000-000000000000"
+
+	// KafkaPhantomExtentStorehost is placeholder/phantom storehost uuid used for Kafka extents
+	KafkaPhantomExtentStorehost = "00000000-0000-0000-0000-000000000000"
 )
