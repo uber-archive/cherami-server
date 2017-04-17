@@ -932,7 +932,10 @@ func (s *McpSuite) TestGetOutputHostsKafka() {
 
 	for extentUUID := range dlqExtents.keys() {
 		pickDlqExtent0 = extentUUID
-		break
+		// ensure the selected DLQ-extent was selected to be consumed from
+		if _, ok := cgExtents[pickDlqExtent0]; ok {
+			break
+		}
 	}
 
 	err = s.mClient.SetAckOffset(nil, &shared.SetAckOffsetRequest{
