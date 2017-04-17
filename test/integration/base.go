@@ -254,7 +254,14 @@ func (tb *testBase) SetUp(clusterSz map[string]int, numReplicas int) {
 		dClient := dconfig.NewDconfigClient(configure.NewCommonServiceConfig(), common.OutputServiceName)
 		sCommon := common.NewService(common.OutputServiceName, hostID, cfg, tb.UUIDResolver, hwInfoReader, reporter, dClient)
 		log.Infof("output ringHosts: %v", cfg.GetRingHosts())
-		oh, tc := outputhost.NewOutputHost(common.OutputServiceName, sCommon, tb.mClient, frontendForOut, nil)
+		oh, tc := outputhost.NewOutputHost(
+			common.OutputServiceName,
+			sCommon,
+			tb.mClient,
+			frontendForOut,
+			nil,
+			cfgMap[common.OutputServiceName][i].GetKafkaConfig(),
+		)
 		oh.Start(tc)
 		// start websocket server
 		common.WSStart(cfg.GetListenAddress().String(), cfg.GetWebsocketPort(), oh)

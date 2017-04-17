@@ -24,6 +24,7 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"gopkg.in/yaml.v2"
 	"io/ioutil"
+	"strings"
 )
 
 // KafkaConfig holds the configuration for the Kafka client
@@ -79,7 +80,7 @@ func (r *KafkaConfig) loadClusterConfigFileIfNecessary() {
 func (r *KafkaConfig) loadClusterConfigFile() {
 	// TODO do we need to detect file change and reload on file change
 	if len(r.KafkaClusterConfigFile) == 0 {
-		log.Warnf("Could not load kafka configu because kafka cluster config file is not configured")
+		log.Warnf("Could not load kafka config because kafka cluster config file is not configured")
 		return
 	}
 
@@ -94,5 +95,17 @@ func (r *KafkaConfig) loadClusterConfigFile() {
 		log.Warnf("Failed to parse kafka cluster config file %s: %v", r.KafkaClusterConfigFile, err)
 	} else {
 		r.ClustersConfig = clusters
+	}
+	r.addPortNumbers()
+}
+
+// addPortNumbers adds the default Kafka broker port number to all broker names
+func (r *KafkaConfig) addPortNumbers() {
+	for _, c := range r.ClustersConfig.Clusters {
+		for i, b := range c.Brokers {
+			if !strings.Contains(b, `:`) {
+				c.Brokers[i] = b + `:9092`
+			}
+		}
 	}
 }

@@ -83,7 +83,9 @@ type (
 		GetDestinationConfig() CommonDestinationConfig
 		// GetDefaultServiceConfig is used to retrieve the default bootstrap service config
 		GetDefaultServiceConfig() CommonServiceConfig
-		// SetServiceConfig is used to set the service config sepcific to the service
+		// GetKafkaConfig gets the Kafka configuration
+		GetKafkaConfig() CommonKafkaConfig
+		// SetServiceConfig is used to set the service config specific to the service
 		SetServiceConfig(serviceName string, cfg CommonServiceConfig)
 	}
 

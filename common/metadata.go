@@ -36,3 +36,8 @@ func IsDLQDestination(dstDesc *shared.DestinationDescription) bool {
 func IsDLQDestinationPath(path string) bool {
 	return len(path) > 4 && strings.HasSuffix(path, ".dlq")
 }
+
+// IsKafkaConsumerGroupExtent determines if a consumer group extent is a Kafka consumption assignment
+func IsKafkaConsumerGroupExtent(e *shared.ConsumerGroupExtent) bool {
+	return AreKafkaPhantomStores(e.GetStoreUUIDs())
+}

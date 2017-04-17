@@ -153,7 +153,7 @@ func StartOutputHostService() {
 	// and since we aren't using thrift anyway. We are selfish with our Frontend.
 	frontendhost, _ := frontendhost.NewFrontendHost(common.FrontendServiceName, sCommon, meta, cfg)
 
-	h, tc := outputhost.NewOutputHost(serviceName, sCommon, meta, frontendhost, nil)
+	h, tc := outputhost.NewOutputHost(serviceName, sCommon, meta, frontendhost, nil, cfg.GetKafkaConfig())
 	h.Start(tc)
 
 	// start websocket server

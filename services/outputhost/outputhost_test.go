@@ -156,7 +156,7 @@ func utilGetHTTPRequestWithPath(path string) *http.Request {
 // fail, if there is no path given to publish
 func (s *OutputHostSuite) TestOutputHostRejectNoPath() {
 	sName := "cherami-test-out"
-	outputHost, _ := NewOutputHost(sName, s.mockService, nil, nil, nil)
+	outputHost, _ := NewOutputHost(sName, s.mockService, nil, nil, nil, nil)
 	httpRequest := utilGetHTTPRequest()
 	outputHost.OpenConsumerStreamHandler(s.mockHTTPResponse, httpRequest)
 	s.mockHTTPResponse.AssertCalled(s.T(), "WriteHeader", http.StatusBadRequest)
@@ -168,7 +168,7 @@ func (s *OutputHostSuite) TestOutputHostReadMessage() {
 
 	count := 10
 
-	outputHost, _ := NewOutputHost("outputhost-test", s.mockService, s.mockMeta, nil, nil)
+	outputHost, _ := NewOutputHost("outputhost-test", s.mockService, s.mockMeta, nil, nil, nil)
 	httpRequest := utilGetHTTPRequestWithPath("foo")
 
 	destUUID := uuid.New()
@@ -273,7 +273,7 @@ func (s *OutputHostSuite) TestOutputHostReadMessage() {
 // of whether write() succeeds or fails.
 func (s *OutputHostSuite) TestOutputHostPutsMsgIntoMsgCacheOnWriteError() {
 
-	outputHost, _ := NewOutputHost("outputhost-test", s.mockService, s.mockMeta, nil, nil)
+	outputHost, _ := NewOutputHost("outputhost-test", s.mockService, s.mockMeta, nil, nil, nil)
 	httpRequest := utilGetHTTPRequestWithPath("foo")
 
 	destUUID := uuid.New()
@@ -363,7 +363,7 @@ func (s *OutputHostSuite) TestOutputHostPutsMsgIntoMsgCacheOnWriteError() {
 }
 
 func (s *OutputHostSuite) TestOutputHostAckMessage() {
-	outputHost, _ := NewOutputHost("outputhost-test", s.mockService, s.mockMeta, nil, nil)
+	outputHost, _ := NewOutputHost("outputhost-test", s.mockService, s.mockMeta, nil, nil, nil)
 	httpRequest := utilGetHTTPRequestWithPath("foo")
 	ctx, _ := utilGetThriftContext()
 
@@ -445,7 +445,7 @@ func (s *OutputHostSuite) TestOutputHostAckMessage() {
 }
 
 func (s *OutputHostSuite) TestOutputHostInvalidAcks() {
-	outputHost, _ := NewOutputHost("outputhost-test", s.mockService, s.mockMeta, nil, nil)
+	outputHost, _ := NewOutputHost("outputhost-test", s.mockService, s.mockMeta, nil, nil, nil)
 	ctx, _ := utilGetThriftContext()
 
 	// ack a couple of invalid messages
@@ -478,7 +478,7 @@ func (s *OutputHostSuite) TestOutputHostInvalidAcks() {
 }
 
 func (s *OutputHostSuite) TestOutputHostReconfigure() {
-	outputHost, _ := NewOutputHost("outputhost-test", s.mockService, s.mockMeta, nil, nil)
+	outputHost, _ := NewOutputHost("outputhost-test", s.mockService, s.mockMeta, nil, nil, nil)
 	httpRequest := utilGetHTTPRequestWithPath("foo")
 	ctx, _ := utilGetThriftContext()
 
@@ -607,7 +607,7 @@ func (s *OutputHostSuite) TestOutputHostReceiveMessageBatch() {
 	var count int32
 	count = 10
 
-	outputHost, _ := NewOutputHost("outputhost-test", s.mockService, s.mockMeta, nil, nil)
+	outputHost, _ := NewOutputHost("outputhost-test", s.mockService, s.mockMeta, nil, nil, nil)
 	ctx, _ := utilGetThriftContext()
 
 	destUUID := uuid.New()
@@ -676,7 +676,7 @@ func (s *OutputHostSuite) TestOutputHostReceiveMessageBatch_NoMsg() {
 	var count int32
 	count = 10
 
-	outputHost, _ := NewOutputHost("outputhost-test", s.mockService, s.mockMeta, nil, nil)
+	outputHost, _ := NewOutputHost("outputhost-test", s.mockService, s.mockMeta, nil, nil, nil)
 	ctx, _ := utilGetThriftContext()
 
 	destUUID := uuid.New()
@@ -726,7 +726,7 @@ func (s *OutputHostSuite) TestOutputHostReceiveMessageBatch_SomeMsgAvailable() {
 	var count int32
 	count = 10
 
-	outputHost, _ := NewOutputHost("outputhost-test", s.mockService, s.mockMeta, nil, nil)
+	outputHost, _ := NewOutputHost("outputhost-test", s.mockService, s.mockMeta, nil, nil, nil)
 	ctx, _ := utilGetThriftContext()
 
 	destUUID := uuid.New()
@@ -793,7 +793,7 @@ func (s *OutputHostSuite) TestOutputHostReceiveMessageBatch_SomeMsgAvailable() {
 }
 
 func (s *OutputHostSuite) TestOutputCgUnload() {
-	outputHost, _ := NewOutputHost("outputhost-test", s.mockService, s.mockMeta, nil, nil)
+	outputHost, _ := NewOutputHost("outputhost-test", s.mockService, s.mockMeta, nil, nil, nil)
 	httpRequest := utilGetHTTPRequestWithPath("foo")
 	ctx, _ := utilGetThriftContext()
 
@@ -887,7 +887,7 @@ func (s *OutputHostSuite) TestOutputCgUnload() {
 }
 
 func (s *OutputHostSuite) TestOutputAckMgrReset() {
-	outputHost, _ := NewOutputHost("outputhost-test-reset", s.mockService, s.mockMeta, nil, nil)
+	outputHost, _ := NewOutputHost("outputhost-test-reset", s.mockService, s.mockMeta, nil, nil, nil)
 	httpRequest := utilGetHTTPRequestWithPath("foo")
 
 	go outputHost.manageCgCache()

@@ -21,11 +21,13 @@
 package outputhost
 
 import (
+	"encoding/json"
 	"fmt"
 	"math/rand"
 	"net"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -34,6 +36,8 @@ import (
 	"github.com/uber-common/bark"
 	"github.com/uber/tchannel-go/thrift"
 
+	"github.com/Shopify/sarama"
+	sc "github.com/bsm/sarama-cluster"
 	"github.com/uber/cherami-server/common"
 	"github.com/uber/cherami-server/common/metrics"
 	"github.com/uber/cherami-server/services/outputhost/load"
@@ -137,13 +141,30 @@ type extentCache struct {
 
 	// consumerM3Client for metrics per consumer group
 	consumerM3Client metrics.Client
+
+	// kafkaClient is the client for the kafka connection, if any
+	kafkaClient *sc.Consumer
 }
+
+var kafkaLogSetup sync.Once
 
 // extentLoadReportingInterval is the freq which load
 // metrics are reported to the controller
 const extentLoadReportingInterval = 2 * time.Second
 
-func (extCache *extentCache) load(outputHostUUID string, cgUUID string, metaClient metadata.TChanMetadataService, cge *shared.ConsumerGroupExtent) (err error) {
+// kafkaDefaultRetention is the default value of log.retention.hours in the Kafka system
+const kafkaDefaultRetention = common.UnixNanoTime(time.Hour * 24 * 7)
+
+func (extCache *extentCache) load(
+	outputHostUUID,
+	cgUUID,
+	cgName,
+	kafkaCluster string,
+	kafkaTopics []string,
+	startFrom common.UnixNanoTime,
+	metaClient metadata.TChanMetadataService,
+	cge *shared.ConsumerGroupExtent,
+) (err error) {
 	// it is ok to take the local lock for this extent which will not affect
 	// others
 	extCache.cacheMutex.Lock()
@@ -153,8 +174,14 @@ func (extCache *extentCache) load(outputHostUUID string, cgUUID string, metaClie
 	extCache.ackMgr.start()
 
 	// now try to load the replica streams
-	extCache.connection, extCache.pickedIndex, err =
-		extCache.loadReplicaStream(cge.GetAckLevelOffset(), common.SequenceNumber(cge.GetAckLevelSeqNo()), rand.Intn(len(extCache.storeUUIDs)))
+
+	if common.IsKafkaConsumerGroupExtent(cge) {
+		extCache.connectedStoreUUID = kafkaConnectedStoreUUID
+		extCache.connection, err = extCache.loadKafkaStream(cgName, outputHostUUID, startFrom, kafkaCluster, kafkaTopics)
+	} else {
+		extCache.connection, extCache.pickedIndex, err =
+			extCache.loadReplicaStream(cge.GetAckLevelOffset(), common.SequenceNumber(cge.GetAckLevelSeqNo()), rand.Intn(len(extCache.storeUUIDs)))
+	}
 	if err != nil {
 		// Exhausted all replica streams.. giving up
 		extCache.logger.Error(`unable to load replica stream for extent`)
@@ -306,6 +333,72 @@ func (extCache *extentCache) loadReplicaStream(startAddress int64, startSequence
 	return
 }
 
+func (extCache *extentCache) loadKafkaStream(
+	cgName string,
+	outputHostUUID string,
+	startFrom common.UnixNanoTime,
+	kafkaCluster string,
+	kafkaTopics []string,
+) (repl *replicaConnection, err error) {
+	groupID := getKafkaGroupIDForCheramiConsumerGroupName(cgName)
+
+	// Configure sarama-cluster
+	cfg := sc.NewConfig()
+
+	// Metadata for the Kafka group join
+	meta := KafkaGroupMetadata{
+		Version:        kafkaGroupMetadataVersion,
+		OutputHostUUID: outputHostUUID,
+	}
+	cfg.Group.Member.UserData, _ = json.Marshal(meta)
+
+	// Get the notifications channel; we will just log it
+	cfg.Group.Return.Notifications = true
+
+	// Older startFroms (e.g. 0, >3.5 days back) are considered to want the oldest offset
+	// The logic here is that the default Kafka retention is 7 days, so we just decide whether
+	// the oldest or newest offset is likely to be 'closer' to the desired startFrom time
+	// Obviously, startFrom = 0 always works perfectly, and startFrom = now also works, as long
+	// as the consumer group is used within 3.5 days of creation.
+	// TODO: Use Sarama GetMetadata to get the list of partitions, then build the offset request
+	// to use with GetAvailableOffsets, and then "somehow" manually commit it so that sarama-cluster
+	// starts from the right place
+	if common.Now()-startFrom > kafkaDefaultRetention/2 {
+		cfg.Config.Consumer.Offsets.Initial = sarama.OffsetOldest
+	}
+
+	// This is an ID that may appear in Kafka logs or metadata
+	cfg.Config.ClientID = `cherami_` + groupID
+
+	// TODO: Sarama metrics registry
+
+	// Build the Kafka client. Note that we would ideally like to have a factory for this, but the client
+	// has consumer-group-specific changes to its configuration
+	extCache.kafkaClient, err = sc.NewConsumer(
+		getKafkaBrokersForCluster(kafkaCluster),
+		groupID,
+		kafkaTopics,
+		cfg,
+	)
+	if err != nil {
+		extCache.logger.WithField(common.TagErr, err).Error(`couldn't make Kafka client`)
+		return nil, err
+	}
+
+	// Setup the notification logger
+	go kafkaNotificationsLogger(extCache.kafkaClient.Notifications(), extCache.logger)
+
+	// Create the kafkaStream
+	call := OpenKafkaStream(extCache.kafkaClient.Messages(), extCache.logger)
+
+	// Setup the replicaConnection
+	replicaConnectionName := fmt.Sprintf(`replicaConnection{Extent: %s, kafkaCluster: %s}`, extCache.extUUID, kafkaCluster)
+	repl = newReplicaConnection(call, extCache, nil, replicaConnectionName, extCache.logger, 0)
+	extCache.shutdownWG.Add(1)
+	repl.open()
+	return
+}
+
 // stop the extentCache stops the ackMgr and notifies the cgCache that this extent is done
 // Notification to the CG happens only when extent is closed after it is consumed.
 // If it is being unloaded by the CG, then no need to notify again
@@ -417,6 +510,11 @@ func (extCache *extentCache) Report(reporter common.LoadReporter) {
 func (extCache *extentCache) unload() {
 	extCache.cacheMutex.Lock()
 	close(extCache.closeChannel)
+	if extCache.kafkaClient != nil {
+		if err := extCache.kafkaClient.Close(); err != nil {
+			extCache.logger.WithField(common.TagErr, err).Error(`error closing Kafka client`)
+		}
+	}
 	extCache.cacheMutex.Unlock()
 }
 
@@ -430,4 +528,58 @@ func (extCache *extentCache) getState() *admin.OutputCgExtent {
 	cge.AckMgrState = extCache.ackMgr.getAckMgrState()
 
 	return cge
+}
+
+// KafkaGroupMetadata is a structure used for JSON encoding/decoding of the metadata stored for
+// Kafka groups joined by Cherami
+type KafkaGroupMetadata struct {
+	// Version is the version of this structure
+	Version uint
+
+	// CGUUID is the internal Cherami consumer group UUID that committed this offset
+	CGUUID string
+
+	// OutputHostUUID is the UUID of the Cherami Outputhost that committed this offset
+	OutputHostUUID string
+}
+
+const kafkaGroupMetadataVersion = uint(0) // Current version of the KafkaGroupMetadata
+
+func kafkaNotificationsLogger(ch <-chan *sc.Notification, log bark.Logger) {
+	notificationNum := 0
+notificationsLoop:
+	for {
+		select {
+		case n, ok := <-ch:
+			if !ok {
+				break notificationsLoop
+			}
+			if n == nil {
+				log.Warn(`nil notification received`)
+				continue notificationsLoop
+			}
+			notificationNum++
+			log = log.WithField(`notificationNum`, notificationNum)
+			if len(n.Claimed) > 0 {
+				log.WithField(`claimed`, n.Claimed).Info(`claimed partitions`)
+			}
+			if len(n.Released) > 0 {
+				log.WithField(`released`, n.Released).Info(`released partitions`)
+			}
+			if len(n.Current) > 0 {
+				log.WithField(`current`, n.Current).Info(`current partitions`)
+			}
+		}
+	}
+	log.Info(`Notifications channel closed`)
+}
+
+func getKafkaGroupIDForCheramiConsumerGroupName(cgName string) string {
+	s := strings.Split(cgName, `/`)
+	return s[len(s)-1]
+}
+
+func getKafkaBrokersForCluster(cluster string) []string {
+	cfg, _ := thisOutputHost.kafkaCfg.GetKafkaClusterConfig(cluster)
+	return cfg.Brokers
 }

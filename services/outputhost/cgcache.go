@@ -39,6 +39,10 @@ import (
 	"github.com/uber/cherami-thrift/.generated/go/shared"
 )
 
+const (
+	kafkaConnectedStoreUUID = `cafca000-0000-0caf-ca00-0000000cafca` // Placeholder connected store for logs
+)
+
 type (
 	// cacheMsg is the message written to the cg cache
 	// it has the actual message and a connection ID
@@ -189,6 +193,12 @@ type (
 
 		// cfgMgr is the reference to the cassandra backed cfgMgr
 		cfgMgr dconfig.ConfigManager
+
+		// kafkaCluster is the Kafka cluster for this consumer group, if applicable
+		kafkaCluster string
+
+		// kafkaTopics is the list of kafka topics consumed by this consumer group, if applicable
+		kafkaTopics []string
 	}
 )
 
@@ -293,6 +303,7 @@ func (cgCache *consumerGroupCache) getConsumerGroupTags() map[string]string {
 
 // loadExtentCache loads the extent cache, if it doesn't already exist for this consumer group
 func (cgCache *consumerGroupCache) loadExtentCache(ctx thrift.Context, destType shared.DestinationType, cge *shared.ConsumerGroupExtent) {
+	var committer Committer
 	extUUID := cge.GetExtentUUID()
 	if extCache, exists := cgCache.extentCache[extUUID]; !exists {
 		extCache = &extentCache{
@@ -336,15 +347,24 @@ func (cgCache *consumerGroupCache) loadExtentCache(ctx thrift.Context, destType 
 			extCache.initialCredits = cgCache.getMessageCacheSize(cfg, defaultNumOutstandingMsgs)
 		}
 
-		committer := NewCheramiCommitter(
-			cgCache.metaClient,
-			cgCache.outputHostUUID,
-			cgCache.cachedCGDesc.GetConsumerGroupUUID(),
-			extCache.extUUID,
-			&extCache.connectedStoreUUID,
-			cgCache.cachedCGDesc.GetIsMultiZone(),
-			cgCache.tClients,
-		)
+		if common.IsKafkaConsumerGroupExtent(cge) {
+			committer = NewKafkaCommitter(
+				cgCache.outputHostUUID,
+				cgCache.cachedCGDesc.GetConsumerGroupUUID(),
+				extCache.logger,
+				&extCache.kafkaClient,
+			)
+		} else {
+			committer = NewCheramiCommitter(
+				cgCache.metaClient,
+				cgCache.outputHostUUID,
+				cgCache.cachedCGDesc.GetConsumerGroupUUID(),
+				extCache.extUUID,
+				&extCache.connectedStoreUUID,
+				cgCache.cachedCGDesc.GetIsMultiZone(),
+				cgCache.tClients,
+			)
+		}
 
 		extCache.ackMgr = newAckManager(
 			cgCache,
@@ -364,7 +384,16 @@ func (cgCache *consumerGroupCache) loadExtentCache(ctx thrift.Context, destType 
 		extCache.shutdownWG.Add(1)
 
 		// if load fails we will unload it the usual way
-		go extCache.load(cgCache.outputHostUUID, cgCache.cachedCGDesc.GetConsumerGroupUUID(), cgCache.metaClient, cge)
+		go extCache.load(
+			cgCache.outputHostUUID,
+			cgCache.cachedCGDesc.GetConsumerGroupUUID(),
+			cgCache.cachedCGDesc.GetConsumerGroupName(),
+			cgCache.kafkaCluster,
+			cgCache.kafkaTopics,
+			common.UnixNanoTime(cgCache.cachedCGDesc.GetStartFrom()),
+			cgCache.metaClient,
+			cge,
+		)
 
 		// now notify the outputhost
 		cgCache.ackMgrLoadCh <- ackMgrLoadMsg{uint32(extCache.ackMgr.ackMgrID), extCache.ackMgr}
@@ -517,6 +546,11 @@ func (cgCache *consumerGroupCache) refreshCgCache(ctx thrift.Context) error {
 		cgCache.logger.Info("destination deleted; unloading all extents")
 		go cgCache.unloadConsumerGroupCache()
 		return ErrCgUnloaded
+	}
+
+	if dstDesc.GetType() == shared.DestinationType_KAFKA {
+		cgCache.kafkaCluster = dstDesc.GetKafkaCluster()
+		cgCache.kafkaTopics = dstDesc.GetKafkaTopics()
 	}
 
 	readReq := &shared.ReadConsumerGroupRequest{

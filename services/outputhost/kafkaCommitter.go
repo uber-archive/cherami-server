@@ -23,12 +23,14 @@ package outputhost
 import (
 	"encoding/json"
 	"sync"
+	"time"
 
 	sc "github.com/bsm/sarama-cluster"
 	"github.com/uber-common/bark"
 	"github.com/uber/cherami-server/common"
-	"github.com/uber/cherami-thrift/.generated/go/metadata"
 )
+
+var outputHostStartTime = time.Now()
 
 // KafkaCommitter is commits ackLevels to Cassandra through the TChanMetadataClient interface
 type KafkaCommitter struct {
@@ -36,9 +38,8 @@ type KafkaCommitter struct {
 	commitLevel        CommitterLevel
 	readLevel          CommitterLevel
 	finalLevel         CommitterLevel
-	metaclient         metadata.TChanMetadataService
 	*sc.OffsetStash
-	*sc.Consumer
+	consumer **sc.Consumer
 	KafkaOffsetMetadata
 	metadataString string // JSON version of KafkaOffsetMetadata
 	logger         bark.Logger
@@ -55,6 +56,12 @@ type KafkaOffsetMetadata struct {
 
 	// OutputHostUUID is the UUID of the Cherami Outputhost that committed this offset
 	OutputHostUUID string
+
+	// OutputHostStartTime is the time that the output host started
+	OutputHostStartTime string
+
+	// CommitterStartTime is the time that this committer was started
+	CommitterStartTime string
 }
 
 const kafkaOffsetMetadataVersion = uint(0) // Current version of the KafkaOffsetMetadata
@@ -84,11 +91,16 @@ func (c *KafkaCommitter) SetFinalLevel(l CommitterLevel) {
 
 // UnlockAndFlush pushes our commit and read levels to Cherami metadata, using SetAckOffset
 func (c *KafkaCommitter) UnlockAndFlush(l sync.Locker) error {
+	var err error
 	os := c.OffsetStash
 	c.OffsetStash = sc.NewOffsetStash()
 	l.Unlock() // MarkOffsets may take some time, so we unlock the thread that owns us
-	c.MarkOffsets(os)
-	return nil
+	if *c.consumer != nil {
+		c.logger.WithField(`offsets`, os.Offsets()).Debug(`Flushing Offsets`)
+		(*c.consumer).MarkOffsets(os)
+		err = (*c.consumer).CommitOffsets()
+	}
+	return err
 }
 
 // GetReadLevel returns the next readlevel that will be flushed
@@ -107,27 +119,29 @@ func (c *KafkaCommitter) GetCommitLevel() (l CommitterLevel) {
  * Setup & Utility
  */
 
-// NewKafkaCommitter instantiates a KafkaCommitter
-func NewKafkaCommitter(metaclient metadata.TChanMetadataService,
+// NewKafkaCommitter instantiates a kafkaCommitter
+func NewKafkaCommitter(
 	outputHostUUID string,
 	cgUUID string,
-	extUUID string,
-	connectedStoreUUID *string,
-	logger bark.Logger) *KafkaCommitter {
+	logger bark.Logger,
+	client **sc.Consumer) *KafkaCommitter {
+	now := time.Now()
+
 	meta := KafkaOffsetMetadata{
-		Version:        kafkaOffsetMetadataVersion,
-		OutputHostUUID: outputHostUUID,
-		CGUUID:         cgUUID,
+		Version:             kafkaOffsetMetadataVersion,
+		OutputHostUUID:      outputHostUUID,
+		CGUUID:              cgUUID,
+		OutputHostStartTime: outputHostStartTime.Format(time.RFC3339),
+		CommitterStartTime:  now.Format(time.RFC3339),
 	}
 
 	metaJSON, _ := json.Marshal(meta)
 	return &KafkaCommitter{
-		metaclient:          metaclient,
-		connectedStoreUUID:  connectedStoreUUID,
 		OffsetStash:         sc.NewOffsetStash(),
 		metadataString:      string(metaJSON),
 		KafkaOffsetMetadata: meta,
 		logger:              logger,
+		consumer:            client,
 	}
 }
 

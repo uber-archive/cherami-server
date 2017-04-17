@@ -32,8 +32,10 @@ import (
 	"github.com/uber-common/bark"
 	"github.com/uber/tchannel-go/thrift"
 
+	"github.com/Shopify/sarama"
 	ccommon "github.com/uber/cherami-client-go/common"
 	"github.com/uber/cherami-server/common"
+	"github.com/uber/cherami-server/common/configure"
 	cassDconfig "github.com/uber/cherami-server/common/dconfig"
 	dconfig "github.com/uber/cherami-server/common/dconfigclient"
 	mm "github.com/uber/cherami-server/common/metadata"
@@ -89,6 +91,7 @@ type (
 		ackMgrUnloadCh    chan uint32
 		hostMetrics       *load.HostMetrics
 		cfgMgr            cassDconfig.ConfigManager
+		kafkaCfg          configure.CommonKafkaConfig
 		common.SCommon
 	}
 
@@ -374,6 +377,7 @@ func (h *OutputHost) processAcks(ackIds []string, isNack bool) (invalidIDs []str
 		if ackMgr == nil {
 			h.logger.WithFields(bark.Fields{
 				common.TagAckID: ackIDStr,
+				`ackMgrID`:      ackMgrID,
 			}).Info("processAcks could not get ack manager (probably extent is consumed)")
 			h.m3Client.IncCounter(metrics.AckMessagesScope, metrics.OutputhostMessageNoAckManager)
 			continue
@@ -743,7 +747,14 @@ func (h *OutputHost) SetFrontendClient(frontendClient ccherami.TChanBFrontend) {
 }
 
 // NewOutputHost is the constructor for BOut
-func NewOutputHost(serviceName string, sVice common.SCommon, metadataClient metadata.TChanMetadataService, frontendClient ccherami.TChanBFrontend, opts *OutOptions) (*OutputHost, []thrift.TChanServer) {
+func NewOutputHost(
+	serviceName string,
+	sVice common.SCommon,
+	metadataClient metadata.TChanMetadataService,
+	frontendClient ccherami.TChanBFrontend,
+	opts *OutOptions,
+	kafkaCfg configure.CommonKafkaConfig,
+) (*OutputHost, []thrift.TChanServer) {
 
 	// Get the deployment name for logger field
 	deploymentName := sVice.GetConfig().GetDeploymentName()
@@ -760,7 +771,10 @@ func NewOutputHost(serviceName string, sVice common.SCommon, metadataClient meta
 		ackMgrUnloadCh: make(chan uint32, defaultAckMgrMapChSize),
 		ackMgrIDGen:    common.NewHostAckIDGenerator(defaultAckMgrIDStartFrom),
 		hostMetrics:    load.NewHostMetrics(),
+		kafkaCfg:       kafkaCfg,
 	}
+
+	sarama.Logger = NewSaramaLoggerFromBark(bs.logger, `sarama`)
 
 	bs.sessionID = common.UUIDToUint16(sVice.GetHostUUID())
 
