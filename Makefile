@@ -33,7 +33,7 @@ ALL_SRC := $(shell find . -name "*.go" | grep -v -e Godeps -e vendor \
 	-e ".*/_.*" \
 	-e ".*/mocks.*")
 
-RECENTLY_TOUCHED_SRC := $(shell git log --since="52 week ago" --name-only --oneline | grep "[^ ]*\.go$$" | grep -v -e Godeps -e vendor \
+RECENTLY_TOUCHED_SRC := $(shell git log --since="1 week ago" --name-only --oneline | grep "[^ ]*\.go$$" | grep -v -e Godeps -e vendor \
 	-e ".*/\//*" \
 	-e ".*/_.*" \
 	-e ".*/mocks.*")
