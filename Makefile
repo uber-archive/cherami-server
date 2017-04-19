@@ -33,7 +33,7 @@ ALL_SRC := $(shell find . -name "*.go" | grep -v -e Godeps -e vendor \
 	-e ".*/_.*" \
 	-e ".*/mocks.*")
 
-TOUCHED_SRC := $(shell git diff --name-only master | grep "\.go$$" | grep -v -e Godeps -e vendor \
+RECENTLY_TOUCHED_SRC := $(shell git log --since="52 week ago" --name-only --oneline | grep "[^ ]*\.go$$" | grep -v -e Godeps -e vendor \
 	-e ".*/\//*" \
 	-e ".*/_.*" \
 	-e ".*/mocks.*")
@@ -129,7 +129,7 @@ clean:
 	rm -Rf $(BUILD)
 
 lint:
-	@lintFail=0; for file in $(TOUCHED_SRC); do \
+	@lintFail=0; for file in $(RECENTLY_TOUCHED_SRC); do \
 		golint -set_exit_status "$$file"; \
 		if [ $$? -eq 1 ]; then lintFail=1; fi; \
 	done; \
