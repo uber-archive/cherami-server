@@ -1,5 +1,3 @@
-.PHONY: bins clean setup test test-race cover cover_ci cover_profile
-
 SHELL = /bin/bash
 
 PROJECT_ROOT=github.com/uber/cherami-server
@@ -100,21 +98,26 @@ cherami-store-tool: $(DEPS)
 
 bins: cherami-server cherami-replicator-server cherami-cli cherami-admin cherami-replicator-tool cherami-cassandra-tool cherami-store-tool
 
-cover_profile: lint $(DEPS)
+integration_test_targets = $(addsuffix coverage.out, $(INTEG_TEST_DIRS))
+
+$(integration_test_targets): %/coverage.out: $(DEPS)
+	@mkdir -p $(BUILD)/$*;
+	go test $(EMBED) ./$*/ $(TEST_ARG) $(GOCOVERPKG_ARG) -coverprofile=$(BUILD)/$*/coverage.out || exit 1;
+
+run_all_integration_tests: $(integration_test_targets)
+
+package_test_targets = $(addsuffix coverage.out, $(PKG_TEST_DIRS))
+
+$(package_test_targets): %/coverage.out: $(DEPS)
+	@mkdir -p $(BUILD)/$*;
+	go test $(EMBED) ./$*/ $(TEST_ARG) -coverprofile=$(BUILD)/$*/coverage.out || exit 1;
+
+run_all_package_tests: $(package_test_targets)
+
+cover_profile: lint
 	@mkdir -p $(BUILD)
 	@echo "mode: atomic" > $(BUILD)/cover.out
-
-	@echo Running integration tests:
-	@time for dir in $(INTEG_TEST_DIRS); do \
-		mkdir -p $(BUILD)/"$$dir"; \
-		go test $(EMBED) "$$dir" $(TEST_ARG) $(GOCOVERPKG_ARG) -coverprofile=$(BUILD)/"$$dir"/coverage.out || exit 1; \
-		cat $(BUILD)/"$$dir"/coverage.out | grep -v "mode: atomic" >> $(BUILD)/cover.out; \
-	done
-
-	@echo Running tests:
-	@time for dir in $(PKG_TEST_DIRS); do \
-		mkdir -p $(BUILD)/"$$dir"; \
-		go test $(EMBED) "$$dir" $(TEST_ARG) -coverprofile=$(BUILD)/"$$dir"/coverage.out || exit 1; \
+	@time for dir in $(INTEG_TEST_DIRS) $(PKG_TEST_DIRS); do \
 		cat $(BUILD)/"$$dir"/coverage.out | grep -v "mode: atomic" >> $(BUILD)/cover.out; \
 	done
 
@@ -147,3 +150,4 @@ lint:
 fmt:
 	gofmt -w $(ALL_SRC)
 
+.PHONY: bins clean setup test test-race cover cover_ci cover_profile run_all_integration_tests run_all_package_tests
