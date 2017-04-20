@@ -79,11 +79,15 @@ after_success:
         export TAG=latest;
         export REPO=ubercherami/cherami-server-standalone;
         echo "Building docker image for TRAVIS_BRANCH=$TRAVIS_BRANCH, REPO=$REPO, PR=$PR, BRANCH=$BRANCH, TAG=$TAG";
-        travis_wait 20 docker build -f docker/standalone/Dockerfile -t $REPO:$COMMIT -t $REPO:$TAG -t $REPO:travis-$TRAVIS_BUILD_NUMBER docker/standalone/;
+        travis_wait 30 docker build -f docker/standalone/Dockerfile -t $REPO:$COMMIT -t $REPO:$TAG -t $REPO:travis-$TRAVIS_BUILD_NUMBER docker/standalone/;
         docker push $REPO;
+    fi'
+  - 'if [ "$BRANCH" == "master" ]; then
+        docker login -u $DOCKER_USER -p $DOCKER_PASS;
+        export TAG=latest;
         export REPO=ubercherami/cherami-server;
         echo "Building docker image for TRAVIS_BRANCH=$TRAVIS_BRANCH, REPO=$REPO, PR=$PR, BRANCH=$BRANCH, TAG=$TAG";
-        travis_wait 20 docker build -f docker/server/Dockerfile -t $REPO:$COMMIT -t $REPO:$TAG -t $REPO:travis-$TRAVIS_BUILD_NUMBER docker/server/;
+        travis_wait 30 docker build -f docker/server/Dockerfile -t $REPO:$COMMIT -t $REPO:$TAG -t $REPO:travis-$TRAVIS_BUILD_NUMBER docker/server/;
         docker push $REPO;
     fi'
   
