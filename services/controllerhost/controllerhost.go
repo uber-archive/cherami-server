@@ -423,7 +423,7 @@ func (mcp *Mcp) GetOutputHosts(ctx thrift.Context, inReq *c.GetOutputHostsReques
 		return response(result.cachedResult, &shared.InternalServiceError{Message: err.Error()})
 	}
 
-	return response(hostIDs, nil)
+	return response(hostIDs, ErrUnavailable)
 }
 
 // GetQueueDepthInfo to return queue depth backlog infor for consumer group
