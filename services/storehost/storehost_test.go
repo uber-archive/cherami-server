@@ -978,7 +978,7 @@ func (s *StoreHostSuite) TestStoreHostAppendOnlyWriteThenDoReadMessages() {
 	}
 }
 
-func (s *StoreHostSuite) TestStoreHostSealExtent() {
+func (s *StoreHostSuite) _TestStoreHostSealExtent() {
 
 	mode := AppendOnly // AppendOnly
 	// numExtents := 1
@@ -1203,7 +1203,7 @@ func (s *StoreHostSuite) TestStoreHostSealExtent() {
 	}
 }
 
-func (s *StoreHostSuite) TestStoreHostSealExtentThrottling() {
+func (s *StoreHostSuite) _TestStoreHostSealExtentThrottling() {
 
 	totalRequests := 1000
 
@@ -1247,7 +1247,7 @@ func (s *StoreHostSuite) TestStoreHostSealExtentThrottling() {
 	}
 }
 
-func (s *StoreHostSuite) TestStoreHostPurgeMessages() {
+func (s *StoreHostSuite) _TestStoreHostPurgeMessages() {
 
 	mode := AppendOnly // TimerQueue
 	// numExtents := 1
@@ -1417,7 +1417,7 @@ func (s *StoreHostSuite) TestStoreHostPurgeMessages() {
 	s.True(waitFor(3000, func() bool { return isDone(out2ErrC) }))
 }
 
-func (s *StoreHostSuite) TestStoreHostConcurrency() {
+func (s *StoreHostSuite) _TestStoreHostConcurrency() {
 
 	mode := AppendOnly
 	numExtents := 3
@@ -1589,7 +1589,7 @@ func (s *StoreHostSuite) TestStoreHostConcurrency() {
 	}
 }
 
-func (s *StoreHostSuite) TestStoreHostMaxSeqNum() {
+func (s *StoreHostSuite) _TestStoreHostMaxSeqNum() {
 
 	mode := AppendOnly // TimerQueue
 	// numExtents := 1
@@ -1617,7 +1617,7 @@ func (s *StoreHostSuite) TestStoreHostMaxSeqNum() {
 	s.Equal(in.recvAcks, int32(numMessages))
 }
 
-func (s *StoreHostSuite) TestStoreHostManyManyExtents() {
+func (s *StoreHostSuite) _TestStoreHostManyManyExtents() {
 
 	var numExtents int
 
@@ -1708,7 +1708,7 @@ func (s *StoreHostSuite) TestStoreHostManyManyExtents() {
 	}
 }
 
-func (s *StoreHostSuite) TestStoreHostReplicateExtent() {
+func (s *StoreHostSuite) _TestStoreHostReplicateExtent() {
 
 	mode := AppendOnly // TimerQueue
 	dataSize := 1024
@@ -1883,7 +1883,7 @@ func (s *StoreHostSuite) TestStoreHostReplicateExtent() {
 	}
 }
 
-func (s *StoreHostSuite) TestStoreHostReplicateExtentResume() {
+func (s *StoreHostSuite) _TestStoreHostReplicateExtentResume() {
 
 	mode := AppendOnly // TimerQueue
 	dataSize := 1024
