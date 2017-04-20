@@ -31,6 +31,7 @@ import (
 	"github.com/stretchr/testify/suite"
 	"github.com/uber-common/bark"
 	"github.com/uber/cherami-server/common"
+	m "github.com/uber/cherami-thrift/.generated/go/metadata"
 )
 
 type (
@@ -74,9 +75,13 @@ func (s *DfddTestSuite) TestFailureDetection() {
 		s.rpm.NotifyListeners(common.InputServiceName, h, common.HostAddedEvent)
 		s.rpm.NotifyListeners(common.InputServiceName, h, common.HostRemovedEvent)
 	}
-	for _, h := range storeIDs {
+	for i, h := range storeIDs {
 		s.rpm.NotifyListeners(common.StoreServiceName, h, common.HostAddedEvent)
-		s.rpm.NotifyListeners(common.StoreServiceName, h, common.HostRemovedEvent)
+		if i == len(storeIDs)-1 {
+			s.dfdd.ReportHostGoingDown(common.StoreServiceName, h)
+		} else {
+			s.rpm.NotifyListeners(common.StoreServiceName, h, common.HostRemovedEvent)
+		}
 	}
 
 	cond := func() bool {
@@ -87,6 +92,15 @@ func (s *DfddTestSuite) TestFailureDetection() {
 	succ := common.SpinWaitOnCondition(cond, 10*time.Second)
 	s.True(succ, "Dfdd failed to detect failure within timeout")
 	s.Equal(0, s.eventPipeline.numStoreRemoteExtentReplicatorDownEvents(), "unexpected events generated")
+
+	// async, not guaranteed to change state immediately
+	s.rpm.NotifyListeners(common.StoreServiceName, storeIDs[2], common.HostRemovedEvent)
+	cond = func() bool {
+		s, _ := s.dfdd.GetHostState(common.StoreServiceName, storeIDs[2])
+		return s == dfddHostStateDown
+	}
+	succ = common.SpinWaitOnCondition(cond, 10*time.Second)
+	s.True(succ, "dfdd failed to mark host as down")
 
 	for _, h := range inHostIDs {
 		state, _ := s.dfdd.GetHostState(common.InputServiceName, h)
@@ -108,7 +122,6 @@ func (s *DfddTestSuite) TestFailureDetection() {
 		succ := common.SpinWaitOnCondition(cond, time.Second*10)
 		s.True(succ, "dfdd failed to remove store host entry after downToForgottenDuration")
 	}
-
 	// now test hostGoingDown state
 	s.rpm.NotifyListeners(common.InputServiceName, inHostIDs[0], common.HostAddedEvent)
 	s.rpm.NotifyListeners(common.StoreServiceName, storeIDs[0], common.HostAddedEvent)
@@ -129,11 +142,54 @@ func (s *DfddTestSuite) TestFailureDetection() {
 	s.True(succ, "dfdd failed to discover new hosts")
 
 	s.context.failureDetector = s.dfdd
-	succ = isInputGoingDown(s.context, inHostIDs[0])
+	succ = isDfddHostStatusGoingDown(s.context.failureDetector, common.InputServiceName, inHostIDs[0])
 	s.True(succ, "isInputGoingDown() failed")
+
+	succ = isDfddHostStatusGoingDown(s.context.failureDetector, common.StoreServiceName, storeIDs[0])
+	s.True(succ, "isStoreGoingDown() failed")
+
+	dstExtent := &m.DestinationExtent{
+		ExtentUUID: common.StringPtr(uuid.New()),
+		StoreUUIDs: []string{storeIDs[0]},
+	}
+
+	succ = areExtentStoresHealthy(s.context, dstExtent)
+	s.False(succ, "areExtentStoresHealthy check failed")
+
+	dstExtent.StoreUUIDs = []string{storeIDs[1]}
+	succ = areExtentStoresHealthy(s.context, dstExtent)
+	s.False(succ, "areExtentStoresHealthy check failed")
 
 	s.dfdd.Stop()
 	stateMachineTickerInterval = oldStateMachineInterval
+}
+
+func (s *DfddTestSuite) TestDfddStateToString() {
+	states := []dfddHostState{
+		dfddHostStateUnknown,
+		dfddHostStateUP,
+		dfddHostStateGoingDown,
+		dfddHostStateDown,
+		dfddHostStateForgotten,
+		dfddHostState(-1),
+		dfddHostState(128),
+	}
+	for _, st := range states {
+		switch st {
+		case dfddHostStateUnknown:
+			s.Equal("unknown", st.String())
+		case dfddHostStateUP:
+			s.Equal("up", st.String())
+		case dfddHostStateGoingDown:
+			s.Equal("goingDown", st.String())
+		case dfddHostStateDown:
+			s.Equal("down", st.String())
+		case dfddHostStateForgotten:
+			s.Equal("forgotten", st.String())
+		default:
+			s.Equal("invalid", st.String())
+		}
+	}
 }
 
 type testEventPipelineImpl struct {

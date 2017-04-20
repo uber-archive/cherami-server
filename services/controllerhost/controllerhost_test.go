@@ -64,6 +64,7 @@ type McpSuite struct {
 	inputPort      int
 	outputPort     int
 	storePort      int
+	dfdd           *dfddImpl
 	mClient        m.TChanMetadataService
 	mockReplicator *mockreplicator.MockTChanReplicator
 }
@@ -121,7 +122,20 @@ func (s *McpSuite) startController() {
 	context.channel = s.mcp.GetTChannel()
 	context.eventPipeline = NewEventPipeline(context, nEventPipelineWorkers)
 	context.eventPipeline.Start()
-	context.failureDetector = NewDfdd(s.mcp.context, common.NewRealTimeSource())
+	s.dfdd = NewDfdd(s.mcp.context, common.NewRealTimeSource()).(*dfddImpl)
+	context.failureDetector = s.dfdd
+
+	hosts, _ := s.mockrpm.GetHosts(common.InputServiceName)
+	for _, h := range hosts {
+		event := &common.RingpopListenerEvent{Key: h.UUID, Type: common.HostAddedEvent}
+		s.dfdd.handleHostAddedEvent(common.InputServiceName, event)
+	}
+	hosts, _ = s.mockrpm.GetHosts(common.StoreServiceName)
+	for _, h := range hosts {
+		event := &common.RingpopListenerEvent{Key: h.UUID, Type: common.HostAddedEvent}
+		s.dfdd.handleHostAddedEvent(common.StoreServiceName, event)
+	}
+
 	s.mcp.started = 1
 }
 

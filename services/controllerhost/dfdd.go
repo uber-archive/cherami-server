@@ -93,7 +93,16 @@ const (
 	dfddHostStateGoingDown
 	dfddHostStateDown
 	dfddHostStateForgotten
+	numDfddStates // must be the last member
 )
+
+var dfddStateNames = [numDfddStates]string{
+	"unknown",
+	"up",
+	"goingDown",
+	"down",
+	"forgotten",
+}
 
 // state that represents that the host is about to
 // go down for planned deployment or maintenance
@@ -307,6 +316,18 @@ func (dfdd *dfddImpl) handleHostGoingDownEvent(service string, event *common.Rin
 	copy := deepCopyMap(hosts)
 	copy[event.Key] = newDFDDHost(dfddHostStateGoingDown, dfdd.timeSource)
 	dfdd.putHosts(service, copy)
+
+	if service == common.StoreServiceName {
+		// When a store host is about to go down for deployment,
+		// we need to trigger draining of every OPEN extent. However,
+		// the store is still not *considered* down until its down
+		// in ringpop. Ideally, we need a StoreGoingDownEvent, but
+		// since the behavior is going to be the same as StoreFailedEvent,
+		// we simply enqueue a storeFailedEvent
+		if !dfdd.context.eventPipeline.Add(NewStoreHostFailedEvent(event.Key)) {
+			dfdd.context.log.WithField(common.TagEvent, event).Error("failed to enqueue event after store reported as GoingDown")
+		}
+	}
 }
 
 func (dfdd *dfddImpl) handleListenerEvent(service string, event *common.RingpopListenerEvent) {
@@ -342,11 +363,23 @@ func (dfdd *dfddImpl) putHosts(service string, hosts map[string]dfddHost) {
 	}
 }
 
+func isDfddHostStatusGoingDown(dfdd Dfdd, service string, hostID string) bool {
+	state, _ := dfdd.GetHostState(service, hostID)
+	return state == dfddHostStateGoingDown
+}
+
 func newDFDDHost(state dfddHostState, timeSource common.TimeSource) dfddHost {
 	return dfddHost{
 		state:               state,
 		lastStateChangeTime: timeSource.Now().UnixNano(),
 	}
+}
+
+func (state dfddHostState) String() string {
+	if state < 0 || state >= numDfddStates {
+		return "invalid"
+	}
+	return dfddStateNames[state]
 }
 
 // creates a new map and copies the key/values from the
