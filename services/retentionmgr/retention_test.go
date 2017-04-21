@@ -73,21 +73,21 @@ func (s *RetentionMgrSuite) TearDownTest() {
 func (s *RetentionMgrSuite) TestRetentionManager() {
 
 	// Test cases
-	// DEST2,EXT1: minAckAddr < hardRetentionAddr -> retentionAddr = hardRetentionAddr
-	// DEST2,EXT2: softRetentionAddr < minAckAddr -> retentionAddr = softRetentionAddr
-	// DEST2,EXT3: hardRetentionAddr < minAckAddr < softRetentionAddr -> retentionAddr = minAckAddr
-	// DEST2,EXT31: hardRetentionAddr < minAckAddr < softRetentionAddr but is multi_zone(extent in source zone) -> retentionAddr = hardRetentionAddr
-	// DEST2,EXT32: hardRetentionAddr < minAckAddr < softRetentionAddr but is multi_zone(extent in remote zone) -> retentionAddr = minAckAddr
-	// DEST2,EXT4: minAckAddr < softRetentionAddr; softRetentionAddr == seal -> retentionAddr = minAckAddr
-	// DEST2,EXT5: minAckAddr == seal; softRetentionAddr == seal -> retentionAddr = seal (and delete)
-	// DEST2,EXT6: minAckAddr == seal; softRetentionAddr != seal -> retentionAddr = softRetentionAddr
-	// DEST2,EXT7: deleted extent -> don't process
-	// DEST2,EXT8:
-	// DEST2,EXT9:
-	// DEST2,EXTA: test DeleteConsumerGroupExtent returns EntityNotExistsError
-	// DEST2,EXTE0: test extent that is 'active', but hardRetentionConsumed = true (should not move to 'consumed')
-	// DEST2,EXTE1: test extent that is 'sealed', but hardRetentionConsumed = true (should move to 'consumed')
-	// DEST2,EXTE2: test extent that is 'sealed', but softRetentionConsumed = true (should move to 'consumed')
+	// DEST1,EXT1: minAckAddr < hardRetentionAddr -> retentionAddr = hardRetentionAddr
+	// DEST1,EXT2: softRetentionAddr < minAckAddr -> retentionAddr = softRetentionAddr
+	// DEST1,EXT3: hardRetentionAddr < minAckAddr < softRetentionAddr -> retentionAddr = minAckAddr
+	// DEST1,EXT31: hardRetentionAddr < minAckAddr < softRetentionAddr but is multi_zone(extent in source zone) -> retentionAddr = hardRetentionAddr
+	// DEST1,EXT32: hardRetentionAddr < minAckAddr < softRetentionAddr but is multi_zone(extent in remote zone) -> retentionAddr = minAckAddr
+	// DEST1,EXT4: minAckAddr < softRetentionAddr; softRetentionAddr == seal -> retentionAddr = minAckAddr
+	// DEST1,EXT5: minAckAddr == seal; softRetentionAddr == seal -> retentionAddr = seal (and delete)
+	// DEST1,EXT6: minAckAddr == seal; softRetentionAddr != seal -> retentionAddr = softRetentionAddr
+	// DEST1,EXT7: deleted extent -> don't process
+	// DEST1,EXT8:
+	// DEST1,EXT9:
+	// DEST1,EXTA: test DeleteConsumerGroupExtent returns EntityNotExistsError
+	// DEST1,EXTE0: test extent that is 'active', but hardRetentionConsumed = true (should not move to 'consumed')
+	// DEST1,EXTE1: test extent that is 'sealed', but hardRetentionConsumed = true (should move to 'consumed')
+	// DEST1,EXTE2: test extent that is 'sealed', but softRetentionConsumed = true (should move to 'consumed')
 
 	softRetSecs, hardRetSecs := int32(10), int32(20)
 
@@ -108,107 +108,60 @@ func (s *RetentionMgrSuite) TestRetentionManager() {
 	// fmt.Printf("addrPreHard=%v addrePostHard=%v\n", addrPreHard, addrPostHard)
 	// fmt.Printf("addrSeal=%v", addrSeal)
 
-	destinations := []*destinationInfo{
-		{id: "DEST2", status: shared.DestinationStatus_ENABLED, softRetention: softRetSecs, hardRetention: hardRetSecs, isMultiZone: true},
-	}
+	destinations := []*destinationInfo{{
+		id:            "DEST1",
+		status:        shared.DestinationStatus_ENABLED,
+		softRetention: softRetSecs,
+		hardRetention: hardRetSecs,
+		isMultiZone:   true,
+	}}
 
-	extStoreMap := map[extentID][]storehostID{
-		"EXT1":  {"STOR1", "STOR2", "STOR3"},
-		"EXT2":  {"STOR4", "STOR5", "STOR6"},
-		"EXT3":  {"STOR1", "STOR3", "STOR5"},
-		"EXT31": {"STOR1", "STOR3", "STOR5"},
-		"EXT32": {"STOR1", "STOR3", "STOR5"},
-		"EXT4":  {"STOR2", "STOR4", "STOR6"},
-		"EXT5":  {"STOR2", "STOR3", "STOR4"},
-		"EXT6":  {"STOR3", "STOR5", "STOR4"},
-		"EXT61": {"STOR3", "STOR5", "STOR4"},
-		"EXT7":  {"STOR7", "STOR6", "STOR5"},
-		"EXT8":  {"STOR3", "STOR4", "STOR6"},
-		"EXT9":  {"STOR1", "STOR2", "STOR5"},
-		"EXTA":  {"STOR2", "STOR3", "STOR4"},
-		"EXTB":  {"STOR2", "STOR3", "STOR4"},
-		"EXTC":  {"STOR2", "STOR4", "STOR6"},
-		"EXTD1": {"STOR2", "STOR4", "STOR6"},
-		"EXTE0": {"STOR2", "STOR3", "STOR4"},
-		"EXTE1": {"STOR2", "STOR3", "STOR4"},
-		"EXTE2": {"STOR2", "STOR3", "STOR4"},
-		"EXTE3": {"STOR2", "STOR3", "STOR4"},
-		"EXTE4": {"STOR2", "STOR3", "STOR4"},
-		"EXTm":  {"STOR3"}, // Single CG Visible
-		"EXTn":  {"STOR7"}, // Single CG Visible
-	}
-
-	extStatusMap := map[extentID]shared.ExtentStatus{
-		"EXT1":  shared.ExtentStatus_OPEN,
-		"EXT2":  shared.ExtentStatus_OPEN,
-		"EXT3":  shared.ExtentStatus_OPEN,
-		"EXT31": shared.ExtentStatus_OPEN,
-		"EXT32": shared.ExtentStatus_OPEN,
-		"EXT4":  shared.ExtentStatus_OPEN,
-		"EXT5":  shared.ExtentStatus_SEALED,
-		"EXT6":  shared.ExtentStatus_CONSUMED,
-		"EXT61": shared.ExtentStatus_CONSUMED,
-		"EXT7":  shared.ExtentStatus_DELETED,
-		"EXT8":  shared.ExtentStatus_OPEN,
-		"EXT9":  shared.ExtentStatus_SEALED,
-		"EXTA":  shared.ExtentStatus_SEALED,
-		"EXTB":  shared.ExtentStatus_SEALED,
-		"EXTC":  shared.ExtentStatus_OPEN,
-		"EXTD":  shared.ExtentStatus_SEALED,
-		"EXTD1": shared.ExtentStatus_SEALED,
-		"EXTE0": shared.ExtentStatus_OPEN,
-		"EXTE1": shared.ExtentStatus_SEALED,
-		"EXTE2": shared.ExtentStatus_SEALED,
-		"EXTE3": shared.ExtentStatus_SEALED,
-		"EXTE4": shared.ExtentStatus_SEALED,
-		"EXTm":  shared.ExtentStatus_SEALED, // Merged DLQ extents should always be sealed
-		"EXTn":  shared.ExtentStatus_SEALED, //
-	}
-
-	extSingleCGVisibilityMap := map[extentID]consumerGroupID{
-		"EXTm": consumerGroupID("CGm"),
-		"EXTn": consumerGroupID("CGm"),
+	extInfoMap := map[extentID]extentInfo{
+		"EXT1":  {status: shared.ExtentStatus_OPEN, storehosts: []storehostID{"STOR1", "STOR2", "STOR3"}, originZone: "zone2"},
+		"EXT2":  {status: shared.ExtentStatus_OPEN, storehosts: []storehostID{"STOR4", "STOR5", "STOR6"}, originZone: "zone2"},
+		"EXT3":  {status: shared.ExtentStatus_OPEN, storehosts: []storehostID{"STOR1", "STOR3", "STOR5"}, originZone: "zone2"},
+		"EXT31": {status: shared.ExtentStatus_OPEN, storehosts: []storehostID{"STOR1", "STOR3", "STOR5"}}, // no origin zone
+		"EXT32": {status: shared.ExtentStatus_OPEN, storehosts: []storehostID{"STOR1", "STOR3", "STOR5"}, originZone: "zone2"},
+		"EXT4":  {status: shared.ExtentStatus_OPEN, storehosts: []storehostID{"STOR2", "STOR4", "STOR6"}, originZone: "zone2"},
+		"EXT5":  {status: shared.ExtentStatus_SEALED, storehosts: []storehostID{"STOR2", "STOR3", "STOR4"}, originZone: "zone2"},
+		"EXT6":  {status: shared.ExtentStatus_CONSUMED, storehosts: []storehostID{"STOR3", "STOR5", "STOR4"}, originZone: "zone2"},
+		// 'EXT61' (below) is like EXT6, except the statusUpdatedTime is beyond the ExtentDeleteDeferPeriod, causing it to be deleted.
+		"EXT61": {status: shared.ExtentStatus_CONSUMED, statusUpdatedTime: time.Now().Add(-2 * time.Hour), storehosts: []storehostID{"STOR3", "STOR5", "STOR4"}, originZone: "zone2"},
+		"EXT7":  {status: shared.ExtentStatus_DELETED, storehosts: []storehostID{"STOR7", "STOR6", "STOR5"}, originZone: "zone2"},
+		"EXT8":  {status: shared.ExtentStatus_OPEN, storehosts: []storehostID{"STOR3", "STOR4", "STOR6"}, originZone: "zone2"},
+		"EXT9":  {status: shared.ExtentStatus_SEALED, storehosts: []storehostID{"STOR1", "STOR2", "STOR5"}, originZone: "zone2"},
+		"EXTA":  {status: shared.ExtentStatus_SEALED, storehosts: []storehostID{"STOR2", "STOR3", "STOR4"}, originZone: "zone2"},
+		"EXTB":  {status: shared.ExtentStatus_SEALED, storehosts: []storehostID{"STOR2", "STOR3", "STOR4"}, originZone: "zone2"},
+		"EXTC":  {status: shared.ExtentStatus_OPEN, storehosts: []storehostID{"STOR2", "STOR4", "STOR6"}, originZone: "zone2"},
+		"EXTD1": {status: shared.ExtentStatus_SEALED, storehosts: []storehostID{"STOR2", "STOR4", "STOR6"}, originZone: "zone2"},
+		"EXTE0": {status: shared.ExtentStatus_OPEN, storehosts: []storehostID{"STOR2", "STOR3", "STOR4"}, originZone: "zone2"},
+		"EXTE1": {status: shared.ExtentStatus_SEALED, storehosts: []storehostID{"STOR2", "STOR3", "STOR4"}, originZone: "zone2"},
+		"EXTE2": {status: shared.ExtentStatus_SEALED, storehosts: []storehostID{"STOR2", "STOR3", "STOR4"}, originZone: "zone2"},
+		"EXTE3": {status: shared.ExtentStatus_SEALED, storehosts: []storehostID{"STOR2", "STOR3", "STOR4"}, originZone: "zone2"},
+		"EXTE4": {status: shared.ExtentStatus_SEALED, storehosts: []storehostID{"STOR2", "STOR3", "STOR4"}, originZone: "zone2"},
+		"EXTk1": {status: shared.ExtentStatus_OPEN, storehosts: []storehostID{common.KafkaPhantomExtentStorehost}, originZone: "zone2", kafkaPhantomExtent: true},   // kafka phantom extent
+		"EXTk2": {status: shared.ExtentStatus_SEALED, storehosts: []storehostID{common.KafkaPhantomExtentStorehost}, originZone: "zone2", kafkaPhantomExtent: true}, // kafka phantom extent
+		"EXTm":  {status: shared.ExtentStatus_SEALED, singleCGVisibility: "CGm", storehosts: []storehostID{"STOR3"}, originZone: "zone2"},                           // Merged DLQ extent should always be sealed
+		"EXTn":  {status: shared.ExtentStatus_SEALED, singleCGVisibility: "CGm", storehosts: []storehostID{"STOR7"}, originZone: "zone2"},
 	}
 
 	var extents []*extentInfo
 
-	for ext, storehosts := range extStoreMap {
+	for ext, xi := range extInfoMap {
 
-		statusUpdatedTime := time.Unix(0, tNow).Add(-55 * time.Minute)
-
-		// 'EXT61' is like EXT6, except the statusUpdatedTime is beyond the ExtentDeleteDeferPeriod,
-		// causing it to be deleted.
-		if ext == "EXT61" {
-			statusUpdatedTime = time.Unix(0, tNow).Add(-2 * time.Hour)
+		extInfo := xi
+		extInfo.id = ext
+		// if statusUpdatedTime not set, then default to  55 mins before now
+		if extInfo.statusUpdatedTime.IsZero() {
+			extInfo.statusUpdatedTime = time.Unix(0, tNow).Add(-55 * time.Minute)
 		}
 
-		extents = append(extents, &extentInfo{
-			id:                 extentID(ext),
-			status:             extStatusMap[ext],
-			statusUpdatedTime:  statusUpdatedTime,
-			storehosts:         storehosts,
-			singleCGVisibility: extSingleCGVisibilityMap[ext],
-		})
+		extents = append(extents, &extInfo)
+		s.metadata.On("GetExtentInfo", destinationID("DEST1"), ext).Return(&extInfo, nil).Once()
 	}
 
 	s.metadata.On("GetDestinations").Return(destinations).Once()
-	s.metadata.On("GetExtents", destinationID("DEST2")).Return(extents).Once()
-
-	for ext, storehosts := range extStoreMap {
-		originZone := `zone2`
-		if ext == "EXT31" {
-			originZone = ``
-		}
-
-		extInfo := &extentInfo{
-			id:                 extentID(ext),
-			status:             extStatusMap[ext],
-			storehosts:         storehosts,
-			singleCGVisibility: extSingleCGVisibilityMap[ext],
-			originZone:         originZone,
-		}
-		s.metadata.On("GetExtentInfo", destinationID("DEST2"), extentID(ext)).Return(extInfo, nil).Once()
-	}
+	s.metadata.On("GetExtents", destinationID("DEST1")).Return(extents).Once()
 
 	consumerGroups := []*consumerGroupInfo{
 		{id: "CG1", status: shared.ConsumerGroupStatus_ENABLED},
@@ -217,7 +170,7 @@ func (s *RetentionMgrSuite) TestRetentionManager() {
 		{id: "CGm", status: shared.ConsumerGroupStatus_ENABLED}, // Single CG Visible consumer group
 	}
 
-	s.metadata.On("GetConsumerGroups", destinationID("DEST2")).Return(consumerGroups)
+	s.metadata.On("GetConsumerGroups", destinationID("DEST1")).Return(consumerGroups)
 
 	type gaftRet struct {
 		addr   int64
@@ -248,6 +201,8 @@ func (s *RetentionMgrSuite) TestRetentionManager() {
 		"EXTE2": {"STOR2": {addrBegin, false}, "STOR3": {addrBegin, false}, "STOR4": {addrBegin, false}},
 		"EXTE3": {"STOR2": {addrBegin, false}, "STOR3": {addrBegin, false}, "STOR4": {addrBegin, false}},
 		"EXTE4": {"STOR2": {addrBegin, false}, "STOR3": {addrBegin, false}, "STOR4": {addrBegin, false}},
+		"EXTk1": {common.KafkaPhantomExtentStorehost: {addrBegin, false}},
+		"EXTk2": {common.KafkaPhantomExtentStorehost: {addrBegin, false}},
 		"EXTm":  {"STOR3": {addrHard - 100, true}},
 		"EXTn":  {"STOR7": {addrHard - 100, true}},
 	}
@@ -276,6 +231,8 @@ func (s *RetentionMgrSuite) TestRetentionManager() {
 		"EXTE2": {"STOR2": {addrBegin, false}, "STOR3": {addrBegin, false}, "STOR4": {addrBegin, true}},
 		"EXTE3": {"STOR2": {addrBegin, false}, "STOR3": {addrBegin, false}, "STOR4": {addrBegin, false}},
 		"EXTE4": {"STOR2": {addrBegin, false}, "STOR3": {addrBegin, false}, "STOR4": {addrBegin, true}},
+		"EXTk1": {common.KafkaPhantomExtentStorehost: {addrBegin, false}},
+		"EXTk2": {common.KafkaPhantomExtentStorehost: {addrBegin, false}},
 		"EXTm":  {"STOR3": {addrSoft, true}},
 		"EXTn":  {"STOR7": {addrSoft, true}},
 	}
@@ -303,8 +260,10 @@ func (s *RetentionMgrSuite) TestRetentionManager() {
 		"EXTE2": {"CGm": addrBegin, "CG1": addrBegin, "CG2": addrBegin, "CG3": addrBegin},
 		"EXTE3": {"CGm": addrBegin, "CG1": addrBegin, "CG2": addrSeal, "CG3": addrBegin},
 		"EXTE4": {"CGm": addrSeal, "CG1": addrBegin, "CG2": addrBegin, "CG3": addrBegin},
-		"EXTm":  {"CGm": addrPostSoft},
-		"EXTn":  {"CGm": addrPreSoft},
+		// "EXTk1": // kafka phantom extents should not see a GetAckLevel call
+		// "EXTk2":
+		"EXTm": {"CGm": addrPostSoft},
+		"EXTn": {"CGm": addrPreSoft},
 	}
 
 	for ext, retMap := range gaftHard {
@@ -321,20 +280,21 @@ func (s *RetentionMgrSuite) TestRetentionManager() {
 
 	for ext, ackMap := range gal {
 		for cg, addr := range ackMap {
-			s.metadata.On("GetAckLevel", destinationID("DEST2"), extentID(ext), consumerGroupID(cg)).Return(addr, nil).Once()
+			s.metadata.On("GetAckLevel", destinationID("DEST1"), extentID(ext), consumerGroupID(cg)).Return(addr, nil).Once()
 		}
 	}
 
-	s.metadata.On("MarkExtentConsumed", destinationID("DEST2"), extentID("EXT5")).Return(nil).Once()
-	s.metadata.On("MarkExtentConsumed", destinationID("DEST2"), extentID("EXT9")).Return(nil).Once()
-	s.metadata.On("MarkExtentConsumed", destinationID("DEST2"), extentID("EXTA")).Return(nil).Once()
-	s.metadata.On("MarkExtentConsumed", destinationID("DEST2"), extentID("EXTB")).Return(nil).Once()
-	s.metadata.On("MarkExtentConsumed", destinationID("DEST2"), extentID("EXTD")).Return(nil).Once()
-	s.metadata.On("MarkExtentConsumed", destinationID("DEST2"), extentID("EXTD1")).Return(nil).Once()
-	s.metadata.On("MarkExtentConsumed", destinationID("DEST2"), extentID("EXTE1")).Return(nil).Once()
-	s.metadata.On("MarkExtentConsumed", destinationID("DEST2"), extentID("EXTE4")).Return(nil).Once()
-	s.metadata.On("MarkExtentConsumed", destinationID("DEST2"), extentID("EXTm")).Return(nil).Once()
-	s.metadata.On("MarkExtentConsumed", destinationID("DEST2"), extentID("EXTn")).Return(nil).Once()
+	s.metadata.On("MarkExtentConsumed", destinationID("DEST1"), extentID("EXT5")).Return(nil).Once()
+	s.metadata.On("MarkExtentConsumed", destinationID("DEST1"), extentID("EXT9")).Return(nil).Once()
+	s.metadata.On("MarkExtentConsumed", destinationID("DEST1"), extentID("EXTA")).Return(nil).Once()
+	s.metadata.On("MarkExtentConsumed", destinationID("DEST1"), extentID("EXTB")).Return(nil).Once()
+	s.metadata.On("MarkExtentConsumed", destinationID("DEST1"), extentID("EXTD")).Return(nil).Once()
+	s.metadata.On("MarkExtentConsumed", destinationID("DEST1"), extentID("EXTD1")).Return(nil).Once()
+	s.metadata.On("MarkExtentConsumed", destinationID("DEST1"), extentID("EXTE1")).Return(nil).Once()
+	s.metadata.On("MarkExtentConsumed", destinationID("DEST1"), extentID("EXTE4")).Return(nil).Once()
+	s.metadata.On("MarkExtentConsumed", destinationID("DEST1"), extentID("EXTm")).Return(nil).Once()
+	s.metadata.On("MarkExtentConsumed", destinationID("DEST1"), extentID("EXTn")).Return(nil).Once()
+	s.metadata.On("MarkExtentConsumed", destinationID("DEST1"), extentID("EXTk2")).Return(nil).Once()
 
 	// expected retention addresses
 	purgeAddrMap := map[extentID]int64{
@@ -345,7 +305,7 @@ func (s *RetentionMgrSuite) TestRetentionManager() {
 		"EXT32": addrPreSoft,
 		"EXT4":  addrPreSoft,
 		"EXT5":  addrSoft + 11,
-		// "EXT6": addrSeal,
+		// "EXT6": addrSeal, // EXT6 should not see a delete extent, unlike EXT6 below
 		"EXT61": addrSeal,
 		// "EXT7": ,
 		"EXT8":  addrSoft + 51,
@@ -355,13 +315,14 @@ func (s *RetentionMgrSuite) TestRetentionManager() {
 		"EXTC":  addrSoft,
 		"EXTD":  addrSoft,
 		"EXTD1": addrHard,
-		"EXTm":  addrSoft,
-		"EXTn":  addrPreSoft,
+		// "EXTk": , // kafka phantom extents that are OPEN should not see a PurgeAddress
+		"EXTm": addrSoft,
+		"EXTn": addrPreSoft,
 	}
 
 	for ext, addr := range purgeAddrMap {
-		for i := range extStoreMap[ext] {
-			s.storehost.On("PurgeMessages", extStoreMap[ext][i], ext, addr).Return(addr+1, nil).Once()
+		for _, storeID := range extInfoMap[ext].storehosts {
+			s.storehost.On("PurgeMessages", storeID, ext, addr).Return(addr+1, nil).Once()
 		}
 	}
 
@@ -375,9 +336,9 @@ func (s *RetentionMgrSuite) TestRetentionManager() {
 	}
 
 	// // DeleteConsumerGroupExtent on EXTA got an EntityNotExistsError, but it should still be deleted; while EXTB shouldn't
-	// s.metadata.On("DeleteExtent", destinationID("DEST2"), extentID("EXTA")).Return(nil).Once()
+	// s.metadata.On("DeleteExtent", destinationID("DEST1"), extentID("EXTA")).Return(nil).Once()
 
-	s.metadata.On("DeleteExtent", destinationID("DEST2"), extentID("EXT61")).Return(nil).Once()
+	s.metadata.On("DeleteExtent", destinationID("DEST1"), extentID("EXT61")).Return(nil).Once()
 
 	var retMgr *RetentionManager
 
@@ -400,60 +361,102 @@ func (s *RetentionMgrSuite) TestRetentionManagerOnDeletedDestinations() {
 
 	destinations := []*destinationInfo{
 		{id: "DEST1", status: shared.DestinationStatus_DELETING},
+		{id: "DEST2", status: shared.DestinationStatus_DELETING},
 	}
 
-	consumerGroups := []*consumerGroupInfo{
+	extInfoMapDEST1 := map[extentID]extentInfo{
+		"EXT1": {status: shared.ExtentStatus_DELETED, storehosts: []storehostID{"STOR1", "STOR2", "STOR3"}},
+		"EXT2": {status: shared.ExtentStatus_SEALED, storehosts: []storehostID{"STOR1", "STOR2", "STOR3"}},
+		"EXT3": {status: shared.ExtentStatus_CONSUMED, kafkaPhantomExtent: true, storehosts: []storehostID{common.KafkaPhantomExtentStorehost}},
+		"EXT4": {status: shared.ExtentStatus_SEALED, kafkaPhantomExtent: true, storehosts: []storehostID{common.KafkaPhantomExtentStorehost}},
+	}
+
+	extInfoMapDEST2 := map[extentID]extentInfo{
+		"EXT5": {status: shared.ExtentStatus_DELETED, storehosts: []storehostID{common.KafkaPhantomExtentStorehost}},
+		"EXT6": {status: shared.ExtentStatus_CONSUMED, kafkaPhantomExtent: true, storehosts: []storehostID{common.KafkaPhantomExtentStorehost}},
+		"EXT7": {status: shared.ExtentStatus_SEALED, kafkaPhantomExtent: true, storehosts: []storehostID{common.KafkaPhantomExtentStorehost}},
+	}
+
+	consumerGroupsDEST1 := []*consumerGroupInfo{
 		{id: "CG1", status: shared.ConsumerGroupStatus_DELETED},
 		{id: "CG2", status: shared.ConsumerGroupStatus_DELETED},
 		{id: "CG3", status: shared.ConsumerGroupStatus_DELETED},
 	}
 
-	extStoreMap := map[extentID][]storehostID{
-		"EXT1": {"STOR1", "STOR2", "STOR3"},
-		"EXT2": {"STOR1", "STOR2", "STOR3"},
+	consumerGroupsDEST2 := []*consumerGroupInfo{
+		{id: "CG4", status: shared.ConsumerGroupStatus_DELETED},
+		{id: "CG5", status: shared.ConsumerGroupStatus_ENABLED},
+		{id: "CG6", status: shared.ConsumerGroupStatus_DELETED},
 	}
 
-	extents := []*extentInfo{
-		{
-			id:         "EXT1",
-			status:     shared.ExtentStatus_DELETED,
-			storehosts: []storehostID{"STOR1", "STOR2", "STOR3"},
-		},
-		{
-			id:         "EXT2",
-			status:     shared.ExtentStatus_SEALED,
-			storehosts: []storehostID{"STOR1", "STOR2", "STOR3"},
-		},
-	}
-
-	s.metadata.On("GetDestinations").Return(destinations).Once()
-	s.metadata.On("GetExtents", destinationID("DEST1")).Return(extents).Once()
-
-	for _, extInfo := range extents {
-		s.metadata.On("GetExtentInfo", destinationID("DEST1"), extentID(extInfo.id)).Return(extInfo, nil).Once()
-	}
-
-	s.metadata.On("GetConsumerGroups", destinationID("DEST1")).Return(consumerGroups)
-
-	// expected retention addresses
-	purgeAddrMap := map[extentID]int64{
-		"EXT1": int64(store.ADDR_SEAL),
-		"EXT2": int64(store.ADDR_SEAL),
-	}
-
-	for ext, addr := range purgeAddrMap {
-		for i := range extStoreMap[ext] {
-			s.storehost.On("PurgeMessages", extStoreMap[ext][i], ext, addr).Return(addr, nil).Once()
+	var extentsDEST1 []*extentInfo
+	for ext, xi := range extInfoMapDEST1 {
+		extInfo := xi
+		extInfo.id = ext
+		extentsDEST1 = append(extentsDEST1, &extInfo)
+		if xi.status != shared.ExtentStatus_DELETED {
+			s.metadata.On("GetExtentInfo", destinationID("DEST1"), ext).Return(&extInfo, nil).Once()
 		}
 	}
 
-	for _, cg := range consumerGroups {
-		s.metadata.On("DeleteConsumerGroupExtent", consumerGroupID(cg.id), extentID("EXT1")).Return(nil).Once()
-		s.metadata.On("DeleteConsumerGroupExtent", consumerGroupID(cg.id), extentID("EXT2")).Return(nil).Once()
+	var extentsDEST2 []*extentInfo
+	for ext, xi := range extInfoMapDEST2 {
+		extInfo := xi
+		extInfo.id = ext
+		extentsDEST2 = append(extentsDEST2, &extInfo)
+		if xi.status != shared.ExtentStatus_DELETED {
+			s.metadata.On("GetExtentInfo", destinationID("DEST2"), ext).Return(&extInfo, nil).Once()
+		}
 	}
 
-	s.metadata.On("DeleteExtent", destinationID("DEST1"), extentID("EXT1")).Return(nil).Once()
+	s.metadata.On("GetDestinations").Return(destinations).Once()
+	s.metadata.On("GetExtents", destinationID("DEST1")).Return(extentsDEST1).Once()
+	s.metadata.On("GetConsumerGroups", destinationID("DEST1")).Return(consumerGroupsDEST1)
+
+	s.metadata.On("GetExtents", destinationID("DEST2")).Return(extentsDEST2).Once()
+	s.metadata.On("GetConsumerGroups", destinationID("DEST2")).Return(consumerGroupsDEST2)
+
+	s.storehost.On("GetAddressFromTimestamp", storehostID(common.KafkaPhantomExtentStorehost), mock.AnythingOfType("extentID"), mock.AnythingOfType("int64")).Return(int64(store.ADDR_BEGIN), false, nil)
+	s.storehost.On("PurgeMessages", storehostID(common.KafkaPhantomExtentStorehost), mock.AnythingOfType("extentID"), mock.AnythingOfType("int64")).Return(int64(store.ADDR_BEGIN), nil)
+
+	// expected retention addresses
+	purgeAddrMap := map[extentID]int64{
+		// "EXT1": int64(store.ADDR_SEAL),
+		"EXT2": int64(store.ADDR_SEAL),
+		"EXT3": int64(store.ADDR_SEAL),
+		"EXT4": int64(store.ADDR_SEAL),
+	}
+
+	for ext, addr := range purgeAddrMap {
+		for _, storeID := range extInfoMapDEST1[ext].storehosts {
+			s.storehost.On("PurgeMessages", storeID, ext, addr).Return(addr+1, nil).Once()
+		}
+	}
+
+	for _, cg := range consumerGroupsDEST1 {
+		s.metadata.On("DeleteConsumerGroupExtent", consumerGroupID(cg.id), extentID("EXT1")).Return(nil).Once()
+		s.metadata.On("DeleteConsumerGroupExtent", consumerGroupID(cg.id), extentID("EXT2")).Return(nil).Once()
+		s.metadata.On("DeleteConsumerGroupExtent", consumerGroupID(cg.id), extentID("EXT3")).Return(nil).Once()
+		s.metadata.On("DeleteConsumerGroupExtent", consumerGroupID(cg.id), extentID("EXT4")).Return(nil).Once()
+	}
+
+	for _, cg := range consumerGroupsDEST2 {
+		s.metadata.On("DeleteConsumerGroupExtent", consumerGroupID(cg.id), extentID("EXT5")).Return(nil).Once()
+		s.metadata.On("DeleteConsumerGroupExtent", consumerGroupID(cg.id), extentID("EXT6")).Return(nil).Once()
+		s.metadata.On("DeleteConsumerGroupExtent", consumerGroupID(cg.id), extentID("EXT7")).Return(nil).Once()
+	}
+
+	// s.metadata.On("DeleteExtent", destinationID("DEST1"), extentID("EXT1")).Return(nil).Once()
 	s.metadata.On("DeleteExtent", destinationID("DEST1"), extentID("EXT2")).Return(nil).Once()
+	s.metadata.On("DeleteExtent", destinationID("DEST1"), extentID("EXT3")).Return(nil).Once()
+	s.metadata.On("DeleteExtent", destinationID("DEST1"), extentID("EXT4")).Return(nil).Once()
+
+	// DEST2/EXT7 (which was SEALED) should be moved to CONSUMED
+	s.metadata.On("MarkExtentConsumed", destinationID("DEST2"), extentID("EXT7")).Return(nil).Once()
+
+	// DEST2/EXT6&EXT7 (which are CONSUMED) should be DELETED
+	s.metadata.On("DeleteExtent", destinationID("DEST2"), extentID("EXT6")).Return(nil).Once()
+	s.metadata.On("DeleteExtent", destinationID("DEST2"), extentID("EXT7")).Return(nil).Once()
 
 	var retMgr *RetentionManager
 

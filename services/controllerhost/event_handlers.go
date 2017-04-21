@@ -828,6 +828,20 @@ func (event *ExtentDownEvent) Handle(context *Context) error {
 			}
 			event.inputID = stats.GetExtent().GetInputHostUUID()
 			event.storeIDs = stats.GetExtent().GetStoreUUIDs()
+
+			// if this is a Kafka phantom extent (with phantom stores), skip over store
+			// operations and jump directly to sealing extent in metadata. we expect to
+			// get here (ie, get an extent-down event for a kafka phantom extent) only
+			// when the kafka destination is being deleted.
+			if common.AreKafkaPhantomStores(event.storeIDs) {
+				event.state = updateMetadataState
+				context.log.WithFields(bark.Fields{
+					common.TagDst: common.FmtDst(event.dstID),
+					common.TagExt: common.FmtExt(event.extentID),
+				}).Info("ExtentDownEvent on a Kafka phantom extent")
+				continue
+			}
+
 			event.state = drainExtentState
 
 		case drainExtentState:

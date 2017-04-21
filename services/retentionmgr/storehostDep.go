@@ -41,6 +41,11 @@ func newStorehostDep(clientFactory common.ClientFactory, log bark.Logger) storeh
 
 func (t *storehostDepImpl) GetAddressFromTimestamp(storeID storehostID, extID extentID, timestamp int64) (addr int64, sealed bool, err error) {
 
+	// no-op GetAddressFromTimestamp calls to kafka phantom-stores
+	if string(storeID) == common.KafkaPhantomExtentStorehost {
+		return int64(store.ADDR_BEGIN), false, nil
+	}
+
 	s, _, err := t.clientFactory.GetThriftStoreClientUUID(string(storeID), string(storeID))
 
 	if err != nil {
@@ -81,6 +86,11 @@ func (t *storehostDepImpl) GetAddressFromTimestamp(storeID storehostID, extID ex
 }
 
 func (t *storehostDepImpl) PurgeMessages(storeID storehostID, extID extentID, retentionAddr int64) (doneAddr int64, err error) {
+
+	// no-op PurgeMessages calls to kafka phantom-stores
+	if string(storeID) == common.KafkaPhantomExtentStorehost {
+		return int64(store.ADDR_BEGIN), nil
+	}
 
 	s, _, err := t.clientFactory.GetThriftStoreClientUUID(string(storeID), string(storeID))
 
