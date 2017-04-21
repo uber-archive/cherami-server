@@ -72,12 +72,12 @@ func (t *metadataDepImpl) GetDestinations() (destinations []*destinationInfo) {
 
 			dest := &destinationInfo{
 				id:            destinationID(destDesc.GetDestinationUUID()),
+				destType:      destDesc.GetType(),
 				status:        destDesc.GetStatus(),
 				softRetention: destDesc.GetConsumedMessagesRetention(),
 				hardRetention: destDesc.GetUnconsumedMessagesRetention(),
-				// type: mDestDesc.GetType(),
-				path:        destDesc.GetPath(),
-				isMultiZone: destDesc.GetIsMultiZone(),
+				path:          destDesc.GetPath(),
+				isMultiZone:   destDesc.GetIsMultiZone(),
 			}
 
 			destinations = append(destinations, dest)
@@ -130,19 +130,22 @@ func (t *metadataDepImpl) GetExtents(destID destinationID) (extents []*extentInf
 		for _, extStats := range resp.GetExtentStatsList() {
 
 			extent := extStats.GetExtent()
+
 			storeUUIDs := extent.GetStoreUUIDs()
+			storehosts := make([]storehostID, 0, len(storeUUIDs))
+
+			for _, storeUUID := range storeUUIDs {
+				storehosts = append(storehosts, storehostID(storeUUID))
+			}
 
 			extInfo := &extentInfo{
 				id:                 extentID(extent.GetExtentUUID()),
 				status:             extStats.GetStatus(),
 				statusUpdatedTime:  time.Unix(0, extStats.GetStatusUpdatedTimeMillis()*int64(time.Millisecond)),
-				storehosts:         make([]storehostID, 0, len(storeUUIDs)),
+				storehosts:         storehosts,
 				singleCGVisibility: consumerGroupID(extStats.GetConsumerGroupVisibility()),
 				originZone:         extStats.GetExtent().GetOriginZone(),
-			}
-
-			for j := range storeUUIDs {
-				extInfo.storehosts = append(extInfo.storehosts, storehostID(storeUUIDs[j]))
+				kafkaPhantomExtent: common.AreKafkaPhantomStores(storeUUIDs),
 			}
 
 			extents = append(extents, extInfo)
@@ -192,15 +195,20 @@ func (t *metadataDepImpl) GetExtentInfo(destID destinationID, extID extentID) (e
 
 	extStats := resp.GetExtentStats()
 
-	extInfo = &extentInfo{
-		id:                extID,
-		status:            extStats.GetStatus(),
-		statusUpdatedTime: time.Unix(0, extStats.GetStatusUpdatedTimeMillis()*int64(time.Millisecond)),
-		storehosts:        make([]storehostID, 0, len(extStats.GetReplicaStats())),
-	}
+	storeUUIDs := make([]string, 0, len(extStats.GetReplicaStats()))
+	storehosts := make([]storehostID, 0, len(extStats.GetReplicaStats()))
 
 	for _, replicaStat := range extStats.GetReplicaStats() {
-		extInfo.storehosts = append(extInfo.storehosts, storehostID(replicaStat.GetStoreUUID()))
+		storehosts = append(storehosts, storehostID(replicaStat.GetStoreUUID()))
+		storeUUIDs = append(storeUUIDs, replicaStat.GetStoreUUID())
+	}
+
+	extInfo = &extentInfo{
+		id:                 extID,
+		status:             extStats.GetStatus(),
+		storehosts:         storehosts,
+		kafkaPhantomExtent: common.AreKafkaPhantomStores(storeUUIDs),
+		statusUpdatedTime:  time.Unix(0, extStats.GetStatusUpdatedTimeMillis()*int64(time.Millisecond)),
 	}
 
 	log.WithFields(bark.Fields{

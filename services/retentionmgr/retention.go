@@ -109,6 +109,7 @@ type (
 
 	destinationInfo struct {
 		id            destinationID
+		destType      shared.DestinationType
 		status        shared.DestinationStatus
 		extents       []*extentInfo
 		softRetention int32 // in seconds
@@ -124,6 +125,7 @@ type (
 		storehosts         []storehostID
 		singleCGVisibility consumerGroupID
 		originZone         string
+		kafkaPhantomExtent bool
 		// destID  destinationID
 		// dest    *destinationInfo
 	}
@@ -304,9 +306,7 @@ func (t *RetentionManager) runRetention(jobsC chan<- *retentionJob) bool {
 	var totalJobs int64
 
 	// populate each destination-info with extents and consumer-groups information
-	for i := range destList {
-
-		dest := destList[i]
+	for _, dest := range destList {
 
 		if dest.status == shared.DestinationStatus_DELETED {
 			continue
@@ -375,7 +375,7 @@ func (t *RetentionManager) runRetention(jobsC chan<- *retentionJob) bool {
 	scheduleAt := time.Now() // schedule first job 'now'
 
 	// for every destination, for every extent, compute and enforce retention
-	for i := range destList {
+	for _, dest := range destList {
 
 		// check if we have been asked to stop
 		select {
@@ -385,8 +385,6 @@ func (t *RetentionManager) runRetention(jobsC chan<- *retentionJob) bool {
 		default:
 			// continue to schedule next job
 		}
-
-		dest := destList[i]
 
 		// skip deleted destinations
 		if dest.status == shared.DestinationStatus_DELETED {
@@ -460,7 +458,8 @@ func (t *RetentionManager) computeRetention(job *retentionJob, log bark.Logger) 
 		return
 	}
 
-	if dest.status == shared.DestinationStatus_DELETING && ext.status == shared.ExtentStatus_SEALED {
+	if dest.status == shared.DestinationStatus_DELETING &&
+		ext.status == shared.ExtentStatus_SEALED {
 
 		// When the destination is being deleted and all the consumer groups have
 		// gone away for a SEALED extent, then we can short-circuit and decide to
@@ -520,9 +519,7 @@ func (t *RetentionManager) computeRetention(job *retentionJob, log bark.Logger) 
 	var hardRetentionAddr = int64(store.ADDR_BEGIN)
 	var hardRetentionConsumed bool
 
-	for i := range ext.storehosts {
-
-		storeID := ext.storehosts[i]
+	for _, storeID := range ext.storehosts {
 
 		getAddressStartTime := time.Now()
 		addr, consumed, err := t.storehost.GetAddressFromTimestamp(storeID, ext.id, hardRetentionTime)
@@ -569,9 +566,7 @@ func (t *RetentionManager) computeRetention(job *retentionJob, log bark.Logger) 
 	var softRetentionAddr = int64(store.ADDR_BEGIN)
 	var softRetentionConsumed bool
 
-	for i := range ext.storehosts {
-
-		storeID := ext.storehosts[i]
+	for _, storeID := range ext.storehosts {
 
 		getAddressStartTime := time.Now()
 		addr, consumed, err := t.storehost.GetAddressFromTimestamp(storeID, ext.id, softRetentionTime)
@@ -623,49 +618,53 @@ func (t *RetentionManager) computeRetention(job *retentionJob, log bark.Logger) 
 	var minAckAddr = int64(store.ADDR_END)
 	var allHaveConsumed = true // start by assuming this is all-consumed
 
-	for _, cgInfo := range job.consumers {
+	// skip 'minAckAddr' queries for kafka phantom extents
+	if !ext.kafkaPhantomExtent {
 
-		if cgInfo.status == shared.ConsumerGroupStatus_DELETED {
-			// don't include deleted consumer groups in the
-			// soft retention based delete calculation
-			continue
-		}
+		for _, cgInfo := range job.consumers {
 
-		// Skip non-matching CGs for single CG visible extents
-		if len(ext.singleCGVisibility) > 0 {
-			if cgInfo.id != ext.singleCGVisibility {
+			if cgInfo.status == shared.ConsumerGroupStatus_DELETED {
+				// don't include deleted consumer groups in the
+				// soft retention based delete calculation
 				continue
 			}
 
-			log.Debug("calculating minAckAddr for DLQ merged extent")
-		}
+			// Skip non-matching CGs for single CG visible extents
+			if len(ext.singleCGVisibility) > 0 {
+				if cgInfo.id != ext.singleCGVisibility {
+					continue
+				}
 
-		ackAddr, err := t.metadata.GetAckLevel(dest.id, ext.id, cgInfo.id)
+				log.Debug("calculating minAckAddr for DLQ merged extent")
+			}
 
-		if err != nil {
-			// if we got an error, go ahead with 'ADDR_BEGIN'
+			ackAddr, err := t.metadata.GetAckLevel(dest.id, ext.id, cgInfo.id)
 
-			log.WithFields(bark.Fields{
-				common.TagCnsmID: cgInfo.id,
-				common.TagErr:    err,
-			}).Error(`computeRetention: minAckAddr GetAckLevel failed`)
+			if err != nil {
+				// if we got an error, go ahead with 'ADDR_BEGIN'
 
-			minAckAddr = store.ADDR_BEGIN
-			allHaveConsumed = false
-			break
-		}
+				log.WithFields(bark.Fields{
+					common.TagCnsmID: cgInfo.id,
+					common.TagErr:    err,
+				}).Error(`computeRetention: minAckAddr GetAckLevel failed`)
 
-		// check if all CGs have consumed this extent
-		if ackAddr != store.ADDR_SEAL {
-			allHaveConsumed = false
-		}
+				minAckAddr = store.ADDR_BEGIN
+				allHaveConsumed = false
+				break
+			}
 
-		// update minAckAddr, if ackAddr is less than the current value
-		if (minAckAddr == store.ADDR_END) ||
-			(minAckAddr == store.ADDR_SEAL) || // -> consumers we have seen so far have completely consumed this extent
-			(ackAddr != store.ADDR_SEAL && ackAddr < minAckAddr) {
+			// check if all CGs have consumed this extent
+			if ackAddr != store.ADDR_SEAL {
+				allHaveConsumed = false
+			}
 
-			minAckAddr = ackAddr
+			// update minAckAddr, if ackAddr is less than the current value
+			if (minAckAddr == store.ADDR_END) ||
+				(minAckAddr == store.ADDR_SEAL) || // -> consumers we have seen so far have completely consumed this extent
+				(ackAddr != store.ADDR_SEAL && ackAddr < minAckAddr) {
+
+				minAckAddr = ackAddr
+			}
 		}
 	}
 
@@ -704,6 +703,7 @@ func (t *RetentionManager) computeRetention(job *retentionJob, log bark.Logger) 
 		`hardRetentionAddr`: hardRetentionAddr,
 		`softRetentionAddr`: softRetentionAddr,
 		`minAckAddr`:        minAckAddr,
+		`retentionAddr`:     job.retentionAddr,
 	}).Debug("computed retentionAddr")
 
 	// -- step 6: check to see if the extent status can be updated to 'consumed' -- //
@@ -716,13 +716,17 @@ func (t *RetentionManager) computeRetention(job *retentionJob, log bark.Logger) 
 	//         time has "consumed" the extent)
 	// B. or, the hard-retention has reached the end of the sealed extent,
 	// 	in which case we will force the extent to be "consumed"
+	// C. or, this is a kafka 'phantom' extent, which is sealed only when
+	//      the destination is deleted.
 	// NB: if there was an error querying either the hard/soft retention addresses,
 	// {soft,hard}RetentionConsumed would be set to 'false'; if there was an error
 	// querying ack-addr, then allHaveConsumed will be false. therefore errors in
 	// either of the conditions would cause the extent to *not* be moved to the
 	// CONSUMED state, and would cause it to be retried on the next iteration.
 	if (ext.status == shared.ExtentStatus_SEALED) &&
-		((allHaveConsumed && softRetentionConsumed) || hardRetentionConsumed) {
+		((allHaveConsumed && softRetentionConsumed) ||
+			hardRetentionConsumed ||
+			ext.kafkaPhantomExtent) {
 
 		log.WithFields(bark.Fields{
 			`retentionAddr`:         job.retentionAddr,
@@ -730,6 +734,7 @@ func (t *RetentionManager) computeRetention(job *retentionJob, log bark.Logger) 
 			`minAckAddr`:            minAckAddr,
 			`softRetentionConsumed`: softRetentionConsumed,
 			`hardRetentionConsumed`: hardRetentionConsumed,
+			`kafkaPhantomExtent`:    ext.kafkaPhantomExtent,
 		}).Info("computeRetention: marking extent consumed")
 
 		e := t.metadata.MarkExtentConsumed(dest.id, ext.id)
