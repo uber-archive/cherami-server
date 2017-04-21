@@ -1617,7 +1617,7 @@ func (s *StoreHostSuite) _TestStoreHostMaxSeqNum() {
 	s.Equal(in.recvAcks, int32(numMessages))
 }
 
-func (s *StoreHostSuite) _TestStoreHostManyManyExtents() {
+func (s *StoreHostSuite) TestStoreHostManyManyExtents() {
 
 	var numExtents int
 
