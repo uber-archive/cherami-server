@@ -222,6 +222,9 @@ const (
 	// MetadataUpdateStoreExtentReplicaStatsScope defines scope for an operation on metadata
 	MetadataUpdateStoreExtentReplicaStatsScope
 
+	// -- Operation scopes for ZoneFailoverManager (common) --
+	ZoneFailoverMgrScope
+
 	// -- Operation scopes for InputHost --
 
 	// OpenPublisherStreamScope  represents  OpenPublisherStream API
@@ -509,6 +512,8 @@ var scopeDefs = map[ServiceIdx]map[int]scopeDefinition{
 		MetadataUpdateExtentStatsScope:                 {operation: "MetadataUpdateExtentStats"},
 		MetadataUpdateHostInfoScope:                    {operation: "MetadataUpdateHostInfo"},
 		MetadataUpdateStoreExtentReplicaStatsScope:     {operation: "MetadataUpdateStoreExtentReplicaStats"},
+
+		ZoneFailoverMgrScope: {operation: "ZoneFailoverMgr"},
 	},
 
 	// Frontend operation tag values as seen by the Metrics backend
@@ -667,6 +672,15 @@ const (
 	MetadataFailures
 	// MetadataLatency is the latency of requests to metadata
 	MetadataLatency
+
+	// ZoneFailoverMgrRunSuccess indicates a success run
+	ZoneFailoverMgrRunSuccess
+	// ZoneFailoverMgrRunFailToDetectActiveZone indicates failure to detect active zone
+	ZoneFailoverMgrRunFailToDetectActiveZone
+	// ZoneFailoverMgrRunFailToWriteMetadata indicates failure to write metadata
+	ZoneFailoverMgrRunFailToWriteMetadata
+	// ZoneFailoverMgrRunFailToWriteMetadata indicates a failed run
+	ZoneFailoverMgrRunFailure
 
 	// --Inputhost metrics -- //
 
@@ -1079,9 +1093,13 @@ var metricDefs = map[ServiceIdx]map[int]metricDefinition{
 
 	// definition for Common metrics (for all services)
 	Common: {
-		MetadataRequests: {Counter, "metadata.requests"},
-		MetadataFailures: {Counter, "metadata.failures"},
-		MetadataLatency:  {Timer, "metadata.latency"},
+		MetadataRequests:                         {Counter, "metadata.requests"},
+		MetadataFailures:                         {Counter, "metadata.failures"},
+		MetadataLatency:                          {Timer, "metadata.latency"},
+		ZoneFailoverMgrRunSuccess:                {Gauge, "ZoneFailoverMgr.run-success"},
+		ZoneFailoverMgrRunFailToDetectActiveZone: {Gauge, "ZoneFailoverMgr.run-fail-detect-active-zone"},
+		ZoneFailoverMgrRunFailToWriteMetadata:    {Gauge, "ZoneFailoverMgr.run-fail-write-metadata"},
+		ZoneFailoverMgrRunFailure:                {Gauge, "ZoneFailoverMgr.run-failure"},
 	},
 
 	// definitions for Inputhost metrics
