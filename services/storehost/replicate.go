@@ -399,6 +399,7 @@ pump:
 
 		msg := readMsg.GetMessage()
 		msgSeqNum := msg.GetMessage().GetSequenceNumber()
+		visibilityTime := x.messageVisibilityTime(msg.GetMessage())
 
 		if replicateDebug {
 			log.WithFields(bark.Fields{ // #perfdisable
@@ -492,8 +493,10 @@ pump:
 
 		credLine.Return(1) // TODO: make credits proportional to payload size
 
-		// update lastSeqNum with this seqnum
-		x.setLastSeqNum(msgSeqNum)
+		// update last-seqnum, etc (reported by extStats)
+		x.extentLock()
+		x.setLastMsg(int64(key), msgSeqNum, visibilityTime)
+		x.extentUnlock()
 	}
 
 	close(t.credC) // this should close the sendPump
