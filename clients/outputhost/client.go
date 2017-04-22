@@ -76,7 +76,7 @@ func (s *OutClientImpl) ListLoadedConsumerGroups() (*admin.ListConsumerGroupsRes
 	return s.client.ListLoadedConsumerGroups(ctx)
 }
 
-// ReadCgState
+// ReadCgState returns consumer group state inside output host
 func (s *OutClientImpl) ReadCgState(req *admin.ReadConsumerGroupStateRequest) (*admin.ReadConsumerGroupStateResult_, error) {
 	ctx, cancel := tcthrift.NewContext(15 * time.Second)
 	defer cancel()

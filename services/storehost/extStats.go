@@ -39,6 +39,7 @@ const (
 )
 
 type (
+	// ExtStatsReporter reports extent stats to metadata
 	ExtStatsReporter struct {
 		hostID  string
 		xMgr    *ExtentManager
@@ -79,7 +80,7 @@ type (
 // the following globals and their methods are
 var (
 	reportInterval         atomic.Value
-	extStatsReporterPaused int32 = 0
+	extStatsReporterPaused int32
 )
 
 func init() {
@@ -112,6 +113,7 @@ func (t *report) String() string {
 		t.extentID, t.firstSeqNum, t.firstAddress, t.firstTimestamp, t.lastSeqNum, t.lastAddress, t.lastTimestamp)
 }
 
+// NewExtStatsReporter is the constructor for ExtStatsReporter
 func NewExtStatsReporter(hostID string, xMgr *ExtentManager, mClient metadata.TChanMetadataService, logger bark.Logger) *ExtStatsReporter {
 
 	return &ExtStatsReporter{
@@ -130,6 +132,7 @@ func NewExtStatsReporter(hostID string, xMgr *ExtentManager, mClient metadata.TC
 	}
 }
 
+// Start registers callbacks, and kicks off reporter pump and scheduler pump
 func (t *ExtStatsReporter) Start() {
 
 	t.logger.Info("extStatsReporter: started")
@@ -144,6 +147,7 @@ func (t *ExtStatsReporter) Start() {
 	go t.schedulerPump()
 }
 
+// Stop stops periodic pumps for ExtStatsReporter
 func (t *ExtStatsReporter) Stop() {
 
 	close(t.stopC)

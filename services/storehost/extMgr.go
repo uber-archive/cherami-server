@@ -38,6 +38,7 @@ import (
 )
 
 type (
+	// ExtentCallbacks is an interface for any objects want to subscribe to extent events
 	ExtentCallbacks interface {
 
 		// ExtentInit defines the callback function called when a new extent context
@@ -523,12 +524,14 @@ func (xMgr *ExtentManager) IsExtentOpenedForReplication(extentID string) bool {
 	return false
 }
 
+// RegisterCallbacks registers a subscriber
 func (xMgr *ExtentManager) RegisterCallbacks(callbacks ExtentCallbacks) {
 
 	// add to list of callback objects
 	xMgr.callbacks = append(xMgr.callbacks, callbacks)
 }
 
+// CallbackDone decrement callback ref count
 func (xMgr *ExtentManager) CallbackDone(ext *extentContext) {
 
 	// decrement callback-ref; if that drops to zero, call in

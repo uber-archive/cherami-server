@@ -289,7 +289,7 @@ func (t *outputhostStreamMock) Write(msg *store.ReadMessageContent) error {
 			for i := range data {
 				if data[i] != byte(r.Intn(256)) {
 					t.Lock()
-					t.err = fmt.Errorf("corrupt (seqNum: %x): data[%d]\n", appMsg.GetSequenceNumber(), i)
+					t.err = fmt.Errorf("corrupt (seqNum: %x): data[%d]", appMsg.GetSequenceNumber(), i)
 					fmt.Printf("message corrupt (addr: %x seq: %x): data[%d]\n", msg.GetMessage().GetAddress(), appMsg.GetSequenceNumber(), i)
 					t.Unlock()
 					break

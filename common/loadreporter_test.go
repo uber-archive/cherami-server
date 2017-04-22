@@ -269,7 +269,7 @@ func (s *LoadReporterSuite) TestControllerClientFailure() {
 	})
 
 	mockTokenBucket.On("TryConsume", mock.Anything).Return(true, time.Millisecond)
-	mockClientFactory.On("GetControllerClient").Return(nil, errors.New("Error getting client."))
+	mockClientFactory.On("GetControllerClient").Return(nil, errors.New("error getting client"))
 
 	factory := NewLoadReporterDaemonFactory("test", controller.SKU_Machine1, controller.Role_IN, mockClientFactory,
 		newMockTickerFactory(mockTicker), newMockTokenBucketFactory(mockTokenBucket), bark.NewLoggerFromLogrus(log.New()))

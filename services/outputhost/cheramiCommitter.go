@@ -21,7 +21,6 @@
 package outputhost
 
 import (
-	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -127,8 +126,8 @@ func (c *cheramiCommitter) GetCommitLevel() (l CommitterLevel) {
  * Setup & Utility
  */
 
-// NewCheramiCommitter instantiates a cheramiCommitter
-func NewCheramiCommitter(metaclient metadata.TChanMetadataService,
+// newCheramiCommitter instantiates a cheramiCommitter
+func newCheramiCommitter(metaclient metadata.TChanMetadataService,
 	outputHostUUID string,
 	cgUUID string,
 	extUUID string,
@@ -152,7 +151,7 @@ func (c *cheramiCommitter) SetAckOffsetInRemote(setAckLevelRequest *shared.SetAc
 	// send to local replicator to fan out
 	localReplicator, err := c.tClients.GetReplicatorClient()
 	if err != nil {
-		return errors.New(fmt.Sprintf("SetAckOffsetInRemote: GetReplicatorClient failed: %#v", err))
+		return fmt.Errorf("SetAckOffsetInRemote: GetReplicatorClient failed: %#v", err)
 	}
 
 	// empty the output host and store uuid as these apply to local zone only
@@ -163,7 +162,7 @@ func (c *cheramiCommitter) SetAckOffsetInRemote(setAckLevelRequest *shared.SetAc
 	defer cancel()
 	err = localReplicator.SetAckOffsetInRemote(ctx, setAckLevelRequest)
 	if err != nil {
-		return errors.New(fmt.Sprintf("SetAckOffsetInRemote: SetAckOffsetInRemote failed from replicator: %#v", err))
+		return fmt.Errorf("SetAckOffsetInRemote: SetAckOffsetInRemote failed from replicator: %#v", err)
 	}
 	return nil
 }

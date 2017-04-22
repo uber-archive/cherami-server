@@ -1049,6 +1049,7 @@ func (r *Replicator) createCgExtentRemoteCall(zone string, logger bark.Logger, c
 	return nil
 }
 
+// SetAckOffset updates ack offsets in local zone
 func (r *Replicator) SetAckOffset(ctx thrift.Context, request *shared.SetAckOffsetRequest) error {
 	lcllg := r.logger.WithFields(bark.Fields{
 		common.TagCnsm: common.FmtDst(request.GetConsumerGroupUUID()),
@@ -1067,6 +1068,7 @@ func (r *Replicator) SetAckOffset(ctx thrift.Context, request *shared.SetAckOffs
 	return nil
 }
 
+// SetAckOffsetInRemote updates ack offsets in remote zone
 func (r *Replicator) SetAckOffsetInRemote(ctx thrift.Context, request *shared.SetAckOffsetRequest) error {
 	r.m3Client.IncCounter(metrics.ReplicatorSetAckOffsetInRemoteScope, metrics.ReplicatorRequests)
 

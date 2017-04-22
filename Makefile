@@ -33,11 +33,6 @@ ALL_SRC := $(shell find . -name "*.go" | grep -v -e Godeps -e vendor \
 	-e ".*/_.*" \
 	-e ".*/mocks.*")
 
-TOUCHED_SRC := $(shell git diff --name-only master | grep "\.go$$" | grep -v -e Godeps -e vendor \
-	-e ".*/\//*" \
-	-e ".*/_.*" \
-	-e ".*/mocks.*")
-
 # all directories with *_test.go files in them
 ALL_TEST_DIRS := $(sort $(dir $(filter %_test.go,$(ALL_SRC))))
 # all tests other than integration test fall into the pkg_test category
@@ -130,20 +125,19 @@ clean:
 	rm -Rf $(BUILD)
 
 lint:
-	@lintFail=0; for file in $(TOUCHED_SRC); do \
+	@lintFail=0; for file in $(ALL_SRC); do \
 		golint -set_exit_status "$$file"; \
 		if [ $$? -eq 1 ]; then lintFail=1; fi; \
 	done; \
 	if [ $$lintFail -eq 1 ]; then exit 1; fi;
-	@echo gofmt -l $(ALL_SRC)
 	@OUTPUT=`gofmt -l $(ALL_SRC) 2>&1`; \
 	if [ "$$OUTPUT" ]; then \
 		echo "Run 'make fmt'. gofmt must be run on the following files:"; \
 		echo "$$OUTPUT"; \
 		exit 1; \
 	fi
-	go tool vet -all -printfuncs=Info,Infof,Debug,Debugf,Warn,Warnf,Panic,Panicf $(ALL_TEST_DIRS)
+	@go tool vet -all -printfuncs=Info,Infof,Debug,Debugf,Warn,Warnf,Panic,Panicf $(ALL_TEST_DIRS)
 
 fmt:
-	gofmt -w $(ALL_SRC)
+	@gofmt -w $(ALL_SRC)
 

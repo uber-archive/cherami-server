@@ -32,9 +32,12 @@ import (
 )
 
 const (
-	SeqnumInvalid    = int64(math.MaxInt64)
+	// SeqnumInvalid designates an invalid or unknown sequence number
+	SeqnumInvalid = int64(math.MaxInt64)
+	// TimestampInvalid designates an invalid or unknown timestamp
 	TimestampInvalid = int64(math.MaxInt64)
-	AddressInvalid   = int64(math.MaxInt64)
+	// AddressInvalid designates an invalid or unknown address
+	AddressInvalid = int64(math.MaxInt64)
 )
 
 // -- wrappers to create various error blobs -- //

@@ -64,13 +64,13 @@ const (
 	DstMetricMsgsIn
 	// DstMetricBytesIn represents count of incoming bytes per dst
 	DstMetricBytesIn
-	// DstMetricsNumAcks represents count of number of acked messages per dst
+	// DstMetricNumAcks represents count of number of acked messages per dst
 	DstMetricNumAcks
-	// DstMetricsNumNacks represents count of number of nacked messages per dst
+	// DstMetricNumNacks represents count of number of nacked messages per dst
 	DstMetricNumNacks
-	// DstMetricsNumThrottled represents count of number of throttled messages per dst
+	// DstMetricNumThrottled represents count of number of throttled messages per dst
 	DstMetricNumThrottled
-	// DstMetricsNumFailed represents count of number of failed messages per dst
+	// DstMetricNumFailed represents count of number of failed messages per dst
 	DstMetricNumFailed
 	// DstMetricOverallNumMsgs represents count of the overall number of messages per dst
 	// Note: this is different than the MsgsIn above since that maintains the per second msgs

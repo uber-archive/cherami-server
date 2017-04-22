@@ -355,7 +355,7 @@ func (cgCache *consumerGroupCache) loadExtentCache(ctx thrift.Context, destType 
 				&extCache.kafkaClient,
 			)
 		} else {
-			committer = NewCheramiCommitter(
+			committer = newCheramiCommitter(
 				cgCache.metaClient,
 				cgCache.outputHostUUID,
 				cgCache.cachedCGDesc.GetConsumerGroupUUID(),
