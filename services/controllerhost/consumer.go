@@ -865,7 +865,7 @@ func shouldConsumeInZone(zone string, cgDesc *shared.ConsumerGroupDescription, d
 		return strings.EqualFold(zone, dConfig.ActiveZone)
 	}
 
-	if cgDesc.IsSetActiveZone() {
+	if len(cgDesc.GetActiveZone()) > 0 {
 		return strings.EqualFold(zone, cgDesc.GetActiveZone())
 	}
 

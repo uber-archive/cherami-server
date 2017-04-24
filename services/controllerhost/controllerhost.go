@@ -385,12 +385,10 @@ func (mcp *Mcp) GetOutputHosts(ctx thrift.Context, inReq *c.GetOutputHostsReques
 	}
 
 	response := func(outputHostIDs []string, err error) (*c.GetOutputHostsResult_, error) {
-		if len(outputHostIDs) < 1 {
-			// only count as failure if our answer contains no endpoints at all
+		if err != nil {
 			context.m3Client.IncCounter(metrics.GetOutputHostsScope, metrics.ControllerFailures)
-			return nil, err
 		}
-		return &c.GetOutputHostsResult_{OutputHostIds: outputHostIDs}, nil
+		return &c.GetOutputHostsResult_{OutputHostIds: outputHostIDs}, err
 	}
 
 	var now = context.timeSource.Now().UnixNano()
@@ -423,7 +421,7 @@ func (mcp *Mcp) GetOutputHosts(ctx thrift.Context, inReq *c.GetOutputHostsReques
 		return response(result.cachedResult, &shared.InternalServiceError{Message: err.Error()})
 	}
 
-	return response(hostIDs, ErrUnavailable)
+	return response(hostIDs, nil)
 }
 
 // GetQueueDepthInfo to return queue depth backlog infor for consumer group
