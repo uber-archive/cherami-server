@@ -395,7 +395,7 @@ func (mcp *Mcp) GetOutputHosts(ctx thrift.Context, inReq *c.GetOutputHostsReques
 
 	result = context.resultCache.readOutputHosts(cgUUID, now)
 	if result.cacheHit && !result.refreshCache {
-		return response(result.cachedResult, ErrUnavailable)
+		return response(result.cachedResult, nil)
 	}
 
 	if !context.dstLock.TryLock(dstUUID, getLockTimeout(result)) {
@@ -408,7 +408,7 @@ func (mcp *Mcp) GetOutputHosts(ctx thrift.Context, inReq *c.GetOutputHostsReques
 	result = context.resultCache.readOutputHosts(cgUUID, now)
 	if result.cacheHit && !result.refreshCache {
 		context.dstLock.Unlock(dstUUID)
-		return response(result.cachedResult, ErrUnavailable)
+		return response(result.cachedResult, nil)
 	}
 
 	hostIDs, err := refreshOutputHostsForConsGroup(context, dstUUID, cgUUID, *result, now)

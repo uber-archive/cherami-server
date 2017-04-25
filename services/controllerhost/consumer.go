@@ -859,7 +859,7 @@ func refreshOutputHostsForConsGroup(context *Context,
 // shouldConsumeInZone indicated whether we should consume from this zone for a multi_zone consumer group
 // If failover mode is enabled in dynamic config, the active zone will be the one specified in dynamic config
 // Otherwise, use the per cg override if it's specified
-// Last, check the active zone in dynamic config. If specified, use it. Otherwise always return true
+// Last, check the active zone in dynamic config. If specified, use it. Otherwise always return false
 func shouldConsumeInZone(zone string, cgDesc *shared.ConsumerGroupDescription, dConfig ControllerDynamicConfig) bool {
 	if strings.EqualFold(dConfig.FailoverMode, `enabled`) {
 		return strings.EqualFold(zone, dConfig.ActiveZone)
@@ -873,7 +873,7 @@ func shouldConsumeInZone(zone string, cgDesc *shared.ConsumerGroupDescription, d
 		return strings.EqualFold(zone, dConfig.ActiveZone)
 	}
 
-	return true
+	return false
 }
 
 func getControllerDynamicConfig(context *Context) (ControllerDynamicConfig, error) {
