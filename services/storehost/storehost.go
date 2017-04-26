@@ -49,9 +49,6 @@ import (
 	"github.com/uber/tchannel-go/thrift"
 )
 
-// Global logger for this storehost
-var glog bark.Logger
-
 // sealCheckInterval is the regular interval at which both the read and write paths check
 // to see if the extent was sealed in the background. This is to handle the case where there
 // are no more messages available, and asynchronously the extent was sealed.
@@ -224,23 +221,23 @@ func NewStoreHost(serviceName string, sCommon common.SCommon, mClient metadata.T
 		opts = &Options{}
 	}
 
+	logger := sCommon.GetConfig().GetLogger().WithFields(bark.Fields{
+		common.TagStor:    common.FmtStor(sCommon.GetHostUUID()),
+		common.TagDplName: common.FmtDplName(sCommon.GetConfig().GetDeploymentName()),
+	})
+
+	m3Client := metrics.NewClient(sCommon.GetMetricsReporter(), metrics.Storage)
+
 	t := &StoreHost{
 		SCommon:       sCommon,
 		opts:          opts,
 		hostMetrics:   load.NewHostMetrics(),
 		shutdownC:     make(chan struct{}),
 		disableWriteC: make(chan struct{}),
-		m3Client:      metrics.NewClient(sCommon.GetMetricsReporter(), metrics.Storage),
+		logger:        logger,
+		m3Client:      m3Client,
+		mClient:       mm.NewMetadataMetricsMgr(mClient, m3Client, logger),
 	}
-
-	t.logger = common.GetDefaultLogger().WithFields(bark.Fields{
-		common.TagStor:    common.FmtStor(sCommon.GetHostUUID()),
-		common.TagDplName: common.FmtDplName(sCommon.GetConfig().GetDeploymentName()),
-	})
-
-	glog = t.logger
-
-	t.mClient = mm.NewMetadataMetricsMgr(mClient, t.m3Client, t.logger)
 
 	return t, []thrift.TChanServer{store.NewTChanBStoreServer(t)}
 }
