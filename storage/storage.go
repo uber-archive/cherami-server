@@ -85,6 +85,9 @@ type StoreManager interface {
 	GetExtentInfo(id ExtentUUID) (*ExtentInfo, error)
 }
 
+// OpenExtentDB gets a handle to the raw extent DB
+// func OpenExtentDB(id ExtentUUID, path string) (ExtentStore, error)
+
 // -- EXTENT STORE -- //
 // The extent-store is designed and expected to be used concurrently by
 // at most one-writer and any number of readers.
@@ -302,6 +305,14 @@ type ExtentStore interface {
 	// Returns:
 	//     none
 	Close()
+
+	// CloseExtentDB is closes the handle when opened using OpenExtentDB
+	// Args:
+	//    none
+	//
+	// Returns:
+	//    none
+	CloseExtentDB()
 }
 
 // -- Misc utility functions -- //

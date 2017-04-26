@@ -93,7 +93,10 @@ cherami-cassandra-tool: $(DEPS)
 cherami-store-tool: $(DEPS)
 	go build -i $(EMBED) -o cherami-store-tool cmd/tools/store/main.go
 
-bins: cherami-server cherami-replicator-server cherami-cli cherami-admin cherami-replicator-tool cherami-cassandra-tool cherami-store-tool
+cdb: $(DEPS)
+	go build -i $(EMBED) -o cdb cmd/tools/cdb/*.go
+
+bins: cherami-server cherami-replicator-server cherami-cli cherami-admin cherami-replicator-tool cherami-cassandra-tool cherami-store-tool cdb
 
 cover_profile: lint bins
 	@mkdir -p $(BUILD)
