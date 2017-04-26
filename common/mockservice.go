@@ -138,3 +138,9 @@ func (m *MockService) IsLimitsEnabled() bool {
 	args := m.Called()
 	return args.Get(0).(bool)
 }
+
+// GetAuthManager returns the auth manager
+func (m *MockService) GetAuthManager() AuthManager {
+	args := m.Called()
+	return args.Get(0).(AuthManager)
+}

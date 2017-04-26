@@ -57,6 +57,7 @@ type (
 		rFactory               LoadReporterDaemonFactory
 		startWg                sync.WaitGroup
 		logger                 bark.Logger
+		authManager            AuthManager
 	}
 
 	// WSService is the interface which should be implemented by websocket service
@@ -116,5 +117,7 @@ type (
 
 		// UpgradeHandler is the handler for the upgrade end point for this service
 		UpgradeHandler(w http.ResponseWriter, r *http.Request)
+
+		GetAuthManager() AuthManager
 	}
 )

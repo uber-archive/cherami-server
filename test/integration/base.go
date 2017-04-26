@@ -199,7 +199,7 @@ func (tb *testBase) SetUp(clusterSz map[string]int, numReplicas int) {
 		cfg := cfgMap[common.StoreServiceName][i].ServiceConfig[common.StoreServiceName]
 		reporter := common.NewTestMetricsReporter()
 		dClient := dconfig.NewDconfigClient(configure.NewCommonServiceConfig(), common.StoreServiceName)
-		sCommon := common.NewService(common.StoreServiceName, hostID, cfg, tb.UUIDResolver, hwInfoReader, reporter, dClient)
+		sCommon := common.NewService(common.StoreServiceName, hostID, cfg, tb.UUIDResolver, hwInfoReader, reporter, dClient, common.NewBypassAuthManager())
 		log.Infof("store ringHosts: %v", cfg.GetRingHosts())
 		sh, tc := storehost.NewStoreHost(common.StoreServiceName, sCommon, tb.mClient, storehostOpts)
 		sh.Start(tc)
@@ -223,7 +223,7 @@ func (tb *testBase) SetUp(clusterSz map[string]int, numReplicas int) {
 		cfg := cfgMap[common.InputServiceName][i].ServiceConfig[common.InputServiceName]
 		reporter := common.NewTestMetricsReporter()
 		dClient := dconfig.NewDconfigClient(configure.NewCommonServiceConfig(), common.InputServiceName)
-		sCommon := common.NewService(common.InputServiceName, hostID, cfg, tb.UUIDResolver, hwInfoReader, reporter, dClient)
+		sCommon := common.NewService(common.InputServiceName, hostID, cfg, tb.UUIDResolver, hwInfoReader, reporter, dClient, common.NewBypassAuthManager())
 		log.Infof("input ringHosts: %v", cfg.GetRingHosts())
 		ih, tc := inputhost.NewInputHost(common.InputServiceName, sCommon, tb.mClient, nil)
 		ih.Start(tc)
@@ -239,7 +239,7 @@ func (tb *testBase) SetUp(clusterSz map[string]int, numReplicas int) {
 		reporter := common.NewTestMetricsReporter()
 		dClient := dconfig.NewDconfigClient(configure.NewCommonServiceConfig(), common.FrontendServiceName)
 
-		sCommon := common.NewService(common.FrontendServiceName, hostID, cfg, tb.UUIDResolver, hwInfoReader, reporter, dClient)
+		sCommon := common.NewService(common.FrontendServiceName, hostID, cfg, tb.UUIDResolver, hwInfoReader, reporter, dClient, common.NewBypassAuthManager())
 		log.Infof("front ringHosts: %v", cfg.GetRingHosts())
 		fh, tc := frontendhost.NewFrontendHost(common.FrontendServiceName, sCommon, tb.mClient, cfgMap[common.FrontendServiceName][i])
 		fh.Start(tc)
@@ -252,7 +252,7 @@ func (tb *testBase) SetUp(clusterSz map[string]int, numReplicas int) {
 		cfg := cfgMap[common.OutputServiceName][i].ServiceConfig[common.OutputServiceName]
 		reporter := common.NewTestMetricsReporter()
 		dClient := dconfig.NewDconfigClient(configure.NewCommonServiceConfig(), common.OutputServiceName)
-		sCommon := common.NewService(common.OutputServiceName, hostID, cfg, tb.UUIDResolver, hwInfoReader, reporter, dClient)
+		sCommon := common.NewService(common.OutputServiceName, hostID, cfg, tb.UUIDResolver, hwInfoReader, reporter, dClient, common.NewBypassAuthManager())
 		log.Infof("output ringHosts: %v", cfg.GetRingHosts())
 		oh, tc := outputhost.NewOutputHost(
 			common.OutputServiceName,
@@ -276,7 +276,7 @@ func (tb *testBase) SetUp(clusterSz map[string]int, numReplicas int) {
 		serviceName := common.ControllerServiceName
 		reporter := common.NewTestMetricsReporter()
 		dClient := dconfig.NewDconfigClient(configure.NewCommonServiceConfig(), common.ControllerServiceName)
-		sVice := common.NewService(serviceName, uuid.New(), cfg.ServiceConfig[serviceName], tb.UUIDResolver, hwInfoReader, reporter, dClient)
+		sVice := common.NewService(serviceName, uuid.New(), cfg.ServiceConfig[serviceName], tb.UUIDResolver, hwInfoReader, reporter, dClient, common.NewBypassAuthManager())
 		ch, tc := controllerhost.NewController(cfg, sVice, tb.mClient, common.NewDummyZoneFailoverManager())
 		ch.Start(tc)
 		tb.Controllers[hostID] = ch

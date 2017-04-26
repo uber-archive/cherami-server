@@ -356,7 +356,7 @@ func benchmarkByDataSize(b *testing.B, dataSize int) {
 
 	reporter := common.NewMetricReporterWithHostname(configure.NewCommonServiceConfig())
 	dClient := dconfig.NewDconfigClient(configure.NewCommonServiceConfig(), common.StoreServiceName)
-	sCommon := common.NewService(sName, uuid.New(), configure.NewCommonServiceConfig(), nil, nil, reporter, dClient)
+	sCommon := common.NewService(sName, uuid.New(), configure.NewCommonServiceConfig(), nil, nil, reporter, dClient, common.NewBypassAuthManager())
 	storeHost, tc := NewStoreHost(sName, sCommon, nil, &Options{Store: storeC})
 	storeHost.Start(tc)
 
@@ -472,7 +472,7 @@ func benchmarkParallelExtents(b *testing.B, dataSize int, numExtents int) {
 	reporter := common.NewMetricReporterWithHostname(configure.NewCommonServiceConfig())
 	dClient := dconfig.NewDconfigClient(configure.NewCommonServiceConfig(), common.StoreServiceName)
 
-	sCommon := common.NewService(sName, uuid.New(), configure.NewCommonServiceConfig(), nil, nil, reporter, dClient)
+	sCommon := common.NewService(sName, uuid.New(), configure.NewCommonServiceConfig(), nil, nil, reporter, dClient, common.NewBypassAuthManager())
 	storeHost, tc := NewStoreHost(sName, sCommon, nil, &Options{Store: storeC})
 	storeHost.Start(tc)
 

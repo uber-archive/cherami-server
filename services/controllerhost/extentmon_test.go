@@ -89,7 +89,7 @@ func (s *ExtentStateMonitorSuite) SetupTest() {
 	reporter := common.NewMetricReporterWithHostname(configure.NewCommonServiceConfig())
 	dClient := dconfig.NewDconfigClient(serviceConfig, common.ControllerServiceName)
 
-	sVice := common.NewService(serviceName, uuid.New(), serviceConfig, common.NewUUIDResolver(s.mClient), common.NewHostHardwareInfoReader(s.mClient), reporter, dClient)
+	sVice := common.NewService(serviceName, uuid.New(), serviceConfig, common.NewUUIDResolver(s.mClient), common.NewHostHardwareInfoReader(s.mClient), reporter, dClient, common.NewBypassAuthManager())
 
 	mcp, _ := NewController(s.cfg, sVice, s.mClient, common.NewDummyZoneFailoverManager())
 	mcp.context.m3Client = &MockM3Metrics{}

@@ -232,7 +232,7 @@ func (t *testBase) newTestStoreHost(store Store) *testStoreHost {
 	reporter := common.NewMetricReporterWithHostname(configure.NewCommonServiceConfig())
 	dClient := dconfig.NewDconfigClient(configure.NewCommonServiceConfig(), common.StoreServiceName)
 
-	sCommon := common.NewService(common.StoreServiceName, hostID.String(), cfg, t.uuidResolver, t.hwInfoReader, reporter, dClient)
+	sCommon := common.NewService(common.StoreServiceName, hostID.String(), cfg, t.uuidResolver, t.hwInfoReader, reporter, dClient, common.NewBypassAuthManager())
 
 	storehost, tc := NewStoreHost(common.StoreServiceName, sCommon, t.mClient, &Options{Store: store, BaseDir: t.baseDir})
 

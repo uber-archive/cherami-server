@@ -46,7 +46,7 @@ const roleKey = "serviceName"
 // TODO: have a better name for Service.
 // this is the object which holds all the common stuff
 // shared by all the services.
-func NewService(serviceName string, uuid string, cfg configure.CommonServiceConfig, resolver UUIDResolver, hostHWInfoReader HostHardwareInfoReader, reporter metrics.Reporter, dClient dconfig.Client) *Service {
+func NewService(serviceName string, uuid string, cfg configure.CommonServiceConfig, resolver UUIDResolver, hostHWInfoReader HostHardwareInfoReader, reporter metrics.Reporter, dClient dconfig.Client, authManager AuthManager) *Service {
 	sVice := &Service{
 		sName:                  serviceName,
 		cfg:                    cfg,
@@ -57,6 +57,7 @@ func NewService(serviceName string, uuid string, cfg configure.CommonServiceConf
 		mReporter:              reporter,
 		runtimeMetricsReporter: metrics.NewRuntimeMetricsReporter(reporter, time.Minute, cfg.GetLogger()),
 		dClient:                dClient,
+		authManager:            authManager,
 	}
 
 	// Get the host name and set it on the service.  This is used for emitting metric with a tag for hostname
@@ -247,6 +248,11 @@ func (h *Service) Report(reporter LoadReporter) {
 // UpgradeHandler is used to implement the upgrade endpoint
 func (h *Service) UpgradeHandler(w http.ResponseWriter, r *http.Request) {
 	// register service specific upgrade handler
+}
+
+// GetAuthManager returns the auth manager
+func (h *Service) GetAuthManager() AuthManager {
+	return h.authManager
 }
 
 // IsDevelopmentEnvironment detects if we are running in a development environment

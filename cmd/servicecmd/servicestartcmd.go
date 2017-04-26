@@ -70,7 +70,7 @@ func StartInputHostService() {
 	reporter := common.NewMetricReporterWithHostname(cfg.GetServiceConfig(serviceName))
 	dClient := dconfigclient.NewDconfigClient(cfg.GetServiceConfig(serviceName), serviceName)
 
-	sCommon := common.NewService(serviceName, uuid.New(), cfg.GetServiceConfig(serviceName), common.NewUUIDResolver(meta), hwInfoReader, reporter, dClient)
+	sCommon := common.NewService(serviceName, uuid.New(), cfg.GetServiceConfig(serviceName), common.NewUUIDResolver(meta), hwInfoReader, reporter, dClient, common.NewBypassAuthManager())
 	h, tc := inputhost.NewInputHost(serviceName, sCommon, meta, nil)
 	h.Start(tc)
 
@@ -98,7 +98,7 @@ func StartControllerService() {
 	hwInfoReader := common.NewHostHardwareInfoReader(meta)
 	reporter := common.NewMetricReporterWithHostname(cfg.GetServiceConfig(serviceName))
 	dClient := dconfigclient.NewDconfigClient(cfg.GetServiceConfig(serviceName), serviceName)
-	sVice := common.NewService(serviceName, uuid.New(), cfg.GetServiceConfig(serviceName), common.NewUUIDResolver(meta), hwInfoReader, reporter, dClient)
+	sVice := common.NewService(serviceName, uuid.New(), cfg.GetServiceConfig(serviceName), common.NewUUIDResolver(meta), hwInfoReader, reporter, dClient, common.NewBypassAuthManager())
 	mcp, tc := controllerhost.NewController(cfg, sVice, meta, common.NewDummyZoneFailoverManager())
 	mcp.Start(tc)
 	common.ServiceLoop(cfg.GetServiceConfig(serviceName).GetPort()+diagnosticPortOffset, cfg, mcp.Service)
@@ -121,7 +121,7 @@ func StartFrontendHostService() {
 	hwInfoReader := common.NewHostHardwareInfoReader(meta)
 	reporter := common.NewMetricReporterWithHostname(cfg.GetServiceConfig(serviceName))
 	dClient := dconfigclient.NewDconfigClient(cfg.GetServiceConfig(serviceName), serviceName)
-	sCommon := common.NewService(serviceName, uuid.New(), cfg.GetServiceConfig(serviceName), common.NewUUIDResolver(meta), hwInfoReader, reporter, dClient)
+	sCommon := common.NewService(serviceName, uuid.New(), cfg.GetServiceConfig(serviceName), common.NewUUIDResolver(meta), hwInfoReader, reporter, dClient, common.NewBypassAuthManager())
 	h, tc := frontendhost.NewFrontendHost(serviceName, sCommon, meta, cfg)
 
 	// frontend host also exposes non-streaming metadata methods
@@ -147,7 +147,7 @@ func StartOutputHostService() {
 	hwInfoReader := common.NewHostHardwareInfoReader(meta)
 	reporter := common.NewMetricReporterWithHostname(cfg.GetServiceConfig(serviceName))
 	dClient := dconfigclient.NewDconfigClient(cfg.GetServiceConfig(serviceName), serviceName)
-	sCommon := common.NewService(serviceName, uuid.New(), cfg.GetServiceConfig(serviceName), common.NewUUIDResolver(meta), hwInfoReader, reporter, dClient)
+	sCommon := common.NewService(serviceName, uuid.New(), cfg.GetServiceConfig(serviceName), common.NewUUIDResolver(meta), hwInfoReader, reporter, dClient, common.NewBypassAuthManager())
 
 	// Instantiate a frontend server. Don't call frontendhost.Start(), since that would advertise in Hyperbahn,
 	// and since we aren't using thrift anyway. We are selfish with our Frontend.
@@ -180,7 +180,7 @@ func StartStoreHostService() {
 	hwInfoReader := common.NewHostHardwareInfoReader(meta)
 	reporter := common.NewMetricReporterWithHostname(cfg.GetServiceConfig(serviceName))
 	dClient := dconfigclient.NewDconfigClient(cfg.GetServiceConfig(serviceName), serviceName)
-	sCommon := common.NewService(serviceName, cfg.GetStorageConfig().GetHostUUID(), cfg.GetServiceConfig(serviceName), common.NewUUIDResolver(meta), hwInfoReader, reporter, dClient)
+	sCommon := common.NewService(serviceName, cfg.GetStorageConfig().GetHostUUID(), cfg.GetServiceConfig(serviceName), common.NewUUIDResolver(meta), hwInfoReader, reporter, dClient, common.NewBypassAuthManager())
 
 	// parse args and pass them into NewStoreHost
 	var storeStr, baseDir string
@@ -252,7 +252,7 @@ func StartReplicatorService() {
 	hwInfoReader := common.NewHostHardwareInfoReader(meta)
 	reporter := common.NewMetricReporterWithHostname(cfg.GetServiceConfig(serviceName))
 	dClient := dconfigclient.NewDconfigClient(cfg.GetServiceConfig(serviceName), serviceName)
-	sCommon := common.NewService(serviceName, uuid.New(), cfg.GetServiceConfig(serviceName), common.NewUUIDResolver(meta), hwInfoReader, reporter, dClient)
+	sCommon := common.NewService(serviceName, uuid.New(), cfg.GetServiceConfig(serviceName), common.NewUUIDResolver(meta), hwInfoReader, reporter, dClient, common.NewBypassAuthManager())
 
 	h, tc := replicator.NewReplicator(serviceName, sCommon, meta, replicator.NewReplicatorClientFactory(cfg, common.GetDefaultLogger()), cfg)
 	h.Start(tc)

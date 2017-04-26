@@ -586,6 +586,20 @@ func (h *Frontend) CreateDestination(ctx thrift.Context, createRequest *c.Create
 
 	lclLg := h.logger.WithField(common.TagDstPth, common.FmtDstPth(createRequest.GetPath()))
 
+	authSubject, err := h.GetAuthManager().Authenticate(ctx)
+	if err != nil {
+		// TODO add metrics
+		return nil, err
+	}
+
+	authResource := common.GetResourceRootURN(h.SCommon)
+	err = h.GetAuthManager().Authorize(authSubject, common.OperationCreate, common.Resource(authResource))
+	if err != nil {
+		lclLg.WithField(common.TagSubject, authSubject).WithField(common.TagResource, authResource).Info("Not allowed to create destination")
+		// TODO add metrics
+		return nil, err
+	}
+
 	// Verify that Kafka configuration is valid
 	if createRequest.GetType() == c.DestinationType_KAFKA {
 		if createRequest.GetKafkaCluster() == `` ||

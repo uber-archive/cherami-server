@@ -162,6 +162,12 @@ const TagCGExtentStatus = `cgExtStatus`
 // TagSeq is for sequence number
 const TagSeq = `seq`
 
+// TagSubject is for subject
+const TagSubject = `subject`
+
+// TagResource is for resource
+const TagResource = `resource`
+
 const checkFormatAndPanic = false // TODO : Enable is staging
 
 var longLowercaseGUIDRegex = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)

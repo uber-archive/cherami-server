@@ -163,6 +163,7 @@ func (s *FrontendHostSuite) SetupCommonMock() {
 	s.mockService.On("GetClientFactory").Return(mockClientFactory)
 	s.mockService.On("GetMetricsReporter").Return(common.NewMetricReporterWithHostname(configure.NewCommonServiceConfig()))
 	s.mockService.On("GetDConfigClient").Return(dconfig.NewDconfigClient(configure.NewCommonServiceConfig(), common.FrontendServiceName))
+	s.mockService.On("GetAuthManager").Return(common.NewBypassAuthManager())
 
 }
 
