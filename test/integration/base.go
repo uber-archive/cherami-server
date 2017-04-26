@@ -160,6 +160,7 @@ func (tb *testBase) setupSuiteImpl(t *testing.T) {
 
 	// Adjust the controller and storehost scan intervals
 	controllerhost.IntervalBtwnScans = time.Second
+	controllerhost.SetDrainExtentTimeout(5 * time.Second)
 	storehost.ExtStatsReporterSetReportInterval(time.Second)
 	storehost.ExtStatsReporterResume()
 

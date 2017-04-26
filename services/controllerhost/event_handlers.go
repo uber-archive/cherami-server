@@ -162,7 +162,7 @@ const (
 const resultCacheRefreshMaxWaitTime = int64(500 * time.Millisecond)
 
 // how long to wait for an input host to respond to a drain command
-const drainExtentTimeout = time.Minute
+var drainExtentTimeout = int64(time.Minute)
 
 var (
 	sealExtentInitialCallTimeout = 2 * time.Second
@@ -277,6 +277,18 @@ func NewStoreHostFailedEvent(hostUUID string) Event {
 	return &StoreHostFailedEvent{
 		hostUUID: hostUUID,
 	}
+}
+
+// SetDrainExtentTimeout overrides the drain extent
+// timeout to the given value. This method is intended
+// only for unit test
+func SetDrainExtentTimeout(timeout time.Duration) {
+	atomic.StoreInt64(&drainExtentTimeout, int64(timeout))
+}
+
+// GetDrainExtentTimeout returns the current drainExtentTimeout
+func GetDrainExtentTimeout() time.Duration {
+	return time.Duration(atomic.LoadInt64(&drainExtentTimeout))
 }
 
 // Handle handles the creation of a new extent.
@@ -1150,7 +1162,7 @@ func drainExtent(context *Context, dstID string, extentID string, inputID string
 		`reconfigID`:  drainReq.GetUpdateUUID(),
 	}).Info(`sending drain command to input host`)
 
-	ctx, cancel := thrift.NewContext(drainExtentTimeout)
+	ctx, cancel := thrift.NewContext(GetDrainExtentTimeout())
 	if err = adminClient.DrainExtent(ctx, drainReq); err != nil {
 		context.m3Client.IncCounter(m3Scope, metrics.ControllerErrDrainFailed)
 	}
