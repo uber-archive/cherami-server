@@ -25,12 +25,13 @@ import (
 	"gopkg.in/yaml.v2"
 	"io/ioutil"
 	"strings"
+	"sync/atomic"
 )
 
 // KafkaConfig holds the configuration for the Kafka client
 type KafkaConfig struct {
 	KafkaClusterConfigFile string `yaml:"kafkaClusterConfigFile"`
-	ClustersConfig         ClustersConfig
+	ClustersConfig         atomic.Value
 }
 
 // ClustersConfig holds the configuration for the Kafka clusters
@@ -52,10 +53,11 @@ func NewCommonKafkaConfig() *KafkaConfig {
 
 // GetKafkaClusters returns all kafka cluster names
 func (r *KafkaConfig) GetKafkaClusters() []string {
-	r.loadClusterConfigFileIfNecessary()
+	r.loadConfig()
 
-	ret := make([]string, 0, len(r.ClustersConfig.Clusters))
-	for key := range r.ClustersConfig.Clusters {
+	clusters := r.ClustersConfig.Load().(ClustersConfig).Clusters
+	ret := make([]string, 0, len(clusters))
+	for key := range clusters {
 		ret = append(ret, key)
 	}
 	return ret
@@ -63,21 +65,18 @@ func (r *KafkaConfig) GetKafkaClusters() []string {
 
 // GetKafkaClusterConfig returns all kafka cluster names
 func (r *KafkaConfig) GetKafkaClusterConfig(cluster string) (ClusterConfig, bool) {
-	r.loadClusterConfigFileIfNecessary()
+	r.loadConfig()
 
-	val, ok := r.ClustersConfig.Clusters[cluster]
+	val, ok := r.ClustersConfig.Load().(ClustersConfig).Clusters[cluster]
 	return val, ok
 }
 
-func (r *KafkaConfig) loadClusterConfigFileIfNecessary() {
-	if len(r.ClustersConfig.Clusters) > 0 {
+func (r *KafkaConfig) loadConfig() {
+	// check if we have already loaded the cluster config file
+	if cfg := r.ClustersConfig.Load(); cfg != nil && len(cfg.(ClustersConfig).Clusters) > 0 {
 		return
 	}
 
-	r.loadClusterConfigFile()
-}
-
-func (r *KafkaConfig) loadClusterConfigFile() {
 	// TODO do we need to detect file change and reload on file change
 	if len(r.KafkaClusterConfigFile) == 0 {
 		log.Warnf("Could not load kafka config because kafka cluster config file is not configured")
@@ -94,14 +93,15 @@ func (r *KafkaConfig) loadClusterConfigFile() {
 	if err := yaml.Unmarshal(contents, &clusters); err != nil {
 		log.Warnf("Failed to parse kafka cluster config file %s: %v", r.KafkaClusterConfigFile, err)
 	} else {
-		r.ClustersConfig = clusters
+		r.ClustersConfig.Store(clusters)
 	}
 	r.addPortNumbers()
 }
 
 // addPortNumbers adds the default Kafka broker port number to all broker names
 func (r *KafkaConfig) addPortNumbers() {
-	for _, c := range r.ClustersConfig.Clusters {
+	clusters := r.ClustersConfig.Load().(ClustersConfig).Clusters
+	for _, c := range clusters {
 		for i, b := range c.Brokers {
 			if !strings.Contains(b, `:`) {
 				c.Brokers[i] = b + `:9092`
