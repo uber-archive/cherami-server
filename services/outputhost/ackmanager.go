@@ -185,6 +185,9 @@ func (ackMgr *ackManager) addLevelOffsetImpl(offset common.SequenceNumber) {
 func (ackMgr *ackManager) stop() {
 	close(ackMgr.closeChannel)
 	ackMgr.doneWG.Wait()
+	ackMgr.logger.WithFields(bark.Fields{
+		`state`: ackMgr.getAckMgrState().String(),
+	}).Info("ackMgr stopped")
 }
 
 func (ackMgr *ackManager) start() {
@@ -353,13 +356,6 @@ func (ackMgr *ackManager) updateAckLevel() {
 				default:
 				}
 			}
-			ackMgr.logger.WithFields(bark.Fields{
-				`status`:           oReq.GetStatus(),
-				`ackLevelAddress`:  oReq.GetAckLevelAddress(),
-				`ackLevelSeqNo`:    oReq.GetAckLevelSeqNo(),
-				`readLevelAddress`: oReq.GetReadLevelAddress(),
-				`readLevelSeqNo`:   oReq.GetReadLevelSeqNo(),
-			}).Info("ack level update succeeded")
 		}
 	}
 
