@@ -131,7 +131,13 @@ func (ackMgr *ackManager) getNextAckID(address int64, sequence common.SequenceNu
 		skippedMessages := sequence - expectedReadLevel
 
 		if skippedMessages < 0 {
-			ackMgr.logger.Error(`negative discontinuity detected (rollback)`)
+			ackMgr.logger.WithFields(bark.Fields{
+				`gotSeqNum`:      sequence,
+				`gotAddress`:     address,
+				`expectedSeqNum`: expectedReadLevel,
+				`levelOffset`:    ackMgr.levelOffset,
+				`readLevel`:      ackMgr.readLevel,
+			}).Error(`negative discontinuity detected (rollback)`)
 			// Don't update gauge, since negative numbers aren't supported for M3 gauges
 		} else {
 			// update gauge here to say we skipped messages (potentially due to retention?)
@@ -347,6 +353,13 @@ func (ackMgr *ackManager) updateAckLevel() {
 				default:
 				}
 			}
+			ackMgr.logger.WithFields(bark.Fields{
+				`status`:           oReq.GetStatus(),
+				`ackLevelAddress`:  oReq.GetAckLevelAddress(),
+				`ackLevelSeqNo`:    oReq.GetAckLevelSeqNo(),
+				`readLevelAddress`: oReq.GetReadLevelAddress(),
+				`readLevelSeqNo`:   oReq.GetReadLevelSeqNo(),
+			}).Info("ack level update succeeded")
 		}
 	}
 

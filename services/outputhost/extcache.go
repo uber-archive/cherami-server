@@ -238,12 +238,13 @@ func (extCache *extentCache) loadReplicaStream(startAddress int64, startSequence
 			}
 		}
 
+		cDestType, _ := common.CheramiDestinationType(extCache.destType)
+
 		logger.WithFields(bark.Fields{
 			`startAddress`:  startAddress,
 			`startSequence`: startSequence,
+			`dstType`:       cDestType.String(),
 		}).Info(`loadReplicaStream: starting`)
-
-		cDestType, _ := common.CheramiDestinationType(extCache.destType)
 
 		req := &store.OpenReadStreamRequest{
 			DestinationUUID:   common.StringPtr(extCache.destUUID),

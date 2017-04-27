@@ -213,6 +213,8 @@ func (conn *replicaConnection) readMessagesPump() {
 		readBatchSize = int(conn.initialCredits / 10)
 	}
 
+	isFirstMsg := true
+
 	for {
 		select {
 		default:
@@ -245,6 +247,15 @@ func (conn *replicaConnection) readMessagesPump() {
 				msg := rmc.GetMessage()
 				correctSequenceNumber := common.SequenceNumber(msg.Message.GetSequenceNumber())
 
+				if isFirstMsg {
+					isFirstMsg = false
+					conn.logger.WithFields(bark.Fields{
+						`address`:    msg.GetAddress(),
+						`msgSeqNum`:  msg.Message.GetSequenceNumber(),
+						`lastSeqNum`: lastSeqNum,
+					}).Info("replConn: first message from store to output")
+				}
+
 				// XXX: Sequence number check to make sure we get monotonically increasing
 				// sequence number.
 				// We just log and move forward
@@ -265,6 +276,7 @@ func (conn *replicaConnection) readMessagesPump() {
 				} else {
 					// T471157 For timers, do not signal discontinuities to ack manager, since discontinuities are frequent
 					correctSequenceNumber = 0
+					conn.logger.WithField("expectedSeqNum", lastSeqNum+1).Info("Forcing msg sequence number to zero for timer destination")
 				}
 
 				// update the lastSeqNum to this value
