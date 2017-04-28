@@ -49,6 +49,7 @@ import (
 	"github.com/uber/cherami-thrift/.generated/go/metadata"
 	"github.com/uber/cherami-thrift/.generated/go/shared"
 	"github.com/uber/cherami-thrift/.generated/go/store"
+	"github.com/uber/cherami-server/boy_private"
 )
 
 // GlobalOptions are options shared by most command line
@@ -142,7 +143,7 @@ func GetCClient(c *cli.Context, serviceName string) ccli.Client {
 	if !(len(gOpts.frontendHost) > 0 || gOpts.frontendPort > 0) && gOpts.hyperbahn {
 		cClient, err = ccli.NewHyperbahnClient(serviceName, gOpts.hyperbahnBootstrapFile, &cOpts)
 	} else {
-		cClient, err = ccli.NewClient(serviceName, gOpts.frontendHost, gOpts.frontendPort, &cOpts)
+		cClient, err = cherami_boy_private.NewClient(serviceName, gOpts.frontendHost, gOpts.frontendPort, &cOpts)
 	}
 
 	ExitIfError(err)
