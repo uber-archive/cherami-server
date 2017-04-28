@@ -335,7 +335,7 @@ func (r *metadataReconciler) reconcileCg(localCgs []*shared.ConsumerGroupDescrip
 				continue
 			}
 
-			// case #2: destination exists in both remote and local, try to compare the property to see if anything gets updated
+			// case #2: cg exists in both remote and local, try to compare the property to see if anything gets updated
 			updateRequest := &shared.UpdateConsumerGroupRequest{}
 			cgUpdated := false
 
