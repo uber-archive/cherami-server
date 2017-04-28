@@ -124,23 +124,15 @@ func (ackMgr *ackManager) getNextAckID(address int64, sequence common.SequenceNu
 	ackMgr.readLevel++ // This means that the first ID is '1'
 	ackMgr.readLevelAddr = storeHostAddress(address)
 
-	var expectedReadLevel common.SequenceNumber
-	if msg, ok := ackMgr.addrs[ackMgr.readLevel]; ok {
-		expectedReadLevel = msg.seq
-	} else {
-		expectedReadLevel = sequence
-	}
-
 	// NOTE: sequence should be zero for timer destinations, since they usually have discontinuous sequence numbers
-	if sequence != 0 && expectedReadLevel != sequence {
-		skippedMessages := sequence - expectedReadLevel
+	if sequence != 0 && sequence != ackMgr.readLevel {
+		skippedMessages := sequence - ackMgr.readLevel
 
 		if skippedMessages < 0 {
 			ackMgr.logger.WithFields(bark.Fields{
-				`gotSeqNum`:      sequence,
-				`gotAddress`:     address,
-				`expectedSeqNum`: expectedReadLevel,
-				`readLevel`:      ackMgr.readLevel,
+				`gotSeqNum`:  sequence,
+				`gotAddress`: address,
+				`readLevel`:  ackMgr.readLevel,
 			}).Error(`negative discontinuity detected (rollback)`)
 			// Don't update gauge, since negative numbers aren't supported for M3 gauges
 		} else {
@@ -239,13 +231,15 @@ func (ackMgr *ackManager) updateAckLevel() {
 	// moving the acklevel as we go forward.
 	for curr := ackMgr.ackLevel + 1; curr <= stop; curr++ {
 		if addrs, ok := ackMgr.addrs[curr]; ok {
-			if addrs.acked {
-				update = true
-				ackMgr.ackLevel = curr
-				count++
-			} else {
+
+			if !addrs.acked {
 				break
 			}
+
+			update = true
+			ackMgr.ackLevel = curr
+			count++
+			delete(ackMgr.addrs, curr-1)
 		}
 	}
 
