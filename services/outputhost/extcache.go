@@ -154,7 +154,10 @@ func (extCache *extentCache) load(outputHostUUID string, cgUUID string, metaClie
 
 	// now try to load the replica streams
 	extCache.connection, extCache.pickedIndex, err =
-		extCache.loadReplicaStream(cge.GetAckLevelOffset(), common.SequenceNumber(cge.GetAckLevelSeqNo()), rand.Intn(len(extCache.storeUUIDs)))
+		extCache.loadReplicaStream(
+			storeHostAddress(cge.GetAckLevelOffset()),
+			common.SequenceNumber(cge.GetAckLevelSeqNo()),
+			rand.Intn(len(extCache.storeUUIDs)))
 	if err != nil {
 		// Exhausted all replica streams.. giving up
 		extCache.logger.Error(`unable to load replica stream for extent`)
@@ -173,7 +176,7 @@ func (extCache *extentCache) load(outputHostUUID string, cgUUID string, metaClie
 	return
 }
 
-func (extCache *extentCache) loadReplicaStream(startAddress int64, startSequence common.SequenceNumber, startIndex int) (repl *replicaConnection, pickedIndex int, err error) {
+func (extCache *extentCache) loadReplicaStream(startAddress storeHostAddress, startSequence common.SequenceNumber, startIndex int) (repl *replicaConnection, pickedIndex int, err error) {
 	var call serverStream.BStoreOpenReadStreamOutCall
 	var cancel context.CancelFunc
 	extUUID := extCache.extUUID
@@ -226,7 +229,7 @@ func (extCache *extentCache) loadReplicaStream(startAddress int64, startSequence
 					logger.WithField(common.TagErr, tmpErr).Warn(`loadReplicaStream: GetAddressFromTimestamp failed`)
 					startAddress = 0
 				} else {
-					startAddress = getResp.GetAddress()
+					startAddress = storeHostAddress(getResp.GetAddress())
 					// FIXME: T471157 Timer queues don't give an accurate sequence number
 					if extCache.destType != shared.DestinationType_TIMER {
 						startSequence = common.SequenceNumber(getResp.GetSequenceNumber())
@@ -251,7 +254,7 @@ func (extCache *extentCache) loadReplicaStream(startAddress int64, startSequence
 			DestinationType:   cherami.DestinationTypePtr(cDestType),
 			ExtentUUID:        common.StringPtr(extUUID),
 			ConsumerGroupUUID: common.StringPtr(extCache.cgUUID),
-			Address:           common.Int64Ptr(startAddress),
+			Address:           common.Int64Ptr(int64(startAddress)),
 			Inclusive:         common.BoolPtr(false),
 		}
 		reqHeaders := common.GetOpenReadStreamRequestHeaders(req)
@@ -284,11 +287,6 @@ func (extCache *extentCache) loadReplicaStream(startAddress int64, startSequence
 			return
 		}
 		cancel = nil
-
-		// successfully opened read stream on the replica; save this index
-		if startSequence != 0 {
-			extCache.ackMgr.addLevelOffset(startSequence) // Let ack manager know that the first message received is not sequence zero
-		}
 
 		logger.WithField(`startIndex`, startIndex).Debug(`opened read stream`)
 		pickedIndex = startIndex
@@ -342,13 +340,14 @@ func (extCache *extentCache) manageExtentCache() {
 			} else {
 				// this means a replica stream was closed. try another replica
 				extCache.logger.Info(`trying another replica`)
-				// first make sure the ackMgr updates its current ack level
-				extCache.ackMgr.updateAckLevel()
+
 				// TODO: Fix small race between the offset and seqNo calls
+
+				// When we switch to a new replica, start reading from the
+				// current read-level offset
+				readLevelAddr, readLevelSeq := extCache.ackMgr.getCurrentReadLevel()
 				extCache.connection, extCache.pickedIndex, err =
-					extCache.loadReplicaStream(
-						extCache.ackMgr.getCurrentAckLevelOffset(),
-						extCache.ackMgr.getCurrentAckLevelSeqNo(),
+					extCache.loadReplicaStream(readLevelAddr, readLevelSeq,
 						(extCache.pickedIndex+1)%len(extCache.storeUUIDs))
 			}
 			extCache.cacheMutex.Unlock()
