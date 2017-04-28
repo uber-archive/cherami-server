@@ -66,6 +66,7 @@ type NetIntegrationSuiteParallelD struct {
 type NetIntegrationSuiteParallelE struct {
 	testBase
 }
+
 type NetIntegrationSuiteSerial struct {
 	testBase
 }

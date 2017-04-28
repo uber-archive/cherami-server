@@ -90,7 +90,7 @@ ReplicatorConfig:
 
 # KafkaConfig specifies
 KafkaConfig:
-  kafkaClusterConfigFile: "./config/local_kafka_clusters.yaml"
+  kafkaClusterConfigFile: "../../config/local_kafka_clusters.yaml"
 
 # Logging configuration
 logging:

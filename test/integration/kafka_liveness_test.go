@@ -24,9 +24,7 @@ import (
 	"github.com/Shopify/sarama"
 	"github.com/bsm/sarama-cluster"
 	"github.com/pborman/uuid"
-	"github.com/stretchr/testify/suite"
 	"log"
-	"testing"
 	"time"
 )
 
@@ -34,17 +32,7 @@ import (
 // If running on Mac and java 1.7 for ZooKeeper/Kafka, run following command before starting Kafka:
 // echo "127.0.0.1 $HOSTNAME" | sudo tee -a /etc/hosts
 
-type KafkaLivenessIntegrationSuite struct {
-	testBase
-}
-
-func TestKafkaLivenessSuite(t *testing.T) {
-	s := new(KafkaLivenessIntegrationSuite)
-	s.testBase.SetupSuite(t)
-	suite.Run(t, s)
-}
-
-func (s *KafkaLivenessIntegrationSuite) TestKafkaLivenessBySarama() {
+func (s *NetIntegrationSuiteParallelE) TestKafkaLivenessBySarama() {
 	msgValue := "testing message " + uuid.New()
 
 	producer, partition, err := s.produceKafkaMessage(msgValue)
@@ -94,7 +82,7 @@ FOR:
 	s.Assert().True(receivedMessage)
 }
 
-func (s *KafkaLivenessIntegrationSuite) TestKafkaLivenessBySaramaCluster() {
+func (s *NetIntegrationSuiteParallelE) TestKafkaLivenessBySaramaCluster() {
 	msgValue := "testing message " + uuid.New()
 
 	producer, partition, err := s.produceKafkaMessage(msgValue)
@@ -151,7 +139,7 @@ FOR:
 	s.Assert().True(receivedMessage)
 }
 
-func (s *KafkaLivenessIntegrationSuite) produceKafkaMessage(msgValue string) (producer sarama.SyncProducer, partition int32, err error) {
+func (s *NetIntegrationSuiteParallelE) produceKafkaMessage(msgValue string) (producer sarama.SyncProducer, partition int32, err error) {
 	config := sarama.NewConfig()
 	config.Producer.RequiredAcks = sarama.WaitForAll
 	config.Producer.Return.Successes = true
