@@ -335,7 +335,56 @@ func (r *metadataReconciler) reconcileCg(localCgs []*shared.ConsumerGroupDescrip
 				continue
 			}
 
-			// TODO case #2: cg exists in both remote and local, try to compare the property to see if anything gets updated
+			// case #2: destination exists in both remote and local, try to compare the property to see if anything gets updated
+			updateRequest := &shared.UpdateConsumerGroupRequest{}
+			cgUpdated := false
+
+			if localCg.GetLockTimeoutSeconds() != remoteCg.GetLockTimeoutSeconds() {
+				updateRequest.LockTimeoutSeconds = common.Int32Ptr(remoteCg.GetLockTimeoutSeconds())
+				cgUpdated = true
+			}
+			if localCg.GetMaxDeliveryCount() != remoteCg.GetMaxDeliveryCount() {
+				updateRequest.MaxDeliveryCount = common.Int32Ptr(remoteCg.GetMaxDeliveryCount())
+				cgUpdated = true
+			}
+			if localCg.GetSkipOlderMessagesSeconds() != remoteCg.GetSkipOlderMessagesSeconds() {
+				updateRequest.SkipOlderMessagesSeconds = common.Int32Ptr(remoteCg.GetSkipOlderMessagesSeconds())
+				cgUpdated = true
+			}
+			if localCg.GetStatus() != remoteCg.GetStatus() {
+				updateRequest.Status = common.InternalConsumerGroupStatusPtr(remoteCg.GetStatus())
+				cgUpdated = true
+			}
+			if localCg.GetOwnerEmail() != remoteCg.GetOwnerEmail() {
+				updateRequest.OwnerEmail = common.StringPtr(remoteCg.GetOwnerEmail())
+				cgUpdated = true
+			}
+			if localCg.GetActiveZone() != remoteCg.GetActiveZone() {
+				updateRequest.ActiveZone = common.StringPtr(remoteCg.GetActiveZone())
+				cgUpdated = true
+			}
+
+			if cgUpdated {
+				lclLg.Info(`Found cg gets updated in remote but not in local`)
+
+				destDesc, err := r.readDestinationInAuthoritativeZone(remoteCg.GetDestinationUUID())
+				if err != nil {
+					lclLg.WithFields(bark.Fields{
+						common.TagErr: err,
+					}).Error(`Failed to update ConsumerGroup in local zone because read destination failed in remote zone`)
+					continue
+				}
+				updateRequest.DestinationPath = common.StringPtr(destDesc.GetPath())
+				updateRequest.ConsumerGroupName = common.StringPtr(remoteCg.GetConsumerGroupName())
+
+				ctx, cancel := thrift.NewContext(localReplicatorCallTimeOut)
+				defer cancel()
+				_, err = r.replicator.UpdateConsumerGroup(ctx, updateRequest)
+				if err != nil {
+					lclLg.WithField(common.TagErr, err).Error(`Failed to update cg in local zone for reconciliation`)
+					continue
+				}
+			}
 		} else {
 			// case #3: cg exists in remote, but not in local. Create the cg locally
 			lclLg.Warn(`Found missing ConsumerGroup from remote!`)

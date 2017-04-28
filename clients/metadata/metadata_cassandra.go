@@ -1492,6 +1492,7 @@ func (s *CassandraMetadataService) ReadConsumerGroupByUUID(ctx thrift.Context, r
 func updateCGDescIfChanged(req *shared.UpdateConsumerGroupRequest, cgDesc *shared.ConsumerGroupDescription) bool {
 	isChanged := false
 
+	// Note: for any updatable property here, we also need to reconcile it in replicator
 	if req.IsSetLockTimeoutSeconds() && req.GetLockTimeoutSeconds() != cgDesc.GetLockTimeoutSeconds() {
 		isChanged = true
 		cgDesc.LockTimeoutSeconds = common.Int32Ptr(req.GetLockTimeoutSeconds())
@@ -1515,6 +1516,11 @@ func updateCGDescIfChanged(req *shared.UpdateConsumerGroupRequest, cgDesc *share
 	if req.IsSetOwnerEmail() && req.GetOwnerEmail() != cgDesc.GetOwnerEmail() {
 		isChanged = true
 		cgDesc.OwnerEmail = common.StringPtr(req.GetOwnerEmail())
+	}
+
+	if req.IsSetActiveZone() && req.GetActiveZone() != cgDesc.GetActiveZone() {
+		isChanged = true
+		cgDesc.ActiveZone = common.StringPtr(req.GetActiveZone())
 	}
 	return isChanged
 }
