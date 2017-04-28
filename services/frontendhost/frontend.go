@@ -578,6 +578,7 @@ func (h *Frontend) HostPort(ctx thrift.Context) (string, error) {
 
 // CreateDestination implements TChanBFrontendServer::CreateDestination
 func (h *Frontend) CreateDestination(ctx thrift.Context, createRequest *c.CreateDestinationRequest) (destDesc *c.DestinationDescription, err error) {
+	fmt.Println("********** xxxxxxxxxx", ctx)
 	sw := h.m3Client.StartTimer(metrics.CreateDestinationScope, metrics.FrontendLatencyTimer)
 	defer func() { sw.Stop(); h.epilog(metrics.CreateDestinationScope, destDesc, &err) }()
 	if _, err = h.prolog(ctx, createRequest); err != nil {
