@@ -1025,6 +1025,8 @@ const (
 	ControllerNumOpenCGExtents
 	// ControllerNumConsumedCGExtents represents the count of consumed cg extents
 	ControllerNumConsumedCGExtents
+	// ControllerNoActiveZone indicates there's no active zone from dynamic config
+	ControllerNoActiveZone
 
 	// -- Replicator metrics -- //
 
@@ -1234,6 +1236,7 @@ var metricDefs = map[ServiceIdx]map[int]metricDefinition{
 		ControllerRetentionJobDuration:             {Timer, "controller.retentionmgr.jobduration"},
 		ControllerGetAddressLatency:                {Timer, "controller.retentionmgr.getaddresslatency"},
 		ControllerPurgeMessagesLatency:             {Timer, "controller.retentionmgr.purgemessageslatency"},
+		ControllerNoActiveZone:                     {Gauge, "controller.no-active-zone"},
 	},
 
 	// definitions for Replicator metrics
