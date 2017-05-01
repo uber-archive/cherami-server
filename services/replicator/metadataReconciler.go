@@ -119,21 +119,34 @@ func (r *metadataReconciler) run() {
 		return
 	}
 
+	// Get the local destination and cgs
+	localDests, err := r.getAllMultiZoneDestInLocalZone()
+	if err != nil {
+		r.m3Client.UpdateGauge(metrics.ReplicatorReconcileScope, metrics.ReplicatorReconcileFail, 1)
+		return
+	}
+	localCgs, err := r.getAllMultiZoneCgInLocalZone(localDests)
+	if err != nil {
+		r.m3Client.UpdateGauge(metrics.ReplicatorReconcileScope, metrics.ReplicatorReconcileFail, 1)
+		return
+	}
+
 	// destination/cg metadata reconciliation is only needed if this is a non-authoritative zone
-	var localCgs []*shared.ConsumerGroupDescription
 	if r.localZone != r.replicator.getAuthoritativeZone() {
 		r.m3Client.UpdateGauge(metrics.ReplicatorReconcileScope, metrics.ReplicatorReconcileDestRun, 1)
-		localDests, remoteDests, err2 := r.reconcileDestMetadata()
-		if err2 != nil {
-			r.m3Client.UpdateGauge(metrics.ReplicatorReconcileScope, metrics.ReplicatorReconcileDestFail, 1)
-			return
-		}
-
-		r.m3Client.UpdateGauge(metrics.ReplicatorReconcileScope, metrics.ReplicatorReconcileCgRun, 1)
-		localCgs, err = r.reconcileCgMetadata(localDests, remoteDests)
+		authoritativeZoneDests, err := r.getAllMultiZoneDestInAuthoritativeZone()
 		if err != nil {
-			r.m3Client.UpdateGauge(metrics.ReplicatorReconcileScope, metrics.ReplicatorReconcileCgFail, 1)
-			return
+			r.m3Client.UpdateGauge(metrics.ReplicatorReconcileScope, metrics.ReplicatorReconcileDestFail, 1)
+		} else {
+			r.reconcileDest(localDests, authoritativeZoneDests)
+
+			r.m3Client.UpdateGauge(metrics.ReplicatorReconcileScope, metrics.ReplicatorReconcileCgRun, 1)
+			authoritativeZoneCgs, err := r.getAllMultiZoneCgInAuthoritativeZone(authoritativeZoneDests)
+			if err != nil {
+				r.m3Client.UpdateGauge(metrics.ReplicatorReconcileScope, metrics.ReplicatorReconcileCgFail, 1)
+			} else {
+				r.reconcileCg(localCgs, authoritativeZoneCgs)
+			}
 		}
 	}
 
@@ -152,36 +165,6 @@ func (r *metadataReconciler) run() {
 	}
 
 	atomic.StoreInt64(&r.running, 0)
-}
-
-func (r *metadataReconciler) reconcileDestMetadata() ([]*shared.DestinationDescription, []*shared.DestinationDescription, error) {
-	localDests, err := r.getAllMultiZoneDestInLocalZone()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	remoteDests, err := r.getAllMultiZoneDestInAuthoritativeZone()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	r.reconcileDest(localDests, remoteDests)
-	return localDests, remoteDests, nil
-}
-
-func (r *metadataReconciler) reconcileCgMetadata(localDests []*shared.DestinationDescription, remoteDests []*shared.DestinationDescription) ([]*shared.ConsumerGroupDescription, error) {
-	localCgs, err := r.getAllMultiZoneCgInLocalZone(localDests)
-	if err != nil {
-		return nil, err
-	}
-
-	remoteCgs, err := r.getAllMultiZoneCgInAuthoritativeZone(remoteDests)
-	if err != nil {
-		return nil, err
-	}
-
-	r.reconcileCg(localCgs, remoteCgs)
-	return localCgs, nil
 }
 
 func (r *metadataReconciler) reconcileDest(localDests []*shared.DestinationDescription, remoteDests []*shared.DestinationDescription) {

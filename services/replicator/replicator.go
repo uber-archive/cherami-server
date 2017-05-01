@@ -1064,7 +1064,6 @@ func (r *Replicator) SetAckOffset(ctx thrift.Context, request *shared.SetAckOffs
 		return err
 	}
 
-	lcllg.Info(`Ack offset updated in metadata`)
 	return nil
 }
 

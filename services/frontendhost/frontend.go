@@ -1029,13 +1029,13 @@ func (h *Frontend) ReadConsumerGroupHosts(ctx thrift.Context, readRequest *c.Rea
 
 	getOutputHostReq := &controller.GetOutputHostsRequest{DestinationUUID: common.StringPtr(mCGDesc.GetDestinationUUID()), ConsumerGroupUUID: common.StringPtr(mCGDesc.GetConsumerGroupUUID())}
 	getOutputHostResp, err := cClient.GetOutputHosts(ctx, getOutputHostReq)
-	if err != nil || len(getOutputHostResp.GetOutputHostIds()) < 1 {
-		if err != nil {
-			lclLg = lclLg.WithField(common.TagErr, err)
-		}
-
-		lclLg.Error("No hosts returned from controller")
+	if err != nil {
+		lclLg.WithField(common.TagErr, err).Error(`error getting hosts from controller`)
 		return nil, err
+	}
+
+	if len(getOutputHostResp.GetOutputHostIds()) < 1 {
+		return c.NewReadConsumerGroupHostsResult_(), nil
 	}
 
 	outputHostIds := getOutputHostResp.GetOutputHostIds()

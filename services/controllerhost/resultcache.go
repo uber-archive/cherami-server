@@ -42,22 +42,25 @@ type (
 		nExtents   int
 		maxExtents int
 		dstType
-		hostIDs []string
+		hostIDs         []string
+		consumeDisabled bool
 	}
 
 	resultCacheReadResult struct {
-		cachedResult []string
-		cacheHit     bool
-		refreshCache bool
+		cachedResult    []string
+		consumeDisabled bool
+		cacheHit        bool
+		refreshCache    bool
 		*resultCacheEntry
 	}
 
 	resultCacheParams struct {
-		dstType    dstType
-		nExtents   int
-		maxExtents int
-		hostIDs    []string
-		expiry     int64
+		dstType         dstType
+		nExtents        int
+		maxExtents      int
+		hostIDs         []string
+		consumeDisabled bool
+		expiry          int64
 	}
 )
 
@@ -108,6 +111,7 @@ func (cache *resultCache) write(key string, write resultCacheParams) {
 	cacheEntry.dstType = write.dstType
 	cacheEntry.expiry = write.expiry
 	cacheEntry.hostIDs = write.hostIDs
+	cacheEntry.consumeDisabled = write.consumeDisabled
 	cacheEntry.nExtents = write.nExtents
 	cacheEntry.maxExtents = write.maxExtents
 	cache.Put(key, cacheEntry)
@@ -135,6 +139,7 @@ func readResultCache(cache *resultCache, key string, svc string, now int64) *res
 
 		return &resultCacheReadResult{
 			cachedResult:     cachedResult,
+			consumeDisabled:  cacheEntry.consumeDisabled,
 			cacheHit:         cacheHit,
 			refreshCache:     refreshCache,
 			resultCacheEntry: cacheEntry,
@@ -142,6 +147,7 @@ func readResultCache(cache *resultCache, key string, svc string, now int64) *res
 	}
 	return &resultCacheReadResult{
 		cachedResult:     cachedResult,
+		consumeDisabled:  false,
 		cacheHit:         cacheHit,
 		refreshCache:     refreshCache,
 		resultCacheEntry: &resultCacheEntry{},

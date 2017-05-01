@@ -1025,6 +1025,8 @@ const (
 	ControllerNumOpenCGExtents
 	// ControllerNumConsumedCGExtents represents the count of consumed cg extents
 	ControllerNumConsumedCGExtents
+	// ControllerNoActiveZone indicates there's no active zone from dynamic config
+	ControllerNoActiveZone
 
 	// -- Replicator metrics -- //
 
@@ -1048,6 +1050,8 @@ const (
 	// ReplicatorOutConnMsgRead indicates how many messages OutConn read
 	ReplicatorOutConnMsgRead
 
+	// ReplicatorReconcileDestRun indicates the reconcile fails
+	ReplicatorReconcileFail
 	// ReplicatorReconcileDestRun indicates the reconcile for dest runs
 	ReplicatorReconcileDestRun
 	// ReplicatorReconcileDestFail indicates the reconcile for dest fails
@@ -1232,6 +1236,7 @@ var metricDefs = map[ServiceIdx]map[int]metricDefinition{
 		ControllerRetentionJobDuration:             {Timer, "controller.retentionmgr.jobduration"},
 		ControllerGetAddressLatency:                {Timer, "controller.retentionmgr.getaddresslatency"},
 		ControllerPurgeMessagesLatency:             {Timer, "controller.retentionmgr.purgemessageslatency"},
+		ControllerNoActiveZone:                     {Gauge, "controller.no-active-zone"},
 	},
 
 	// definitions for Replicator metrics
@@ -1245,6 +1250,7 @@ var metricDefs = map[ServiceIdx]map[int]metricDefinition{
 		ReplicatorInConnMsgWritten:                              {Counter, "replicator.inconn.msgwritten"},
 		ReplicatorOutConnCreditsSent:                            {Counter, "replicator.outconn.creditssent"},
 		ReplicatorOutConnMsgRead:                                {Counter, "replicator.outconn.msgread"},
+		ReplicatorReconcileFail:                                 {Gauge, "replicator.reconcile.fail"},
 		ReplicatorReconcileDestRun:                              {Gauge, "replicator.reconcile.dest.run"},
 		ReplicatorReconcileDestFail:                             {Gauge, "replicator.reconcile.dest.fail"},
 		ReplicatorReconcileDestFoundMissing:                     {Gauge, "replicator.reconcile.dest.foundmissing"},
