@@ -1673,6 +1673,7 @@ func assertConsumerGroupsEqual(s *CassandraSuite, expected, got *shared.Consumer
 	s.Equal(expected.GetSkipOlderMessagesSeconds(), got.GetSkipOlderMessagesSeconds(), "Wrong SkipOlderMessagesSeconds")
 	s.Equal(expected.GetOwnerEmail(), got.GetOwnerEmail(), "Wrong OwnerEmail")
 	s.Equal(expected.GetDeadLetterQueueDestinationUUID(), got.GetDeadLetterQueueDestinationUUID(), "Wrong DeadLetterQueueDestinationUUID")
+	s.Equal(expected.GetActiveZone(), got.GetActiveZone(), "Wrong ActiveZone")
 }
 
 func (s *CassandraSuite) TestDeleteConsumerGroupDeletesDLQ() {
@@ -1835,11 +1836,18 @@ func (s *CassandraSuite) TestConsumerGroupCRUD() {
 			OwnerEmail:               common.StringPtr("consumer_test@uber.com"),
 		}
 
+		if pass%2 == 0 {
+			updateReq.ActiveZone = common.StringPtr(`zone2`)
+		} else {
+			updateReq.ActiveZone = common.StringPtr(``)
+		}
+
 		expectedCG.Status = common.InternalConsumerGroupStatusPtr(shared.ConsumerGroupStatus_DISABLED)
 		expectedCG.LockTimeoutSeconds = common.Int32Ptr(updateReq.GetLockTimeoutSeconds())
 		expectedCG.MaxDeliveryCount = common.Int32Ptr(updateReq.GetMaxDeliveryCount())
 		expectedCG.SkipOlderMessagesSeconds = common.Int32Ptr(updateReq.GetSkipOlderMessagesSeconds())
 		expectedCG.OwnerEmail = common.StringPtr(updateReq.GetOwnerEmail())
+		expectedCG.ActiveZone = common.StringPtr(updateReq.GetActiveZone())
 
 		gotCG = nil
 		gotCG, err = s.client.UpdateConsumerGroup(nil, updateReq)
