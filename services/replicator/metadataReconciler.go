@@ -390,7 +390,7 @@ func (r *metadataReconciler) reconcileCg(localCgs []*shared.ConsumerGroupDescrip
 	// We don't need to handle this because deleted cg will still be in the uuid table for 30 days, so it should be covered by case #1
 
 	r.m3Client.UpdateGauge(metrics.ReplicatorReconcileScope, metrics.ReplicatorReconcileCgFoundMissing, replicatorReconcileCgFoundMissingCount)
-	r.m3Client.UpdateGauge(metrics.ReplicatorReconcileScope, metrics.ReplicatorReconcileCgFoundUp
+	r.m3Client.UpdateGauge(metrics.ReplicatorReconcileScope, metrics.ReplicatorReconcileCgFoundUpdated, replicatorReconcileCgFoundUpdatedCount)
 }
 
 func (r *metadataReconciler) compareAndUpdateCg(remoteCg *shared.ConsumerGroupDescription, localCg *shared.ConsumerGroupDescription, logger bark.Logger, replicatorReconcileCgFoundUpdatedCount *int64) {

@@ -2,9 +2,7 @@ hash: 95b094ac76b3329e6ad38bb6314377db13aa5d0a7f29f4a74b54f00502e17ad4
 updated: 2017-04-17T10:59:50.30170527-07:00
 imports:
 - name: github.com/apache/thrift
-  repo: git://git.apache.org/thrift.git
-  vcs: git
-  version: b2a4d4ae21c789b689dd162deb819665567f481c
+  version: 2d65c2365f19f637bc732222e71d78727bf0b709
   subpackages:
   - lib/go/thrift
 - name: github.com/aws/aws-sdk-go
@@ -135,7 +133,7 @@ imports:
   - common/websocket
   - stream
 - name: github.com/uber/cherami-thrift
-  version: 96831195ae16ae217142cdac0dd9d05dae9dab39
+  version: 5ee4a84768ccabe0469c7c02c66b28d206e2c34f
   subpackages:
   - .generated/go/admin
   - .generated/go/cherami

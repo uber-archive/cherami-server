@@ -2,9 +2,6 @@ package: github.com/uber/cherami-server
 import:
 - package: github.com/Sirupsen/logrus
 - package: github.com/apache/thrift
-  repo: git://git.apache.org/thrift.git
-  vcs: git
-  version: ^0.9.3
   subpackages:
   - lib/go/thrift
 - package: github.com/aws/aws-sdk-go
