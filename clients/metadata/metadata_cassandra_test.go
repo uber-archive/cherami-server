@@ -1836,7 +1836,7 @@ func (s *CassandraSuite) TestConsumerGroupCRUD() {
 			OwnerEmail:               common.StringPtr("consumer_test@uber.com"),
 		}
 
-		if pass % 2 == 0 {
+		if pass%2 == 0 {
 			updateReq.ActiveZone = common.StringPtr(`zone2`)
 		} else {
 			updateReq.ActiveZone = common.StringPtr(``)

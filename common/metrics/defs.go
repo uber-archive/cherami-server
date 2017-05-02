@@ -1060,6 +1060,8 @@ const (
 	ReplicatorReconcileCgFail
 	// ReplicatorReconcileCgFoundMissing indicates the reconcile for cg found a missing cg
 	ReplicatorReconcileCgFoundMissing
+	// ReplicatorReconcileCgFoundUpdated indicates the reconcile for cg found a updated cg
+	ReplicatorReconcileCgFoundUpdated
 	// ReplicatorReconcileDestExtentRun indicates the reconcile for dest extent runs
 	ReplicatorReconcileDestExtentRun
 	// ReplicatorReconcileDestExtentFail indicates the reconcile for dest extent fails
@@ -1251,6 +1253,7 @@ var metricDefs = map[ServiceIdx]map[int]metricDefinition{
 		ReplicatorReconcileCgRun:                                {Gauge, "replicator.reconcile.cg.run"},
 		ReplicatorReconcileCgFail:                               {Gauge, "replicator.reconcile.cg.fail"},
 		ReplicatorReconcileCgFoundMissing:                       {Gauge, "replicator.reconcile.cg.foundmissing"},
+		ReplicatorReconcileCgFoundUpdated:                       {Gauge, "replicator.reconcile.cg.foundupdated"},
 		ReplicatorReconcileDestExtentRun:                        {Gauge, "replicator.reconcile.destextent.run"},
 		ReplicatorReconcileDestExtentFail:                       {Gauge, "replicator.reconcile.destextent.fail"},
 		ReplicatorReconcileDestExtentFoundMissing:               {Gauge, "replicator.reconcile.destextent.foundmissing"},

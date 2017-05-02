@@ -301,6 +301,7 @@ func (r *metadataReconciler) reconcileDest(localDests []*shared.DestinationDescr
 
 func (r *metadataReconciler) reconcileCg(localCgs []*shared.ConsumerGroupDescription, remoteCgs []*shared.ConsumerGroupDescription) {
 	var replicatorReconcileCgFoundMissingCount int64
+	var replicatorReconcileCgFoundUpdatedCount int64
 	localCgsSet := make(map[string]*shared.ConsumerGroupDescription, len(localCgs))
 	for _, cg := range localCgs {
 		localCgsSet[cg.GetConsumerGroupUUID()] = cg
@@ -335,56 +336,8 @@ func (r *metadataReconciler) reconcileCg(localCgs []*shared.ConsumerGroupDescrip
 				continue
 			}
 
-			// case #2: cg exists in both remote and local, try to compare the property to see if anything gets updated
-			updateRequest := &shared.UpdateConsumerGroupRequest{}
-			cgUpdated := false
-
-			if localCg.GetLockTimeoutSeconds() != remoteCg.GetLockTimeoutSeconds() {
-				updateRequest.LockTimeoutSeconds = common.Int32Ptr(remoteCg.GetLockTimeoutSeconds())
-				cgUpdated = true
-			}
-			if localCg.GetMaxDeliveryCount() != remoteCg.GetMaxDeliveryCount() {
-				updateRequest.MaxDeliveryCount = common.Int32Ptr(remoteCg.GetMaxDeliveryCount())
-				cgUpdated = true
-			}
-			if localCg.GetSkipOlderMessagesSeconds() != remoteCg.GetSkipOlderMessagesSeconds() {
-				updateRequest.SkipOlderMessagesSeconds = common.Int32Ptr(remoteCg.GetSkipOlderMessagesSeconds())
-				cgUpdated = true
-			}
-			if localCg.GetStatus() != remoteCg.GetStatus() {
-				updateRequest.Status = common.InternalConsumerGroupStatusPtr(remoteCg.GetStatus())
-				cgUpdated = true
-			}
-			if localCg.GetOwnerEmail() != remoteCg.GetOwnerEmail() {
-				updateRequest.OwnerEmail = common.StringPtr(remoteCg.GetOwnerEmail())
-				cgUpdated = true
-			}
-			if localCg.GetActiveZone() != remoteCg.GetActiveZone() {
-				updateRequest.ActiveZone = common.StringPtr(remoteCg.GetActiveZone())
-				cgUpdated = true
-			}
-
-			if cgUpdated {
-				lclLg.Info(`Found cg gets updated in remote but not in local`)
-
-				destDesc, err := r.readDestinationInAuthoritativeZone(remoteCg.GetDestinationUUID())
-				if err != nil {
-					lclLg.WithFields(bark.Fields{
-						common.TagErr: err,
-					}).Error(`Failed to update ConsumerGroup in local zone because read destination failed in remote zone`)
-					continue
-				}
-				updateRequest.DestinationPath = common.StringPtr(destDesc.GetPath())
-				updateRequest.ConsumerGroupName = common.StringPtr(remoteCg.GetConsumerGroupName())
-
-				ctx, cancel := thrift.NewContext(localReplicatorCallTimeOut)
-				defer cancel()
-				_, err = r.replicator.UpdateConsumerGroup(ctx, updateRequest)
-				if err != nil {
-					lclLg.WithField(common.TagErr, err).Error(`Failed to update cg in local zone for reconciliation`)
-					continue
-				}
-			}
+			// case #2: cg exists in both remote and local, try to compare and update cg
+			r.compareAndUpdateCg(remoteCg, localCg, lclLg, &replicatorReconcileCgFoundUpdatedCount)
 		} else {
 			// case #3: cg exists in remote, but not in local. Create the cg locally
 			lclLg.Warn(`Found missing ConsumerGroup from remote!`)
@@ -437,6 +390,59 @@ func (r *metadataReconciler) reconcileCg(localCgs []*shared.ConsumerGroupDescrip
 	// We don't need to handle this because deleted cg will still be in the uuid table for 30 days, so it should be covered by case #1
 
 	r.m3Client.UpdateGauge(metrics.ReplicatorReconcileScope, metrics.ReplicatorReconcileCgFoundMissing, replicatorReconcileCgFoundMissingCount)
+	r.m3Client.UpdateGauge(metrics.ReplicatorReconcileScope, metrics.ReplicatorReconcileCgFoundUp
+}
+
+func (r *metadataReconciler) compareAndUpdateCg(remoteCg *shared.ConsumerGroupDescription, localCg *shared.ConsumerGroupDescription, logger bark.Logger, replicatorReconcileCgFoundUpdatedCount *int64) {
+	updateRequest := &shared.UpdateConsumerGroupRequest{}
+	cgUpdated := false
+
+	if localCg.GetLockTimeoutSeconds() != remoteCg.GetLockTimeoutSeconds() {
+		updateRequest.LockTimeoutSeconds = common.Int32Ptr(remoteCg.GetLockTimeoutSeconds())
+		cgUpdated = true
+	}
+	if localCg.GetMaxDeliveryCount() != remoteCg.GetMaxDeliveryCount() {
+		updateRequest.MaxDeliveryCount = common.Int32Ptr(remoteCg.GetMaxDeliveryCount())
+		cgUpdated = true
+	}
+	if localCg.GetSkipOlderMessagesSeconds() != remoteCg.GetSkipOlderMessagesSeconds() {
+		updateRequest.SkipOlderMessagesSeconds = common.Int32Ptr(remoteCg.GetSkipOlderMessagesSeconds())
+		cgUpdated = true
+	}
+	if localCg.GetStatus() != remoteCg.GetStatus() {
+		updateRequest.Status = common.InternalConsumerGroupStatusPtr(remoteCg.GetStatus())
+		cgUpdated = true
+	}
+	if localCg.GetOwnerEmail() != remoteCg.GetOwnerEmail() {
+		updateRequest.OwnerEmail = common.StringPtr(remoteCg.GetOwnerEmail())
+		cgUpdated = true
+	}
+	if localCg.GetActiveZone() != remoteCg.GetActiveZone() {
+		updateRequest.ActiveZone = common.StringPtr(remoteCg.GetActiveZone())
+		cgUpdated = true
+	}
+
+	if cgUpdated {
+		logger.Info(`Found cg gets updated in remote but not in local`)
+		*replicatorReconcileCgFoundUpdatedCount = *replicatorReconcileCgFoundUpdatedCount + 1
+
+		destDesc, err := r.readDestinationInAuthoritativeZone(remoteCg.GetDestinationUUID())
+		if err != nil {
+			logger.WithFields(bark.Fields{
+				common.TagErr: err,
+			}).Error(`Failed to update ConsumerGroup in local zone because read destination failed in remote zone`)
+			return
+		}
+		updateRequest.DestinationPath = common.StringPtr(destDesc.GetPath())
+		updateRequest.ConsumerGroupName = common.StringPtr(remoteCg.GetConsumerGroupName())
+
+		ctx, cancel := thrift.NewContext(localReplicatorCallTimeOut)
+		defer cancel()
+		_, err = r.replicator.UpdateConsumerGroup(ctx, updateRequest)
+		if err != nil {
+			logger.WithField(common.TagErr, err).Error(`Failed to update cg in local zone for reconciliation`)
+		}
+	}
 }
 
 func (r *metadataReconciler) readDestinationInAuthoritativeZone(destUUID string) (*shared.DestinationDescription, error) {
