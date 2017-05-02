@@ -51,8 +51,9 @@ func UpdateDestination(c *cli.Context) {
 
 // CreateConsumerGroup creates the CG
 func CreateConsumerGroup(c *cli.Context, cliHelper scommon.CliHelper) {
+	mClient := common.GetMClient(c, serviceName)
 	cClient := common.GetCClient(c, serviceName)
-	common.CreateConsumerGroup(c, cClient, cliHelper)
+	common.CreateConsumerGroup(c, cClient, mClient, cliHelper)
 }
 
 // UpdateConsumerGroup updates the CG

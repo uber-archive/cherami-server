@@ -398,6 +398,9 @@ func convertUpdateCGRequestToInternal(updateRequest *c.UpdateConsumerGroupReques
 	if updateRequest.IsSetOwnerEmail() {
 		internalUpdateRequest.OwnerEmail = common.StringPtr(updateRequest.GetOwnerEmail())
 	}
+	if updateRequest.IsSetActiveZone() {
+		internalUpdateRequest.ActiveZone = common.StringPtr(updateRequest.GetActiveZone())
+	}
 	return internalUpdateRequest
 }
 

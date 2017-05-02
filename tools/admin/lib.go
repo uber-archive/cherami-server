@@ -59,7 +59,8 @@ func UpdateDestination(c *cli.Context) {
 // CreateConsumerGroup creates a consumer group
 func CreateConsumerGroup(c *cli.Context, cliHelper common.CliHelper) {
 	cClient := toolscommon.GetCClient(c, adminToolService)
-	toolscommon.CreateConsumerGroup(c, cClient, cliHelper)
+	mClient := toolscommon.GetMClient(c, adminToolService)
+	toolscommon.CreateConsumerGroup(c, cClient, mClient, cliHelper)
 }
 
 // UpdateConsumerGroup updates properties of a consumer group
