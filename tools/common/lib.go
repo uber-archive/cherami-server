@@ -79,18 +79,21 @@ const (
 )
 
 const (
-	strNotEnoughArgs               = "Not enough arguments. Try \"--help\""
-	strTooManyArgs                 = "Too many arguments. Try \"--help\""
-	strNoChange                    = "Update must update something. Try \"--help\""
-	strCGSpecIncorrectArgs         = "Incorrect consumer group specification. Use \"<cg_uuid>\" or \"<dest_path> <cg_name>\""
-	strDestStatus                  = "Destination status must be \"enabled\", \"disabled\", \"sendonly\", or \"recvonly\""
-	strCGStatus                    = "Consumer group status must be \"enabled\", or \"disabled\""
-	strWrongDestZoneConfig         = "Format of destination zone config is wrong, should be \"ZoneName,AllowPublish,AllowConsume,ReplicaCount\". For example: \"zone1,true,true,3\""
-	strWrongReplicaCount           = "Replica count must be within 1 to 3"
-	strWrongZoneConfigCount        = "Multi zone destination must have at least 2 zone configs"
-	strUnconsumedRetentionTooSmall = "Unconsumed retention period for multi zone destination should be at least 3 days"
-	strKafkaNaming                 = "Kafka destinations and consumer groups must begin with \"" + kafkaPrefix + "\""
-	strKafkaNotEnoughArgs          = "Kafka destinations must specify the Kafka cluster and at least one topic"
+	strNotEnoughArgs                 = "Not enough arguments. Try \"--help\""
+	strTooManyArgs                   = "Too many arguments. Try \"--help\""
+	strNoChange                      = "Update must update something. Try \"--help\""
+	strCGSpecIncorrectArgs           = "Incorrect consumer group specification. Use \"<cg_uuid>\" or \"<dest_path> <cg_name>\""
+	strDestStatus                    = "Destination status must be \"enabled\", \"disabled\", \"sendonly\", or \"recvonly\""
+	strCGStatus                      = "Consumer group status must be \"enabled\", or \"disabled\""
+	strWrongDestZoneConfig           = "Format of destination zone config is wrong, should be \"ZoneName,AllowPublish,AllowConsume,ReplicaCount\". For example: \"zone1,true,true,3\""
+	strWrongReplicaCount             = "Replica count must be within 1 to 3"
+	strWrongZoneConfigCount          = "Multi zone destination or consumer group must have at least 2 zone configs"
+	strWrongCgZoneConfig             = "Format of consumer group zone config is wrong, should be \"ZoneName,PreferedActiveZone\". For example: \"zone1,false\""
+	strMultiZoneCgWithSingleZoneDest = "Multi zone consumer group must be created with a multi zone destination"
+	strMultiplePreferedActiveZone    = "At most one zone can be prefered active zone"
+	strUnconsumedRetentionTooSmall   = "Unconsumed retention period for multi zone destination should be at least 3 days"
+	strKafkaNaming                   = "Kafka destinations and consumer groups must begin with \"" + kafkaPrefix + "\""
+	strKafkaNotEnoughArgs            = "Kafka destinations must specify the Kafka cluster and at least one topic"
 )
 
 var uuidRegex, _ = regexp.Compile(`^[[:xdigit:]]{8}-[[:xdigit:]]{4}-[[:xdigit:]]{4}-[[:xdigit:]]{4}-[[:xdigit:]]{12}$`)
@@ -344,7 +347,7 @@ func UpdateDestination(c *cli.Context, cClient ccli.Client, mClient mcli.Client)
 }
 
 // CreateConsumerGroup create consumer group based on cli.Context
-func CreateConsumerGroup(c *cli.Context, cClient ccli.Client, cliHelper common.CliHelper) {
+func CreateConsumerGroup(c *cli.Context, cClient ccli.Client, mClient mcli.Client, cliHelper common.CliHelper) {
 	if len(c.Args()) < 2 {
 		ExitIfError(errors.New(strNotEnoughArgs))
 	}
@@ -373,6 +376,55 @@ func CreateConsumerGroup(c *cli.Context, cClient ccli.Client, cliHelper common.C
 	if len(ownerEmail) == 0 {
 		ownerEmail = cliHelper.GetDefaultOwnerEmail()
 	}
+
+	var zoneConfigs cherami.ConsumerGroupZoneConfigs
+	configs := c.StringSlice("zone_config")
+	var preferedActiveZone string
+	for _, config := range configs {
+		parts := strings.Split(config, `,`)
+		if len(parts) != 2 {
+			ExitIfError(errors.New(strWrongCgZoneConfig))
+		}
+
+		zone, err := cliHelper.GetCanonicalZone(parts[0])
+		ExitIfError(err)
+
+		isPreferedActiveZone, err := strconv.ParseBool(parts[1])
+		ExitIfError(err)
+
+		if isPreferedActiveZone {
+			if len(preferedActiveZone) > 0 {
+				ExitIfError(errors.New(strMultiplePreferedActiveZone))
+			} else {
+				preferedActiveZone = zone
+			}
+		}
+
+		zoneConfigs.Configs = append(zoneConfigs.Configs, &cherami.ConsumerGroupZoneConfig{
+			Zone:    common.StringPtr(zone),
+			Visible: common.BoolPtr(true),
+		})
+	}
+
+	if len(zoneConfigs.Configs) == 1 {
+		ExitIfError(errors.New(strWrongZoneConfigCount))
+	}
+
+	var isMultiZone bool
+	if len(zoneConfigs.Configs) > 1 {
+		dest, err := mClient.ReadDestination(&shared.ReadDestinationRequest{
+			Path: &path,
+		})
+		ExitIfError(err)
+
+		if !dest.GetIsMultiZone() {
+			ExitIfError(errors.New(strMultiZoneCgWithSingleZoneDest))
+		}
+
+		isMultiZone = true
+		zoneConfigs.ActiveZone = common.StringPtr(preferedActiveZone)
+	}
+
 	desc, err := cClient.CreateConsumerGroup(&cherami.CreateConsumerGroupRequest{
 		DestinationPath:            &path,
 		ConsumerGroupName:          &name,
@@ -381,6 +433,8 @@ func CreateConsumerGroup(c *cli.Context, cClient ccli.Client, cliHelper common.C
 		MaxDeliveryCount:           &maxDelivery,
 		SkipOlderMessagesInSeconds: &skipOlder,
 		OwnerEmail:                 &ownerEmail,
+		IsMultiZone:                &isMultiZone,
+		ZoneConfigs:                &zoneConfigs,
 	})
 
 	ExitIfError(err)
@@ -413,6 +467,7 @@ func UpdateConsumerGroup(c *cli.Context, cClient ccli.Client) {
 		MaxDeliveryCount:           getIfSetInt32(c, `max_delivery_count`, &setCount),
 		SkipOlderMessagesInSeconds: getIfSetInt32(c, `skip_older_messages_in_seconds`, &setCount),
 		OwnerEmail:                 getIfSetString(c, `owner_email`, &setCount),
+		ActiveZone:                 getIfSetString(c, `active_zone`, &setCount),
 	}
 
 	if c.IsSet(`status`) {
@@ -829,16 +884,19 @@ func DeleteConsumerGroup(c *cli.Context, cClient ccli.Client) {
 }
 
 type cgJSONOutputFields struct {
-	CGName                   string                     `json:"consumer_group_name"`
-	DestUUID                 string                     `json:"destination_uuid"`
-	CGUUID                   string                     `json:"consumer_group_uuid"`
-	Status                   shared.ConsumerGroupStatus `json:"consumer_group_status"`
-	StartFrom                int64                      `json:"startFrom"`
-	LockTimeoutSeconds       int32                      `json:"lock_timeout_seconds"`
-	MaxDeliveryCount         int32                      `json:"max_delivery_count"`
-	SkipOlderMessagesSeconds int32                      `json:"skip_older_msg_seconds"`
-	CGEmail                  string                     `json:"owner_email"`
-	CGDlq                    string                     `json:"dlqUUID"`
+	CGName                   string                            `json:"consumer_group_name"`
+	DestUUID                 string                            `json:"destination_uuid"`
+	CGUUID                   string                            `json:"consumer_group_uuid"`
+	Status                   shared.ConsumerGroupStatus        `json:"consumer_group_status"`
+	StartFrom                int64                             `json:"startFrom"`
+	LockTimeoutSeconds       int32                             `json:"lock_timeout_seconds"`
+	MaxDeliveryCount         int32                             `json:"max_delivery_count"`
+	SkipOlderMessagesSeconds int32                             `json:"skip_older_msg_seconds"`
+	CGEmail                  string                            `json:"owner_email"`
+	CGDlq                    string                            `json:"dlqUUID"`
+	IsMultiZone              bool                              `json:"is_multi_zone"`
+	ZoneConfigs              []*shared.ConsumerGroupZoneConfig `json:"zone_Configs"`
+	ActiveZone               string                            `json:"active_zone"`
 }
 
 func printCG(cg *shared.ConsumerGroupDescription) {
@@ -852,7 +910,11 @@ func printCG(cg *shared.ConsumerGroupDescription) {
 		MaxDeliveryCount:         cg.GetMaxDeliveryCount(),
 		SkipOlderMessagesSeconds: cg.GetSkipOlderMessagesSeconds(),
 		CGEmail:                  cg.GetOwnerEmail(),
-		CGDlq:                    cg.GetDeadLetterQueueDestinationUUID()}
+		CGDlq:                    cg.GetDeadLetterQueueDestinationUUID(),
+		IsMultiZone:              cg.GetIsMultiZone(),
+		ZoneConfigs:              cg.GetZoneConfigs(),
+		ActiveZone:               cg.GetActiveZone(),
+	}
 	outputStr, _ := json.Marshal(output)
 	fmt.Fprintln(os.Stdout, string(outputStr))
 }
