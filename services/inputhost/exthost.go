@@ -30,8 +30,6 @@ import (
 
 	"github.com/pborman/uuid"
 	"github.com/uber-common/bark"
-	"github.com/uber/tchannel-go/thrift"
-
 	"github.com/uber/cherami-server/common"
 	"github.com/uber/cherami-server/services/inputhost/load"
 	"github.com/uber/cherami-thrift/.generated/go/admin"
@@ -39,6 +37,7 @@ import (
 	"github.com/uber/cherami-thrift/.generated/go/controller"
 	"github.com/uber/cherami-thrift/.generated/go/shared"
 	"github.com/uber/cherami-thrift/.generated/go/store"
+	"github.com/uber/tchannel-go/thrift"
 )
 
 type (
@@ -191,7 +190,47 @@ var (
 	msgAckTimeout = 1 * time.Minute
 )
 
-func newExtConnection(destUUID string, pathCache *inPathCache, extUUID string, numReplicas int, loadReporterFactory common.LoadReporterDaemonFactory, logger bark.Logger, tClients common.ClientFactory, shutdownWG *sync.WaitGroup, limitsEnabled bool) *extHost {
+// getMaxSequenceNumberWithTestOverride calculates a random extent length, with or without a test override provided by dynamic configuration
+func getMaxSequenceNumberWithTestOverride(pathCache *inPathCache, logger bark.Logger) int64 {
+	var shortExtents int64
+	override := pathCache.inputHost.GetTestShortExtentsByPath()
+	logFn := func() bark.Logger {
+		return logger
+	}
+
+	if override != `` {
+		shortExtents = common.OverrideValueByPrefix(
+			logFn,
+			pathCache.destinationPath,
+			strings.Split(override, `,`),
+			0,
+			`TestShortExtents`)
+	}
+
+	length := common.GetRandInt64(int64(extentRolloverSeqnumMin), int64(extentRolloverSeqnumMax)) // 50% chance with the test override, 100% with no test override
+	if shortExtents > 0 {
+		if common.GetRandInt64(0, 1) == 0 { // 50% chance
+			if common.GetRandInt64(0, 1) == 0 { // 50% chance
+				length = 0 // Empty extent with 25% probability with the test override
+			}
+			length = common.GetRandInt64(1, 20) // 25% chance of very short extent with the test override
+		}
+		logger.WithField(`extentLength`, length).Info(`Overriding extent length for testing`)
+	}
+
+	return length
+}
+
+func newExtConnection(
+	destUUID string,
+	pathCache *inPathCache,
+	extUUID string,
+	numReplicas int,
+	loadReporterFactory common.LoadReporterDaemonFactory,
+	logger bark.Logger,
+	tClients common.ClientFactory,
+	shutdownWG *sync.WaitGroup,
+	limitsEnabled bool) *extHost {
 	conn := &extHost{
 		streams:                 make(map[storeHostPort]*replicaInfo),
 		extUUID:                 extUUID,
@@ -211,7 +250,7 @@ func newExtConnection(destUUID string, pathCache *inPathCache, extUUID string, n
 		shutdownWG:              shutdownWG,
 		forceUnloadCh:           make(chan struct{}),
 		limitsEnabled:           limitsEnabled,
-		maxSequenceNumber:       common.GetRandInt64(int64(extentRolloverSeqnumMin), int64(extentRolloverSeqnumMax)),
+		maxSequenceNumber:       getMaxSequenceNumberWithTestOverride(pathCache, logger),
 		extMetrics:              load.NewExtentMetrics(),
 		dstMetrics:              pathCache.dstMetrics,
 		hostMetrics:             pathCache.hostMetrics,
@@ -549,6 +588,7 @@ func (conn *extHost) writeAckToPubConn(putMsgAckCh chan *cherami.PutMessageAck, 
 }
 
 func (conn *extHost) sendMessage(pr *inPutMessage, extSendTimer *common.Timer, watermark *int64) {
+	sequenceNumber, err := int64(0), error(nil)
 	// make sure we can satisfy the rate, if needed
 	if conn.limitsEnabled {
 		if ok, _ := conn.GetExtTokenBucketValue().TryConsume(1); !ok {
@@ -591,7 +631,22 @@ func (conn *extHost) sendMessage(pr *inPutMessage, extSendTimer *common.Timer, w
 		return
 	}
 
-	sequenceNumber, err := conn.sendMessageToReplicas(pr, extSendTimer, watermark)
+	if conn.maxSequenceNumber == 0 { // MaxSequenceNumber may be zero when we are testing short extents
+		conn.logger.Info(`inputhost: exthost: sealing and closing due to testing zero maxSequenceNumber`)
+		putMsgAck := &cherami.PutMessageAck{
+			ID:          common.StringPtr(pr.putMsg.GetID()),
+			UserContext: pr.putMsg.GetUserContext(),
+			Status:      common.CheramiStatusPtr(cherami.Status_FAILED),
+			Message:     common.StringPtr(`test extent is randomly chosen to be empty`),
+		}
+		conn.writeAckToPubConn(pr.putMsgAckCh, putMsgAck)
+		go conn.sealExtent()
+		time.Sleep(time.Second) // Give the seal signal a moment to propagate
+		go conn.close()
+		return
+	}
+
+	sequenceNumber, err = conn.sendMessageToReplicas(pr, extSendTimer, watermark)
 	if err != nil {
 		// For now, lets reply Status_FAILED immediately and
 		// close the connection if we got an error.

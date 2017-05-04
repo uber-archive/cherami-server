@@ -369,9 +369,10 @@ func GetConnectionKey(host *cherami.HostAddress) string {
 	return fmt.Sprintf("%v:%d", host.GetHost(), host.GetPort())
 }
 
-// GetRandInt64 is used to get a 64 bit random number between min and max
+// GetRandInt64 is used to get a 64 bit random number between min and max, inclusive
 func GetRandInt64(min int64, max int64) int64 {
 	// we need to get a random number between min and max
+	max++ // Int63n returns a number in the range (0,n] (i.e. not inclusive)
 	return min + rand.Int63n(max-min)
 }
 

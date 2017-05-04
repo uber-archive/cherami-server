@@ -64,7 +64,7 @@ const (
 	minimumAllowedMessageDelaySecondsTest = 3
 
 	// extentRolloverSeqnum{Min,Max} is the range within which extents would be sealed
-	// triggering a roll-over to a new exstent. the code picks a random number in this
+	// triggering a roll-over to a new extent. the code picks a random number in this
 	// range (currently, betweetn 10 million and 20 million) and will seal at this
 	// sequence number proactively so that we don't have a very large extent.
 	extentRolloverSeqnumMin, extentRolloverSeqnumMax = 10000000, 20000000
@@ -109,6 +109,7 @@ type (
 		hostMetrics            *load.HostMetrics
 		lastLoadReportedTime   int64        // unix nanos when the last load report was sent
 		nodeStatus             atomic.Value // status of the node
+		testShortExtentsByPath string       // Override to make some paths randomly have extremely short or zero-length extents
 		common.SCommon
 	}
 
@@ -961,6 +962,16 @@ func (h *InputHost) GetNodeStatus() controller.NodeStatus {
 // SetNodeStatus sets the status of this host
 func (h *InputHost) SetNodeStatus(status controller.NodeStatus) {
 	h.nodeStatus.Store(status)
+}
+
+// SetTestShortExtentsByPath sets path override that enables testing short extents
+func (h *InputHost) SetTestShortExtentsByPath(override string) {
+	h.testShortExtentsByPath = override
+}
+
+// GetTestShortExtentsByPath gets path override that enables testing short extents
+func (h *InputHost) GetTestShortExtentsByPath() (override string) {
+	return h.testShortExtentsByPath
 }
 
 // Shutdown shutsdown all the InputHost cleanly
