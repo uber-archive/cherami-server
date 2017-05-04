@@ -572,6 +572,16 @@ func main() {
 			Name:    "serviceconfig",
 			Aliases: []string{"cfg"},
 			Usage:   "serviceconfig (get|set|delete)",
+			Description: `Manage service configs. Supported service names, config keys and usage are:
+"cherami-controllerhost", "numPublisherExtentsByPath",      comma-separated list of "prefix=extent_count"
+"cherami-controllerhost", "numConsumerExtentsByPath",       comma-separated list of "prefix=extent_count"
+"cherami-controllerhost", "numRemoteConsumerExtentsByPath", comma-separated list of "prefix=extent_count"
+"cherami-controllerhost", "activeZone",                     the active zone for multi-zone consumers
+"cherami-controllerhost", "failoverMode",                   "enabled" or "disabled"
+"cherami-storehost",      "adminStatus",                    if set to anything other than "enabled", will prevent placement of new extent on this store
+"cherami-storehost",      "minFreeDiskSpaceBytes",          integer, minimum required free disk space in bytes to place a new extent
+"cherami-outputhost",     "messagecachesize",               comma-separated list of "destination/CG_name=value" for message cache size
+			`,
 			Subcommands: []cli.Command{
 				{
 					Name:    "get",
