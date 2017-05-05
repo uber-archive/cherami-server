@@ -1274,17 +1274,21 @@ func Publish(c *cli.Context, cClient ccli.Client) {
 			break
 		}
 
+		// Increment the WaitGroup before the publish to make sure that
+		// we'll never call Done on the WaitGroup before we've called Add.
+		receiptWg.Add(1)
 		id, err = publisher.PublishAsync(&ccli.PublisherMessage{
 			Data: line,
 		}, receiptCh)
 
 		if err != nil {
+			// If the publish errored, we never actually sent a receipt down the channel.
+			receiptWg.Done()
 			fmt.Fprintf(os.Stderr, "%v\n", err)
 			break
 		}
 
 		fmt.Fprintf(os.Stdout, "Local publish ID: %s\n", id)
-		receiptWg.Add(1)
 	}
 
 	if !common.AwaitWaitGroup(&receiptWg, time.Minute) {
