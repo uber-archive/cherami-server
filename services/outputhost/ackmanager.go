@@ -123,7 +123,14 @@ func (ackMgr *ackManager) getNextAckID(address int64, sequence common.SequenceNu
 		skippedMessages := sequence - expectedReadLevel
 
 		if skippedMessages < 0 {
-			ackMgr.logger.Error(`negative discontinuity detected (rollback)`)
+			ackMgr.logger.WithFields(bark.Fields{
+				`address`:           address,
+				`sequence`:          sequence,
+				`readLevel`:         ackMgr.readLevel,
+				`levelOffset`:       ackMgr.levelOffset,
+				`expectedReadLevel`: expectedReadLevel,
+				`skippedMessages`:   skippedMessages,
+			}).Error(`negative discontinuity detected (rollback)`)
 			// Don't update gauge, since negative numbers aren't supported for M3 gauges
 		} else {
 			// update gauge here to say we skipped messages (potentially due to retention?)
@@ -185,20 +192,22 @@ func (ackMgr *ackManager) start() {
 	go ackMgr.manageAckLevel()
 }
 
-func (ackMgr *ackManager) getCurrentAckLevelOffset() (addr int64) {
+// getCurrentReadLevel returns the current read-level address and seqnum. this is called
+// by extcache when it connects to a new replica, when one stream is disconnected.
+func (ackMgr *ackManager) getCurrentReadLevel() (addr int64, seqNo common.SequenceNumber) {
+
 	ackMgr.lk.RLock()
-	if addrs, ok := ackMgr.addrs[ackMgr.ackLevel]; ok {
-		addr = int64(addrs.addr)
+	defer ackMgr.lk.RUnlock()
+
+	// the 'readLevel' may not exist in the 'addrs' map if this instance
+	// of ackMgr has not seen a message yet (ie, getNextAckID has not been
+	// called), in which case we would return '0' addr.
+	if msg, ok := ackMgr.addrs[ackMgr.readLevel]; ok {
+		addr = int64(msg.addr)
 	}
-	ackMgr.lk.RUnlock()
 
-	return
-}
+	seqNo = ackMgr.levelOffset + ackMgr.readLevel
 
-func (ackMgr *ackManager) getCurrentAckLevelSeqNo() (seqNo common.SequenceNumber) {
-	ackMgr.lk.RLock()
-	seqNo = ackMgr.levelOffset + ackMgr.ackLevel
-	ackMgr.lk.RUnlock()
 	return
 }
 

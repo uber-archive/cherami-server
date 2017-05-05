@@ -1,5 +1,5 @@
-hash: 95b094ac76b3329e6ad38bb6314377db13aa5d0a7f29f4a74b54f00502e17ad4
-updated: 2017-04-17T10:59:50.30170527-07:00
+hash: 870ba36290434c4a2426ce5a9925be2be2ea38616ae8ed8f20979e936ae2344f
+updated: 2017-05-05T14:07:34.743467256-07:00
 imports:
 - name: github.com/apache/thrift
   version: 2d65c2365f19f637bc732222e71d78727bf0b709
@@ -76,8 +76,10 @@ imports:
   - internal/streams
 - name: github.com/golang/snappy
   version: 553a641470496b2327abcac10b36396bd98e45c9
+- name: github.com/google/uuid
+  version: 064e2069ce9c359c118179501254f67d7d37ba24
 - name: github.com/gorilla/websocket
-  version: a91eba7f97777409bc2c443f5534d41dd20c5720
+  version: 3ab3a8b8831546bd18fd182c20687ca853b2bb13
 - name: github.com/hailocab/go-hostpool
   version: e80d13ce29ede4452c43dea11e79b9bc8a15b478
 - name: github.com/jmespath/go-jmespath
@@ -168,7 +170,7 @@ imports:
   - trand
   - typed
 - name: golang.org/x/net
-  version: 5602c733f70afc6dcec6766be0d5034d4c4f14de
+  version: d212a1ef2de2f5d441c327b8f26cf3ea3ea9f265
   subpackages:
   - context
 - name: golang.org/x/sys

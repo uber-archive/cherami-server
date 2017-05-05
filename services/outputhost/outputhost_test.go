@@ -34,6 +34,7 @@ import (
 	"github.com/uber/cherami-server/common"
 	"github.com/uber/cherami-server/common/configure"
 	dconfig "github.com/uber/cherami-server/common/dconfigclient"
+	"github.com/uber/cherami-server/common/set"
 	mockcommon "github.com/uber/cherami-server/test/mocks/common"
 	mockcontroller "github.com/uber/cherami-server/test/mocks/controllerhost"
 	mockmeta "github.com/uber/cherami-server/test/mocks/metadata"
@@ -1000,4 +1001,143 @@ func (s *OutputHostSuite) TestOutputAckMgrReset() {
 
 	// 10. make sure the readlevels are not the same
 	assert.NotEqual(s.T(), readLevel, newReadLevel, "read levels should not be the same")
+}
+
+func (s *OutputHostSuite) TestOutputHostReplicaRollover() {
+
+	count := 50
+
+	outputHost, _ := NewOutputHost("outputhost-test", s.mockService, s.mockMeta, nil, nil, nil)
+	httpRequest := utilGetHTTPRequestWithPath("foo")
+
+	destUUID := uuid.New()
+	destDesc := shared.NewDestinationDescription()
+	destDesc.Path = common.StringPtr("/foo/bar")
+	destDesc.DestinationUUID = common.StringPtr(destUUID)
+	destDesc.Status = common.InternalDestinationStatusPtr(shared.DestinationStatus_ENABLED)
+	s.mockMeta.On("ReadDestination", mock.Anything, mock.Anything).Return(destDesc, nil).Once()
+	s.mockMeta.On("ReadExtentStats", mock.Anything, mock.Anything).Return(nil, fmt.Errorf(`foo`))
+
+	cgDesc := shared.NewConsumerGroupDescription()
+	cgDesc.ConsumerGroupUUID = common.StringPtr(uuid.New())
+	cgDesc.DestinationUUID = common.StringPtr(destUUID)
+	s.mockMeta.On("ReadConsumerGroup", mock.Anything, mock.Anything).Return(cgDesc, nil).Twice()
+
+	cgExt := shared.NewConsumerGroupExtent()
+	cgExt.ExtentUUID = common.StringPtr(uuid.New())
+	cgExt.StoreUUIDs = []string{"mock"}
+
+	cgRes := &shared.ReadConsumerGroupExtentsResult_{}
+	cgRes.Extents = append(cgRes.Extents, cgExt)
+	s.mockMeta.On("ReadConsumerGroupExtents", mock.Anything, mock.Anything).Return(cgRes, nil).Once()
+	s.mockRead.On("Write", mock.Anything).Return(nil)
+
+	writeDoneCh := make(chan struct{})
+	var msgsRecv = set.New(count)
+
+	s.mockCons.On("Write", mock.Anything).Return(nil).Run(func(args mock.Arguments) {
+
+		ohc := args.Get(0).(*cherami.OutputHostCommand)
+
+		if ohc.GetType() == cherami.OutputHostCommandType_MESSAGE {
+
+			msg := ohc.GetMessage()
+			id := msg.GetPayload().GetID()
+
+			// ensure we don't see duplicates
+			s.False(msgsRecv.Contains(id))
+
+			if msgsRecv.Insert(id); msgsRecv.Count() == count {
+				close(writeDoneCh)
+			}
+		}
+
+	}).Times(count)
+
+	cFlow := cherami.NewControlFlow()
+	cFlow.Credits = common.Int32Ptr(int32(count))
+
+	connOpenedCh := make(chan struct{})
+	s.mockCons.On("Read").Return(cFlow, nil).Once().Run(func(args mock.Arguments) { close(connOpenedCh) })
+
+	rmc := store.NewReadMessageContent()
+	rmc.Type = store.ReadMessageContentTypePtr(store.ReadMessageContentType_MESSAGE)
+
+	var seqnum int64
+
+	s.mockRead.On("Read").Return(rmc, nil).Run(func(args mock.Arguments) {
+		seqnum++
+		aMsg := store.NewAppendMessage()
+		aMsg.SequenceNumber = common.Int64Ptr(seqnum)
+		pMsg := cherami.NewPutMessage()
+		pMsg.ID = common.StringPtr(strconv.Itoa(int(seqnum)))
+		pMsg.Data = []byte(fmt.Sprintf("seqnum=%d", seqnum))
+		aMsg.Payload = pMsg
+		rMsg := store.NewReadMessage()
+		rMsg.Message = aMsg
+		rMsg.Address = common.Int64Ptr(1234000000 + seqnum)
+		rmc.Message = rMsg
+	}).Times(20)
+
+	// simulate error from a replica, that should cause outputhost to resume
+	// by re-connecting to the replica
+	s.mockRead.On("Read").Return(0, errors.New("store error")).Once()
+
+	s.mockRead.On("Read").Return(rmc, nil).Run(func(args mock.Arguments) {
+		seqnum++
+		aMsg := store.NewAppendMessage()
+		aMsg.SequenceNumber = common.Int64Ptr(seqnum)
+		pMsg := cherami.NewPutMessage()
+		pMsg.ID = common.StringPtr(strconv.Itoa(int(seqnum)))
+		pMsg.Data = []byte(fmt.Sprintf("seqnum=%d", seqnum))
+		aMsg.Payload = pMsg
+		rMsg := store.NewReadMessage()
+		rMsg.Message = aMsg
+		rMsg.Address = common.Int64Ptr(1234000000 + seqnum)
+		rmc.Message = rMsg
+	}).Times(count - 20)
+
+	rmcSeal := store.NewReadMessageContent()
+	rmcSeal.Type = store.ReadMessageContentTypePtr(store.ReadMessageContentType_SEALED)
+	rmcSeal.Sealed = store.NewExtentSealedError()
+	s.mockRead.On("Read").Return(rmcSeal, nil).Once()
+
+	streamDoneCh := make(chan struct{})
+	go func() {
+		outputHost.OpenConsumerStreamHandler(s.mockHTTPResponse, httpRequest)
+		close(streamDoneCh)
+	}()
+
+	// close the read stream
+	creditUnblockCh := make(chan struct{})
+	s.mockRead.On("Read").Return(nil, io.EOF)
+	s.mockCons.On("Read").Return(nil, io.EOF).Run(func(args mock.Arguments) { <-writeDoneCh; <-creditUnblockCh })
+
+	<-connOpenedCh // wait for the consConnection to open
+
+	// look up cgcache and the underlying client connnection
+	outputHost.cgMutex.RLock()
+	cgCache, ok := outputHost.cgCache[cgDesc.GetConsumerGroupUUID()]
+	outputHost.cgMutex.RUnlock()
+	s.True(ok, "cannot find cgcache entry")
+
+	var nConns = 0
+	var conn *consConnection
+	cgCache.extMutex.RLock()
+	for _, conn = range cgCache.connections {
+		break
+	}
+	nConns = len(cgCache.connections)
+	cgCache.extMutex.RUnlock()
+	s.Equal(1, nConns, "wrong number of consumer connections")
+	s.NotNil(conn, "failed to find consConnection within cgcache")
+
+	creditUnblockCh <- struct{}{} // now unblock the readCreditsPump on the consconnection
+	<-streamDoneCh
+
+	s.mockHTTPResponse.AssertNotCalled(s.T(), "WriteHeader", mock.Anything)
+	s.Equal(int64(count), conn.sentMsgs, "wrong sentMsgs count")
+	s.Equal(int64(0), conn.reSentMsgs, "wrong reSentMsgs count")
+	s.Equal(conn.sentMsgs, conn.sentToMsgCache, "sentMsgs != sentToMsgCache")
+	outputHost.Shutdown()
 }

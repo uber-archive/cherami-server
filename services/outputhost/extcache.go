@@ -429,15 +429,10 @@ func (extCache *extentCache) manageExtentCache() {
 				err = nil
 			} else {
 				// this means a replica stream was closed. try another replica
-				extCache.logger.Info(`trying another replica`)
-				// first make sure the ackMgr updates its current ack level
-				extCache.ackMgr.updateAckLevel()
-				// TODO: Fix small race between the offset and seqNo calls
+				startAddr, startSequence := extCache.ackMgr.getCurrentReadLevel()
+				extCache.logger.WithFields(bark.Fields{`addr`: startAddr, `seqnum`: startSequence}).Info(`extcache: trying another replica`)
 				extCache.connection, extCache.pickedIndex, err =
-					extCache.loadReplicaStream(
-						extCache.ackMgr.getCurrentAckLevelOffset(),
-						extCache.ackMgr.getCurrentAckLevelSeqNo(),
-						(extCache.pickedIndex+1)%len(extCache.storeUUIDs))
+					extCache.loadReplicaStream(startAddr, startSequence, (extCache.pickedIndex+1)%len(extCache.storeUUIDs))
 			}
 			extCache.cacheMutex.Unlock()
 			if err != nil {

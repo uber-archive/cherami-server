@@ -23,7 +23,6 @@ import:
   - mock
   - require
   - suite
-
 - package: github.com/tecbot/gorocksdb
   version: 17991d3138a879b166adebf86f7c84da3c1517a7
 - package: github.com/cockroachdb/c-jemalloc
@@ -72,3 +71,5 @@ import:
 - package: github.com/Shopify/sarama
   version: ^1.11.0
   repo: http://github.com/Shopify/sarama
+- package: github.com/google/uuid
+  version: ^0.2.0
