@@ -1781,7 +1781,7 @@ readLoop:
 	}
 }
 
-func (s *NetIntegrationSuiteParallelA) _TestSmartRetry() {
+func (s *NetIntegrationSuiteParallelA) TestSmartRetry() {
 	destPath := "/test.runner.SmartRetry/TestSmartRetry"
 	cgPath := "/test.runner.SmartRetry/TestSmartRetryCG"
 	testMsgCount := 1000
@@ -2038,7 +2038,7 @@ ReadLoop2_TheReloopening:
 
 }
 
-func (s *NetIntegrationSuiteParallelE) _TestStartFromWithCassandra() {
+func (s *NetIntegrationSuiteParallelE) TestStartFromWithCassandra() {
 	destPath := "/dest/TestStartFromWithCassandra"
 	cgPathEverything := "/cg/TestStartFromWithCassandraEverything"
 	cgPathStartFrom := "/cg/TestStartFromWithCassandra"
@@ -2258,7 +2258,7 @@ ReadLoop2:
 	s.Nil(err, "Failed to delete destination")
 }
 
-func (s *NetIntegrationSuiteParallelB) _TestQueueDepth() {
+func (s *NetIntegrationSuiteParallelB) TestQueueDepth() {
 	const (
 		destPath                = `/test.runner.SmartRetry/TestQueueDepth` // This path ensures that throttling is limited for this test
 		cgPath                  = `/test.runner.SmartRetry/TestQueueDepthCG`
