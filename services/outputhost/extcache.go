@@ -307,11 +307,6 @@ func (extCache *extentCache) loadReplicaStream(startAddress int64, startSequence
 			return
 		}
 
-		// successfully opened read stream on the replica; save this index
-		if startSequence != 0 {
-			extCache.ackMgr.addLevelOffset(startSequence) // Let ack manager know that the first message received is not sequence zero
-		}
-
 		logger.WithField(`startIndex`, startIndex).Debug(`opened read stream`)
 		pickedIndex = startIndex
 		replicaConnectionName := fmt.Sprintf(`replicaConnection{Extent: %s, Store: %s}`, extUUID, storeUUID)

@@ -968,7 +968,7 @@ func (s *OutputHostSuite) TestOutputAckMgrReset() {
 	s.mockCons.On("Write", mock.Anything).Return(fmt.Errorf("breaking write pipe"))
 
 	// 8. get the ackMgr
-	var readLevel common.SequenceNumber
+	var readLevel ackIndex
 	var ackMgr *ackManager
 	outputHost.cgMutex.RLock()
 	if cg, ok := outputHost.cgCache[cgUUID]; ok {
@@ -994,7 +994,7 @@ func (s *OutputHostSuite) TestOutputAckMgrReset() {
 	outputHost.Shutdown()
 
 	// 9. Make sure we reset the readLevel
-	var newReadLevel common.SequenceNumber
+	var newReadLevel ackIndex
 	ackMgr.lk.RLock()
 	newReadLevel = ackMgr.readLevel
 	ackMgr.lk.RUnlock()

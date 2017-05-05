@@ -225,7 +225,7 @@ func (conn *replicaConnection) readMessagesPump() {
 			case store.ReadMessageContentType_MESSAGE:
 
 				msg := rmc.GetMessage()
-				correctSequenceNumber := common.SequenceNumber(msg.Message.GetSequenceNumber())
+				msgSeqNum := common.SequenceNumber(msg.Message.GetSequenceNumber())
 
 				// XXX: Sequence number check to make sure we get monotonically increasing
 				// sequence number.
@@ -233,20 +233,20 @@ func (conn *replicaConnection) readMessagesPump() {
 				// XXX: Note we skip the first message check here because we can start from
 				// a bigger sequence number in case of restarts
 				if conn.extCache.destType != shared.DestinationType_TIMER {
-					if lastSeqNum+1 != int64(correctSequenceNumber) {
+					if lastSeqNum+1 != int64(msgSeqNum) {
 						// FIXME: add metric to help alert this case
 						expectedSeqNum := 1 + lastSeqNum
-						skippedMessages := int64(correctSequenceNumber) - lastSeqNum
+						skippedMessages := int64(msgSeqNum) - lastSeqNum
 
 						conn.logger.WithFields(bark.Fields{
-							"correctSequenceNumber": correctSequenceNumber,
-							"expectedSeqNum":        expectedSeqNum,
-							"skippedMessages":       skippedMessages,
+							"msgSeqNum":       msgSeqNum,
+							"expectedSeqNum":  expectedSeqNum,
+							"skippedMessages": skippedMessages,
 						}).Error("sequence number out of order")
 					}
 				} else {
 					// T471157 For timers, do not signal discontinuities to ack manager, since discontinuities are frequent
-					correctSequenceNumber = 0
+					msgSeqNum = 0
 				}
 
 				// update the lastSeqNum to this value
@@ -257,7 +257,7 @@ func (conn *replicaConnection) readMessagesPump() {
 				cMsg.EnqueueTimeUtc = msg.Message.EnqueueTimeUtc
 				cMsg.Payload = msg.Message.Payload
 
-				cMsg.AckId = common.StringPtr(conn.extCache.ackMgr.getNextAckID(msg.GetAddress(), correctSequenceNumber))
+				cMsg.AckId = common.StringPtr(conn.extCache.ackMgr.getNextAckID(storeHostAddress(msg.GetAddress()), msgSeqNum))
 				// write the message to the msgsCh so that it can be delivered
 				// after being stored on the cache.
 				// 1. either there are no listeners
