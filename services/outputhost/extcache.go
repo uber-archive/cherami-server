@@ -31,8 +31,6 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/net/context"
-
 	"github.com/uber-common/bark"
 	"github.com/uber/tchannel-go/thrift"
 
@@ -202,7 +200,6 @@ func (extCache *extentCache) load(
 
 func (extCache *extentCache) loadReplicaStream(startAddress int64, startSequence common.SequenceNumber, startIndex int) (repl *replicaConnection, pickedIndex int, err error) {
 	var call serverStream.BStoreOpenReadStreamOutCall
-	var cancel context.CancelFunc
 	extUUID := extCache.extUUID
 
 	startIndex--
@@ -309,7 +306,6 @@ func (extCache *extentCache) loadReplicaStream(startAddress int64, startSequence
 			logger.WithField(common.TagErr, err).Error(`outputhost: Websocket dial store replica: failed`)
 			return
 		}
-		cancel = nil
 
 		// successfully opened read stream on the replica; save this index
 		if startSequence != 0 {
@@ -319,7 +315,7 @@ func (extCache *extentCache) loadReplicaStream(startAddress int64, startSequence
 		logger.WithField(`startIndex`, startIndex).Debug(`opened read stream`)
 		pickedIndex = startIndex
 		replicaConnectionName := fmt.Sprintf(`replicaConnection{Extent: %s, Store: %s}`, extUUID, storeUUID)
-		repl = newReplicaConnection(call, extCache, cancel, replicaConnectionName, logger, startSequence)
+		repl = newReplicaConnection(call, extCache, replicaConnectionName, logger, startSequence)
 		// all open connections should be closed before shutdown
 		extCache.shutdownWG.Add(1)
 		repl.open()
@@ -393,7 +389,7 @@ func (extCache *extentCache) loadKafkaStream(
 
 	// Setup the replicaConnection
 	replicaConnectionName := fmt.Sprintf(`replicaConnection{Extent: %s, kafkaCluster: %s}`, extCache.extUUID, kafkaCluster)
-	repl = newReplicaConnection(call, extCache, nil, replicaConnectionName, extCache.logger, 0)
+	repl = newReplicaConnection(call, extCache, replicaConnectionName, extCache.logger, 0)
 	extCache.shutdownWG.Add(1)
 	repl.open()
 	return
