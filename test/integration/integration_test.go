@@ -2080,6 +2080,9 @@ func (s *NetIntegrationSuiteParallelE) TestStartFromWithCassandra() {
 	s.NotNil(publisherTest)
 
 	err := publisherTest.Open()
+	if err != nil {
+		fmt.Printf("TestStartFromWithCassandra: publisherTest.Open failed: %v\n", err)
+	}
 	s.NoError(err)
 
 	// Publish messages
@@ -2366,6 +2369,9 @@ func (s *NetIntegrationSuiteParallelB) TestQueueDepth() {
 	s.NotNil(publisherTest)
 
 	errPTO := publisherTest.Open()
+	if errPTO != nil {
+		fmt.Printf("TestQueueDepth: publisherTest.Open failed: %v\n", errPTO)
+	}
 	s.NoError(errPTO)
 	defer publisherTest.Close()
 

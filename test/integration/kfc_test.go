@@ -249,6 +249,17 @@ loop:
 			cmsg.Ack()
 
 		case <-time.After(45 * time.Second):
+
+			fmt.Printf("\nreceived:\n")
+			for _, m := range recvMsgs {
+				fmt.Printf("%v\n", m)
+			}
+
+			fmt.Printf("\nsent (and not received):\n")
+			for _, m := range sentMsgs {
+				fmt.Printf("%v\n", m)
+			}
+
 			s.Fail("cherami-consumer: timed out")
 			break loop
 		}
@@ -256,5 +267,6 @@ loop:
 
 	s.Equal(numMsgs, len(recvMsgs)) // we should have received all the messages
 
+	fmt.Printf("KAFKAFORCHERAMI KAFKAFORCHERAMI KAFKAFORCHERAMI\n")
 	return
 }
