@@ -43,9 +43,9 @@ type (
 
 	// msgCtx is the message context which is stored locally on the ackMgr
 	msgCtx struct {
-		addr  storeHostAddress
-		seq   common.SequenceNumber
-		acked bool
+		addr   storeHostAddress
+		seqnum common.SequenceNumber
+		acked  bool
 	}
 
 	levels struct {
@@ -140,8 +140,8 @@ func (ackMgr *ackManager) getNextAckID(address storeHostAddress, sequence common
 
 	// now store the message in the data structure internally
 	ackMgr.addrs[ackMgr.readLevel] = &msgCtx{
-		addr: address,
-		seq:  sequence,
+		addr:   address,
+		seqnum: sequence,
 	}
 
 	// Let the committer know about the new read level
@@ -240,7 +240,7 @@ func (ackMgr *ackManager) updateAckLevel() {
 			// We need to commit every message we see here, since we may have an interleved stream,
 			// and only the committer knows how to report the level(s). This is true, e.g. for Kafka.
 			ackMgr.committer.SetCommitLevel(CommitterLevel{
-				seqNo:   addrs.seq,
+				seqNo:   addrs.seqnum,
 				address: addrs.addr,
 			})
 
