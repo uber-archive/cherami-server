@@ -134,12 +134,20 @@ func newGlobalOptionsFromCLIContext(c *cli.Context) *GlobalOptions {
 
 // GetCClient return a cherami.Client
 func GetCClient(c *cli.Context, serviceName string) ccli.Client {
+	return GetSecureCClient(c, serviceName, nil)
+}
+
+// GetSecureCClient returns a cherami.Client with security enabled.
+// We are gradually enabling security for Cherami so we have two methods GetSecureCClient and GetCClient.
+// We will remove GetCClient after we enable security for all operations.
+func GetSecureCClient(c *cli.Context, serviceName string, authProvider ccli.AuthProvider) ccli.Client {
 	gOpts := newGlobalOptionsFromCLIContext(c)
 	var cClient ccli.Client
 	var err error
 	cOpts := ccli.ClientOptions{
 		Timeout:       time.Duration(gOpts.timeoutSecs) * time.Second,
 		DeploymentStr: gOpts.env,
+		AuthProvider:  authProvider,
 	}
 
 	if !(len(gOpts.frontendHost) > 0 || gOpts.frontendPort > 0) && gOpts.hyperbahn {

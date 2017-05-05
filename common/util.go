@@ -41,6 +41,7 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/uber-common/bark"
+	cheramiClient "github.com/uber/cherami-client-go/client/cherami"
 	"github.com/uber/cherami-server/common/configure"
 	"github.com/uber/cherami-server/common/metrics"
 	"github.com/uber/cherami-thrift/.generated/go/admin"
@@ -582,6 +583,7 @@ func GetEnvVariableFromHostPort(hostPort string) (envVar string) {
 type cliHelper struct {
 	defaultOwnerEmail string
 	cZones            map[string]string
+	authProvider      cheramiClient.AuthProvider
 }
 
 // GetDefaultOwnerEmail is the implementation of the corresponding method
@@ -620,11 +622,20 @@ func (r *cliHelper) SetCanonicalZones(cZones map[string]string) {
 	}
 }
 
+func (r *cliHelper) SetAuthProvider(value cheramiClient.AuthProvider) {
+	r.authProvider = value
+}
+
+func (r *cliHelper) GetAuthProvider() cheramiClient.AuthProvider {
+	return r.authProvider
+}
+
 // NewCliHelper is used to create an uber specific CliHelper
 func NewCliHelper() CliHelper {
 	return &cliHelper{
 		defaultOwnerEmail: "cherami@cli",
 		cZones:            make(map[string]string),
+		authProvider:      cheramiClient.NewBypassAuthProvider(),
 	}
 }
 

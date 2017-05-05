@@ -45,7 +45,7 @@ const (
 
 // CreateDestination creates a destination
 func CreateDestination(c *cli.Context, cliHelper common.CliHelper) {
-	cClient := toolscommon.GetCClient(c, adminToolService)
+	cClient := toolscommon.GetSecureCClient(c, adminToolService, cliHelper.GetAuthProvider())
 	toolscommon.CreateDestination(c, cClient, cliHelper)
 }
 

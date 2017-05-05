@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/uber/cherami-client-go/client/cherami"
 	"github.com/uber/cherami-thrift/.generated/go/store"
 )
 
@@ -75,6 +76,10 @@ type CliHelper interface {
 	GetCanonicalZone(zone string) (string, error)
 	// SetCanonicalZones is used to populate all valid zones that can be given from CLI
 	SetCanonicalZones(map[string]string)
+	// GetAuthProvider returns auth provider to provide client side auth identity
+	GetAuthProvider() cherami.AuthProvider
+	// SetAuthProvider sets auth provider to provide client side auth identity
+	SetAuthProvider(cherami.AuthProvider)
 }
 
 func (hi *HostInfo) String() string {
