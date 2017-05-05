@@ -213,7 +213,7 @@ func getMaxSequenceNumberWithTestOverride(pathCache *inPathCache, logger bark.Lo
 			if common.GetRandInt64(0, 1) == 0 { // 50% chance
 				length = 0 // Empty extent with 25% probability with the test override
 			}
-			length = common.GetRandInt64(1, 20) // 25% chance of very short extent with the test override
+			length = common.GetRandInt64(1, 20000) // 25% chance of very short extent with the test override
 		}
 		logger.WithField(`extentLength`, length).Info(`Overriding extent length for testing`)
 	}
