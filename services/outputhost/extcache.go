@@ -37,6 +37,7 @@ import (
 	"github.com/Shopify/sarama"
 	sc "github.com/bsm/sarama-cluster"
 	"github.com/uber/cherami-server/common"
+	"github.com/uber/cherami-server/common/goMetricsExporter"
 	"github.com/uber/cherami-server/common/metrics"
 	"github.com/uber/cherami-server/services/outputhost/load"
 	serverStream "github.com/uber/cherami-server/stream"
@@ -142,6 +143,9 @@ type extentCache struct {
 
 	// kafkaClient is the client for the kafka connection, if any
 	kafkaClient *sc.Consumer
+
+	// exporter is the metrics bridge between the kafka consumer metrics and the Cherami metrics reporting library
+	exporter *goMetricsExporter.GoMetricsExporter
 }
 
 var kafkaLogSetup sync.Once
@@ -162,6 +166,7 @@ func (extCache *extentCache) load(
 	startFrom common.UnixNanoTime,
 	metaClient metadata.TChanMetadataService,
 	cge *shared.ConsumerGroupExtent,
+	metricsClient metrics.Client,
 ) (err error) {
 	// it is ok to take the local lock for this extent which will not affect
 	// others
@@ -175,7 +180,7 @@ func (extCache *extentCache) load(
 
 	if common.IsKafkaConsumerGroupExtent(cge) {
 		extCache.connectedStoreUUID = kafkaConnectedStoreUUID
-		extCache.connection, err = extCache.loadKafkaStream(cgName, outputHostUUID, startFrom, kafkaCluster, kafkaTopics)
+		extCache.connection, err = extCache.loadKafkaStream(cgName, outputHostUUID, startFrom, kafkaCluster, kafkaTopics, metricsClient)
 	} else {
 		extCache.connection, extCache.pickedIndex, err =
 			extCache.loadReplicaStream(cge.GetAckLevelOffset(), common.SequenceNumber(cge.GetAckLevelSeqNo()), rand.Intn(len(extCache.storeUUIDs)))
@@ -335,6 +340,7 @@ func (extCache *extentCache) loadKafkaStream(
 	startFrom common.UnixNanoTime,
 	kafkaCluster string,
 	kafkaTopics []string,
+	metricsClient metrics.Client,
 ) (repl *replicaConnection, err error) {
 	groupID := getKafkaGroupIDForCheramiConsumerGroupName(cgName)
 
@@ -366,10 +372,24 @@ func (extCache *extentCache) loadKafkaStream(
 	// This is an ID that may appear in Kafka logs or metadata
 	cfg.Config.ClientID = `cherami_` + groupID
 
-	// TODO: Sarama metrics registry
+	// Configure a metrics registry and start the exporter
+	extCache.exporter, cfg.Config.MetricRegistry = goMetricsExporter.NewGoMetricsExporter(
+		metricsClient,
+		metrics.ConsConnectionScope,
+		map[string]int{
+			`incoming-byte-rate`:    metrics.OutputhostCGKafkaIncomingBytes,
+			`outgoing-byte-rate`:    metrics.OutputhostCGKafkaOutgoingBytes,
+			`request-rate`:          metrics.OutputhostCGKafkaRequestSent,
+			`request-size`:          metrics.OutputhostCGKafkaRequestSize,
+			`request-latency-in-ms`: metrics.OutputhostCGKafkaRequestLatency,
+			`response-rate`:         metrics.OutputhostCGKafkaResponseReceived,
+			`response-size`:         metrics.OutputhostCGKafkaResponseSize,
+		},
+	)
+	go extCache.exporter.Run()
 
 	// Build the Kafka client. Note that we would ideally like to have a factory for this, but the client
-	// has consumer-group-specific changes to its configuration
+	// has consumer-group-specific changes to its configuration (e.g. startFrom)
 	extCache.kafkaClient, err = sc.NewConsumer(
 		getKafkaBrokersForCluster(kafkaCluster),
 		groupID,
@@ -505,6 +525,9 @@ func (extCache *extentCache) unload() {
 		if err := extCache.kafkaClient.Close(); err != nil {
 			extCache.logger.WithField(common.TagErr, err).Error(`error closing Kafka client`)
 		}
+	}
+	if extCache.exporter != nil {
+		extCache.exporter.Stop()
 	}
 	extCache.cacheMutex.Unlock()
 }

@@ -142,14 +142,12 @@ func NewClientWithTags(m3Client Client, serviceIdx ServiceIdx, tags map[string]s
 
 	// initialize reporters for Common operations
 	for scope, def := range dynamicScopeDefs[Common] {
-
 		childReporters[scope] = initChildReporter(def, tags)
 		childReporters[scope].InitMetrics(metricsMap)
 	}
 
 	// initialize scope reporters for service operations
 	for scope, def := range dynamicScopeDefs[serviceIdx] {
-
 		childReporters[scope] = initChildReporter(def, tags)
 		childReporters[scope].InitMetrics(metricsMap)
 	}
