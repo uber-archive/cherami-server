@@ -71,6 +71,14 @@ func (h *InputHost) LoadUconfig() {
 	} else {
 		log.Errorf("Cannot get %s from uconfig, Using right format", UkeyHostOverall)
 	}
+
+	str, ok := h.dConfigClient.GetOrDefault(UkeyTestShortExts, ``).(string)
+	if ok {
+		h.SetTestShortExtentsByPath(str)
+		log.WithField(UkeyTestShortExts, str).Info(`Updated`)
+	} else {
+		log.WithField(UkeyTestShortExts, str).Warn(`Failed update, type assertion failed`)
+	}
 }
 
 // uconfigManage do the work for uconfig
