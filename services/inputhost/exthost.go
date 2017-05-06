@@ -198,6 +198,8 @@ func getMaxSequenceNumberWithTestOverride(pathCache *inPathCache, logger bark.Lo
 		return logger
 	}
 
+	logger.Infof("getMaxSequenceNumberWithTestOverride, override: %v, path %v", override, pathCache.destinationPath)
+
 	if override != `` {
 		shortExtents = common.OverrideValueByPrefix(
 			logFn,
