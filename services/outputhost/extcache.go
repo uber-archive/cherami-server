@@ -31,14 +31,13 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/net/context"
-
 	"github.com/uber-common/bark"
 	"github.com/uber/tchannel-go/thrift"
 
 	"github.com/Shopify/sarama"
 	sc "github.com/bsm/sarama-cluster"
 	"github.com/uber/cherami-server/common"
+	"github.com/uber/cherami-server/common/goMetricsExporter"
 	"github.com/uber/cherami-server/common/metrics"
 	"github.com/uber/cherami-server/services/outputhost/load"
 	serverStream "github.com/uber/cherami-server/stream"
@@ -144,6 +143,9 @@ type extentCache struct {
 
 	// kafkaClient is the client for the kafka connection, if any
 	kafkaClient *sc.Consumer
+
+	// exporter is the metrics bridge between the kafka consumer metrics and the Cherami metrics reporting library
+	exporter *goMetricsExporter.GoMetricsExporter
 }
 
 var kafkaLogSetup sync.Once
@@ -164,6 +166,7 @@ func (extCache *extentCache) load(
 	startFrom common.UnixNanoTime,
 	metaClient metadata.TChanMetadataService,
 	cge *shared.ConsumerGroupExtent,
+	metricsClient metrics.Client,
 ) (err error) {
 	// it is ok to take the local lock for this extent which will not affect
 	// others
@@ -177,7 +180,7 @@ func (extCache *extentCache) load(
 
 	if common.IsKafkaConsumerGroupExtent(cge) {
 		extCache.connectedStoreUUID = kafkaConnectedStoreUUID
-		extCache.connection, err = extCache.loadKafkaStream(cgName, outputHostUUID, startFrom, kafkaCluster, kafkaTopics)
+		extCache.connection, err = extCache.loadKafkaStream(cgName, outputHostUUID, startFrom, kafkaCluster, kafkaTopics, metricsClient)
 	} else {
 		extCache.connection, extCache.pickedIndex, err =
 			extCache.loadReplicaStream(cge.GetAckLevelOffset(), common.SequenceNumber(cge.GetAckLevelSeqNo()), rand.Intn(len(extCache.storeUUIDs)))
@@ -202,7 +205,6 @@ func (extCache *extentCache) load(
 
 func (extCache *extentCache) loadReplicaStream(startAddress int64, startSequence common.SequenceNumber, startIndex int) (repl *replicaConnection, pickedIndex int, err error) {
 	var call serverStream.BStoreOpenReadStreamOutCall
-	var cancel context.CancelFunc
 	extUUID := extCache.extUUID
 
 	startIndex--
@@ -309,17 +311,11 @@ func (extCache *extentCache) loadReplicaStream(startAddress int64, startSequence
 			logger.WithField(common.TagErr, err).Error(`outputhost: Websocket dial store replica: failed`)
 			return
 		}
-		cancel = nil
-
-		// successfully opened read stream on the replica; save this index
-		if startSequence != 0 {
-			extCache.ackMgr.addLevelOffset(startSequence) // Let ack manager know that the first message received is not sequence zero
-		}
 
 		logger.WithField(`startIndex`, startIndex).Debug(`opened read stream`)
 		pickedIndex = startIndex
 		replicaConnectionName := fmt.Sprintf(`replicaConnection{Extent: %s, Store: %s}`, extUUID, storeUUID)
-		repl = newReplicaConnection(call, extCache, cancel, replicaConnectionName, logger, startSequence)
+		repl = newReplicaConnection(call, extCache, replicaConnectionName, logger, startSequence)
 		// all open connections should be closed before shutdown
 		extCache.shutdownWG.Add(1)
 		repl.open()
@@ -339,6 +335,7 @@ func (extCache *extentCache) loadKafkaStream(
 	startFrom common.UnixNanoTime,
 	kafkaCluster string,
 	kafkaTopics []string,
+	metricsClient metrics.Client,
 ) (repl *replicaConnection, err error) {
 	groupID := getKafkaGroupIDForCheramiConsumerGroupName(cgName)
 
@@ -370,10 +367,24 @@ func (extCache *extentCache) loadKafkaStream(
 	// This is an ID that may appear in Kafka logs or metadata
 	cfg.Config.ClientID = `cherami_` + groupID
 
-	// TODO: Sarama metrics registry
+	// Configure a metrics registry and start the exporter
+	extCache.exporter, cfg.Config.MetricRegistry = goMetricsExporter.NewGoMetricsExporter(
+		metricsClient,
+		metrics.ConsConnectionScope,
+		map[string]int{
+			`incoming-byte-rate`:    metrics.OutputhostCGKafkaIncomingBytes,
+			`outgoing-byte-rate`:    metrics.OutputhostCGKafkaOutgoingBytes,
+			`request-rate`:          metrics.OutputhostCGKafkaRequestSent,
+			`request-size`:          metrics.OutputhostCGKafkaRequestSize,
+			`request-latency-in-ms`: metrics.OutputhostCGKafkaRequestLatency,
+			`response-rate`:         metrics.OutputhostCGKafkaResponseReceived,
+			`response-size`:         metrics.OutputhostCGKafkaResponseSize,
+		},
+	)
+	go extCache.exporter.Run()
 
 	// Build the Kafka client. Note that we would ideally like to have a factory for this, but the client
-	// has consumer-group-specific changes to its configuration
+	// has consumer-group-specific changes to its configuration (e.g. startFrom)
 	extCache.kafkaClient, err = sc.NewConsumer(
 		getKafkaBrokersForCluster(kafkaCluster),
 		groupID,
@@ -393,7 +404,7 @@ func (extCache *extentCache) loadKafkaStream(
 
 	// Setup the replicaConnection
 	replicaConnectionName := fmt.Sprintf(`replicaConnection{Extent: %s, kafkaCluster: %s}`, extCache.extUUID, kafkaCluster)
-	repl = newReplicaConnection(call, extCache, nil, replicaConnectionName, extCache.logger, 0)
+	repl = newReplicaConnection(call, extCache, replicaConnectionName, extCache.logger, 0)
 	extCache.shutdownWG.Add(1)
 	repl.open()
 	return
@@ -433,15 +444,10 @@ func (extCache *extentCache) manageExtentCache() {
 				err = nil
 			} else {
 				// this means a replica stream was closed. try another replica
-				extCache.logger.Info(`trying another replica`)
-				// first make sure the ackMgr updates its current ack level
-				extCache.ackMgr.updateAckLevel()
-				// TODO: Fix small race between the offset and seqNo calls
+				startAddr, startSequence := extCache.ackMgr.getCurrentReadLevel()
+				extCache.logger.WithFields(bark.Fields{`addr`: startAddr, `seqnum`: startSequence}).Info(`extcache: trying another replica`)
 				extCache.connection, extCache.pickedIndex, err =
-					extCache.loadReplicaStream(
-						extCache.ackMgr.getCurrentAckLevelOffset(),
-						extCache.ackMgr.getCurrentAckLevelSeqNo(),
-						(extCache.pickedIndex+1)%len(extCache.storeUUIDs))
+					extCache.loadReplicaStream(startAddr, startSequence, (extCache.pickedIndex+1)%len(extCache.storeUUIDs))
 			}
 			extCache.cacheMutex.Unlock()
 			if err != nil {
@@ -514,6 +520,9 @@ func (extCache *extentCache) unload() {
 		if err := extCache.kafkaClient.Close(); err != nil {
 			extCache.logger.WithField(common.TagErr, err).Error(`error closing Kafka client`)
 		}
+	}
+	if extCache.exporter != nil {
+		extCache.exporter.Stop()
 	}
 	extCache.cacheMutex.Unlock()
 }
