@@ -183,6 +183,9 @@ func (s *NetIntegrationSuiteParallelC) TestMsgCacheLimit() {
 	s.NotNil(publisherTest)
 
 	err = publisherTest.Open()
+	if err != nil {
+		fmt.Printf("TestMsgCacheLimit: publisherTest.Open failed: %v\n", err)
+	}
 	s.NoError(err)
 	// Publish messages
 	doneCh := make(chan *client.PublisherReceipt, testMsgCount)
@@ -337,6 +340,9 @@ func (s *NetIntegrationSuiteParallelE) TestWriteEndToEndSuccessWithCassandra() {
 	s.NotNil(publisherTest)
 
 	err := publisherTest.Open()
+	if err != nil {
+		fmt.Printf("TestWriteEndToEndSuccessWithCassandra: publisherTest.Open failed: %v\n", err)
+	}
 	s.NoError(err)
 
 	// Publish messages
@@ -436,7 +442,7 @@ ReadLoop:
 	s.Nil(err, "Failed to delete destination")
 }
 
-func (s *NetIntegrationSuiteParallelE) _TestWriteWithDrain() { // Disabled pending fix for flakiness
+func (s *NetIntegrationSuiteParallelE) TestWriteWithDrain() { // Disabled pending fix for flakiness
 	destPath := "/dest/testWriteDrain"
 	cgPath := "/cg/testWriteDrain"
 	testMsgCount := 1000
@@ -477,6 +483,9 @@ func (s *NetIntegrationSuiteParallelE) _TestWriteWithDrain() { // Disabled pendi
 	s.NotNil(publisherTest)
 
 	err := publisherTest.Open()
+	if err != nil {
+		fmt.Printf("TestWriteWithDrain: publisherTest.Open failed: %v\n", err)
+	}
 	s.NoError(err)
 
 	// Publish messages
@@ -656,6 +665,9 @@ func (s *NetIntegrationSuiteSerial) TestWriteEndToEndMultipleStore() {
 	s.NotNil(publisherTest)
 
 	err := publisherTest.Open()
+	if err != nil {
+		fmt.Printf("TestWriteEndToEndMultipleStore: publisherTest.Open failed: %v\n", err)
+	}
 	s.NoError(err)
 
 	// Publish messages
@@ -774,7 +786,7 @@ ReadLoop2:
 // then starts the consumer and a publisher. The consumer reads half the messages
 // that were published before waiting for the publisher to finish publishing all of the
 // messages -- the consumer then reads the rest of the messages, from the "backlog".
-func (s *NetIntegrationSuiteParallelB) _TestTimerQueue() {
+func (s *NetIntegrationSuiteParallelB) TestTimerQueue() {
 
 	destPath, cg1Path, cg2Path := "/test.dest/TestTimerQueue", "/test.cg/TestTimerQueue", "/test.cg.backlog/TestTimerQueue"
 
@@ -901,6 +913,9 @@ func (s *NetIntegrationSuiteParallelB) _TestTimerQueue() {
 
 	// -- start publisher and publish all messages
 	err = publisherTest.Open()
+	if err != nil {
+		fmt.Printf("TestTimerQueue: publisherTest.Open failed: %v\n", err)
+	}
 	s.NoError(err)
 
 	doneCh := make(chan *client.PublisherReceipt, testMsgCount)
@@ -1095,7 +1110,9 @@ func (s *NetIntegrationSuiteParallelA) TestDLQWithCassandra() {
 	s.NotNil(publisherTest)
 
 	err := publisherTest.Open()
-	log.Errorf("error is: %v", err)
+	if err != nil {
+		fmt.Printf("TestDLQWithCassandra: publisherTest.Open failed: %v\n", err)
+	}
 	s.NoError(err)
 
 	// Publish messages continuously in a goroutine;
@@ -1626,6 +1643,9 @@ func (s *NetIntegrationSuiteParallelD) TestSmartRetryDisableDuringDLQMerge() {
 	s.NotNil(publisherTest)
 
 	err := publisherTest.Open()
+	if err != nil {
+		fmt.Printf("TestSmartRetryDisableDuringDLQMerge: publisherTest.Open failed: %v\n", err)
+	}
 	s.NoError(err)
 
 	// Publish messages continuously in a goroutine to ensures a steady supply of 'good' messages so
@@ -1821,6 +1841,9 @@ func (s *NetIntegrationSuiteParallelA) TestSmartRetry() {
 	s.NotNil(publisherTest)
 
 	err := publisherTest.Open()
+	if err != nil {
+		fmt.Printf("TestSmartRetry: publisherTest.Open failed: %v\n", err)
+	}
 	s.NoError(err)
 
 	// Publish messages
@@ -2749,6 +2772,9 @@ func (s *NetIntegrationSuiteParallelC) doPublishAndReadTest(
 	s.NotNil(publisherTest)
 
 	err := publisherTest.Open()
+	if err != nil {
+		fmt.Printf("doPublishAndReadTest: publisherTest.Open failed: %v\n", err)
+	}
 	s.NoError(err)
 
 	// Publish messages
