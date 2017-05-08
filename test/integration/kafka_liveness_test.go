@@ -32,7 +32,7 @@ import (
 // If running on Mac and java 1.7 for ZooKeeper/Kafka, run following command before starting Kafka:
 // echo "127.0.0.1 $HOSTNAME" | sudo tee -a /etc/hosts
 
-func (s *NetIntegrationSuiteParallelE) TestKafkaLivenessBySarama() {
+func (s *NetIntegrationSuiteParallelE) _TestKafkaLivenessBySarama() {
 	msgValue := "testing message " + uuid.New()
 
 	producer, partition, err := s.produceKafkaMessage(msgValue)
@@ -82,7 +82,7 @@ FOR:
 	s.Assert().True(receivedMessage)
 }
 
-func (s *NetIntegrationSuiteParallelE) TestKafkaLivenessBySaramaCluster() {
+func (s *NetIntegrationSuiteParallelE) _TestKafkaLivenessBySaramaCluster() {
 	msgValue := "testing message " + uuid.New()
 
 	producer, partition, err := s.produceKafkaMessage(msgValue)
