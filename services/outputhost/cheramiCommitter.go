@@ -42,6 +42,7 @@ type cheramiCommitter struct {
 	commitLevel        CommitterLevel
 	readLevel          CommitterLevel
 	finalLevel         CommitterLevel
+	finalSet           bool
 	metaclient         metadata.TChanMetadataService
 	isMultiZone        bool
 	tClients           common.ClientFactory
@@ -63,6 +64,7 @@ func (c *cheramiCommitter) SetReadLevel(l CommitterLevel) {
 
 // SetFinalLevel just updates the last possible read level
 func (c *cheramiCommitter) SetFinalLevel(l CommitterLevel) {
+	c.finalSet = true
 	c.finalLevel = l
 }
 
@@ -83,7 +85,7 @@ func (c *cheramiCommitter) UnlockAndFlush(l sync.Locker) error {
 		ReadLevelSeqNo:     common.Int64Ptr(int64(c.readLevel.seqNo)),
 	}
 
-	if c.finalLevel != CommitterLevel(CommitterLevel{}) { // If the final level has been set
+	if c.finalSet { // If the final level has been set
 		if c.finalLevel.address == c.readLevel.address && c.readLevel.address == c.commitLevel.address { // And final==read==commit
 			oReq.Status = common.CheramiConsumerGroupExtentStatusPtr(shared.ConsumerGroupExtentStatus_CONSUMED)
 		}
