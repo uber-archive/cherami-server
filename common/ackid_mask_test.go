@@ -46,18 +46,18 @@ func testCreateBitMaskUtil(startFromBit uint64, numBits uint64) uint64 {
 
 // testCreateBitMask creates gives the masks for the session, ackMgr and the seqNo
 func testCreateBitMask() (uint64, uint64, uint64) {
-	sessionMask := testCreateBitMaskUtil(maxBits-sessionIDNumBits, sessionIDNumBits)           // sessionId is the top 16 bits - 48 to 63 [48, 64)
-	ackMgrMask := testCreateBitMaskUtil(maxBits-(sessionIDNumBits+ackIDNumBits), ackIDNumBits) // ackMgrBitMask is from bits 32 to 47 [32, 48)
-	seqNoMask := testCreateBitMaskUtil(0, seqNoNumBits)                                        // seqNoBitMask is from bits 0 to 32 [0, 32)
+	sessionMask := testCreateBitMaskUtil(maxBits-sessionIDNumBits, sessionIDNumBits)                 // sessionId is the top 16 bits - 48 to 63 [48, 64)
+	ackMgrMask := testCreateBitMaskUtil(maxBits-(sessionIDNumBits+ackMgrIDNumBits), ackMgrIDNumBits) // ackMgrBitMask is from bits 32 to 47 [32, 48)
+	indexMask := testCreateBitMaskUtil(0, indexNumBits)                                              // seqNoBitMask is from bits 0 to 32 [0, 32)
 
-	return sessionMask, ackMgrMask, seqNoMask
+	return sessionMask, ackMgrMask, indexMask
 }
 
 // TestAckIDValidateBitMasks is a simple test to validate the masks
 // we use based on the bits.
 func (s *AckIDSuite) TestAckIDValidateBitMasks() {
-	sessionMask, ackMgrMask, seqNoMask := testCreateBitMask()
-	s.Equal(sessionMask, sessionIDMask)
-	s.Equal(ackMgrMask, ackMgrIDMask)
-	s.Equal(seqNoMask, seqNumMask)
+	sMask, aMask, iMask := testCreateBitMask()
+	s.Equal(sMask, sessionIDMask)
+	s.Equal(aMask, ackMgrIDMask)
+	s.Equal(iMask, indexMask)
 }

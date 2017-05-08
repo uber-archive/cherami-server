@@ -73,10 +73,9 @@ type (
 		doneWG             sync.WaitGroup
 		logger             bark.Logger
 		sessionID          uint16
-		ackMgrID           uint16                // ID of this ackManager; unique on this host
-		cgCache            *consumerGroupCache   // back pointer to the consumer group cache
-		levelOffset        common.SequenceNumber // ‡
-		lk                 sync.RWMutex          // ‡ = guarded by this mutex
+		ackMgrID           uint16              // ID of this ackManager; unique on this host
+		cgCache            *consumerGroupCache // back pointer to the consumer group cache
+		lk                 sync.RWMutex        // ‡ = guarded by this mutex
 	}
 )
 
@@ -127,15 +126,21 @@ func (ackMgr *ackManager) getNextAckID(address storeHostAddress, sequence common
 	ackMgr.readLevelSeq++
 
 	if sequence != ackMgr.readLevelSeq {
+		if sequence > ackMgr.readLevelSeq {
+			ackMgr.logger.WithFields(bark.Fields{
+				`old-readLevelSeq`: ackMgr.readLevelSeq,
+				`new-readLevelSeq`: sequence,
+			}).Warn(`adjusting read-level sequence forward`)
 
-		ackMgr.logger.WithFields(bark.Fields{
-			`old-readLevelSeq`: ackMgr.readLevelSeq,
-			`new-readLevelSeq`: sequence,
-		}).Warn(`adjusting read-level sequence`)
-
-		// update gauge here to indicate we skipped messages (potentially due to retention?)
-		ackMgr.cgCache.consumerM3Client.UpdateGauge(metrics.ConsConnectionScope,
-			metrics.OutputhostCGSkippedMessages, int64(sequence-ackMgr.readLevelSeq))
+			// update gauge here to indicate we skipped messages (potentially due to retention?)
+			ackMgr.cgCache.consumerM3Client.UpdateGauge(metrics.ConsConnectionScope,
+				metrics.OutputhostCGSkippedMessages, int64(sequence-ackMgr.readLevelSeq))
+		} else {
+			ackMgr.logger.WithFields(bark.Fields{
+				`old-readLevelSeq`: ackMgr.readLevelSeq,
+				`new-readLevelSeq`: sequence,
+			}).Error(`adjusting read-level sequence backwards`)
+		}
 
 		ackMgr.readLevelSeq = sequence
 	}
@@ -309,12 +314,12 @@ func (ackMgr *ackManager) updateAckLevel() {
 	}
 }
 
-func (ackMgr *ackManager) acknowledgeMessage(ackID AckID, seqNum ackIndex, address int64, isNack bool) error {
+func (ackMgr *ackManager) acknowledgeMessage(ackID AckID, index ackIndex, address int64, isNack bool) error {
 	var err error
 	notifyCg := true
 	ackMgr.lk.Lock() // Read lock would be OK in this case (except for a benign race with two simultaneous acks for the same ackID), see below
 	// check if this id is present
-	if msg, ok := ackMgr.addrs[seqNum]; ok {
+	if msg, ok := ackMgr.addrs[index]; ok {
 		// validate the address from the ackID
 		if msg.addr != storeHostAddress(address) {
 			ackMgr.logger.WithFields(bark.Fields{
@@ -326,17 +331,17 @@ func (ackMgr *ackManager) acknowledgeMessage(ackID AckID, seqNum ackIndex, addre
 		} else {
 			if ackMgr.cgCache.cachedCGDesc.GetOwnerEmail() == SmartRetryDisableString {
 				ackMgr.logger.WithFields(bark.Fields{
-					`Address`:     address,
-					`addr`:        msg.addr,
-					common.TagSeq: seqNum,
-					`isNack`:      isNack,
+					`Address`: address,
+					`addr`:    msg.addr,
+					`index`:   index,
+					`isNack`:  isNack,
 				}).Info(`msg ack`)
 			}
 			if !isNack {
 				msg.acked = true // This is the only place that this field of msg is changed. It was initially set under a write lock elsewhere, hence we can have a read lock
 				// update the last acked sequence, if this is the most recent ack
-				if ackMgr.lastAckedSeq < common.SequenceNumber(seqNum) {
-					ackMgr.lastAckedSeq = common.SequenceNumber(seqNum)
+				if ackMgr.lastAckedSeq < msg.seqnum {
+					ackMgr.lastAckedSeq = msg.seqnum
 				}
 			}
 		}

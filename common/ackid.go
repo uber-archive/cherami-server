@@ -38,13 +38,13 @@ type AckID struct {
 
 const (
 	sessionIDNumBits = 16 // 16 bits for the unique session ID
-	ackIDNumBits     = 16 // 16 bits for the unique ack managers within this host
-	seqNoNumBits     = 32 // 32 bits for the sequence number within the ack manager
+	ackMgrIDNumBits  = 16 // 16 bits for the unique ack managers within this host
+	indexNumBits     = 32 // 32 bits for the index of the message within the ack manager
 	maxBits          = 64
 
 	sessionIDMask uint64 = 18446462598732840960 //0xffff000000000000
 	ackMgrIDMask  uint64 = 281470681743360      //0x0000ffff00000000
-	seqNumMask    uint64 = 4294967295           //0x00000000ffffffff
+	indexMask     uint64 = 4294967295           //0x00000000ffffffff
 )
 
 // ToString serializes AckID object into a base64 encoded string
@@ -56,7 +56,7 @@ const (
 // The reason for having the above fields in the ackID is as follows:
 // sessionID - to make sure ack is to the same outputhost (let's say to prevent a bad client)
 // ackID - to uniquely identify the ack managers within this outputhost
-// seqNum - to identify the data structure within the ackMgr
+// index - to identify the data structure within the ackMgr
 // Address - to make sure we validate the ack based on what we get from the store
 // We need all the above to prevent collisions
 func (a AckID) ToString() string {
@@ -68,13 +68,13 @@ func (a AckID) ToString() string {
 
 // ConstructCombinedID constructs the combinedID from the session,
 // ackmgr and the seq numbers based on the bit masks
-func (a AckID) ConstructCombinedID(sessionID uint64, ackMgrID uint64, seqNum uint64) CombinedID {
-	return CombinedID(((sessionID << 48) & sessionIDMask) | ((ackMgrID << 32) & ackMgrIDMask) | (seqNum & seqNumMask))
+func (a AckID) ConstructCombinedID(sessionID uint64, ackMgrID uint64, index uint64) CombinedID {
+	return CombinedID(((sessionID << 48) & sessionIDMask) | ((ackMgrID << 32) & ackMgrIDMask) | (index & indexMask))
 }
 
 // DeconstructCombinedID deconstructs the combinedID
 func (c CombinedID) DeconstructCombinedID() (uint16, uint16, uint32) {
-	return uint16((uint64(c) & sessionIDMask) >> 48), uint16((uint64(c) & ackMgrIDMask) >> 32), uint32(uint64(c) & seqNumMask)
+	return uint16((uint64(c) & sessionIDMask) >> 48), uint16((uint64(c) & ackMgrIDMask) >> 32), uint32(uint64(c) & indexMask)
 }
 
 // AckIDFromString deserializes a string into the object.
@@ -95,9 +95,9 @@ func AckIDFromString(ackID string) (*AckID, error) {
 }
 
 // ConstructAckID is a helper routine to construct the ackID from the given args
-func ConstructAckID(sessionID uint16, ackMgrID uint16, seqNum uint32, address int64) string {
+func ConstructAckID(sessionID uint16, ackMgrID uint16, index uint32, address int64) string {
 	stAckID := AckID{Address: address}
-	stAckID.MutatedID = stAckID.ConstructCombinedID(uint64(sessionID), uint64(ackMgrID), uint64(seqNum))
+	stAckID.MutatedID = stAckID.ConstructCombinedID(uint64(sessionID), uint64(ackMgrID), uint64(index))
 
 	return stAckID.ToString()
 }

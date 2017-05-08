@@ -23,3 +23,5 @@ cherami-cli
 cherami-replicator-tool
 cherami-server
 cherami-replicator-server
+cdb
+cherami-store-tool
