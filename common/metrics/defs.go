@@ -847,6 +847,20 @@ const (
 	OutputhostCGSkippedMessages
 	// OutputhostCGCreditsAccumulated is a gauge to record credits that are accumulated locally per consumer group
 	OutputhostCGCreditsAccumulated
+	// OutputhostCGKafkaIncomingBytes corresponds to Kafka's (sarama's) incoming-byte-rate metric
+	OutputhostCGKafkaIncomingBytes
+	// OutputhostCGKafkaOutgoingBytes corresponds to Kafka's (sarama's) outgoing-byte-rate metric
+	OutputhostCGKafkaOutgoingBytes
+	// OutputhostCGKafkaRequestSent corresponds to Kafka's (sarama's) request-rate metric
+	OutputhostCGKafkaRequestSent
+	// OutputhostCGKafkaRequestSize corresponds to Kafka's (sarama's) request-size metric
+	OutputhostCGKafkaRequestSize
+	// OutputhostCGKafkaRequestLatency corresponds to Kafka's (sarama's) request-latency metric
+	OutputhostCGKafkaRequestLatency
+	// OutputhostCGKafkaResponseReceived corresponds to Kafka's (sarama's) response-rate metric
+	OutputhostCGKafkaResponseReceived
+	// OutputhostCGKafkaResponseSize corresponds to Kafka's (sarama's) response-size metric
+	OutputhostCGKafkaResponseSize
 
 	// -- Frontend metrics -- //
 
@@ -1318,6 +1332,15 @@ var dynamicMetricDefs = map[ServiceIdx]map[int]metricDefinition{
 		OutputhostCGAckMgrResetMsgError:   {Gauge, "outputhost.ackmgr.reset.message.error.cg"},
 		OutputhostCGSkippedMessages:       {Gauge, "outputhost.skipped.messages.cg"},
 		OutputhostCGCreditsAccumulated:    {Gauge, "outputhost.credit-accumulated.cg"},
+
+		// Kafka "broker-related metrics"
+		OutputhostCGKafkaIncomingBytes:    {Counter, "outputhost.kafka.received.bytes.cg"},
+		OutputhostCGKafkaOutgoingBytes:    {Counter, "outputhost.kafka.sent.bytes.cg"},
+		OutputhostCGKafkaRequestSent:      {Counter, "outputhost.kafka.request.cg"},
+		OutputhostCGKafkaRequestSize:      {Timer, "outputhost.kafka.request.size.cg"}, // Histograms are respresented in M3 as timers, per documentation
+		OutputhostCGKafkaRequestLatency:   {Timer, "outputhost.kafka.request.latency.cg"},
+		OutputhostCGKafkaResponseReceived: {Counter, "outputhost.kafka.response.received.cg"},
+		OutputhostCGKafkaResponseSize:     {Timer, "outputhost.kafka.response.size.cg"},
 	},
 
 	// definitions for Controller metrics
