@@ -448,6 +448,7 @@ func (extCache *extentCache) manageExtentCache() {
 				extCache.logger.WithFields(bark.Fields{`addr`: startAddr, `seqnum`: startSequence}).Info(`extcache: trying another replica`)
 				extCache.connection, extCache.pickedIndex, err =
 					extCache.loadReplicaStream(startAddr, startSequence, (extCache.pickedIndex+1)%len(extCache.storeUUIDs))
+				extCache.consumerM3Client.IncCounter(metrics.ConsConnectionScope, metrics.OutputhostCGReplicaReconnect)
 			}
 			extCache.cacheMutex.Unlock()
 			if err != nil {

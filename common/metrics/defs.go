@@ -821,6 +821,8 @@ const (
 	OutputhostCGMessagesThrottled
 	// OutputhostCGAckMgrSeqNotFound is the gauge to track acks whose seq number is not found
 	OutputhostCGAckMgrSeqNotFound
+	// OutputhostCGReplicaReconnect is a counter that tracks replica reconnections
+	OutputhostCGReplicaReconnect
 	// OutputhostCGMessageSentLatency is the latency to send a message
 	OutputhostCGMessageSentLatency
 	//OutputhostCGMessageCacheSize is the cashe size of consumer group message
@@ -1319,6 +1321,7 @@ var dynamicMetricDefs = map[ServiceIdx]map[int]metricDefinition{
 		OutputhostCGMessageSentNAck:       {Counter, "outputhost.message.sent-nack.cg"},
 		OutputhostCGMessagesThrottled:     {Counter, "outputhost.message.throttled"},
 		OutputhostCGAckMgrSeqNotFound:     {Counter, "outputhost.ackmgr.seq-not-found.cg"},
+		OutputhostCGReplicaReconnect:      {Counter, "outputhost.replica-reconnect.cg"},
 		OutputhostCGMessageSentLatency:    {Timer, "outputhost.message.sent-latency.cg"},
 		OutputhostCGMessageCacheSize:      {Gauge, "outputhost.message.cache.size.cg"},
 		OutputhostCGConsConnection:        {Gauge, "outputhost.consconnection.cg"},
