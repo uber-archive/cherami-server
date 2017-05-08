@@ -40,9 +40,11 @@ type (
 	}
 )
 
-type handlerFn func(metricName string, baseTags, tags map[string]string, value int64)
+// HandlerFn is the handler function prototype for the test reporter; your provided functions must match
+// this type.
+type HandlerFn func(metricName string, baseTags, tags map[string]string, value int64)
 
-var handlers = make(map[string]map[string]handlerFn) // Key1 - metricName; Key2 - "filterTag:filterVal"
+var handlers = make(map[string]map[string]HandlerFn) // Key1 - metricName; Key2 - "filterTag:filterVal"
 var handlerMutex sync.RWMutex
 
 // NewTestReporter create an instance of Reporter which can be used for driver to emit metric to console
@@ -134,11 +136,11 @@ func (r *TestReporter) executeHandler(name string, tags map[string]string, value
 // * Your handler can be called concurrently. Capture your own sync.Mutex if you must serialize
 // * Counters report the delta; you must maintain the cumulative value of your counter if it is important
 // * Your handler executes synchronously with the metrics code; DO NOT BLOCK
-func RegisterHandler(metricName, filterTag, filterTagVal string, handler handlerFn) {
+func RegisterHandler(metricName, filterTag, filterTagVal string, handler HandlerFn) {
 	defer handlerMutex.Unlock()
 	handlerMutex.Lock()
 	if _, ok := handlers[metricName]; !ok {
-		handlers[metricName] = make(map[string]handlerFn)
+		handlers[metricName] = make(map[string]HandlerFn)
 	}
 
 	key2 := filterTag + `:` + filterTagVal
@@ -189,6 +191,5 @@ func (r *TestReporter) StartTimer(name string, tags map[string]string) Stopwatch
 
 // RecordTimer should be used for measuring latency when you cannot start the stop watch.
 func (r *TestReporter) RecordTimer(name string, tags map[string]string, d time.Duration) {
-	// Record the time as counter of time in milliseconds
-	// not implemented
+	r.executeHandler(name, tags, int64(d))
 }

@@ -50,10 +50,11 @@ type (
 
 	levels struct {
 		asOf         common.UnixNanoTime   // Timestamp when this level was calculated
-		readLevel    ackIndex              // -1 = nothing received, 0 = 1 message (#0) received, etc.
-		readLevelSeq common.SequenceNumber // store msg seqnum corresponding to readLevel
-		ackLevel     ackIndex              // -1 = nothing acked
-		ackLevelSeq  common.SequenceNumber // store msg seqnum corresponding to the ackLevel
+		readLevel    ackIndex              // index upto which msgs have been read
+		readLevelSeq common.SequenceNumber // msg seqnum corresponding to readLevel
+		ackLevel     ackIndex              // index upto which msgs have been acked
+		ackLevelSeq  common.SequenceNumber // msg seqnum corresponding to the ackLevel
+
 		lastAckedSeq common.SequenceNumber // the latest sequence which is acked
 	}
 
@@ -131,7 +132,11 @@ func (ackMgr *ackManager) getNextAckID(address storeHostAddress, sequence common
 		ackMgr.logger.WithFields(bark.Fields{
 			`old-readLevelSeq`: ackMgr.readLevelSeq,
 			`new-readLevelSeq`: sequence,
-		}).Error(`adjusting read-level sequence`)
+		}).Warn(`adjusting read-level sequence`)
+
+		// update gauge here to indicate we skipped messages (potentially due to retention?)
+		ackMgr.cgCache.consumerM3Client.UpdateGauge(metrics.ConsConnectionScope,
+			metrics.OutputhostCGSkippedMessages, int64(sequence-ackMgr.readLevelSeq))
 
 		ackMgr.readLevelSeq = sequence
 	}
