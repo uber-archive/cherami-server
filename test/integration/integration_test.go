@@ -113,7 +113,7 @@ func XXXTestNetIntegrationSuiteSerial(t *testing.T) {
 
 func createCheramiClient(svcName string, ipaddr string, port int, logger bark.Logger) client.Client {
 	options := &client.ClientOptions{
-		Timeout: time.Second * 30,
+		Timeout: time.Second * 60,
 		ReconfigurationPollingInterval: time.Second,
 	}
 	if logger != nil {
