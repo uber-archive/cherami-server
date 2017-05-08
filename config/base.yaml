@@ -94,7 +94,7 @@ KafkaConfig:
 
 # Logging configuration
 logging:
-  level: info
+  level: error
   stdout: true
 
 # DefaultDestinationConfig right now configures how many replicas you want
