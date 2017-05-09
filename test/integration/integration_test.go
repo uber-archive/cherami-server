@@ -786,7 +786,7 @@ ReadLoop2:
 // then starts the consumer and a publisher. The consumer reads half the messages
 // that were published before waiting for the publisher to finish publishing all of the
 // messages -- the consumer then reads the rest of the messages, from the "backlog".
-func (s *NetIntegrationSuiteParallelB) TestTimerQueue() {
+func (s *NetIntegrationSuiteParallelB) _TestTimerQueue() {
 
 	destPath, cg1Path, cg2Path := "/test.dest/TestTimerQueue", "/test.cg/TestTimerQueue", "/test.cg.backlog/TestTimerQueue"
 
