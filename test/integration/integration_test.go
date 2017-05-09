@@ -51,10 +51,10 @@ import (
 	"testing"
 )
 
-type NetIntegrationSuiteParallelB struct {
+type NetIntegrationSuiteParallelA struct {
 	testBase
 }
-type NetIntegrationSuiteParallelA struct {
+type NetIntegrationSuiteParallelB struct {
 	testBase
 }
 type NetIntegrationSuiteParallelC struct {
@@ -2663,7 +2663,7 @@ func (s *NetIntegrationSuiteParallelB) TestQueueDepth() {
 
 	var newStartFrom int64
 	for ; phase < phaseCount; phase++ {
-		ll().WithField(`phase`, phase).Error(`Starting...`)
+		ll().WithField(`phase`, phase).Info(`Starting...`)
 		// Producer actions
 		switch phase {
 		case 0:
