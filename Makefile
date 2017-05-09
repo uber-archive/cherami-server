@@ -104,6 +104,10 @@ integration_tests: bins
 		go test $(EMBED) "$$dir" $(TEST_ARG) $(GOCOVERPKG_ARG) || exit 1; \
 	done
 
+queue_depth: bins
+	go test -v -race ./test/integration -testify.m QueueDepth || exit 1; \
+
+
 unit_tests: bins
 	@echo Running tests:
 	@time for dir in $(PKG_TEST_DIRS); do \
