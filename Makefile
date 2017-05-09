@@ -101,7 +101,7 @@ bins: cherami-server cherami-replicator-server cherami-cli cherami-admin cherami
 integration_tests: bins
 	@echo Running integration tests:
 	@time for dir in $(INTEG_TEST_DIRS); do \
-		go test $(EMBED) "$$dir" $(TEST_ARG) $(GOCOVERPKG_ARG) || exit 1; \
+		go test $(EMBED) "$$dir" $(TEST_ARG) || exit 1; \
 	done
 
 queue_depth: bins

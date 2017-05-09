@@ -74,36 +74,36 @@ type NetIntegrationSuiteSerial struct {
 func TestNetIntegrationSuiteParallelA(t *testing.T) {
 	s := new(NetIntegrationSuiteParallelA)
 	s.testBase.SetupSuite(t)
-	t.Parallel()
+	// t.Parallel()
 	suite.Run(t, s)
 }
 func TestNetIntegrationSuiteParallelB(t *testing.T) {
 	s := new(NetIntegrationSuiteParallelB)
 	s.testBase.SetupSuite(t)
-	t.Parallel()
+	// t.Parallel()
 	suite.Run(t, s)
 }
 func TestNetIntegrationSuiteParallelC(t *testing.T) {
 	s := new(NetIntegrationSuiteParallelC)
 	s.testBase.SetupSuite(t)
-	t.Parallel()
+	// t.Parallel()
 	suite.Run(t, s)
 }
 func TestNetIntegrationSuiteParallelD(t *testing.T) {
 	s := new(NetIntegrationSuiteParallelD)
 	s.testBase.SetupSuite(t)
-	t.Parallel()
+	// t.Parallel()
 	suite.Run(t, s)
 }
 func TestNetIntegrationSuiteParallelE(t *testing.T) {
 	s := new(NetIntegrationSuiteParallelE)
 	s.testBase.SetupSuite(t)
-	t.Parallel()
+	// t.Parallel()
 	suite.Run(t, s)
 }
 
 // Disabled, since it is apparently impossible to get this test to run without racing with the parallel tests
-func XXXTestNetIntegrationSuiteSerial(t *testing.T) {
+func TestNetIntegrationSuiteSerial(t *testing.T) {
 	if !testing.Short() {
 		s := new(NetIntegrationSuiteSerial)
 		s.testBase.SetupSuite(t)
@@ -2284,7 +2284,7 @@ ReadLoop2:
 	s.Nil(err, "Failed to delete destination")
 }
 
-func (s *NetIntegrationSuiteParallelB) TestQueueDepth() {
+func (s *NetIntegrationSuiteSerial) TestQueueDepth() {
 
 	const (
 		destPath                = `/test.runner.SmartRetry/TestQueueDepth` // This path ensures that throttling is limited for this test
