@@ -1761,7 +1761,6 @@ func (s *NetIntegrationSuiteParallelA) TestSmartRetry() {
 	rReq := cherami.NewReadDestinationRequest()
 	rReq.Path = common.StringPtr(destPath)
 	readDesc, _ := cheramiClient.ReadDestination(rReq)
-	log.Errorf("readDesc: %v\n", readDesc)
 	s.NotNil(readDesc)
 
 	// ==WRITE==
@@ -2213,20 +2212,22 @@ ReadLoop2:
 }
 
 func (s *NetIntegrationSuiteParallelA) TestQueueDepth() { // Disable pending fix for flakiness
-	destPath := `/test.runner.SmartRetry/TestQueueDepth` // This path ensures that throttling is limited for this test
-	cgPath := `/test.runner.SmartRetry/TestQueueDepthCG`
-	cgMaxDeliveryCount := 2
-	cgLockTimeout := 5000 // No redeliveries
-	cgReadLoopTimeout := time.Minute / 2
-	cgExpectedDeliveryCount := cgMaxDeliveryCount + 1
-	cgVerifyLoopTimeout := time.Minute * 2
-	cgVerifyLoopTicker := cgLockTimeout * time.Second
-	cnsmrPrefetch := 13
-	publisherPubInterval := time.Second / 5
-	DLQPublishClearTime := cgLockTimeout * time.Second * 2
+	const (
+		destPath                = `/test.runner.SmartRetry/TestQueueDepth` // This path ensures that throttling is limited for this test
+		cgPath                  = `/test.runner.SmartRetry/TestQueueDepthCG`
+		cgMaxDeliveryCount      = 2
+		cgLockTimeout           = 5000 // No redeliveries
+		cgReadLoopTimeout       = time.Minute / 2
+		cgExpectedDeliveryCount = cgMaxDeliveryCount + 1
+		cgVerifyLoopTimeout     = time.Minute * 2
+		cgVerifyLoopTicker      = cgLockTimeout * time.Second
+		cnsmrPrefetch           = 13
+		publisherPubInterval    = time.Second / 5
+		DLQPublishClearTime     = cgLockTimeout * time.Second * 2
 
-	futureTSOffset := 45 * time.Second
-	phaseCount := 200
+		futureTSOffset = 45 * time.Second
+		phaseCount     = 200
+	)
 
 	// How long to wait to be sure that the storehost reporter has committed its pending writes.
 	// Note that because store tries to spread its writes over the entire interval, we need to wait
