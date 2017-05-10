@@ -283,7 +283,7 @@ func (tb *testBase) SetUp(clusterSz map[string]int, numReplicas int) {
 		tb.Controllers[hostID] = ch
 	}
 
-	tappedServices := []string{common.InputServiceName, common.OutputServiceName, common.StoreServiceName}
+	tappedServices := []string{common.InputServiceName, common.OutputServiceName, common.StoreServiceName, common.FrontendServiceName}
 	for _, s := range tappedServices {
 		var ch *controllerhost.Mcp
 		for _, ch = range tb.Controllers {
