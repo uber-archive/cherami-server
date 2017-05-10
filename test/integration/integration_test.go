@@ -2211,7 +2211,7 @@ ReadLoop2:
 	s.Nil(err, "Failed to delete destination")
 }
 
-func (s *NetIntegrationSuiteParallelA) TestQueueDepth() { // Disable pending fix for flakiness
+func (s *NetIntegrationSuiteParallelA) _TestQueueDepth() { // Disable pending fix for flakiness
 	const (
 		destPath                = `/test.runner.SmartRetry/TestQueueDepth` // This path ensures that throttling is limited for this test
 		cgPath                  = `/test.runner.SmartRetry/TestQueueDepthCG`
