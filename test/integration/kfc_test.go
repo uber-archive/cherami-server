@@ -81,7 +81,7 @@ func (t *kafkaMsg) String() string {
 		t.seq, t.topic, t.key, len(t.val), t.part, t.offs, t.count)
 }
 
-func (s *NetIntegrationSuiteParallelE) TestKafkaForCherami() {
+func (s *NetIntegrationSuiteParallelA) TestKafkaForCherami() {
 
 	destPath, cgPath := "/kafka_test_dest/kfc", "/kafka_test_cg/kfc"
 

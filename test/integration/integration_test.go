@@ -51,26 +51,7 @@ import (
 	"testing"
 )
 
-type NetIntegrationSuiteParallelB struct {
-	testBase
-}
 type NetIntegrationSuiteParallelA struct {
-	testBase
-}
-type NetIntegrationSuiteParallelC struct {
-	testBase
-}
-type NetIntegrationSuiteParallelD struct {
-	testBase
-}
-type NetIntegrationSuiteParallelE struct {
-	testBase
-}
-type NetIntegrationSuiteParallelF struct {
-	testBase
-}
-
-type NetIntegrationSuiteSerial struct {
 	testBase
 }
 
@@ -79,45 +60,6 @@ func TestNetIntegrationSuiteParallelA(t *testing.T) {
 	s.testBase.SetupSuite(t)
 	t.Parallel()
 	suite.Run(t, s)
-}
-func TestNetIntegrationSuiteParallelB(t *testing.T) {
-	s := new(NetIntegrationSuiteParallelB)
-	s.testBase.SetupSuite(t)
-	t.Parallel()
-	suite.Run(t, s)
-}
-func TestNetIntegrationSuiteParallelC(t *testing.T) {
-	s := new(NetIntegrationSuiteParallelC)
-	s.testBase.SetupSuite(t)
-	t.Parallel()
-	suite.Run(t, s)
-}
-func TestNetIntegrationSuiteParallelD(t *testing.T) {
-	s := new(NetIntegrationSuiteParallelD)
-	s.testBase.SetupSuite(t)
-	t.Parallel()
-	suite.Run(t, s)
-}
-func TestNetIntegrationSuiteParallelE(t *testing.T) {
-	s := new(NetIntegrationSuiteParallelE)
-	s.testBase.SetupSuite(t)
-	t.Parallel()
-	suite.Run(t, s)
-}
-func TestNetIntegrationSuiteParallelF(t *testing.T) {
-	s := new(NetIntegrationSuiteParallelF)
-	s.testBase.SetupSuite(t)
-	t.Parallel()
-	suite.Run(t, s)
-}
-
-// Disabled, since it is apparently impossible to get this test to run without racing with the parallel tests
-func XXXTestNetIntegrationSuiteSerial(t *testing.T) {
-	if !testing.Short() {
-		s := new(NetIntegrationSuiteSerial)
-		s.testBase.SetupSuite(t)
-		suite.Run(t, s)
-	}
 }
 
 func createCheramiClient(svcName string, ipaddr string, port int, logger bark.Logger) client.Client {
@@ -132,7 +74,7 @@ func createCheramiClient(svcName string, ipaddr string, port int, logger bark.Lo
 	return cc
 }
 
-func (s *NetIntegrationSuiteParallelC) TestMsgCacheLimit() {
+func (s *NetIntegrationSuiteParallelA) TestMsgCacheLimit() {
 	destPath := "/dest/TestMsgCacheLimit"
 	cgPath := "/cg/TestMsgCacheLimit"
 	testMsgCount := 100
@@ -305,7 +247,7 @@ ReadLoop2:
 	consumerTest.Close()
 }
 
-func (s *NetIntegrationSuiteParallelE) TestWriteEndToEndSuccessWithCassandra() {
+func (s *NetIntegrationSuiteParallelA) TestWriteEndToEndSuccessWithCassandra() {
 	destPath := "/dest/testWriteEndToEndCassandra"
 	cgPath := "/cg/testWriteEndToEndCassandra"
 	testMsgCount := 100
@@ -445,7 +387,7 @@ ReadLoop:
 	s.Nil(err, "Failed to delete destination")
 }
 
-func (s *NetIntegrationSuiteParallelE) TestWriteWithDrain() { // Disabled pending fix for flakiness
+func (s *NetIntegrationSuiteParallelA) TestWriteWithDrain() { // Disabled pending fix for flakiness
 	destPath := "/dest/testWriteDrain"
 	cgPath := "/cg/testWriteDrain"
 	testMsgCount := 1000
@@ -619,7 +561,7 @@ ReadLoop:
 	s.Nil(err, "Failed to delete destination")
 }
 
-func (s *NetIntegrationSuiteSerial) TestWriteEndToEndMultipleStore() {
+func (s *NetIntegrationSuiteParallelA) _TestWriteEndToEndMultipleStore() {
 	destPath := "/dest/testCassandraMultiple"
 	cgPath := "/cg/testCassandraMultiple"
 	testMsgCount := 10
@@ -783,7 +725,7 @@ ReadLoop2:
 // then starts the consumer and a publisher. The consumer reads half the messages
 // that were published before waiting for the publisher to finish publishing all of the
 // messages -- the consumer then reads the rest of the messages, from the "backlog".
-func (s *NetIntegrationSuiteParallelF) TestTimerQueue() {
+func (s *NetIntegrationSuiteParallelA) _TestTimerQueue() {
 
 	destPath, cg1Path, cg2Path := "/test.dest/TestTimerQueue", "/test.cg/TestTimerQueue", "/test.cg.backlog/TestTimerQueue"
 
@@ -1485,7 +1427,7 @@ operationsLoop:
 
 }
 
-func (s *NetIntegrationSuiteParallelD) TestSmartRetryDisableDuringDLQMerge() {
+func (s *NetIntegrationSuiteParallelA) TestSmartRetryDisableDuringDLQMerge() {
 	const (
 		destPath                   = `/test.runner.SmartRetry/SRDDDM` // This path ensures that throttling is limited for this test
 		cgPath                     = `/test.runner.SmartRetry/SRDDDMCG`
@@ -2047,7 +1989,7 @@ ReadLoop2_TheReloopening:
 
 }
 
-func (s *NetIntegrationSuiteParallelE) TestStartFromWithCassandra() {
+func (s *NetIntegrationSuiteParallelA) TestStartFromWithCassandra() {
 	destPath := "/dest/TestStartFromWithCassandra"
 	cgPathEverything := "/cg/TestStartFromWithCassandraEverything"
 	cgPathStartFrom := "/cg/TestStartFromWithCassandra"
@@ -2267,7 +2209,7 @@ ReadLoop2:
 	s.Nil(err, "Failed to delete destination")
 }
 
-func (s *NetIntegrationSuiteParallelB) TestQueueDepth() { // Disable pending fix for flakiness
+func (s *NetIntegrationSuiteParallelA) TestQueueDepth() { // Disable pending fix for flakiness
 	const (
 		destPath                = `/test.runner.SmartRetry/TestQueueDepth` // This path ensures that throttling is limited for this test
 		cgPath                  = `/test.runner.SmartRetry/TestQueueDepthCG`
@@ -2731,7 +2673,7 @@ func (s *NetIntegrationSuiteParallelB) TestQueueDepth() { // Disable pending fix
 	ll().Info(`END`)
 }
 
-func (s *NetIntegrationSuiteParallelC) doPublishAndReadTest(
+func (s *NetIntegrationSuiteParallelA) doPublishAndReadTest(
 	cheramiClient client.Client,
 	destPath, cgPath string,
 	testMsgCount int,
@@ -2821,7 +2763,7 @@ ReadLoop:
 	consumerTest.Close()
 }
 
-func (s *NetIntegrationSuiteParallelC) TestEndToEndChecksum() {
+func (s *NetIntegrationSuiteParallelA) TestEndToEndChecksum() {
 	destPath := "/dest/testChecksum"
 	cgPath := "/cg/testChecksum"
 	testMsgCount := 10

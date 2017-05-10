@@ -7,7 +7,7 @@ INTEG_TEST_ROOT=./test
 TOOLS_ROOT=./tools
 export GO15VENDOREXPERIMENT=1
 NOVENDOR = $(shell GO15VENDOREXPERIMENT=1 glide novendor)
-TEST_ARG ?= -race -v -timeout 5m
+TEST_ARG ?= -race -v -timeout 10m
 TEST_NO_RACE_ARG ?= -timeout 5m
 BUILD := ./build
 PWD = $(shell pwd)
