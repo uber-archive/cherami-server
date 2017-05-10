@@ -70,6 +70,8 @@ func createCheramiClient(svcName string, ipaddr string, port int, logger bark.Lo
 	if logger != nil {
 		options.Logger = logger
 	}
+	log := common.GetDefaultLogger()
+	log.Errorf("IPADDR IS: %v; PORT IS: %v", ipaddr, port)
 	cc, _ := client.NewClient(svcName, ipaddr, port, options)
 	return cc
 }
