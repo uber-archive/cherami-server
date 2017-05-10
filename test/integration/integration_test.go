@@ -66,6 +66,9 @@ type NetIntegrationSuiteParallelD struct {
 type NetIntegrationSuiteParallelE struct {
 	testBase
 }
+type NetIntegrationSuiteParallelF struct {
+	testBase
+}
 
 type NetIntegrationSuiteSerial struct {
 	testBase
@@ -97,6 +100,12 @@ func TestNetIntegrationSuiteParallelD(t *testing.T) {
 }
 func TestNetIntegrationSuiteParallelE(t *testing.T) {
 	s := new(NetIntegrationSuiteParallelE)
+	s.testBase.SetupSuite(t)
+	t.Parallel()
+	suite.Run(t, s)
+}
+func TestNetIntegrationSuiteParallelF(t *testing.T) {
+	s := new(NetIntegrationSuiteParallelF)
 	s.testBase.SetupSuite(t)
 	t.Parallel()
 	suite.Run(t, s)
@@ -774,7 +783,7 @@ ReadLoop2:
 // then starts the consumer and a publisher. The consumer reads half the messages
 // that were published before waiting for the publisher to finish publishing all of the
 // messages -- the consumer then reads the rest of the messages, from the "backlog".
-func (s *NetIntegrationSuiteParallelB) TestTimerQueue() {
+func (s *NetIntegrationSuiteParallelF) TestTimerQueue() {
 
 	destPath, cg1Path, cg2Path := "/test.dest/TestTimerQueue", "/test.cg/TestTimerQueue", "/test.cg.backlog/TestTimerQueue"
 
