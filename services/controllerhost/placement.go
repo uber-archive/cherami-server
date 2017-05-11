@@ -236,7 +236,7 @@ func (p *DistancePlacement) doesStoreMeetConstraints(host *common.HostInfo) bool
 	if cfg.AdminStatus != "enabled" {
 		p.context.log.WithFields(bark.Fields{
 			common.TagHostIP: host.Addr,
-			`reason`:         "AdminDisabled"}).Info("Placement ignoring store host")
+			`reason`:         "AdminDisabled"}).Error("Placement ignoring store host")
 		return false
 	}
 
@@ -249,7 +249,7 @@ func (p *DistancePlacement) doesStoreMeetConstraints(host *common.HostInfo) bool
 		p.context.log.WithFields(bark.Fields{
 			common.TagHostIP:     host.Addr,
 			`freeDiskSpaceBytes`: val,
-			`reason`:             "DiskSpaceTooLow"}).Info("Placement ignoring store host")
+			`reason`:             "DiskSpaceTooLow"}).Error("Placement ignoring store host")
 		return false
 	}
 
@@ -259,6 +259,7 @@ func (p *DistancePlacement) doesStoreMeetConstraints(host *common.HostInfo) bool
 func (p *DistancePlacement) getHealthyHosts(service string) ([]*common.HostInfo, error) {
 	hosts, err := p.context.rpm.GetHosts(service)
 	if err != nil {
+		p.context.log.Errorf("rpm get hosts failed: %v", err)
 		return nil, err
 	}
 	result := make([]*common.HostInfo, 0, len(hosts))
@@ -266,6 +267,7 @@ func (p *DistancePlacement) getHealthyHosts(service string) ([]*common.HostInfo,
 
 		state, _ := p.context.failureDetector.GetHostState(service, h.UUID)
 		if state == dfddHostStateGoingDown { // ignore hosts in GoingDown state from placement
+			p.context.log.Errorf("Host in going down state: %v", h.UUID)
 			continue
 		}
 		result = append(result, h)
@@ -273,6 +275,7 @@ func (p *DistancePlacement) getHealthyHosts(service string) ([]*common.HostInfo,
 
 	// if no hosts are found error out; could happen if all the hosts are "going down"
 	if len(result) == 0 {
+		p.context.log.Errorf("No healthy found")
 		return nil, errNoHosts
 	}
 	return result, nil
@@ -293,6 +296,8 @@ func (p *DistancePlacement) findEligibleStoreHosts() ([]*common.HostInfo, error)
 	for _, h := range storeHosts {
 		if p.doesStoreMeetConstraints(h) {
 			result = append(result, h)
+		} else {
+			p.context.log.Errorf("store doesn't meet constraints: %v", h)
 		}
 	}
 
