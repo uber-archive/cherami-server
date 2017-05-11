@@ -37,7 +37,7 @@ type (
 		// to host an extent. The default value
 		// translates to 40GB which is 2 percent
 		// for a 2TB drive
-		MinFreeDiskSpaceBytes int64 `name:"minFreeDiskSpaceBytes" default:"40000000000"`
+		MinFreeDiskSpaceBytes int64 `name:"minFreeDiskSpaceBytes" default:"4000000000"`
 	}
 	// InputPlacementConfig contains the config
 	// parameters needed for inputhost placement
