@@ -54,9 +54,91 @@ import (
 type NetIntegrationSuiteParallelA struct {
 	testBase
 }
+type NetIntegrationSuiteParallelB struct {
+	testBase
+}
+type NetIntegrationSuiteParallelC struct {
+	testBase
+}
+type NetIntegrationSuiteParallelD struct {
+	testBase
+}
+type NetIntegrationSuiteParallelE struct {
+	testBase
+}
+type NetIntegrationSuiteParallelF struct {
+	testBase
+}
+type NetIntegrationSuiteParallelG struct {
+	testBase
+}
+type NetIntegrationSuiteParallelH struct {
+	testBase
+}
+type NetIntegrationSuiteParallelI struct {
+	testBase
+}
+type NetIntegrationSuiteParallelJ struct {
+	testBase
+}
 
 func TestNetIntegrationSuiteParallelA(t *testing.T) {
 	s := new(NetIntegrationSuiteParallelA)
+	s.testBase.SetupSuite(t)
+	t.Parallel()
+	suite.Run(t, s)
+}
+
+func TestNetIntegrationSuiteParallelB(t *testing.T) {
+	s := new(NetIntegrationSuiteParallelB)
+	s.testBase.SetupSuite(t)
+	t.Parallel()
+	suite.Run(t, s)
+}
+func TestNetIntegrationSuiteParallelC(t *testing.T) {
+	s := new(NetIntegrationSuiteParallelC)
+	s.testBase.SetupSuite(t)
+	t.Parallel()
+	suite.Run(t, s)
+}
+func TestNetIntegrationSuiteParallelD(t *testing.T) {
+	s := new(NetIntegrationSuiteParallelD)
+	s.testBase.SetupSuite(t)
+	t.Parallel()
+	suite.Run(t, s)
+}
+func TestNetIntegrationSuiteParallelE(t *testing.T) {
+	s := new(NetIntegrationSuiteParallelE)
+	s.testBase.SetupSuite(t)
+	t.Parallel()
+	suite.Run(t, s)
+}
+func TestNetIntegrationSuiteParallelF(t *testing.T) {
+	s := new(NetIntegrationSuiteParallelF)
+	s.testBase.SetupSuite(t)
+	t.Parallel()
+	suite.Run(t, s)
+}
+func TestNetIntegrationSuiteParallelG(t *testing.T) {
+	s := new(NetIntegrationSuiteParallelG)
+	s.testBase.SetupSuite(t)
+	t.Parallel()
+	suite.Run(t, s)
+}
+func TestNetIntegrationSuiteParallelH(t *testing.T) {
+	s := new(NetIntegrationSuiteParallelH)
+	s.testBase.SetupSuite(t)
+	t.Parallel()
+	suite.Run(t, s)
+}
+func TestNetIntegrationSuiteParallelI(t *testing.T) {
+	s := new(NetIntegrationSuiteParallelI)
+	s.testBase.SetupSuite(t)
+	t.Parallel()
+	suite.Run(t, s)
+}
+func TestNetIntegrationSuiteParallelJ(t *testing.T) {
+	s := new(NetIntegrationSuiteParallelJ)
 	s.testBase.SetupSuite(t)
 	t.Parallel()
 	suite.Run(t, s)
@@ -249,7 +331,7 @@ ReadLoop2:
 	consumerTest.Close()
 }
 
-func (s *NetIntegrationSuiteParallelA) TestWriteEndToEndSuccessWithCassandra() {
+func (s *NetIntegrationSuiteParallelB) TestWriteEndToEndSuccessWithCassandra() {
 	destPath := "/dest/testWriteEndToEndCassandra"
 	cgPath := "/cg/testWriteEndToEndCassandra"
 	testMsgCount := 100
@@ -389,7 +471,7 @@ ReadLoop:
 	s.Nil(err, "Failed to delete destination")
 }
 
-func (s *NetIntegrationSuiteParallelA) TestWriteWithDrain() { // Disabled pending fix for flakiness
+func (s *NetIntegrationSuiteParallelI) TestWriteWithDrain() { // Disabled pending fix for flakiness
 	destPath := "/dest/testWriteDrain"
 	cgPath := "/cg/testWriteDrain"
 	testMsgCount := 1000
@@ -964,7 +1046,7 @@ ReadLoop2:
 	consumerTest.Close()
 }
 
-func (s *NetIntegrationSuiteParallelA) TestDLQWithCassandra() {
+func (s *NetIntegrationSuiteParallelH) TestDLQWithCassandra() {
 	const (
 		destPath                = `/test.runner.SmartRetry/TestDLQWithCassandra` // This path ensures that throttling is limited for this test
 		cgPath                  = `/test.runner.SmartRetry/TestDLQWithCassandraCG`
@@ -1429,7 +1511,7 @@ operationsLoop:
 
 }
 
-func (s *NetIntegrationSuiteParallelA) TestSmartRetryDisableDuringDLQMerge() {
+func (s *NetIntegrationSuiteParallelC) TestSmartRetryDisableDuringDLQMerge() {
 	const (
 		destPath                   = `/test.runner.SmartRetry/SRDDDM` // This path ensures that throttling is limited for this test
 		cgPath                     = `/test.runner.SmartRetry/SRDDDMCG`
@@ -1734,7 +1816,7 @@ readLoop:
 	}
 }
 
-func (s *NetIntegrationSuiteParallelA) TestSmartRetry() {
+func (s *NetIntegrationSuiteParallelD) TestSmartRetry() {
 	destPath := "/test.runner.SmartRetry/TestSmartRetry"
 	cgPath := "/test.runner.SmartRetry/TestSmartRetryCG"
 	testMsgCount := 1000
@@ -1991,7 +2073,7 @@ ReadLoop2_TheReloopening:
 
 }
 
-func (s *NetIntegrationSuiteParallelA) TestStartFromWithCassandra() {
+func (s *NetIntegrationSuiteParallelE) TestStartFromWithCassandra() {
 	destPath := "/dest/TestStartFromWithCassandra"
 	cgPathEverything := "/cg/TestStartFromWithCassandraEverything"
 	cgPathStartFrom := "/cg/TestStartFromWithCassandra"
@@ -2211,7 +2293,7 @@ ReadLoop2:
 	s.Nil(err, "Failed to delete destination")
 }
 
-func (s *NetIntegrationSuiteParallelA) _TestQueueDepth() { // Disable pending fix for flakiness
+func (s *NetIntegrationSuiteParallelF) TestQueueDepth() { // Disable pending fix for flakiness
 	const (
 		destPath                = `/test.runner.SmartRetry/TestQueueDepth` // This path ensures that throttling is limited for this test
 		cgPath                  = `/test.runner.SmartRetry/TestQueueDepthCG`
@@ -2675,7 +2757,7 @@ func (s *NetIntegrationSuiteParallelA) _TestQueueDepth() { // Disable pending fi
 	ll().Info(`END`)
 }
 
-func (s *NetIntegrationSuiteParallelA) doPublishAndReadTest(
+func (s *NetIntegrationSuiteParallelG) doPublishAndReadTest(
 	cheramiClient client.Client,
 	destPath, cgPath string,
 	testMsgCount int,
@@ -2765,7 +2847,7 @@ ReadLoop:
 	consumerTest.Close()
 }
 
-func (s *NetIntegrationSuiteParallelA) TestEndToEndChecksum() {
+func (s *NetIntegrationSuiteParallelG) TestEndToEndChecksum() {
 	destPath := "/dest/testChecksum"
 	cgPath := "/cg/testChecksum"
 	testMsgCount := 10
