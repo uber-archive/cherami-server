@@ -322,8 +322,8 @@ const (
 		columnZoneConfigs + `: ?}`
 
 	sqlInsertDstByUUID = `INSERT INTO ` + tableDestinations +
-		`(` + columnUUID + `, ` + columnIsMultiZone + `, ` + columnDestination + `, ` + columnKafkaCluster + `, ` + columnKafkaTopics + `, ` + columnDLQConsumerGroup + `) ` +
-		` VALUES (?, ?, ` + sqlDstType + `, ?, ?, ?)`
+		`(` + columnUUID + `, ` + columnIsMultiZone + `, ` + columnDestination + `, ` + columnKafkaCluster + `, ` + columnKafkaTopics + `, ` + columnDLQConsumerGroup + `, ` + columnDLQPurgeBefore + `, ` + columnDLQMergeBefore + `) ` +
+		` VALUES (?, ?, ` + sqlDstType + `, ?, ?, ?, ?, ?)`
 
 	sqlInsertDstByPath = `INSERT INTO ` + tableDestinationsByPath +
 		`(` +
@@ -385,9 +385,7 @@ const (
 	sqlDeleteDst = `DELETE FROM ` + tableDestinationsByPath +
 		` WHERE ` + columnDirectoryUUID + `=? and ` + columnPath + `=?`
 
-	sqlDeleteDstUUID = `INSERT INTO ` + tableDestinations +
-		`(` + columnUUID + `, ` + columnIsMultiZone + `, ` + columnDestination + `, ` + columnDLQConsumerGroup + `, ` + columnDLQPurgeBefore + `, ` + columnDLQMergeBefore + `) ` +
-		` VALUES (?, ?, ` + sqlDstType + `, ?, ?, ?) USING TTL ?`
+	sqlDeleteDstUUID = sqlInsertDstByUUID + ` USING TTL ?`
 )
 
 // CreateDestination implements the corresponding TChanMetadataServiceClient API
@@ -433,6 +431,7 @@ func (s *CassandraMetadataService) CreateDestinationUUID(ctx thrift.Context, uui
 		request.KafkaCluster,
 		request.KafkaTopics,
 		request.DLQConsumerGroupUUID, // may be nil
+		int64(0), int64(0),           // dlq_{purge,merge}_before default to '0'
 	).Exec(); err != nil {
 		return nil, &shared.InternalServiceError{
 			Message: fmt.Sprintf("CreateDestination failure while inserting into destinations: %v", err),
@@ -879,6 +878,8 @@ func (s *CassandraMetadataService) DeleteDestinationUUID(ctx thrift.Context, del
 		existing.GetChecksumOption(),
 		existing.GetIsMultiZone(),
 		marshalDstZoneConfigs(existing.GetZoneConfigs()),
+		existing.KafkaCluster,
+		existing.KafkaTopics,
 		existing.DLQConsumerGroupUUID, // May be nil
 		existing.DLQPurgeBefore,       // May be nil
 		existing.DLQMergeBefore,       // May be nil
