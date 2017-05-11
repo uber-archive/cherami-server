@@ -326,6 +326,7 @@ func (mcp *Mcp) GetInputHosts(ctx thrift.Context, inReq *c.GetInputHostsRequest)
 		return response(ErrUnavailable)
 	}
 
+	context.log.Errorf("Refreshing cache for dts: %v", dstUUID)
 	hostIDs, err := refreshInputHostsForDst(context, dstUUID, now)
 	context.dstLock.Unlock(dstUUID)
 	if err != nil {

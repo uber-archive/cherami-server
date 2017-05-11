@@ -471,6 +471,8 @@ func refreshInputHostsForDst(context *Context, dstUUID string, now int64) ([]str
 	if err == nil {
 		inputHosts[newHost.UUID] = newHost
 		nHealthy++
+	} else {
+		context.log.Errorf("Create extent failed for dst: %v with error: %v", dstUUID, err)
 	}
 
 	if nHealthy == 0 {
