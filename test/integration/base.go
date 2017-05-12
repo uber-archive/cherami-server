@@ -29,6 +29,10 @@ import (
 	"testing"
 	"time"
 
+	log "github.com/Sirupsen/logrus"
+	"github.com/pborman/uuid"
+	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/suite"
 	"github.com/uber/cherami-server/clients/metadata"
 	"github.com/uber/cherami-server/common"
 	"github.com/uber/cherami-server/common/configure"
@@ -40,11 +44,8 @@ import (
 	"github.com/uber/cherami-server/services/outputhost"
 	"github.com/uber/cherami-server/services/storehost"
 	"github.com/uber/cherami-server/test"
-
-	log "github.com/Sirupsen/logrus"
-	"github.com/pborman/uuid"
-	"github.com/stretchr/testify/require"
-	"github.com/stretchr/testify/suite"
+	thriftM "github.com/uber/cherami-thrift/.generated/go/metadata"
+	"github.com/uber/tchannel-go/thrift"
 )
 
 type (
@@ -129,7 +130,28 @@ func (tb *testBase) SetupSuite(t *testing.T) {
 
 	singletonTestBase.setupSuiteImpl(t)
 	singletonTestBase.SetUp(map[string]int{}, 1)
+	singletonTestBase.setupServiceConfig(t)
 	*tb = singletonTestBase
+}
+
+func (tb *testBase) setupServiceConfig(t *testing.T) {
+	cItem := &thriftM.ServiceConfigItem{
+		ServiceName:    common.StringPtr("cherami-storehost"),
+		ServiceVersion: common.StringPtr("*"),
+		Sku:            common.StringPtr("*"),
+		Hostname:       common.StringPtr("*"),
+		ConfigKey:      common.StringPtr("minfreediskspacebytes"),
+		ConfigValue:    common.StringPtr("100"), // set to a very low value - 100 bytes for the test
+	}
+
+	req := &thriftM.UpdateServiceConfigRequest{ConfigItem: cItem}
+
+	ctx, cancel := thrift.NewContext(15 * time.Second)
+	defer cancel()
+
+	err := tb.mClient.UpdateServiceConfig(ctx, req)
+	tb.NoError(err)
+
 }
 
 func (tb *testBase) setupSuiteImpl(t *testing.T) {
@@ -283,7 +305,7 @@ func (tb *testBase) SetUp(clusterSz map[string]int, numReplicas int) {
 		tb.Controllers[hostID] = ch
 	}
 
-	tappedServices := []string{common.InputServiceName, common.OutputServiceName, common.StoreServiceName}
+	tappedServices := []string{common.InputServiceName, common.OutputServiceName, common.StoreServiceName, common.FrontendServiceName}
 	for _, s := range tappedServices {
 		var ch *controllerhost.Mcp
 		for _, ch = range tb.Controllers {
