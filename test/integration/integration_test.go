@@ -66,6 +66,12 @@ type NetIntegrationSuiteParallelD struct {
 type NetIntegrationSuiteParallelE struct {
 	testBase
 }
+type NetIntegrationSuiteParallelF struct {
+	testBase
+}
+type NetIntegrationSuiteParallelG struct {
+	testBase
+}
 
 type NetIntegrationSuiteSerial struct {
 	testBase
@@ -97,6 +103,18 @@ func TestNetIntegrationSuiteParallelD(t *testing.T) {
 }
 func TestNetIntegrationSuiteParallelE(t *testing.T) {
 	s := new(NetIntegrationSuiteParallelE)
+	s.testBase.SetupSuite(t)
+	t.Parallel()
+	suite.Run(t, s)
+}
+func TestNetIntegrationSuiteParallelF(t *testing.T) {
+	s := new(NetIntegrationSuiteParallelF)
+	s.testBase.SetupSuite(t)
+	t.Parallel()
+	suite.Run(t, s)
+}
+func TestNetIntegrationSuiteParallelG(t *testing.T) {
+	s := new(NetIntegrationSuiteParallelG)
 	s.testBase.SetupSuite(t)
 	t.Parallel()
 	suite.Run(t, s)
@@ -152,6 +170,7 @@ func (s *NetIntegrationSuiteParallelC) TestMsgCacheLimit() {
 	ipaddr, port, _ := net.SplitHostPort(s.GetFrontend().GetTChannel().PeerInfo().HostPort)
 	portNum, _ := strconv.Atoi(port)
 	cheramiClient := createCheramiClient("cherami-test-limit", ipaddr, portNum, nil)
+	defer cheramiClient.Close()
 
 	// Create the destination to publish message
 	crReq := cherami.NewCreateDestinationRequest()
@@ -306,6 +325,7 @@ func (s *NetIntegrationSuiteParallelE) TestWriteEndToEndSuccessWithCassandra() {
 	ipaddr, port, _ := net.SplitHostPort(s.GetFrontend().GetTChannel().PeerInfo().HostPort)
 	portNum, _ := strconv.Atoi(port)
 	cheramiClient, _ := client.NewClient("cherami-test", ipaddr, portNum, nil)
+	defer cheramiClient.Close()
 
 	// Create the destination to publish message
 	crReq := cherami.NewCreateDestinationRequest()
@@ -436,7 +456,7 @@ ReadLoop:
 	s.Nil(err, "Failed to delete destination")
 }
 
-func (s *NetIntegrationSuiteParallelE) _TestWriteWithDrain() { // Disabled pending fix for flakiness
+func (s *NetIntegrationSuiteParallelE) TestWriteWithDrain() { // Disabled pending fix for flakiness
 	destPath := "/dest/testWriteDrain"
 	cgPath := "/cg/testWriteDrain"
 	testMsgCount := 1000
@@ -625,6 +645,7 @@ func (s *NetIntegrationSuiteSerial) TestWriteEndToEndMultipleStore() {
 	ipaddr, port, _ := net.SplitHostPort(s.GetFrontend().GetTChannel().PeerInfo().HostPort)
 	portNum, _ := strconv.Atoi(port)
 	cheramiClient := createCheramiClient("cherami-test-multiple", ipaddr, portNum, nil)
+	defer cheramiClient.Close()
 
 	// Create the destination to publish message
 	crReq := cherami.NewCreateDestinationRequest()
@@ -793,6 +814,7 @@ func (s *NetIntegrationSuiteParallelB) _TestTimerQueue() {
 	ipaddr, port, _ := net.SplitHostPort(s.GetFrontend().GetTChannel().PeerInfo().HostPort)
 	portNum, _ := strconv.Atoi(port)
 	cheramiClient := createCheramiClient("cherami-test-timer", ipaddr, portNum, nil)
+	defer cheramiClient.Close()
 
 	// Create the destination to publish message
 	crReq := cherami.NewCreateDestinationRequest()
@@ -1066,6 +1088,7 @@ func (s *NetIntegrationSuiteParallelA) TestDLQWithCassandra() {
 	ipaddr, port, _ := net.SplitHostPort(s.GetFrontend().GetTChannel().PeerInfo().HostPort)
 	portNum, _ := strconv.Atoi(port)
 	cheramiClient := createCheramiClient("cherami-test-dlq", ipaddr, portNum, nil)
+	defer cheramiClient.Close()
 
 	// Create the destination to publish message
 	crReq := cherami.NewCreateDestinationRequest()
@@ -1597,6 +1620,7 @@ func (s *NetIntegrationSuiteParallelD) TestSmartRetryDisableDuringDLQMerge() {
 	ipaddr, port, _ := net.SplitHostPort(s.GetFrontend().GetTChannel().PeerInfo().HostPort)
 	portNum, _ := strconv.Atoi(port)
 	cheramiClient := createCheramiClient("cherami-test-smartretry-dlq", ipaddr, portNum, nil)
+	defer cheramiClient.Close()
 
 	// Create the destination to publish message
 	crReq := cherami.NewCreateDestinationRequest()
@@ -1688,6 +1712,7 @@ func (s *NetIntegrationSuiteParallelD) TestSmartRetryDisableDuringDLQMerge() {
 	delivery := make(chan client.Delivery, 1)
 	delivery, err = consumerTest.Open(delivery)
 	s.NoError(err)
+	defer consumerTest.Close()
 
 	beforeMergeDLQDeliveryCount := -1
 
@@ -1781,10 +1806,10 @@ readLoop:
 	}
 }
 
-func (s *NetIntegrationSuiteParallelA) _TestSmartRetry() {
+func (s *NetIntegrationSuiteParallelF) TestSmartRetry() {
 	destPath := "/test.runner.SmartRetry/TestSmartRetry"
 	cgPath := "/test.runner.SmartRetry/TestSmartRetryCG"
-	testMsgCount := 1000
+	testMsgCount := 100
 	var ackedMsgID int
 
 	log := common.GetDefaultLogger()
@@ -1792,6 +1817,7 @@ func (s *NetIntegrationSuiteParallelA) _TestSmartRetry() {
 	ipaddr, port, _ := net.SplitHostPort(s.GetFrontend().GetTChannel().PeerInfo().HostPort)
 	portNum, _ := strconv.Atoi(port)
 	cheramiClient := createCheramiClient("cherami-test-smartretry", ipaddr, portNum, nil)
+	defer cheramiClient.Close()
 
 	// Create the destination to publish message
 	crReq := cherami.NewCreateDestinationRequest()
@@ -2038,7 +2064,7 @@ ReadLoop2_TheReloopening:
 
 }
 
-func (s *NetIntegrationSuiteParallelE) _TestStartFromWithCassandra() {
+func (s *NetIntegrationSuiteParallelE) TestStartFromWithCassandra() {
 	destPath := "/dest/TestStartFromWithCassandra"
 	cgPathEverything := "/cg/TestStartFromWithCassandraEverything"
 	cgPathStartFrom := "/cg/TestStartFromWithCassandra"
