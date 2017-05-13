@@ -892,6 +892,7 @@ func (h *InputHost) GetHostConnLimitPerSecond() int {
 
 // SetHostConnLimitPerSecond sets the rate at which this host can accept conns
 func (h *InputHost) SetHostConnLimitPerSecond(connLimit int32) {
+	h.logger.WithField(`val`, connLimit).Info(`SetHostConnLimitPerSecond`)
 	atomic.StoreInt32(&h.hostConnLimitPerSecond, connLimit)
 	h.SetTokenBucketValue(int32(connLimit))
 }
@@ -903,6 +904,7 @@ func (h *InputHost) GetExtMsgsLimitPerSecond() int {
 
 // SetExtMsgsLimitPerSecond sets the rate limit for per extent per second
 func (h *InputHost) SetExtMsgsLimitPerSecond(connLimit int32) {
+	h.logger.WithField(`val`, connLimit).Info(`SetExtMsgsLimitPerSecond`)
 	atomic.StoreInt32(&h.extMsgsLimitPerSecond, connLimit)
 	h.updateExtTokenBucket(int32(connLimit))
 }
@@ -914,6 +916,7 @@ func (h *InputHost) GetConnMsgsLimitPerSecond() int {
 
 // SetConnMsgsLimitPerSecond sets the rate limit for per connection per second
 func (h *InputHost) SetConnMsgsLimitPerSecond(connLimit int32) {
+	h.logger.WithField(`val`, connLimit).Info(`SetConnMsgsLimitPerSecond`)
 	atomic.StoreInt32(&h.connMsgsLimitPerSecond, connLimit)
 	h.updateConnTokenBucket(int32(connLimit))
 }
@@ -925,12 +928,14 @@ func (h *InputHost) GetTokenBucketValue() common.TokenBucket {
 
 // SetTokenBucketValue sets token bucket for hostConnLimitPerSecond
 func (h *InputHost) SetTokenBucketValue(connLimit int32) {
+	h.logger.WithField(`val`, connLimit).Info(`SetTokenBucketValue`)
 	tokenBucket := common.NewTokenBucket(int(connLimit), common.NewRealTimeSource())
 	h.tokenBucketValue.Store(tokenBucket)
 }
 
 // SetHostConnLimit sets the conn limit for this host
 func (h *InputHost) SetHostConnLimit(connLimit int32) {
+	h.logger.WithField(`val`, connLimit).Info(`SetHostConnLimit`)
 	atomic.StoreInt32(&h.hostConnLimit, connLimit)
 }
 
@@ -941,6 +946,7 @@ func (h *InputHost) GetHostConnLimitOverall() int {
 
 // SetMaxConnPerDest sets the max connection limit per destination
 func (h *InputHost) SetMaxConnPerDest(connLimit int32) {
+	h.logger.WithField(`val`, connLimit).Info(`SetMaxConnPerDest`)
 	atomic.StoreInt32(&h.maxConnLimit, connLimit)
 }
 
@@ -961,11 +967,13 @@ func (h *InputHost) GetNodeStatus() controller.NodeStatus {
 
 // SetNodeStatus sets the status of this host
 func (h *InputHost) SetNodeStatus(status controller.NodeStatus) {
+	h.logger.WithField(`val`, status).Info(`SetNodeStatus`)
 	h.nodeStatus.Store(status)
 }
 
 // SetTestShortExtentsByPath sets path override that enables testing short extents
 func (h *InputHost) SetTestShortExtentsByPath(override string) {
+	h.logger.WithField(`val`, override).Info(`SetTestShortExtentsByPath`)
 	h.testShortExtentsByPath = override
 }
 
