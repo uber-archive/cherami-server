@@ -1298,6 +1298,15 @@ func Publish(c *cli.Context, cClient ccli.Client) {
 	close(receiptCh)
 }
 
+type kafkaMessageJSON struct {
+	EnqueueTime string
+	Key         string
+	Topic       string
+	Partition   int
+	Offset      int64
+	Msg         string
+}
+
 // Consume start to consume from the destination
 func Consume(c *cli.Context, cClient ccli.Client) {
 	var err error
@@ -1338,11 +1347,34 @@ func Consume(c *cli.Context, cClient ccli.Client) {
 		}()
 	}
 
-	fmt.Fprintf(os.Stdout, "%s, %s\n", `Enqueue Time (nanoseconds)`, `Message Data`)
-
+	var headerOnce sync.Once
 	for delivery := range ch {
 		msg := delivery.GetMessage()
-		_, err = fmt.Fprintf(os.Stdout, "%v, %s\n", msg.GetEnqueueTimeUtc(), string(msg.GetPayload().GetData()))
+		if _, ok := msg.GetPayload().GetUserContext()[`topic`]; ok { // If this is a Kafka-for-Cherami message, print in a JSON blob
+			m := msg.GetPayload().GetUserContext()
+			var b []byte
+			p, _ := strconv.Atoi(m[`partition`])
+			o, _ := strconv.ParseInt(m[`offset`], 10, 63)
+			b, err = json.Marshal(kafkaMessageJSON{
+				Msg:         string(msg.GetPayload().GetData()),
+				EnqueueTime: time.Unix(0, msg.GetEnqueueTimeUtc()).Format(time.StampMilli),
+				Key:         m[`key`],
+				Topic:       m[`topic`],
+				Partition:   p,
+				Offset:      o,
+			})
+			if err != nil {
+				panic(err)
+			}
+			if err == nil {
+				_, err = fmt.Fprintf(os.Stdout, "%s\n", string(b))
+			}
+		} else {
+			headerOnce.Do(func() {
+				fmt.Fprintf(os.Stdout, "%s, %s\n", `Enqueue Time (nanoseconds)`, `Message Data`)
+			})
+			_, err = fmt.Fprintf(os.Stdout, "%v, %s\n", msg.GetEnqueueTimeUtc(), string(msg.GetPayload().GetData()))
+		}
 		if autoAck {
 			delivery.Ack()
 		} else {
