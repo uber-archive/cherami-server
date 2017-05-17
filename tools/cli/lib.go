@@ -22,6 +22,7 @@ package cli
 
 import (
 	"github.com/codegangsta/cli"
+	cherami2 "github.com/uber/cherami-client-go/client/cherami"
 	scommon "github.com/uber/cherami-server/common"
 	"github.com/uber/cherami-server/tools/common"
 )
@@ -38,7 +39,12 @@ func ReadCgBacklog(c *cli.Context) {
 
 // CreateDestination creates a destination
 func CreateDestination(c *cli.Context, cliHelper scommon.CliHelper) {
-	cClient := common.GetCClient(c, serviceName)
+	CreateDestinationSecure(c, cliHelper, nil)
+}
+
+// CreateDestinationSecure creates a destination with security enabled
+func CreateDestinationSecure(c *cli.Context, cliHelper scommon.CliHelper, authProvider cherami2.AuthProvider) {
+	cClient := common.GetCClientSecure(c, serviceName, authProvider)
 	common.CreateDestination(c, cClient, cliHelper)
 }
 
@@ -51,8 +57,13 @@ func UpdateDestination(c *cli.Context) {
 
 // CreateConsumerGroup creates the CG
 func CreateConsumerGroup(c *cli.Context, cliHelper scommon.CliHelper) {
+	CreateConsumerGroupSecure(c, cliHelper, nil)
+}
+
+// CreateConsumerGroupSecure creates the CG with security enabled
+func CreateConsumerGroupSecure(c *cli.Context, cliHelper scommon.CliHelper, authProvider cherami2.AuthProvider) {
 	mClient := common.GetMClient(c, serviceName)
-	cClient := common.GetCClient(c, serviceName)
+	cClient := common.GetCClientSecure(c, serviceName, authProvider)
 	common.CreateConsumerGroup(c, cClient, mClient, cliHelper)
 }
 

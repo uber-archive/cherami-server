@@ -595,7 +595,7 @@ func (h *Frontend) CreateDestination(ctx thrift.Context, createRequest *c.Create
 		return nil, err
 	}
 
-	authResource := common.GetResourceRootURN(h.SCommon)
+	authResource := common.GetResourceURNCreateDestination(h.SCommon, createRequest.Path)
 	err = h.GetAuthManager().Authorize(authSubject, common.OperationCreate, common.Resource(authResource))
 	if err != nil {
 		lclLg.WithField(common.TagSubject, authSubject).WithField(common.TagResource, authResource).Info("Not allowed to create destination")
@@ -1100,6 +1100,20 @@ func (h *Frontend) CreateConsumerGroup(ctx thrift.Context, createRequest *c.Crea
 		common.TagDstPth: common.FmtDstPth(createRequest.GetDestinationPath()),
 		common.TagCnsPth: common.FmtCnsPth(createRequest.GetConsumerGroupName()),
 	})
+
+	authSubject, err := h.GetAuthManager().Authenticate(ctx)
+	if err != nil {
+		// TODO add metrics
+		return nil, err
+	}
+
+	authResource := common.GetResourceURNCreateConsumerGroup(h.SCommon, createRequest.DestinationPath)
+	err = h.GetAuthManager().Authorize(authSubject, common.OperationRead, common.Resource(authResource))
+	if err != nil {
+		lclLg.WithField(common.TagSubject, authSubject).WithField(common.TagResource, authResource).Info("Not allowed to create consumer group")
+		// TODO add metrics
+		return nil, err
+	}
 
 	// request to controller
 	var cClient controller.TChanController

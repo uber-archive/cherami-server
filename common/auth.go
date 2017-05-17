@@ -47,6 +47,8 @@ type (
 		Type string
 		// Name is the entity name
 		Name string
+		// Groups contains the groups the entity belongs to
+		Groups []string
 	}
 
 	// Operation is type for an user operation, e.g. CreateDestination, PublishDestination
