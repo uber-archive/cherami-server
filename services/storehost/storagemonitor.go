@@ -178,7 +178,8 @@ func (s *storageMonitor) checkStorage() {
 	} else if availablePcnt < warningThreshold {
 		s.logger.WithFields(bark.Fields{`filePath`: path, `availableMBs`: availableMBs, `totalMBs`: totalMBs, `availablePcnt`: availablePcnt}).Warn(`Available disk space lower than warning threshold`)
 	} else {
-		s.logger.WithFields(bark.Fields{`filePath`: path, `availableMBs`: availableMBs, `totalMBs`: totalMBs, `availablePcnt`: availablePcnt}).Info(`Monitoring disk space`) }
+		s.logger.WithFields(bark.Fields{`filePath`: path, `availableMBs`: availableMBs, `totalMBs`: totalMBs, `availablePcnt`: availablePcnt}).Info(`Monitoring disk space`)
+	}
 }
 
 func (s *storageMonitor) doHouseKeeping() {
