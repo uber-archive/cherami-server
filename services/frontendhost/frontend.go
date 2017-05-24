@@ -21,6 +21,7 @@
 package frontendhost
 
 import (
+	"context"
 	"crypto/sha1"
 	"encoding/base64"
 	"fmt"
@@ -52,6 +53,12 @@ import (
 const (
 	maxSizeCacheDestinationPathForUUID = 1000
 )
+
+// ContextKey is the type for context key
+type ContextKey string
+
+// ResourceUrnKey is the context key name for resourceUrn
+var ResourceUrnKey = ContextKey("resourceUrn")
 
 var nilRequestError = &c.BadRequestError{Message: `request must not be nil`}
 var badRequestKafkaConfigError = &c.BadRequestError{Message: `kafka destination must set kafka cluster and topic, and may not be multi-zone`}
@@ -589,13 +596,15 @@ func (h *Frontend) CreateDestination(ctx thrift.Context, createRequest *c.Create
 
 	lclLg := h.logger.WithField(common.TagDstPth, common.FmtDstPth(createRequest.GetPath()))
 
-	authSubject, err := h.GetAuthManager().Authenticate(ctx)
+	authResource := common.GetResourceURNCreateDestination(h.SCommon, createRequest.Path)
+
+	authContext := context.WithValue(ctx, ResourceUrnKey, authResource)
+	authSubject, err := h.GetAuthManager().Authenticate(authContext)
 	if err != nil {
 		// TODO add metrics
 		return nil, err
 	}
 
-	authResource := common.GetResourceURNCreateDestination(h.SCommon, createRequest.Path)
 	err = h.GetAuthManager().Authorize(authSubject, common.OperationCreate, common.Resource(authResource))
 	if err != nil {
 		lclLg.WithField(common.TagSubject, authSubject).WithField(common.TagResource, authResource).Info("Not allowed to create destination")
