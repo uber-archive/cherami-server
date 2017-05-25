@@ -261,7 +261,7 @@ type cgMsgCache struct {
 	notifier                 Notifier // this notifier is used to slow down cons connections based on NACKs
 	consumerHealth
 	messageCacheHealth
-	creditNotifyCh     chan int32          // this is the notify ch to notify credits to extents
+	creditNotifyCh     chan<- int32        // this is the notify ch to notify credits to extents
 	creditRequestCh    <-chan string       // read-only channel used by the extents to request credits specifically for that extent.
 	maxOutstandingMsgs int32               // max allowed outstanding messages
 	numAcks            int32               // num acks we received

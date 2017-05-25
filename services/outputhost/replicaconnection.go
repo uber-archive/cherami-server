@@ -185,15 +185,6 @@ func (conn *replicaConnection) readMessagesPump() {
 	// lastSeqNum is used to track whether our sequence numbers are
 	// monotonically increasing
 	var lastSeqNum = int64(conn.startingSequence)
-	// readBatchSize is the number of messages to accumulate before
-	// we notify the other pump to ask for credits
-	// this should be less than or equal to the creditBatchSize because we
-	// need to make sure we are listening for credits on the other pump properly
-	readBatchSize := minReadBatchSize
-
-	if readBatchSize < int(conn.initialCredits/10) {
-		readBatchSize = int(conn.initialCredits / 10)
-	}
 
 	for {
 		select {
