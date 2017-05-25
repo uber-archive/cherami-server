@@ -155,7 +155,7 @@ const (
 	stateProgressing
 )
 
-const ackChannelSize = 10000
+const ackChannelSize = 1000
 
 // AckID is an acknowledgement ID; not the same as common.AckID, which decomposes this string
 // Capitalized because otherwise the type name conflicts horribly with local variables

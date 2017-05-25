@@ -53,7 +53,7 @@ import (
 const (
 	// defaultIdleTimeout is the time to wait before we close all streams
 	defaultIdleTimeout        = 10 * time.Minute
-	defaultPrefetchBufferSize = 10000 // XXX: find the optimal prefetch buffer size
+	defaultPrefetchBufferSize = 1000 // XXX: find the optimal prefetch buffer size
 	defaultUnloadChSize       = 50
 	defaultAckMgrMapChSize    = 500
 	defaultAckMgrIDStartFrom  = 0                // the default ack mgr id for this host to start from
