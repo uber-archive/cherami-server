@@ -598,17 +598,8 @@ func (h *Frontend) CreateDestination(ctx thrift.Context, createRequest *c.Create
 
 	authResource := common.GetResourceURNCreateDestination(h.SCommon, createRequest.Path)
 
-	authContext := context.WithValue(ctx, ResourceUrnKey, authResource)
-	authSubject, err := h.GetAuthManager().Authenticate(authContext)
+	err = h.checkAuth(ctx, authResource, common.OperationCreate, lclLg)
 	if err != nil {
-		// TODO add metrics
-		return nil, err
-	}
-
-	err = h.GetAuthManager().Authorize(authSubject, common.OperationCreate, common.Resource(authResource))
-	if err != nil {
-		lclLg.WithField(common.TagSubject, authSubject).WithField(common.TagResource, authResource).Info("Not allowed to create destination")
-		// TODO add metrics
 		return nil, err
 	}
 
@@ -1110,17 +1101,10 @@ func (h *Frontend) CreateConsumerGroup(ctx thrift.Context, createRequest *c.Crea
 		common.TagCnsPth: common.FmtCnsPth(createRequest.GetConsumerGroupName()),
 	})
 
-	authSubject, err := h.GetAuthManager().Authenticate(ctx)
-	if err != nil {
-		// TODO add metrics
-		return nil, err
-	}
-
 	authResource := common.GetResourceURNCreateConsumerGroup(h.SCommon, createRequest.DestinationPath)
-	err = h.GetAuthManager().Authorize(authSubject, common.OperationRead, common.Resource(authResource))
+
+	err = h.checkAuth(ctx, authResource, common.OperationRead, lclLg)
 	if err != nil {
-		lclLg.WithField(common.TagSubject, authSubject).WithField(common.TagResource, authResource).Info("Not allowed to create consumer group")
-		// TODO add metrics
 		return nil, err
 	}
 
@@ -1659,4 +1643,33 @@ func (h *Frontend) getControllerClient() (controller.TChanController, error) {
 	}
 
 	return cf.GetControllerClient()
+}
+
+func (h *Frontend) checkAuth(ctx context.Context, authResource string, operation common.Operation, logger bark.Logger) error {
+	authContext := context.WithValue(ctx, ResourceUrnKey, authResource)
+	authSubject, err := h.GetAuthManager().Authenticate(authContext)
+	if err != nil {
+		logger.WithFields(bark.Fields{
+			common.TagErr:       err,
+			common.TagSubject:   authSubject,
+			common.TagResource:  authResource,
+			common.TagOperation: operation,
+		}).Info("Authenticate failed")
+		// TODO add metrics
+		return err
+	}
+
+	err = h.GetAuthManager().Authorize(authSubject, operation, common.Resource(authResource))
+	if err != nil {
+		logger.WithFields(bark.Fields{
+			common.TagErr:       err,
+			common.TagSubject:   authSubject,
+			common.TagResource:  authResource,
+			common.TagOperation: operation,
+		}).Info("Authorize failed")
+		// TODO add metrics
+		return err
+	}
+
+	return nil
 }

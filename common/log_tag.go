@@ -168,6 +168,9 @@ const TagSubject = `subject`
 // TagResource is for resource
 const TagResource = `resource`
 
+// TagOperation is for operation
+const TagOperation = `operation`
+
 const checkFormatAndPanic = false // TODO : Enable is staging
 
 var longLowercaseGUIDRegex = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
