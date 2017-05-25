@@ -60,6 +60,9 @@ type ContextKey string
 // ResourceUrnKey is the context key name for resourceUrn
 var ResourceUrnKey = ContextKey("resourceUrn")
 
+// HeaderKey is the context key name for header
+var HeaderKey = ContextKey("header")
+
 var nilRequestError = &c.BadRequestError{Message: `request must not be nil`}
 var badRequestKafkaConfigError = &c.BadRequestError{Message: `kafka destination must set kafka cluster and topic, and may not be multi-zone`}
 var badRequestNonKafkaConfigError = &c.BadRequestError{Message: `non-Kafka destination must not set kafka cluster and topic`}
@@ -1645,8 +1648,12 @@ func (h *Frontend) getControllerClient() (controller.TChanController, error) {
 	return cf.GetControllerClient()
 }
 
-func (h *Frontend) checkAuth(ctx context.Context, authResource string, operation common.Operation, logger bark.Logger) error {
+func (h *Frontend) checkAuth(ctx thrift.Context, authResource string, operation common.Operation, logger bark.Logger) error {
 	authContext := context.WithValue(ctx, ResourceUrnKey, authResource)
+	if ctx.Headers() != nil {
+		authContext = context.WithValue(authContext, HeaderKey, ctx.Headers())
+	}
+
 	authSubject, err := h.GetAuthManager().Authenticate(authContext)
 	if err != nil {
 		logger.WithFields(bark.Fields{
