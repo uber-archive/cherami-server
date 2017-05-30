@@ -21,7 +21,6 @@
 package inputhost
 
 import (
-	log "github.com/Sirupsen/logrus"
 	"github.com/uber/cherami-server/common"
 	dconfig "github.com/uber/cherami-server/common/dconfigclient"
 )
@@ -41,7 +40,7 @@ const (
 	UkeyTestShortExts = "inputhost.TestShortExtentsByPath"
 )
 
-func (h *InputHost) registerInt() {
+func (h *InputHost) registerDConfig() {
 	// Add handler function for the dynamic config value
 	handlerMap := make(map[string]dconfig.Handler)
 	handlerMap[UkeyHostOverall] = dconfig.GenerateIntHandler(UkeyHostOverall, h.SetHostConnLimit, h.GetHostConnLimitOverall)
@@ -58,33 +57,13 @@ func (h *InputHost) registerInt() {
 	verifierMap[UkeyMaxConnPerDest] = dconfig.GenerateIntMaxMinVerifier(UkeyMaxConnPerDest, 1, common.MaxHostMaxConnPerDestination)
 	verifierMap[UkeyExtMsgs] = dconfig.GenerateIntMaxMinVerifier(UkeyExtMsgs, 1, common.MaxHostPerExtentMsgsLimitPerSecond)
 	verifierMap[UkeyConnMsgs] = dconfig.GenerateIntMaxMinVerifier(UkeyConnMsgs, 1, common.MaxHostPerConnMsgsLimitPerSecond)
+	verifierMap[UkeyTestShortExts] = dconfig.GenerateStringRegexpVerifier(UkeyTestShortExts, common.OverrideValueByPrefixJoinedValidatorRegexp)
 	h.dConfigClient.AddVerifiers(verifierMap)
-}
-
-// LoadUconfig load the dynamic config values for key
-func (h *InputHost) LoadUconfig() {
-	valueUcfg, ok := h.dConfigClient.GetOrDefault(UkeyHostOverall, common.HostOverallConnLimit).(int)
-	if ok {
-		h.SetHostConnLimit(int32(valueUcfg))
-		log.WithField(UkeyHostOverall, valueUcfg).
-			Info("Update the uconfig value")
-	} else {
-		log.Errorf("Cannot get %s from uconfig, Using right format", UkeyHostOverall)
-	}
-
-	str, ok := h.dConfigClient.GetOrDefault(UkeyTestShortExts, ``).(string)
-	if ok {
-		h.SetTestShortExtentsByPath(str)
-		log.WithField(UkeyTestShortExts, str).Info(`Updated`)
-	} else {
-		log.WithField(UkeyTestShortExts, str).Warn(`Failed update, type assertion failed`)
-	}
 }
 
 // uconfigManage do the work for uconfig
 func (h *InputHost) dynamicConfigManage() {
+	h.registerDConfig()
 	h.dConfigClient.Refresh()
-	h.LoadUconfig()
-	h.registerInt()
 	h.dConfigClient.StartBackGroundRefresh()
 }

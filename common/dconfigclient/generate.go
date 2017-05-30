@@ -22,6 +22,7 @@ package dconfigclient
 
 import (
 	"fmt"
+	"regexp"
 
 	log "github.com/Sirupsen/logrus"
 )
@@ -62,11 +63,28 @@ func GenerateIntMaxMinVerifier(dconfigKey string, minV int, maxV int) Verifier {
 	verifierFunc := func(_ interface{}, newV interface{}) bool {
 		newValue, okNew := newV.(int)
 		if !okNew {
-			log.WithFields(log.Fields{"dconfigKey": dconfigKey, "newValue": fmt.Sprintf("%v", newV)}).Error("verify failed for the dconfig key;  please use digit only")
+			log.WithFields(log.Fields{"dconfigKey": dconfigKey, "newValue": fmt.Sprintf("%v", newV)}).Error("type-assertion to int failed for the dconfig key")
 			return false
 		}
 		if newValue < minV && newValue > maxV {
 			log.WithFields(log.Fields{"dconfigKey": dconfigKey, "newValue": fmt.Sprintf("%v", newValue), "min": fmt.Sprintf("%v", minV), "max": fmt.Sprintf("%v", maxV)}).Error("verify for the dconfigKey failed; new value doesn't fall between min and max")
+			return false
+		}
+		return true
+	}
+	return verifierFunc
+}
+
+// GenerateStringRegexpVerifier return a dconfig Verifier for the dconfigKey
+func GenerateStringRegexpVerifier(dconfigKey string, r *regexp.Regexp) Verifier {
+	verifierFunc := func(_ interface{}, newV interface{}) bool {
+		newValue, okNew := newV.(string)
+		if !okNew {
+			log.WithFields(log.Fields{"dconfigKey": dconfigKey, "newValue": fmt.Sprintf("%v", newV)}).Error("type-assertion to string failed for the dconfig key")
+			return false
+		}
+		if !r.MatchString(newValue) {
+			log.WithFields(log.Fields{"dconfigKey": dconfigKey, "newValue": fmt.Sprintf("%v", newValue), "regexp": r.String()}).Error("verify for the dconfigKey failed; new value doesn't match regular expression")
 			return false
 		}
 		return true

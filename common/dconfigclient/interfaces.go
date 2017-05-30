@@ -36,7 +36,7 @@ type (
 		// AddVerifiers register all the handler for the dynamic config values
 		AddVerifiers(verifierMap map[string]Verifier)
 
-		// Refresh relesh the dynamic config client
+		// Refresh the dynamic config client
 		Refresh()
 
 		// StartBackGroundRefresh start the back fround refresh for dynamic config

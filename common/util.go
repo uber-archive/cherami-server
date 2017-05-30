@@ -629,6 +629,13 @@ func NewCliHelper() CliHelper {
 	}
 }
 
+// OverrideValueByPrefixJoinedValidatorRegexp is a regular expression that validates a comma separated list of OverrideValueByPrefix rules
+// Note that this presumes that the overrides []string will be split with strings.Split(rules, ",") or similar
+var OverrideValueByPrefixJoinedValidatorRegexp = regexp.MustCompile(`^[^=]*=[0-9]+(,[^=]*=[0-9]+)*$`)
+
+// OverrideValueByPrefixSingleRuleValidatorRegexp is a regular expression that validates a single OverrideValueByPrefix rule
+var OverrideValueByPrefixSingleRuleValidatorRegexp = regexp.MustCompile(`^[^=]*=[0-9]+$`)
+
 var overrideValueByPrefixLogMapLock sync.RWMutex
 var overrideValueByPrefixLogMap = make(map[string]struct{})
 
