@@ -127,13 +127,13 @@ func (r *resolverImpl) cachePut(key string, value string) {
 // so names like /./. aren't valid
 
 // PathRegex regex for destination path
-var PathRegex = regexp.MustCompile(`^/[\w.]*[a-zA-Z][\w.]*/[\w.]*[[:alnum:]][\w.]*$`)
+var PathRegex = regexp.MustCompile(`^/[\w.]*[[:alnum:]][\w.]*/[\w.]*[[:alnum:]][\w.]*$`)
 
 // PathDLQRegex regex for dlq destination path
-var PathDLQRegex = regexp.MustCompile(`^/[\w.]*[a-zA-Z][\w.]*/[\w.]*[[:alnum:]][\w.]*.dlq$`)
+var PathDLQRegex = regexp.MustCompile(`^/[\w.]*[[:alnum:]][\w.]*/[\w.]*[[:alnum:]][\w.]*.dlq$`)
 
 // PathRegexAllowUUID For special destinations (e.g. Dead letter queues) we allow a string UUID as path
-var PathRegexAllowUUID, _ = regexp.Compile(`^(/[\w.]*[a-zA-Z][\w.]*/[\w.]*[[:alnum:]][\w.]*|[[:xdigit:]]{8}-[[:xdigit:]]{4}-[[:xdigit:]]{4}-[[:xdigit:]]{4}-[[:xdigit:]]{12})$`)
+var PathRegexAllowUUID, _ = regexp.Compile(`^(/[\w.]*[[:alnum:]][\w.]*/[\w.]*[[:alnum:]][\w.]*|[[:xdigit:]]{8}-[[:xdigit:]]{4}-[[:xdigit:]]{4}-[[:xdigit:]]{4}-[[:xdigit:]]{12})$`)
 
 // ConsumerGroupRegex regex for consumer group path
 var ConsumerGroupRegex = PathRegex
