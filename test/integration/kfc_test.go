@@ -184,11 +184,14 @@ func (s *NetIntegrationSuiteParallelG) TestKafkaForCherami() {
 		}
 	}
 
+	publishedMsgCount := len(sentMsgs)
+	fmt.Printf("Published %v kafka messages", publishedMsgCount)
+
 	recvMsgs := make(map[string]*kafkaMsg)
 
 	// consume messages from cherami
 loop:
-	for i := 0; (len(recvMsgs) < numMsgs) && (i < 2*numMsgs); i++ {
+	for i := 0; (len(recvMsgs) < publishedMsgCount) && (i < 2*numMsgs); i++ {
 
 		select {
 		case cmsg := <-cheramiMsgsCh:
