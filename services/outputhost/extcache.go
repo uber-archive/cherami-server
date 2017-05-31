@@ -366,7 +366,7 @@ func (extCache *extentCache) loadKafkaStream(
 
 	// This is an ID that may appear in Kafka logs or metadata
 	cfg.Config.ClientID = `cherami_` + groupID
-	
+
 	// Give a long max processing time, so that Sarama doesn't enter a reconfigure loop because of consumer backpressure
 	cfg.Config.Consumer.MaxProcessingTime = time.Hour
 

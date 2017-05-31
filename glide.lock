@@ -1,5 +1,5 @@
-hash: d51cb55e9a7f5f33b12d51b6104e8b276271e508df88e931df996a7b5504622a
-updated: 2017-05-09T14:50:04.289167919-07:00
+hash: 2f20f18dc05bba2ae1b835bd4c5c5fa5ca0d3f3c0c33480b24a02c1ec40ba8b3
+updated: 2017-05-30T13:19:52.826558958-07:00
 imports:
 - name: github.com/apache/thrift
   version: 2d65c2365f19f637bc732222e71d78727bf0b709
@@ -126,7 +126,7 @@ imports:
 - name: github.com/uber-go/atomic
   version: 4e336646b2ef9fc6e47be8e21594178f98e5ebcf
 - name: github.com/uber/cherami-client-go
-  version: 997641ce0551bb575b46e1806b9632431df4f36c
+  version: 7a6f6147da201fd682cd8f22dc07e9289c939e5c
   subpackages:
   - client/cherami
   - common
