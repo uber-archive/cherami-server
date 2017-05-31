@@ -195,6 +195,7 @@ loop:
 
 		select {
 		case cmsg := <-cheramiMsgsCh:
+			fmt.Printf("Received %v kafka messages", len(recvMsgs) + 1)
 			payload := cmsg.GetMessage().Payload
 			uc := payload.GetUserContext()
 
