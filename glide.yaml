@@ -76,3 +76,6 @@ import:
 - package: github.com/rcrowley/go-metrics
 - package: github.com/google/uuid
   version: ^0.2.0
+- package: github.com/bsm/sarama-cluster
+  version: 647dd5cbdd02f76266130562644d38f68a0ad563
+  repo: http://github.com/GuillaumeBailey/sarama-cluster

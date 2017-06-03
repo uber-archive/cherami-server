@@ -183,4 +183,7 @@ imports:
   version: 0a9835d809fb647a62611d30cb792e0b5dd65b11
 - name: gopkg.in/yaml.v2
   version: cd8b52f8269e0feb286dfeef29f8fe4d5b397e0b
+- name: github.com/bsm/sarama-cluster
+  version: 647dd5cbdd02f76266130562644d38f68a0ad563
+  repo: http://github.com/GuillaumeBailey/sarama-cluster
 testImports: []
