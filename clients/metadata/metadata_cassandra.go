@@ -726,6 +726,12 @@ func (s *CassandraMetadataService) UpdateDestination(ctx thrift.Context, updateR
 	if !updateRequest.IsSetChecksumOption() {
 		updateRequest.ChecksumOption = common.InternalChecksumOptionPtr(existing.GetChecksumOption())
 	}
+	isMultiZone := existing.GetIsMultiZone()
+	if !updateRequest.IsSetZoneConfigs() {
+		updateRequest.ZoneConfigs = existing.GetZoneConfigs()
+	} else {
+		isMultiZone = true
+	}
 	batch := s.session.NewBatch(gocql.LoggedBatch) // Consider switching to unlogged
 
 	batch.Query(
@@ -738,8 +744,8 @@ func (s *CassandraMetadataService) UpdateDestination(ctx thrift.Context, updateR
 		updateRequest.GetUnconsumedMessagesRetention(),
 		updateRequest.GetOwnerEmail(),
 		updateRequest.GetChecksumOption(),
-		existing.GetIsMultiZone(),
-		marshalDstZoneConfigs(existing.GetZoneConfigs()),
+		isMultiZone,
+		marshalDstZoneConfigs(updateRequest.GetZoneConfigs()),
 		updateRequest.GetDestinationUUID())
 
 	batch.Query(
@@ -752,8 +758,8 @@ func (s *CassandraMetadataService) UpdateDestination(ctx thrift.Context, updateR
 		updateRequest.GetUnconsumedMessagesRetention(),
 		updateRequest.GetOwnerEmail(),
 		updateRequest.GetChecksumOption(),
-		existing.GetIsMultiZone(),
-		marshalDstZoneConfigs(existing.GetZoneConfigs()),
+		isMultiZone,
+		marshalDstZoneConfigs(updateRequest.GetZoneConfigs()),
 		existing.GetPath(),
 		directoryUUID)
 
@@ -794,6 +800,10 @@ func (s *CassandraMetadataService) UpdateDestination(ctx thrift.Context, updateR
 	if updateRequest.IsSetChecksumOption() {
 		existing.ChecksumOption = common.InternalChecksumOptionPtr(updateRequest.GetChecksumOption())
 	}
+	if updateRequest.IsSetZoneConfigs() {
+		existing.ZoneConfigs = updateRequest.GetZoneConfigs()
+	}
+	existing.IsMultiZone = common.BoolPtr(isMultiZone)
 	return existing, nil
 }
 
@@ -1523,6 +1533,13 @@ func updateCGDescIfChanged(req *shared.UpdateConsumerGroupRequest, cgDesc *share
 		isChanged = true
 		cgDesc.ActiveZone = common.StringPtr(req.GetActiveZone())
 	}
+
+	if req.IsSetZoneConfigs() && !common.AreCgZoneConfigsEqual(cgDesc.GetZoneConfigs(), req.GetZoneConfigs()) {
+		isChanged = true
+		cgDesc.ZoneConfigs = req.GetZoneConfigs()
+		cgDesc.IsMultiZone = common.BoolPtr(true)
+	}
+
 	return isChanged
 }
 

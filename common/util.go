@@ -45,6 +45,7 @@ import (
 	"github.com/uber/cherami-server/common/metrics"
 	"github.com/uber/cherami-thrift/.generated/go/admin"
 	"github.com/uber/cherami-thrift/.generated/go/cherami"
+	"github.com/uber/cherami-thrift/.generated/go/shared"
 	"github.com/uber/ringpop-go"
 	"github.com/uber/ringpop-go/discovery/statichosts"
 	"github.com/uber/ringpop-go/swim"
@@ -809,4 +810,55 @@ func IsKafkaPhantomInput(inputUUID string) bool {
 func AreKafkaPhantomStores(storeUUIDs []string) bool {
 
 	return len(storeUUIDs) == 1 && storeUUIDs[0] == KafkaPhantomExtentStorehost
+}
+
+// AreDestinationZoneConfigsEqual determines whether two zone configs have the same content
+func AreDestinationZoneConfigsEqual(left []*shared.DestinationZoneConfig, right []*shared.DestinationZoneConfig) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for _, l := range left {
+		zone := l.GetZone()
+		foundMatch := false
+		for _, r := range right {
+			if strings.EqualFold(r.GetZone(), zone) {
+				foundMatch = true
+				if l.GetAllowConsume() != r.GetAllowConsume() ||
+					l.GetAllowPublish() != r.GetAllowPublish() ||
+					l.GetAlwaysReplicateTo() != r.GetAlwaysReplicateTo() ||
+					l.GetRemoteExtentReplicaNum() != r.GetRemoteExtentReplicaNum() {
+					return false
+				}
+				break
+			}
+		}
+		if !foundMatch {
+			return false
+		}
+	}
+	return true
+}
+
+// AreCgZoneConfigsEqual determines whether two zone configs have the same content
+func AreCgZoneConfigsEqual(left []*shared.ConsumerGroupZoneConfig, right []*shared.ConsumerGroupZoneConfig) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for _, l := range left {
+		zone := l.GetZone()
+		foundMatch := false
+		for _, r := range right {
+			if strings.EqualFold(r.GetZone(), zone) {
+				foundMatch = true
+				if l.GetVisible() != r.GetVisible() {
+					return false
+				}
+				break
+			}
+		}
+		if !foundMatch {
+			return false
+		}
+	}
+	return true
 }

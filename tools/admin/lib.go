@@ -56,10 +56,10 @@ func CreateDestinationSecure(c *cli.Context, cliHelper common.CliHelper, authPro
 }
 
 // UpdateDestination updates properties of a destination
-func UpdateDestination(c *cli.Context) {
+func UpdateDestination(c *cli.Context, cliHelper common.CliHelper) {
 	cClient := toolscommon.GetCClient(c, adminToolService)
 	mClient := toolscommon.GetMClient(c, adminToolService)
-	toolscommon.UpdateDestination(c, cClient, mClient)
+	toolscommon.UpdateDestination(c, cClient, mClient, cliHelper)
 }
 
 // CreateConsumerGroup creates a consumer group
@@ -75,9 +75,10 @@ func CreateConsumerGroupSecure(c *cli.Context, cliHelper common.CliHelper, authP
 }
 
 // UpdateConsumerGroup updates properties of a consumer group
-func UpdateConsumerGroup(c *cli.Context) {
+func UpdateConsumerGroup(c *cli.Context, cliHelper common.CliHelper) {
 	cClient := toolscommon.GetCClient(c, adminToolService)
-	toolscommon.UpdateConsumerGroup(c, cClient)
+	mClient := toolscommon.GetMClient(c, adminToolService)
+	toolscommon.UpdateConsumerGroup(c, cClient, mClient, cliHelper)
 }
 
 // ReadDestination reads a destination

@@ -361,6 +361,28 @@ func (m *MockTChanReplicator) ReadDestination(ctx thrift.Context, listRequest *s
 	return r0, r1
 }
 
+func (m *MockTChanReplicator) ReadDestinationInRemoteZone(ctx thrift.Context, listRequest *shared.ReadDestinationInRemoteZoneRequest) (*shared.DestinationDescription, error) {
+	ret := m.Called(ctx, listRequest)
+
+	var r0 *shared.DestinationDescription
+	if rf, ok := ret.Get(0).(func(thrift.Context, *shared.ReadDestinationInRemoteZoneRequest) *shared.DestinationDescription); ok {
+		r0 = rf(ctx, listRequest)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*shared.DestinationDescription)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(thrift.Context, *shared.ReadDestinationInRemoteZoneRequest) error); ok {
+		r1 = rf(ctx, listRequest)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
 func (m *MockTChanReplicator) ListConsumerGroups(ctx thrift.Context, listRequest *shared.ListConsumerGroupRequest) (*shared.ListConsumerGroupResult_, error) {
 	ret := m.Called(ctx, listRequest)
 
@@ -455,4 +477,48 @@ func (m *MockTChanReplicator) SetAckOffsetInRemote(ctx thrift.Context, request *
 	}
 
 	return r0
+}
+
+func (m *MockTChanReplicator) ReadConsumerGroup(ctx thrift.Context, listRequest *shared.ReadConsumerGroupRequest) (*shared.ConsumerGroupDescription, error) {
+	ret := m.Called(ctx, listRequest)
+
+	var r0 *shared.ConsumerGroupDescription
+	if rf, ok := ret.Get(0).(func(thrift.Context, *shared.ReadConsumerGroupRequest) *shared.ConsumerGroupDescription); ok {
+		r0 = rf(ctx, listRequest)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*shared.ConsumerGroupDescription)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(thrift.Context, *shared.ReadConsumerGroupRequest) error); ok {
+		r1 = rf(ctx, listRequest)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+func (m *MockTChanReplicator) ReadConsumerGroupInRemoteZone(ctx thrift.Context, listRequest *shared.ReadConsumerGroupInRemoteRequest) (*shared.ConsumerGroupDescription, error) {
+	ret := m.Called(ctx, listRequest)
+
+	var r0 *shared.ConsumerGroupDescription
+	if rf, ok := ret.Get(0).(func(thrift.Context, *shared.ReadConsumerGroupInRemoteRequest) *shared.ConsumerGroupDescription); ok {
+		r0 = rf(ctx, listRequest)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*shared.ConsumerGroupDescription)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(thrift.Context, *shared.ReadConsumerGroupInRemoteRequest) error); ok {
+		r1 = rf(ctx, listRequest)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
 }

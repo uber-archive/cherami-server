@@ -49,10 +49,10 @@ func CreateDestinationSecure(c *cli.Context, cliHelper scommon.CliHelper, authPr
 }
 
 // UpdateDestination updates the destination
-func UpdateDestination(c *cli.Context) {
+func UpdateDestination(c *cli.Context, cliHelper scommon.CliHelper) {
 	mClient := common.GetMClient(c, serviceName)
 	cClient := common.GetCClient(c, serviceName)
-	common.UpdateDestination(c, cClient, mClient)
+	common.UpdateDestination(c, cClient, mClient, cliHelper)
 }
 
 // CreateConsumerGroup creates the CG
@@ -68,9 +68,10 @@ func CreateConsumerGroupSecure(c *cli.Context, cliHelper scommon.CliHelper, auth
 }
 
 // UpdateConsumerGroup updates the CG
-func UpdateConsumerGroup(c *cli.Context) {
+func UpdateConsumerGroup(c *cli.Context, cliHelper scommon.CliHelper) {
 	cClient := common.GetCClient(c, serviceName)
-	common.UpdateConsumerGroup(c, cClient)
+	mClient := common.GetMClient(c, serviceName)
+	common.UpdateConsumerGroup(c, cClient, mClient, cliHelper)
 }
 
 // ReadDestination is used to get info about the destination

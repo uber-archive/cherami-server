@@ -866,6 +866,20 @@ func (mcp *Mcp) UpdateDestination(ctx thrift.Context, updateRequest *shared.Upda
 
 	lclLg := context.log.WithField(common.TagDst, common.FmtDst(updateRequest.GetDestinationUUID()))
 
+	if updateRequest.IsSetZoneConfigs() {
+		valid, err := mcp.ValidateDestZoneConfig(ctx, lclLg, updateRequest)
+		if err != nil {
+			context.m3Client.IncCounter(metrics.ControllerUpdateDestinationScope, metrics.ControllerFailures)
+			lclLg.WithField(common.TagErr, err).Error("UpdateDestination: ValidateDestZoneConfig returned error")
+			return nil, err
+		}
+		if !valid {
+			context.m3Client.IncCounter(metrics.ControllerUpdateDestinationScope, metrics.ControllerFailures)
+			lclLg.Error("UpdateDestination: zone config validation failed")
+			return nil, &shared.BadRequestError{Message: "zone config validation failed"}
+		}
+	}
+
 	// update local destination
 	destDesc, err := mcp.mClient.UpdateDestination(ctx, updateRequest)
 	if err != nil {
@@ -1039,6 +1053,20 @@ func (mcp *Mcp) UpdateConsumerGroup(ctx thrift.Context, updateRequest *shared.Up
 		common.TagDstPth: common.FmtDstPth(updateRequest.GetDestinationPath()),
 		common.TagCnsPth: common.FmtCnsPth(updateRequest.GetConsumerGroupName()),
 	})
+
+	if updateRequest.IsSetZoneConfigs() {
+		valid, err := mcp.ValidateCgZoneConfig(ctx, lclLg, updateRequest)
+		if err != nil {
+			context.m3Client.IncCounter(metrics.ControllerUpdateConsumerGroupScope, metrics.ControllerFailures)
+			lclLg.WithField(common.TagErr, err).Error("UpdateConsumerGroup: ValidateCgZoneConfig returned error")
+			return nil, err
+		}
+		if !valid {
+			context.m3Client.IncCounter(metrics.ControllerUpdateConsumerGroupScope, metrics.ControllerFailures)
+			lclLg.Error("UpdateConsumerGroup: zone config validation failed")
+			return nil, &shared.BadRequestError{Message: "zone config validation failed"}
+		}
+	}
 
 	// update local consumer group
 	cgDesc, err := mcp.mClient.UpdateConsumerGroup(ctx, updateRequest)
@@ -1250,4 +1278,100 @@ func (mcp *Mcp) CreateRemoteZoneConsumerGroupExtent(ctx thrift.Context, createRe
 
 	lclLg.Info("CreateRemoteZoneConsumerGroupExtent: Extent added to consumer group")
 	return nil
+}
+
+// ValidateDestZoneConfig validates the zone configs for a UpdateDestinationRequest
+func (mcp *Mcp) ValidateDestZoneConfig(ctx thrift.Context, logger bark.Logger, updateRequest *shared.UpdateDestinationRequest) (bool, error) {
+	// first read the destination
+	destDesc, err := mcp.mClient.ReadDestination(ctx, &shared.ReadDestinationRequest{
+		DestinationUUID: common.StringPtr(updateRequest.GetDestinationUUID()),
+	})
+	if err != nil {
+		logger.WithField(common.TagErr, err).Error("ValidateDestZoneConfig: ReadDestination in local failed")
+		return false, err
+	}
+
+	destPath := destDesc.GetPath()
+
+	localReplicator, err := mcp.GetClientFactory().GetReplicatorClient()
+	if err != nil {
+		logger.WithField(common.TagErr, err).Error("ValidateDestZoneConfig: GetReplicatorClient failed")
+		return false, err
+	}
+
+	for _, zoneConfig := range updateRequest.GetZoneConfigs() {
+		if strings.EqualFold(zoneConfig.GetZone(), mcp.context.localZone) {
+			continue
+		}
+
+		remoteDest, err := localReplicator.ReadDestinationInRemoteZone(ctx, &shared.ReadDestinationInRemoteZoneRequest{
+			Zone: common.StringPtr(zoneConfig.GetZone()),
+			Request: &shared.ReadDestinationRequest{
+				Path: common.StringPtr(destPath),
+			},
+		})
+		if err == nil {
+			// path exists in remote. If uuid is different, then fail the validation (unsupported scenario)
+			// We could potentially support this scenario by updating the UUID of the remote destination and moving all
+			// extents to the new UUID.
+			if remoteDest.GetDestinationUUID() != updateRequest.GetDestinationUUID() {
+				logger.WithField(common.TagZoneName, common.FmtZoneName(zoneConfig.GetZone())).Error(`destination exists in remote but UUID is different`)
+				return false, nil
+			}
+		} else if _, ok := err.(*shared.EntityNotExistsError); ok {
+			// path doesn't exist in remote, validation succeeds
+			continue
+		} else {
+			// some other error
+			return false, err
+		}
+	}
+	return true, nil
+}
+
+// ValidateCgZoneConfig validates the zone configs for a UpdateConsumerGroupRequest
+func (mcp *Mcp) ValidateCgZoneConfig(ctx thrift.Context, logger bark.Logger, updateRequest *shared.UpdateConsumerGroupRequest) (bool, error) {
+	// first read the cg
+	cgDesc, err := mcp.mClient.ReadConsumerGroup(ctx, &shared.ReadConsumerGroupRequest{
+		DestinationPath:   common.StringPtr(updateRequest.GetDestinationPath()),
+		ConsumerGroupName: common.StringPtr(updateRequest.GetConsumerGroupName()),
+	})
+	if err != nil {
+		logger.WithField(common.TagErr, err).Error("ValidateCgZoneConfig: ReadConsumerGroup in local failed")
+		return false, err
+	}
+
+	localReplicator, err := mcp.GetClientFactory().GetReplicatorClient()
+	if err != nil {
+		logger.WithField(common.TagErr, err).Error("ValidateCgZoneConfig: GetReplicatorClient failed")
+		return false, err
+	}
+
+	for _, zoneConfig := range updateRequest.GetZoneConfigs() {
+		if strings.EqualFold(zoneConfig.GetZone(), mcp.context.localZone) {
+			continue
+		}
+
+		remoteCg, err := localReplicator.ReadConsumerGroupInRemoteZone(ctx, &shared.ReadConsumerGroupInRemoteRequest{
+			Zone: common.StringPtr(zoneConfig.GetZone()),
+			Request: &shared.ReadConsumerGroupRequest{
+				DestinationPath:   common.StringPtr(updateRequest.GetDestinationPath()),
+				ConsumerGroupName: common.StringPtr(updateRequest.GetConsumerGroupName()),
+			},
+		})
+		if err == nil {
+			// cg exists in remote. If uuid is different, then fail the validation
+			if remoteCg.GetDestinationUUID() != cgDesc.GetDestinationUUID() || remoteCg.GetConsumerGroupUUID() != cgDesc.GetConsumerGroupUUID() {
+				logger.WithField(common.TagZoneName, common.FmtZoneName(zoneConfig.GetZone())).Error(`cg exists in remote but UUID is different`)
+				return false, nil
+			}
+		} else if _, ok := err.(*shared.EntityNotExistsError); ok {
+			// cg doesn't exist in remote, validation succeeds
+			continue
+		} else {
+			// some other error
+			return false, err
+		}
+	}
+	return true, nil
 }

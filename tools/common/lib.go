@@ -228,6 +228,32 @@ func CreateDestination(c *cli.Context, cClient ccli.Client, cliHelper common.Cli
 		cliHelper.GetDefaultOwnerEmail()
 	}
 
+	zoneConfigs := getDestZoneConfigs(c, cliHelper)
+	// don't allow short unconsumed message retention for multi_zone destination
+	// this is a prevention mechanism to prevent messages from being deleted in source zone in case there's some
+	// issue with cross zone replication(for example, network down between zones)
+	if len(zoneConfigs.Configs) > 1 && unconsumedMessagesRetention < MinUnconsumedMessagesRetentionForMultiZoneDest {
+		ExitIfError(errors.New(strUnconsumedRetentionTooSmall))
+	}
+
+	desc, err := cClient.CreateDestination(&cherami.CreateDestinationRequest{
+		Path: &path,
+		Type: &dType,
+		ConsumedMessagesRetention:   &consumedMessagesRetention,
+		UnconsumedMessagesRetention: &unconsumedMessagesRetention,
+		ChecksumOption:              checksumOption,
+		OwnerEmail:                  &ownerEmail,
+		IsMultiZone:                 common.BoolPtr(len(zoneConfigs.Configs) > 0),
+		ZoneConfigs:                 &zoneConfigs,
+		KafkaCluster:                &kafkaCluster,
+		KafkaTopics:                 kafkaTopics,
+	})
+
+	ExitIfError(err)
+	fmt.Printf("%v\n", Jsonify(desc))
+}
+
+func getDestZoneConfigs(c *cli.Context, cliHelper common.CliHelper) cherami.DestinationZoneConfigs {
 	var zoneConfigs cherami.DestinationZoneConfigs
 	configs := c.StringSlice("zone_config")
 	for _, config := range configs {
@@ -261,33 +287,11 @@ func CreateDestination(c *cli.Context, cClient ccli.Client, cliHelper common.Cli
 	if len(zoneConfigs.Configs) == 1 {
 		ExitIfError(errors.New(strWrongZoneConfigCount))
 	}
-
-	// don't allow short unconsumed message retention for multi_zone destination
-	// this is a prevention mechanism to prevent messages from being deleted in source zone in case there's some
-	// issue with cross zone replication(for example, network down between zones)
-	if len(zoneConfigs.Configs) > 1 && unconsumedMessagesRetention < MinUnconsumedMessagesRetentionForMultiZoneDest {
-		ExitIfError(errors.New(strUnconsumedRetentionTooSmall))
-	}
-
-	desc, err := cClient.CreateDestination(&cherami.CreateDestinationRequest{
-		Path: &path,
-		Type: &dType,
-		ConsumedMessagesRetention:   &consumedMessagesRetention,
-		UnconsumedMessagesRetention: &unconsumedMessagesRetention,
-		ChecksumOption:              checksumOption,
-		OwnerEmail:                  &ownerEmail,
-		IsMultiZone:                 common.BoolPtr(len(zoneConfigs.Configs) > 0),
-		ZoneConfigs:                 &zoneConfigs,
-		KafkaCluster:                &kafkaCluster,
-		KafkaTopics:                 kafkaTopics,
-	})
-
-	ExitIfError(err)
-	fmt.Printf("%v\n", Jsonify(desc))
+	return zoneConfigs
 }
 
 // UpdateDestination update destination based on cli
-func UpdateDestination(c *cli.Context, cClient ccli.Client, mClient mcli.Client) {
+func UpdateDestination(c *cli.Context, cClient ccli.Client, mClient mcli.Client, cliHelper common.CliHelper) {
 	if len(c.Args()) < 1 {
 		ExitIfError(errors.New(strNotEnoughArgs))
 	}
@@ -309,26 +313,29 @@ func UpdateDestination(c *cli.Context, cClient ccli.Client, mClient mcli.Client)
 		}
 	}
 
-	// don't allow short unconsumed message retention for multi_zone destination
-	// this is a prevention mechanism to prevent messages from being deleted in source zone in case there's some
-	// issue with cross zone replication(for example, network down between zones)
-	if c.IsSet(`unconsumed_messages_retention`) && int32(c.Int(`unconsumed_messages_retention`)) < MinUnconsumedMessagesRetentionForMultiZoneDest {
-		desc, err := mClient.ReadDestination(&shared.ReadDestinationRequest{
-			Path: &path,
-		})
-		ExitIfError(err)
-		if desc.GetIsMultiZone() {
-			ExitIfError(errors.New(strUnconsumedRetentionTooSmall))
-		}
-	}
-
 	setCount := 0
 
 	request := &cherami.UpdateDestinationRequest{
 		Path: &path,
 		ConsumedMessagesRetention:   getIfSetInt32(c, `consumed_messages_retention`, &setCount),
 		UnconsumedMessagesRetention: getIfSetInt32(c, `unconsumed_messages_retention`, &setCount),
-		OwnerEmail:                  getIfSetString(c, `owner_email`, &setCount),
+		ZoneConfigs:                 getIfSetDestZoneConfig(c, &setCount, cliHelper),
+	}
+
+	// don't allow short unconsumed message retention for multi_zone destination
+	// this is a prevention mechanism to prevent messages from being deleted in source zone in case there's some
+	// issue with cross zone replication(for example, network down between zones)
+	existingDesc, err := mClient.ReadDestination(&shared.ReadDestinationRequest{
+		Path: &path,
+	})
+	ExitIfError(err)
+	if existingDesc.GetIsMultiZone() || len(request.GetZoneConfigs().GetConfigs()) > 0 {
+		if c.IsSet(`unconsumed_messages_retention`) && int32(c.Int(`unconsumed_messages_retention`)) < MinUnconsumedMessagesRetentionForMultiZoneDest {
+			ExitIfError(errors.New(strUnconsumedRetentionTooSmall))
+		}
+		if !c.IsSet(`unconsumed_messages_retention`) && existingDesc.GetUnconsumedMessagesRetention() < MinUnconsumedMessagesRetentionForMultiZoneDest {
+			ExitIfError(errors.New(strUnconsumedRetentionTooSmall))
+		}
 	}
 
 	if c.IsSet(`status`) {
@@ -383,6 +390,26 @@ func CreateConsumerGroup(c *cli.Context, cClient ccli.Client, mClient mcli.Clien
 		ownerEmail = cliHelper.GetDefaultOwnerEmail()
 	}
 
+	zoneConfigs := getCgZoneConfigs(c, mClient, cliHelper, path)
+	isMultiZone := len(zoneConfigs.GetConfigs()) > 0
+
+	desc, err := cClient.CreateConsumerGroup(&cherami.CreateConsumerGroupRequest{
+		DestinationPath:            &path,
+		ConsumerGroupName:          &name,
+		StartFrom:                  &startTime,
+		LockTimeoutInSeconds:       &lockTimeout,
+		MaxDeliveryCount:           &maxDelivery,
+		SkipOlderMessagesInSeconds: &skipOlder,
+		OwnerEmail:                 &ownerEmail,
+		IsMultiZone:                &isMultiZone,
+		ZoneConfigs:                &zoneConfigs,
+	})
+
+	ExitIfError(err)
+	fmt.Printf("%v\n", Jsonify(desc))
+}
+
+func getCgZoneConfigs(c *cli.Context, mClient mcli.Client, cliHelper common.CliHelper, destinationPath string) cherami.ConsumerGroupZoneConfigs {
 	var zoneConfigs cherami.ConsumerGroupZoneConfigs
 	configs := c.StringSlice("zone_config")
 	var preferedActiveZone string
@@ -416,10 +443,9 @@ func CreateConsumerGroup(c *cli.Context, cClient ccli.Client, mClient mcli.Clien
 		ExitIfError(errors.New(strWrongZoneConfigCount))
 	}
 
-	var isMultiZone bool
 	if len(zoneConfigs.Configs) > 1 {
 		dest, err := mClient.ReadDestination(&shared.ReadDestinationRequest{
-			Path: &path,
+			Path: &destinationPath,
 		})
 		ExitIfError(err)
 
@@ -427,28 +453,13 @@ func CreateConsumerGroup(c *cli.Context, cClient ccli.Client, mClient mcli.Clien
 			ExitIfError(errors.New(strMultiZoneCgWithSingleZoneDest))
 		}
 
-		isMultiZone = true
 		zoneConfigs.ActiveZone = common.StringPtr(preferedActiveZone)
 	}
-
-	desc, err := cClient.CreateConsumerGroup(&cherami.CreateConsumerGroupRequest{
-		DestinationPath:            &path,
-		ConsumerGroupName:          &name,
-		StartFrom:                  &startTime,
-		LockTimeoutInSeconds:       &lockTimeout,
-		MaxDeliveryCount:           &maxDelivery,
-		SkipOlderMessagesInSeconds: &skipOlder,
-		OwnerEmail:                 &ownerEmail,
-		IsMultiZone:                &isMultiZone,
-		ZoneConfigs:                &zoneConfigs,
-	})
-
-	ExitIfError(err)
-	fmt.Printf("%v\n", Jsonify(desc))
+	return zoneConfigs
 }
 
 // UpdateConsumerGroup update the consumer group based on cli.Context
-func UpdateConsumerGroup(c *cli.Context, cClient ccli.Client) {
+func UpdateConsumerGroup(c *cli.Context, cClient ccli.Client, mClient mcli.Client, cliHelper common.CliHelper) {
 	if len(c.Args()) < 2 {
 		ExitIfError(errors.New(strNotEnoughArgs))
 	}
@@ -474,6 +485,7 @@ func UpdateConsumerGroup(c *cli.Context, cClient ccli.Client) {
 		SkipOlderMessagesInSeconds: getIfSetInt32(c, `skip_older_messages_in_seconds`, &setCount),
 		OwnerEmail:                 getIfSetString(c, `owner_email`, &setCount),
 		ActiveZone:                 getIfSetString(c, `active_zone`, &setCount),
+		ZoneConfigs:                getIfSetCgZoneConfig(c, mClient, cliHelper, path, &setCount),
 	}
 
 	if c.IsSet(`status`) {
@@ -1414,6 +1426,24 @@ func getIfSetString(c *cli.Context, p string, setCount *int) (r *string) {
 		v := string(c.String(p))
 		*setCount++
 		return &v
+	}
+	return
+}
+
+func getIfSetDestZoneConfig(c *cli.Context, setCount *int, cliHelper common.CliHelper) (zc *cherami.DestinationZoneConfigs) {
+	zoneConfig := getDestZoneConfigs(c, cliHelper)
+	if len(zoneConfig.GetConfigs()) > 0 {
+		*setCount++
+		return &zoneConfig
+	}
+	return
+}
+
+func getIfSetCgZoneConfig(c *cli.Context, mClient mcli.Client, cliHelper common.CliHelper, destinationPath string, setCount *int) (zc *cherami.ConsumerGroupZoneConfigs) {
+	zoneConfig := getCgZoneConfigs(c, mClient, cliHelper, destinationPath)
+	if len(zoneConfig.GetConfigs()) > 0 {
+		*setCount++
+		return &zoneConfig
 	}
 	return
 }

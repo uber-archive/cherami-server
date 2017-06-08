@@ -267,6 +267,12 @@ func convertUpdateDestRequestToInternal(updateRequest *c.UpdateDestinationReques
 	if updateRequest.IsSetChecksumOption() {
 		internalUpdateRequest.ChecksumOption = common.InternalChecksumOptionPtr(shared.ChecksumOption(updateRequest.GetChecksumOption()))
 	}
+	if updateRequest.IsSetZoneConfigs() {
+		internalUpdateRequest.ZoneConfigs = make([]*shared.DestinationZoneConfig, 0, len(updateRequest.GetZoneConfigs().GetConfigs()))
+		for _, destZoneCfg := range updateRequest.GetZoneConfigs().GetConfigs() {
+			internalUpdateRequest.ZoneConfigs = append(internalUpdateRequest.ZoneConfigs, convertDestZoneConfigToInternal(destZoneCfg))
+		}
+	}
 	return internalUpdateRequest
 }
 
@@ -410,6 +416,12 @@ func convertUpdateCGRequestToInternal(updateRequest *c.UpdateConsumerGroupReques
 	}
 	if updateRequest.IsSetActiveZone() {
 		internalUpdateRequest.ActiveZone = common.StringPtr(updateRequest.GetActiveZone())
+	}
+	if updateRequest.IsSetZoneConfigs() {
+		internalUpdateRequest.ZoneConfigs = make([]*shared.ConsumerGroupZoneConfig, 0, len(updateRequest.GetZoneConfigs().GetConfigs()))
+		for _, cgZoneCfg := range updateRequest.GetZoneConfigs().GetConfigs() {
+			internalUpdateRequest.ZoneConfigs = append(internalUpdateRequest.ZoneConfigs, convertCGZoneConfigToInternal(cgZoneCfg))
+		}
 	}
 	return internalUpdateRequest
 }

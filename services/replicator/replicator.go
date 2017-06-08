@@ -1171,6 +1171,43 @@ func (r *Replicator) ReadDestination(ctx thrift.Context, getRequest *shared.Read
 	return r.metaClient.ReadDestination(ctx, getRequest)
 }
 
+// ReadDestinationInRemoteZone reads a destination in remote zone
+func (r *Replicator) ReadDestinationInRemoteZone(ctx thrift.Context, getRequest *shared.ReadDestinationInRemoteZoneRequest) (*shared.DestinationDescription, error) {
+	// acquire remote zone replicator thrift client
+	client, err := r.replicatorclientFactory.GetReplicatorClient(getRequest.GetZone())
+	if err != nil {
+		r.m3Client.IncCounter(metrics.ReplicatorReadDestinationInRemoteZoneScope, metrics.ReplicatorFailures)
+		r.logger.WithField(common.TagErr, err).Error(`Get remote replicator client failed`)
+		return nil, err
+	}
+
+	// send to remote zone replicator
+	ctx, cancel := thrift.NewContext(remoteReplicatorCallTimeOut)
+	defer cancel()
+	return client.ReadDestination(ctx, getRequest.GetRequest())
+}
+
+// ReadConsumerGroup reads a cg
+func (r *Replicator) ReadConsumerGroup(ctx thrift.Context, getRequest *shared.ReadConsumerGroupRequest) (*shared.ConsumerGroupDescription, error) {
+	return r.metaClient.ReadConsumerGroup(ctx, getRequest)
+}
+
+// ReadConsumerGroupInRemoteZone reads a cg in remote zone
+func (r *Replicator) ReadConsumerGroupInRemoteZone(ctx thrift.Context, getRequest *shared.ReadConsumerGroupInRemoteRequest) (*shared.ConsumerGroupDescription, error) {
+	// acquire remote zone replicator thrift client
+	client, err := r.replicatorclientFactory.GetReplicatorClient(getRequest.GetZone())
+	if err != nil {
+		r.m3Client.IncCounter(metrics.ReplicatorReadCgInRemoteZoneScope, metrics.ReplicatorFailures)
+		r.logger.WithField(common.TagErr, err).Error(`Get remote replicator client failed`)
+		return nil, err
+	}
+
+	// send to remote zone replicator
+	ctx, cancel := thrift.NewContext(remoteReplicatorCallTimeOut)
+	defer cancel()
+	return client.ReadConsumerGroup(ctx, getRequest.GetRequest())
+}
+
 // ListConsumerGroups list consumer groups
 func (r *Replicator) ListConsumerGroups(ctx thrift.Context, getRequest *shared.ListConsumerGroupRequest) (*shared.ListConsumerGroupResult_, error) {
 	return r.metaClient.ListConsumerGroups(ctx, getRequest)

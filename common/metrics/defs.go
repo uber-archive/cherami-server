@@ -453,6 +453,10 @@ const (
 	ReplicatorSetAckOffsetScope
 	// ReplicatorSetAckOffsetInRemoteScope represents replicator SetAckOffsetInRemote API
 	ReplicatorSetAckOffsetInRemoteScope
+	// ReplicatorReadDestinationInRemoteZoneScope represents replicator ReadDestinationInRemoteZone API
+	ReplicatorReadDestinationInRemoteZoneScope
+	// ReplicatorReadCgInRemoteZoneScope represents replicator ReadConsumerGroupInRemoteZone API
+	ReplicatorReadCgInRemoteZoneScope
 	// ReplicatorReconcileScope represents replicator's reconcile process
 	ReplicatorReconcileScope
 )
@@ -578,27 +582,29 @@ var scopeDefs = map[ServiceIdx]map[int]scopeDefinition{
 
 	// Replicator operation tag values as seen by the Metrics backend
 	Replicator: {
-		OpenReplicationRemoteReadScope:      {operation: "OpenReplicationRemoteReadStream"},
-		OpenReplicationReadScope:            {operation: "OpenReplicationReadStream"},
-		ReplicatorCreateDestUUIDScope:       {operation: "ReplicatorCreateDestinationUUID"},
-		ReplicatorCreateRmtDestUUIDScope:    {operation: "ReplicatorCreateRemoteDestinationUUID"},
-		ReplicatorUpdateDestScope:           {operation: "ReplicatorUpdateDestination"},
-		ReplicatorUpdateRmtDestScope:        {operation: "ReplicatorUpdateRemoteDestination"},
-		ReplicatorDeleteDestScope:           {operation: "ReplicatorDeleteDestination"},
-		ReplicatorDeleteRmtDestScope:        {operation: "ReplicatorDeleteRemoteDestination"},
-		ReplicatorCreateCgUUIDScope:         {operation: "ReplicatorCreateConsumerGroupUUID"},
-		ReplicatorCreateRmtCgUUIDScope:      {operation: "ReplicatorCreateRemoteConsumerGroupUUID"},
-		ReplicatorUpdateCgScope:             {operation: "ReplicatorUpdateConsumerGroup"},
-		ReplicatorUpdateRmtCgScope:          {operation: "ReplicatorUpdateRemoteConsumerGroup"},
-		ReplicatorDeleteCgScope:             {operation: "ReplicatorDeleteConsumerGroup"},
-		ReplicatorDeleteRmtCgScope:          {operation: "ReplicatorDeleteRemoteConsumerGroup"},
-		ReplicatorCreateExtentScope:         {operation: "ReplicatorCreateExtent"},
-		ReplicatorCreateRmtExtentScope:      {operation: "ReplicatorCreateRemoteExtent"},
-		ReplicatorCreateCgExtentScope:       {operation: "ReplicatorCreateConsumerGroupExtent"},
-		ReplicatorCreateRmtCgExtentScope:    {operation: "ReplicatorCreateRemoteConsumerGroupExtent"},
-		ReplicatorSetAckOffsetScope:         {operation: "SetAckOffset"},
-		ReplicatorSetAckOffsetInRemoteScope: {operation: "SetAckOffsetInRemote"},
-		ReplicatorReconcileScope:            {operation: "ReplicatorReconcile"},
+		OpenReplicationRemoteReadScope:             {operation: "OpenReplicationRemoteReadStream"},
+		OpenReplicationReadScope:                   {operation: "OpenReplicationReadStream"},
+		ReplicatorCreateDestUUIDScope:              {operation: "ReplicatorCreateDestinationUUID"},
+		ReplicatorCreateRmtDestUUIDScope:           {operation: "ReplicatorCreateRemoteDestinationUUID"},
+		ReplicatorUpdateDestScope:                  {operation: "ReplicatorUpdateDestination"},
+		ReplicatorUpdateRmtDestScope:               {operation: "ReplicatorUpdateRemoteDestination"},
+		ReplicatorDeleteDestScope:                  {operation: "ReplicatorDeleteDestination"},
+		ReplicatorDeleteRmtDestScope:               {operation: "ReplicatorDeleteRemoteDestination"},
+		ReplicatorCreateCgUUIDScope:                {operation: "ReplicatorCreateConsumerGroupUUID"},
+		ReplicatorCreateRmtCgUUIDScope:             {operation: "ReplicatorCreateRemoteConsumerGroupUUID"},
+		ReplicatorUpdateCgScope:                    {operation: "ReplicatorUpdateConsumerGroup"},
+		ReplicatorUpdateRmtCgScope:                 {operation: "ReplicatorUpdateRemoteConsumerGroup"},
+		ReplicatorDeleteCgScope:                    {operation: "ReplicatorDeleteConsumerGroup"},
+		ReplicatorDeleteRmtCgScope:                 {operation: "ReplicatorDeleteRemoteConsumerGroup"},
+		ReplicatorCreateExtentScope:                {operation: "ReplicatorCreateExtent"},
+		ReplicatorCreateRmtExtentScope:             {operation: "ReplicatorCreateRemoteExtent"},
+		ReplicatorCreateCgExtentScope:              {operation: "ReplicatorCreateConsumerGroupExtent"},
+		ReplicatorCreateRmtCgExtentScope:           {operation: "ReplicatorCreateRemoteConsumerGroupExtent"},
+		ReplicatorSetAckOffsetScope:                {operation: "SetAckOffset"},
+		ReplicatorSetAckOffsetInRemoteScope:        {operation: "SetAckOffsetInRemote"},
+		ReplicatorReadDestinationInRemoteZoneScope: {operation: "ReadDestinationInRemoteZone"},
+		ReplicatorReadCgInRemoteZoneScope:          {operation: "ReadConsumerGroupInRemoteZone"},
+		ReplicatorReconcileScope:                   {operation: "ReplicatorReconcile"},
 	},
 
 	// Controller operation tag values as seen by the Metrics backend

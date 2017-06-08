@@ -53,7 +53,7 @@ func main() {
 	})
 	app.Name = "cherami"
 	app.Usage = "A command-line tool for cherami users"
-	app.Version = "1.1.9"
+	app.Version = "1.1.10"
 	app.Flags = []cli.Flag{
 		cli.BoolTFlag{
 			Name:  "hyperbahn",
@@ -265,9 +265,13 @@ func main() {
 							Value: cliHelper.GetDefaultOwnerEmail(),
 							Usage: "The updated owner's email",
 						},
+						cli.StringSliceFlag{
+							Name:  "zone_config, zc",
+							Usage: "Zone configs for multi_zone destinations. Format for each zone should be \"ZoneName,AllowPublish,AllowConsume,ReplicaCount\". For example: \"zone1,true,true,3\"",
+						},
 					},
 					Action: func(c *cli.Context) {
-						lib.UpdateDestination(c)
+						lib.UpdateDestination(c, cliHelper)
 					},
 				},
 				{
@@ -305,9 +309,13 @@ func main() {
 							Value: "",
 							Usage: "The updated active zone",
 						},
+						cli.StringSliceFlag{
+							Name:  "zone_config, zc",
+							Usage: "Zone configs for multi_zone consumer group. Format for each zone should be \"ZoneName,PreferedActiveZone\". For example: \"zone1,false\"",
+						},
 					},
 					Action: func(c *cli.Context) {
-						lib.UpdateConsumerGroup(c)
+						lib.UpdateConsumerGroup(c, cliHelper)
 					},
 				},
 			},
