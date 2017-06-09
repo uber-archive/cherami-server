@@ -27,10 +27,11 @@ import (
 
 const (
 	resourceURNTemplateCreateDestination   = "urn:cherami:dst:%v:%v"
-	resourceURNTemplateCreateConsumerGroup = "urn:cherami:dst:%v:%v"
+	resourceURNTemplateReadDestination     = "urn:cherami:dst:%v:%v"
+	resourceURNTemplateCreateConsumerGroup = "urn:cherami:cg:%v:%v"
 )
 
-// GetResourceURNCreateDestination returns the resource URN to create destination, e.g. urn:cherami:dst:zone1_prod:/prefix1
+// GetResourceURNCreateDestination returns the resource URN to create destination, e.g. urn:cherami:dst:zone1_prod:/dst_prefix
 // We use URN (Uniform Resource Name) like this: https://www.ietf.org/rfc/rfc2141.txt
 func GetResourceURNCreateDestination(scommon SCommon, dstPath *string) string {
 	var dstPathString string
@@ -43,9 +44,9 @@ func GetResourceURNCreateDestination(scommon SCommon, dstPath *string) string {
 	return fmt.Sprintf(resourceURNTemplateCreateDestination, strings.ToLower(deploymentName), strings.ToLower(dstPathString))
 }
 
-// GetResourceURNCreateConsumerGroup returns the resource URN to create consumer group, e.g. urn:cherami:dst:zone1_prod:/dst1
+// GetResourceURNReadDestination returns the resource URN to read destination, e.g. urn:cherami:dst:zone1_prod:/dst_prefix/dst1
 // We use URN (Uniform Resource Name) like this: https://www.ietf.org/rfc/rfc2141.txt
-func GetResourceURNCreateConsumerGroup(scommon SCommon, dstPath *string) string {
+func GetResourceURNReadDestination(scommon SCommon, dstPath *string) string {
 	var dstPathString string
 	if dstPath == nil {
 		dstPathString = ""
@@ -53,7 +54,20 @@ func GetResourceURNCreateConsumerGroup(scommon SCommon, dstPath *string) string 
 		dstPathString = *dstPath
 	}
 	deploymentName := scommon.GetConfig().GetDeploymentName()
-	return fmt.Sprintf(resourceURNTemplateCreateConsumerGroup, strings.ToLower(deploymentName), strings.ToLower(dstPathString))
+	return fmt.Sprintf(resourceURNTemplateReadDestination, strings.ToLower(deploymentName), strings.ToLower(dstPathString))
+}
+
+// GetResourceURNCreateConsumerGroup returns the resource URN to create consumer group, e.g. urn:cherami:dst:zone1_prod:/cg_prefix
+// We use URN (Uniform Resource Name) like this: https://www.ietf.org/rfc/rfc2141.txt
+func GetResourceURNCreateConsumerGroup(scommon SCommon, cgPath *string) string {
+	var cgPathString string
+	if cgPath == nil {
+		cgPathString = ""
+	} else {
+		cgPathString = getPathRootName(cgPath)
+	}
+	deploymentName := scommon.GetConfig().GetDeploymentName()
+	return fmt.Sprintf(resourceURNTemplateCreateConsumerGroup, strings.ToLower(deploymentName), strings.ToLower(cgPathString))
 }
 
 func getPathRootName(path *string) string {
