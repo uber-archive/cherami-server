@@ -669,15 +669,16 @@ func (h *Frontend) DeleteDestination(ctx thrift.Context, deleteRequest *c.Delete
 		return
 	}
 
-	// Disallow delete destination for non-test destinations without a password
-	// TODO: remove when appropriate authentication is in place
-	if !allowMutate {
-		err = &c.BadRequestError{Message: fmt.Sprintf("Contact Cherami team to delete this path: %v", deleteRequest.GetPath())}
-		h.logger.WithField(common.TagErr, err).Error("DeleteDestination failed")
-		return
-	}
-
 	lclLg := h.logger.WithField(common.TagDstPth, common.FmtDstPth(deleteRequest.GetPath()))
+
+	// To keep backward compatiblity, only check auth when no password is provided for DeleteDestination
+	if !allowMutate {
+		authResource := common.GetResourceURNOperateDestination(h.SCommon, deleteRequest.Path)
+		err = h.checkAuth(ctx, authResource, common.OperationDelete, lclLg)
+		if err != nil {
+			return err
+		}
+	}
 
 	// Request to controller
 	cClient, err := h.getControllerClient()
@@ -1117,7 +1118,7 @@ func (h *Frontend) CreateConsumerGroup(ctx thrift.Context, createRequest *c.Crea
 	})
 
 	// Check auth for read destination
-	authResource := common.GetResourceURNReadDestination(h.SCommon, createRequest.DestinationPath)
+	authResource := common.GetResourceURNOperateDestination(h.SCommon, createRequest.DestinationPath)
 	err = h.checkAuth(ctx, authResource, common.OperationRead, lclLg)
 	if err != nil {
 		return nil, err
