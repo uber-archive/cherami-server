@@ -371,6 +371,7 @@ const (
 
 	sqlUpdateDstByUUID = `UPDATE ` + tableDestinations + ` SET ` +
 		columnDestination + `=` + sqlDstType +
+		`, ` + columnIsMultiZone + ` = ? ` +
 		` WHERE ` + columnUUID + `=?`
 
 	sqlUpdateDstDLQCursors = `UPDATE ` + tableDestinations + ` SET ` +
@@ -380,6 +381,7 @@ const (
 
 	sqlUpdateDstByPath = `UPDATE ` + tableDestinationsByPath + ` SET ` +
 		columnDestination + `=` + sqlDstType +
+		`, ` + columnIsMultiZone + ` = ? ` +
 		` WHERE ` + columnPath + `=? and ` + columnDirectoryUUID + `=?`
 
 	sqlDeleteDst = `DELETE FROM ` + tableDestinationsByPath +
@@ -746,6 +748,7 @@ func (s *CassandraMetadataService) UpdateDestination(ctx thrift.Context, updateR
 		updateRequest.GetChecksumOption(),
 		isMultiZone,
 		marshalDstZoneConfigs(updateRequest.GetZoneConfigs()),
+		isMultiZone,
 		updateRequest.GetDestinationUUID())
 
 	batch.Query(
@@ -760,6 +763,7 @@ func (s *CassandraMetadataService) UpdateDestination(ctx thrift.Context, updateR
 		updateRequest.GetChecksumOption(),
 		isMultiZone,
 		marshalDstZoneConfigs(updateRequest.GetZoneConfigs()),
+		isMultiZone,
 		existing.GetPath(),
 		directoryUUID)
 
@@ -829,6 +833,7 @@ func (s *CassandraMetadataService) DeleteDestination(ctx thrift.Context, deleteR
 		existing.GetChecksumOption(),
 		existing.GetIsMultiZone(),
 		marshalDstZoneConfigs(existing.GetZoneConfigs()),
+		existing.GetIsMultiZone(),
 		existing.GetDestinationUUID())
 	batch.Query(sqlDeleteDst, directoryUUID, existing.GetPath())
 	if err = s.session.ExecuteBatch(batch); err != nil {
@@ -1705,6 +1710,7 @@ func (s *CassandraMetadataService) DeleteConsumerGroup(ctx thrift.Context, reque
 			dlqDstDesc.GetChecksumOption(),
 			dlqDstDesc.IsMultiZone,
 			marshalDstZoneConfigs(dlqDstDesc.ZoneConfigs),
+			dlqDstDesc.IsMultiZone,
 			dlqDstDesc.GetDestinationUUID())
 	}
 
