@@ -613,7 +613,7 @@ func (h *Frontend) CreateDestination(ctx thrift.Context, createRequest *c.Create
 
 	authResource := common.GetResourceURNCreateDestination(h.SCommon, createRequest.Path)
 
-	err = h.checkAuth(ctx, authResource, common.OperationCreate, lclLg)
+	authSubject, err := h.checkAuth(ctx, authResource, common.OperationCreate, lclLg)
 	if err != nil {
 		return nil, err
 	}
@@ -647,6 +647,13 @@ func (h *Frontend) CreateDestination(ctx thrift.Context, createRequest *c.Create
 		return nil, err
 	}
 
+	// Add Read/Update/Delete permissions for the current user on the destination
+	dstResource := common.GetResourceURNOperateDestination(h.SCommon, createRequest.Path)
+	h.addPermissions(authSubject,
+		dstResource,
+		[]common.Operation{common.OperationRead, common.OperationUpdate, common.OperationDelete},
+		lclLg)
+
 	lclLg.WithFields(bark.Fields{
 		common.TagDst:                 common.FmtDst(destDesc.GetDestinationUUID()),
 		`Type`:                        destDesc.GetType(),
@@ -674,7 +681,7 @@ func (h *Frontend) DeleteDestination(ctx thrift.Context, deleteRequest *c.Delete
 	// To keep backward compatiblity, only check auth when no password is provided for DeleteDestination
 	if !allowMutate {
 		authResource := common.GetResourceURNOperateDestination(h.SCommon, deleteRequest.Path)
-		err = h.checkAuth(ctx, authResource, common.OperationDelete, lclLg)
+		_, err = h.checkAuth(ctx, authResource, common.OperationDelete, lclLg)
 		if err != nil {
 			return err
 		}
@@ -692,6 +699,8 @@ func (h *Frontend) DeleteDestination(ctx thrift.Context, deleteRequest *c.Delete
 		lclLg.WithField(common.TagErr, err).Error(`Error deleting destination`)
 		return
 	}
+
+	// TODO delete permissions
 
 	lclLg.Info("Deleted destination")
 	return
@@ -1119,14 +1128,14 @@ func (h *Frontend) CreateConsumerGroup(ctx thrift.Context, createRequest *c.Crea
 
 	// Check auth for read destination
 	authResource := common.GetResourceURNOperateDestination(h.SCommon, createRequest.DestinationPath)
-	err = h.checkAuth(ctx, authResource, common.OperationRead, lclLg)
+	_, err = h.checkAuth(ctx, authResource, common.OperationRead, lclLg)
 	if err != nil {
 		return nil, err
 	}
 
 	// Check auth for create consumer group
 	authResource = common.GetResourceURNCreateConsumerGroup(h.SCommon, createRequest.ConsumerGroupName)
-	err = h.checkAuth(ctx, authResource, common.OperationCreate, lclLg)
+	authSubject, err := h.checkAuth(ctx, authResource, common.OperationCreate, lclLg)
 	if err != nil {
 		return nil, err
 	}
@@ -1158,6 +1167,22 @@ func (h *Frontend) CreateConsumerGroup(ctx thrift.Context, createRequest *c.Crea
 	if cgDesc == nil { // err != nil
 		lclLg.WithField(common.TagErr, err).Error(`Error creating consumer group`)
 		return nil, err
+	}
+
+	// Add Read/Update/Delete permissions for the current user on the consumer group
+	cgResource := common.GetResourceURNOperateConsumerGroup(h.SCommon, createRequest.DestinationPath, createRequest.ConsumerGroupName)
+	h.addPermissions(authSubject,
+		cgResource,
+		[]common.Operation{common.OperationRead, common.OperationUpdate, common.OperationDelete},
+		lclLg)
+
+	if _cgDesc.DeadLetterQueueDestinationUUID != nil && *_cgDesc.DeadLetterQueueDestinationUUID != "" {
+		// Add Read/Update permissions for the current user on the DLQ destination
+		dlqDstResource := common.GetResourceURNOperateDestination(h.SCommon, _cgDesc.DeadLetterQueueDestinationUUID)
+		h.addPermissions(authSubject,
+			dlqDstResource,
+			[]common.Operation{common.OperationRead, common.OperationUpdate},
+			lclLg)
 	}
 
 	lclLg.Info("Created consumer group")
@@ -1668,7 +1693,7 @@ func (h *Frontend) getControllerClient() (controller.TChanController, error) {
 	return cf.GetControllerClient()
 }
 
-func (h *Frontend) checkAuth(ctx thrift.Context, authResource string, operation common.Operation, logger bark.Logger) error {
+func (h *Frontend) checkAuth(ctx thrift.Context, authResource string, operation common.Operation, logger bark.Logger) (common.Subject, error) {
 	authContext := context.WithValue(ctx, ResourceUrnKey, authResource)
 	if ctx.Headers() != nil {
 		authContext = context.WithValue(authContext, HeaderKey, ctx.Headers())
@@ -1683,7 +1708,7 @@ func (h *Frontend) checkAuth(ctx thrift.Context, authResource string, operation 
 			common.TagOperation: operation,
 		}).Info("Authenticate failed")
 		// TODO add metrics
-		return err
+		return authSubject, err
 	}
 
 	err = h.GetAuthManager().Authorize(authSubject, operation, common.Resource(authResource))
@@ -1695,8 +1720,25 @@ func (h *Frontend) checkAuth(ctx thrift.Context, authResource string, operation 
 			common.TagOperation: operation,
 		}).Info("Authorize failed")
 		// TODO add metrics
-		return err
+		return authSubject, err
 	}
 
+	return authSubject, nil
+}
+
+func (h *Frontend) addPermissions(authSubject common.Subject, authResource string, operations []common.Operation, logger bark.Logger) error {
+	for _, operation := range operations {
+		err := h.GetAuthManager().AddPermission(authSubject, operation, common.Resource(authResource))
+		if err != nil {
+			logger.WithFields(bark.Fields{
+				common.TagErr:       err,
+				common.TagSubject:   authSubject,
+				common.TagResource:  authResource,
+				common.TagOperation: operation,
+			}).Error("Failed to add permission")
+			// TODO add metrics
+			return err
+		}
+	}
 	return nil
 }

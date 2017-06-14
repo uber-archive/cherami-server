@@ -64,6 +64,8 @@ type (
 		// Authorize validates whether the user (subject) has the permission to do the operation on the resource.
 		// It returns nil if the user has the permission, otherwise return error.
 		Authorize(subject Subject, operation Operation, resource Resource) error
+		// AddPermission adds permission
+		AddPermission(subject Subject, operation Operation, resource Resource) error
 	}
 
 	// BypassAuthManager is a dummy implementation
@@ -87,5 +89,10 @@ func (a *BypassAuthManager) Authenticate(ctx context.Context) (Subject, error) {
 
 // Authorize authorizes user
 func (a *BypassAuthManager) Authorize(subject Subject, operation Operation, resource Resource) error {
+	return nil
+}
+
+// AddPermission adds permission
+func (a *BypassAuthManager) AddPermission(subject Subject, operation Operation, resource Resource) error {
 	return nil
 }
