@@ -325,11 +325,9 @@ func UpdateDestination(c *cli.Context, cClient ccli.Client, mClient mcli.Client,
 	// don't allow short unconsumed message retention for multi_zone destination
 	// this is a prevention mechanism to prevent messages from being deleted in source zone in case there's some
 	// issue with cross zone replication(for example, network down between zones)
-	existingDesc, err := mClient.ReadDestination(&shared.ReadDestinationRequest{
-		Path: &path,
-	})
+	existingDesc, err := readDestinationFromMetadata(mClient, path)
 	ExitIfError(err)
-	if existingDesc.GetIsMultiZone() || len(request.GetZoneConfigs().GetConfigs()) > 0 {
+	if existingDesc.GetIsMultiZone() || (request.IsSetZoneConfigs() && len(request.GetZoneConfigs().GetConfigs()) > 0) {
 		if c.IsSet(`unconsumed_messages_retention`) && int32(c.Int(`unconsumed_messages_retention`)) < MinUnconsumedMessagesRetentionForMultiZoneDest {
 			ExitIfError(errors.New(strUnconsumedRetentionTooSmall))
 		}
@@ -444,9 +442,7 @@ func getCgZoneConfigs(c *cli.Context, mClient mcli.Client, cliHelper common.CliH
 	}
 
 	if len(zoneConfigs.Configs) > 1 {
-		dest, err := mClient.ReadDestination(&shared.ReadDestinationRequest{
-			Path: &destinationPath,
-		})
+		dest, err := readDestinationFromMetadata(mClient, destinationPath)
 		ExitIfError(err)
 
 		if !dest.GetIsMultiZone() {
@@ -773,9 +769,7 @@ func ReadDestination(c *cli.Context, mClient mcli.Client) {
 
 	path := c.Args().First()
 	showCG := string(c.String("showcg"))
-	desc, err := mClient.ReadDestination(&shared.ReadDestinationRequest{
-		Path: &path,
-	})
+	desc, err := readDestinationFromMetadata(mClient, path)
 	ExitIfError(err)
 	printDest(desc)
 
@@ -810,6 +804,15 @@ func ReadDestination(c *cli.Context, mClient mcli.Client) {
 	}
 }
 
+// path passed from tools might contain a password for some hacky security check, however the ReadDestination
+// metadata call doesn't handle that. This helper function strips the password if there's any.
+// TODO: we should remove this once the hacky security check is removed
+func readDestinationFromMetadata(mClient mcli.Client, path string) (*shared.DestinationDescription, error) {
+	return mClient.ReadDestination(&shared.ReadDestinationRequest{
+		Path: common.StringPtr(strings.Split(path, `+`)[0]),
+	})
+}
+
 // ReadDlq return the info for dlq dest and related consumer group
 func ReadDlq(c *cli.Context, mClient mcli.Client) {
 	if len(c.Args()) < 1 {
@@ -817,9 +820,7 @@ func ReadDlq(c *cli.Context, mClient mcli.Client) {
 	}
 
 	dlqUUID := c.Args().First()
-	desc, err0 := mClient.ReadDestination(&shared.ReadDestinationRequest{
-		Path: &dlqUUID,
-	})
+	desc, err0 := readDestinationFromMetadata(mClient, dlqUUID)
 
 	ExitIfError(err0)
 	printDest(desc)
