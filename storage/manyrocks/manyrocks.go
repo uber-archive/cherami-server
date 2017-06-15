@@ -36,7 +36,7 @@ import (
 	"github.com/uber/cherami-server/common"
 	s "github.com/uber/cherami-server/storage"
 
-	"github.com/Sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 )
 
 const rocksdbNotExistError = "does not exist (create_if_missing is false)"

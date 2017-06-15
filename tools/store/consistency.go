@@ -29,8 +29,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	log "github.com/Sirupsen/logrus"
 	"github.com/codegangsta/cli"
+	log "github.com/sirupsen/logrus"
 	"github.com/tecbot/gorocksdb"
 	"github.com/uber-common/bark"
 	"github.com/uber/cherami-server/common"

@@ -23,7 +23,7 @@ package common
 import (
 	"time"
 
-	log "github.com/Sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 
 	"github.com/stretchr/testify/mock"
 	"github.com/uber-common/bark"

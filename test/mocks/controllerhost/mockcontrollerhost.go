@@ -102,7 +102,7 @@ func (m *MockControllerHost) CreateRemoteZoneExtent(ctx thrift.Context, createRe
 }
 
 // CreateRemoteZoneExtent is the mock for corresponding ControllerHost API
-func (m *MockControllerHost) CreateRemoteZoneConsumerGroupExtent(ctx thrift.Context, createRequest *shared.CreateConsumerGroupExtentRequest) (error) {
+func (m *MockControllerHost) CreateRemoteZoneConsumerGroupExtent(ctx thrift.Context, createRequest *shared.CreateConsumerGroupExtentRequest) error {
 	args := m.Called(ctx, createRequest)
 	return args.Error(0)
 }

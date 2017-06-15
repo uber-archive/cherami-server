@@ -30,8 +30,8 @@ import (
 	"path"
 	"runtime"
 
-	log "github.com/Sirupsen/logrus"
 	"github.com/pborman/uuid"
+	log "github.com/sirupsen/logrus"
 	"github.com/uber/tchannel-go"
 	"gopkg.in/validator.v2"
 	"gopkg.in/yaml.v2"

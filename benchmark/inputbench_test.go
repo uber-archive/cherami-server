@@ -23,8 +23,8 @@ package benchmark
 import (
 	"testing"
 
-	log "github.com/Sirupsen/logrus"
 	_ "github.com/apache/thrift/lib/go/thrift"
+	log "github.com/sirupsen/logrus"
 )
 
 func BenchmarkInputhostWrite(b *testing.B) {

@@ -27,8 +27,8 @@ import (
 	"bytes"
 	"os/exec"
 
-	log "github.com/Sirupsen/logrus"
 	"github.com/gocql/gocql"
+	log "github.com/sirupsen/logrus"
 )
 
 // NewCassandraCluster creates a cassandra cluster given comma separated list of clusterHosts

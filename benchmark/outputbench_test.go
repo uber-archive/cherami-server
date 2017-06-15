@@ -29,7 +29,7 @@ import (
 
 	"testing"
 
-	log "github.com/Sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 )
 
 func BenchmarkOutputRead(b *testing.B) {

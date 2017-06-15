@@ -52,7 +52,7 @@ import (
 	"github.com/uber/tchannel-go/thrift"
 	"golang.org/x/net/context"
 
-	log "github.com/Sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 )
 
 const (

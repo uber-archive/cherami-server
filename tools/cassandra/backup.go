@@ -32,8 +32,8 @@ import (
 	"regexp"
 	"time"
 
-	log "github.com/Sirupsen/logrus"
 	"github.com/aws/aws-sdk-go/aws/awserr"
+	log "github.com/sirupsen/logrus"
 
 	"github.com/uber/cherami-server/tools/awscloud"
 )
