@@ -1,4 +1,1 @@
-ALTER TABLE destinations ADD kafka_cluster text;
-ALTER TABLE destinations ADD kafka_topics set<text>;
-ALTER TABLE destinations_by_path ADD kafka_cluster text;
-ALTER TABLE destinations_by_path ADD kafka_topics set<text>;
+ALTER TYPE consumer_group ADD delay_seconds int;
