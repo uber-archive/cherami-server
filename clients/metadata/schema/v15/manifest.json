@@ -1,0 +1,8 @@
+{
+	"CurrVersion": 15,
+	"MinCompatibleVersion": 8,
+	"Description": "Add Delay",
+	"SchemaUpdateCqlFiles": [
+		"201706160000_delay.cql"
+	]
+}
