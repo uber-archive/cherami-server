@@ -55,6 +55,13 @@ func UpdateDestination(c *cli.Context, cliHelper scommon.CliHelper) {
 	common.UpdateDestination(c, cClient, mClient, cliHelper)
 }
 
+// UpdateDestinationSecure updates the destination with security enabled
+func UpdateDestinationSecure(c *cli.Context, cliHelper scommon.CliHelper, authProvider cherami2.AuthProvider) {
+	mClient := common.GetMClient(c, serviceName)
+	cClient := common.GetCClientSecure(c, serviceName, authProvider)
+	common.UpdateDestination(c, cClient, mClient, cliHelper)
+}
+
 // CreateConsumerGroup creates the CG
 func CreateConsumerGroup(c *cli.Context, cliHelper scommon.CliHelper) {
 	CreateConsumerGroupSecure(c, cliHelper, nil)
@@ -70,6 +77,13 @@ func CreateConsumerGroupSecure(c *cli.Context, cliHelper scommon.CliHelper, auth
 // UpdateConsumerGroup updates the CG
 func UpdateConsumerGroup(c *cli.Context, cliHelper scommon.CliHelper) {
 	cClient := common.GetCClient(c, serviceName)
+	mClient := common.GetMClient(c, serviceName)
+	common.UpdateConsumerGroup(c, cClient, mClient, cliHelper)
+}
+
+// UpdateConsumerGroupSecure updates the CG with security enabled
+func UpdateConsumerGroupSecure(c *cli.Context, cliHelper scommon.CliHelper, authProvider cherami2.AuthProvider) {
+	cClient := common.GetCClientSecure(c, serviceName, authProvider)
 	mClient := common.GetMClient(c, serviceName)
 	common.UpdateConsumerGroup(c, cClient, mClient, cliHelper)
 }
@@ -92,9 +106,21 @@ func DeleteDestination(c *cli.Context) {
 	common.DeleteDestination(c, cClient)
 }
 
+// DeleteDestinationSecure deletes the given destination with security enabled
+func DeleteDestinationSecure(c *cli.Context, authProvider cherami2.AuthProvider) {
+	cClient := common.GetCClientSecure(c, serviceName, authProvider)
+	common.DeleteDestination(c, cClient)
+}
+
 // DeleteConsumerGroup deletes the given CG
 func DeleteConsumerGroup(c *cli.Context) {
 	cClient := common.GetCClient(c, serviceName)
+	common.DeleteConsumerGroup(c, cClient)
+}
+
+// DeleteConsumerGroupSecure deletes the given CG with security enabled
+func DeleteConsumerGroupSecure(c *cli.Context, authProvider cherami2.AuthProvider) {
+	cClient := common.GetCClientSecure(c, serviceName, authProvider)
 	common.DeleteConsumerGroup(c, cClient)
 }
 

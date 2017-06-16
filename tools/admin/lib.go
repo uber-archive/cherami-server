@@ -62,6 +62,13 @@ func UpdateDestination(c *cli.Context, cliHelper common.CliHelper) {
 	toolscommon.UpdateDestination(c, cClient, mClient, cliHelper)
 }
 
+// UpdateDestinationSecure updates properties of a destination with security enabled
+func UpdateDestinationSecure(c *cli.Context, cliHelper common.CliHelper, authProvider cherami2.AuthProvider) {
+	cClient := toolscommon.GetCClientSecure(c, adminToolService, authProvider)
+	mClient := toolscommon.GetMClient(c, adminToolService)
+	toolscommon.UpdateDestination(c, cClient, mClient, cliHelper)
+}
+
 // CreateConsumerGroup creates a consumer group
 func CreateConsumerGroup(c *cli.Context, cliHelper common.CliHelper) {
 	CreateConsumerGroupSecure(c, cliHelper, nil)
@@ -77,6 +84,13 @@ func CreateConsumerGroupSecure(c *cli.Context, cliHelper common.CliHelper, authP
 // UpdateConsumerGroup updates properties of a consumer group
 func UpdateConsumerGroup(c *cli.Context, cliHelper common.CliHelper) {
 	cClient := toolscommon.GetCClient(c, adminToolService)
+	mClient := toolscommon.GetMClient(c, adminToolService)
+	toolscommon.UpdateConsumerGroup(c, cClient, mClient, cliHelper)
+}
+
+// UpdateConsumerGroupSecure updates properties of a consumer group with security enabled
+func UpdateConsumerGroupSecure(c *cli.Context, cliHelper common.CliHelper, authProvider cherami2.AuthProvider) {
+	cClient := toolscommon.GetCClientSecure(c, adminToolService, authProvider)
 	mClient := toolscommon.GetMClient(c, adminToolService)
 	toolscommon.UpdateConsumerGroup(c, cClient, mClient, cliHelper)
 }
@@ -99,9 +113,21 @@ func DeleteDestination(c *cli.Context) {
 	toolscommon.DeleteDestination(c, cClient)
 }
 
+// DeleteDestinationSecure deletes a destination with security enabled
+func DeleteDestinationSecure(c *cli.Context, authProvider cherami2.AuthProvider) {
+	cClient := toolscommon.GetCClientSecure(c, adminToolService, authProvider)
+	toolscommon.DeleteDestination(c, cClient)
+}
+
 // DeleteConsumerGroup deletes a consumer group
 func DeleteConsumerGroup(c *cli.Context) {
 	cClient := toolscommon.GetCClient(c, adminToolService)
+	toolscommon.DeleteConsumerGroup(c, cClient)
+}
+
+// DeleteConsumerGroupSecure deletes a consumer group with security enabled
+func DeleteConsumerGroupSecure(c *cli.Context, authProvider cherami2.AuthProvider) {
+	cClient := toolscommon.GetCClientSecure(c, adminToolService, authProvider)
 	toolscommon.DeleteConsumerGroup(c, cClient)
 }
 
