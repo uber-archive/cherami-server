@@ -113,11 +113,12 @@ func BootstrapRingpop(rp *ringpop.Ringpop, ipaddr string, port int, cfg configur
 	var rpHosts []string
 
 	if len(cfg.GetRingHosts()) > 0 {
-		// Trim the trailing comma in rpHosts
-		// For example: If rpHosts = "10.x.y.z,", we should trim
-		// it to say, rpHostsTrimmed = "10.x.y.z"
-		rpHostsTrimmed := strings.TrimRight(cfg.GetRingHosts(), ",")
-		rpHosts = strings.Split(rpHostsTrimmed, ",")
+		for _, host := range strings.Split(cfg.GetRingHosts(), ",") {
+			hostTrimed := strings.TrimSpace(host)
+			if len(hostTrimed) > 0 {
+				rpHosts = append(rpHosts, hostTrimed)
+			}
+		}
 	}
 
 	if len(rpHosts) == 0 {
