@@ -34,8 +34,11 @@ const (
 
 	strMaxDeliveryCount = "Maximum number of times a message is delivered\n\tbefore it is sent to the dead-letter queue (DLQ)"
 
-	strSkipOlderMessagesInSeconds = `Skip messages older than this duration in seconds. (NOT IMPLEMENTED)`
-	intSkipOlderMessagesInSeconds = 999999999 // More than 30 years; placeholder for eventual implementation
+	strSkipOlderMessagesInSeconds = `Skip messages older than this duration in seconds.`
+	intSkipOlderMessagesInSeconds = 999999999 // More than 30 years
+
+	strDelaySeconds = `Delay to introduce to all messages, in seconds.`
+	intDelaySeconds = 0 // zero delay, by default
 )
 
 func main() {
@@ -128,7 +131,7 @@ func main() {
 						},
 						cli.StringSliceFlag{
 							Name:  "kafka_topics, kt",
-							Usage: "List of kafka topics to subscribe to. Use multiple times, e.g. \"--kafka_topics topic_a --kafka_topics topic_b\"",
+							Usage: "List of kafka topics to subscribe to. Use multiple times, e.g. \"-kafka_topics topic_a -kafka_topics topic_b\"",
 						},
 					},
 					Action: func(c *cli.Context) {
@@ -159,6 +162,11 @@ func main() {
 							Name:  "skip_older_messages_in_seconds, k",
 							Value: intSkipOlderMessagesInSeconds,
 							Usage: strSkipOlderMessagesInSeconds,
+						},
+						cli.IntFlag{
+							Name:  "delay_seconds, d",
+							Value: intDelaySeconds,
+							Usage: strDelaySeconds,
 						},
 						cli.StringFlag{
 							Name:  "owner_email, oe",
@@ -298,6 +306,11 @@ func main() {
 							Name:  "skip_older_messages_in_seconds, k",
 							Value: intSkipOlderMessagesInSeconds,
 							Usage: strSkipOlderMessagesInSeconds,
+						},
+						cli.IntFlag{
+							Name:  "delay_seconds, d",
+							Value: intDelaySeconds,
+							Usage: strDelaySeconds,
 						},
 						cli.StringFlag{
 							Name:  "owner_email, oe",

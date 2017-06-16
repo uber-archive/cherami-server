@@ -376,6 +376,7 @@ func CreateConsumerGroup(c *cli.Context, cClient ccli.Client, mClient mcli.Clien
 	lockTimeout := int32(c.Int("lock_timeout_seconds"))
 	maxDelivery := int32(c.Int("max_delivery_count"))
 	skipOlder := int32(c.Int("skip_older_messages_in_seconds"))
+	delay := int32(c.Int("delay_seconds"))
 	ownerEmail := string(c.String("owner_email"))
 
 	// Override default startFrom for DLQ consumer groups
@@ -398,6 +399,7 @@ func CreateConsumerGroup(c *cli.Context, cClient ccli.Client, mClient mcli.Clien
 		LockTimeoutInSeconds:       &lockTimeout,
 		MaxDeliveryCount:           &maxDelivery,
 		SkipOlderMessagesInSeconds: &skipOlder,
+		DelaySeconds:               &delay,
 		OwnerEmail:                 &ownerEmail,
 		IsMultiZone:                &isMultiZone,
 		ZoneConfigs:                &zoneConfigs,
@@ -479,6 +481,7 @@ func UpdateConsumerGroup(c *cli.Context, cClient ccli.Client, mClient mcli.Clien
 		LockTimeoutInSeconds:       getIfSetInt32(c, `lock_timeout_seconds`, &setCount),
 		MaxDeliveryCount:           getIfSetInt32(c, `max_delivery_count`, &setCount),
 		SkipOlderMessagesInSeconds: getIfSetInt32(c, `skip_older_messages_in_seconds`, &setCount),
+		DelaySeconds:               getIfSetInt32(c, `delay_seconds`, &setCount),
 		OwnerEmail:                 getIfSetString(c, `owner_email`, &setCount),
 		ActiveZone:                 getIfSetString(c, `active_zone`, &setCount),
 		ZoneConfigs:                getIfSetCgZoneConfig(c, mClient, cliHelper, path, &setCount),
@@ -911,6 +914,7 @@ type cgJSONOutputFields struct {
 	LockTimeoutSeconds       int32                             `json:"lock_timeout_seconds"`
 	MaxDeliveryCount         int32                             `json:"max_delivery_count"`
 	SkipOlderMessagesSeconds int32                             `json:"skip_older_msg_seconds"`
+	DelaySeconds             int32                             `json:"delay_seconds"`
 	CGEmail                  string                            `json:"owner_email"`
 	CGDlq                    string                            `json:"dlqUUID"`
 	IsMultiZone              bool                              `json:"is_multi_zone"`
@@ -928,6 +932,7 @@ func printCG(cg *shared.ConsumerGroupDescription) {
 		LockTimeoutSeconds:       cg.GetLockTimeoutSeconds(),
 		MaxDeliveryCount:         cg.GetMaxDeliveryCount(),
 		SkipOlderMessagesSeconds: cg.GetSkipOlderMessagesSeconds(),
+		DelaySeconds:             cg.GetDelaySeconds(),
 		CGEmail:                  cg.GetOwnerEmail(),
 		CGDlq:                    cg.GetDeadLetterQueueDestinationUUID(),
 		IsMultiZone:              cg.GetIsMultiZone(),
