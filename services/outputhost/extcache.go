@@ -89,6 +89,12 @@ type extentCache struct {
 	// startFrom is the offset to start from
 	startFrom int64
 
+	// skipOlder indicates that the CG wants to skip any messages older than this value, in seconds
+	skipOlder int32
+
+	// delay indicates that the CG wants to delay every message by the specified value, in seconds
+	delay int32
+
 	// msgsCh is the channel where we write the message to the client as we read from replica
 	msgsCh chan<- *cherami.ConsumerMessage
 

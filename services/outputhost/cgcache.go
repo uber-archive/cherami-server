@@ -313,6 +313,8 @@ func (cgCache *consumerGroupCache) loadExtentCache(ctx thrift.Context, destType 
 			destType:             destType,
 			storeUUIDs:           cge.StoreUUIDs,
 			startFrom:            cgCache.cachedCGDesc.GetStartFrom(),
+			skipOlder:            cgCache.cachedCGDesc.GetSkipOlderMessagesSeconds(),
+			delay:                cgCache.cachedCGDesc.GetDelaySeconds(),
 			notifyReplicaCloseCh: make(chan error, 5),
 			closeChannel:         make(chan struct{}),
 			waitConsumedCh:       make(chan bool, 1),
