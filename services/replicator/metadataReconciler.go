@@ -353,6 +353,7 @@ func (r *metadataReconciler) reconcileCg(localCgs []*shared.ConsumerGroupDescrip
 					LockTimeoutSeconds:       common.Int32Ptr(remoteCg.GetLockTimeoutSeconds()),
 					MaxDeliveryCount:         common.Int32Ptr(remoteCg.GetMaxDeliveryCount()),
 					SkipOlderMessagesSeconds: common.Int32Ptr(remoteCg.GetSkipOlderMessagesSeconds()),
+					DelaySeconds:             common.Int32Ptr(remoteCg.GetDelaySeconds()),
 					OwnerEmail:               common.StringPtr(remoteCg.GetOwnerEmail()),
 					IsMultiZone:              common.BoolPtr(remoteCg.GetIsMultiZone()),
 					ActiveZone:               common.StringPtr(remoteCg.GetActiveZone()),
@@ -395,6 +396,10 @@ func (r *metadataReconciler) compareAndUpdateCg(remoteCg *shared.ConsumerGroupDe
 	}
 	if localCg.GetSkipOlderMessagesSeconds() != remoteCg.GetSkipOlderMessagesSeconds() {
 		updateRequest.SkipOlderMessagesSeconds = common.Int32Ptr(remoteCg.GetSkipOlderMessagesSeconds())
+		cgUpdated = true
+	}
+	if localCg.GetDelaySeconds() != remoteCg.GetDelaySeconds() {
+		updateRequest.DelaySeconds = common.Int32Ptr(remoteCg.GetDelaySeconds())
 		cgUpdated = true
 	}
 	if localCg.GetStatus() != remoteCg.GetStatus() {
