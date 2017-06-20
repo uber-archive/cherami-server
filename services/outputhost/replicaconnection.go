@@ -263,7 +263,7 @@ loop:
 				now := common.Now()
 
 				// check if the messages have already 'expired'; ie, if it falls outside the skip-older window
-				if enqueueTime < (now - skipOlderNanos) {
+				if skipOlderNanos > 0 && enqueueTime < (now-skipOlderNanos) {
 					continue loop
 				}
 
