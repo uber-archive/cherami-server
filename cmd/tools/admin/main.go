@@ -140,6 +140,11 @@ func main() {
 							Value: 7200,
 							Usage: "Skip messages older than this duration in seconds.",
 						},
+						cli.IntFlag{
+							Name:  "delay_seonds, d",
+							Value: 0,
+							Usage: "Delay to add to every message, in seconds.",
+						},
 						cli.StringFlag{
 							Name:  "owner_email, oe",
 							Value: "",
@@ -342,6 +347,11 @@ func main() {
 							Name:  "skip_older_messages_in_seconds, k",
 							Value: 7200,
 							Usage: "Skip messages older than this duration in seconds.",
+						},
+						cli.IntFlag{
+							Name:  "delay_seonds, d",
+							Value: 0,
+							Usage: "Delay to add to every message, in seconds.",
 						},
 						cli.StringFlag{
 							Name:  "owner_email, oe",
@@ -721,7 +731,7 @@ func main() {
 		{
 			Name:    "seal-check",
 			Aliases: []string{"sc"},
-			Usage:   "seal-check <dest> [--seal]",
+			Usage:   "seal-check <dest> [-seal]",
 			Flags: []cli.Flag{
 				cli.StringFlag{
 					Name:  "prefix, pf",
@@ -772,7 +782,7 @@ func main() {
 		{
 			Name:    "store-purgeextent",
 			Aliases: []string{"purge"},
-			Usage:   "purge <store_uuid> <extent_uuid> [<address> | --entirely]",
+			Usage:   "purge <store_uuid> <extent_uuid> [<address> | -entirely]",
 			Flags: []cli.Flag{
 				cli.BoolFlag{
 					Name:  "entirely",

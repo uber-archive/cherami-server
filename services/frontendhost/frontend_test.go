@@ -111,6 +111,7 @@ func cgCreateRequestToDesc(createRequest *c.CreateConsumerGroupRequest) *shared.
 	cgDesc.LockTimeoutSeconds = common.Int32Ptr(createRequest.GetLockTimeoutInSeconds())
 	cgDesc.MaxDeliveryCount = common.Int32Ptr(createRequest.GetMaxDeliveryCount())
 	cgDesc.SkipOlderMessagesSeconds = common.Int32Ptr(createRequest.GetSkipOlderMessagesInSeconds())
+	cgDesc.DelaySeconds = common.Int32Ptr(createRequest.GetDelaySeconds())
 	cgDesc.DeadLetterQueueDestinationUUID = common.StringPtr(uuid.New())
 	cgDesc.OwnerEmail = common.StringPtr(createRequest.GetOwnerEmail())
 	cgDesc.ConsumerGroupType = common.InternalConsumerGroupTypePtr(shared.ConsumerGroupType(createRequest.GetConsumerGroupType()))
@@ -133,6 +134,7 @@ func cgUpdateRequestToDesc(updateRequest *c.UpdateConsumerGroupRequest) *shared.
 	cgDesc.LockTimeoutSeconds = common.Int32Ptr(updateRequest.GetLockTimeoutInSeconds())
 	cgDesc.MaxDeliveryCount = common.Int32Ptr(updateRequest.GetMaxDeliveryCount())
 	cgDesc.SkipOlderMessagesSeconds = common.Int32Ptr(updateRequest.GetSkipOlderMessagesInSeconds())
+	cgDesc.DelaySeconds = common.Int32Ptr(updateRequest.GetDelaySeconds())
 	cgDesc.OwnerEmail = common.StringPtr(updateRequest.GetOwnerEmail())
 	return cgDesc
 }
@@ -1128,6 +1130,7 @@ func (s *FrontendHostSuite) TestFrontendHostUpdateConsumerGroup() {
 	req.LockTimeoutInSeconds = common.Int32Ptr(1)
 	req.MaxDeliveryCount = common.Int32Ptr(2)
 	req.SkipOlderMessagesInSeconds = common.Int32Ptr(3)
+	req.DelaySeconds = common.Int32Ptr(5)
 	req.Status = c.ConsumerGroupStatusPtr(c.ConsumerGroupStatus_DISABLED)
 	req.OwnerEmail = common.StringPtr("consumer_front_test@uber.com")
 	newCGDesc := cgUpdateRequestToDesc(req)
@@ -1143,7 +1146,7 @@ func (s *FrontendHostSuite) TestFrontendHostUpdateConsumerGroup() {
 		s.Equal(cgd.DestinationPath, req.DestinationPath)
 		s.Equal(cgd.LockTimeoutInSeconds, req.LockTimeoutInSeconds)
 		s.Equal(cgd.MaxDeliveryCount, req.MaxDeliveryCount)
-		s.Equal(cgd.SkipOlderMessagesInSeconds, req.SkipOlderMessagesInSeconds)
+		s.Equal(cgd.DelaySeconds, req.DelaySeconds)
 		s.Equal(cgd.Status, req.Status)
 		s.Equal(cgd.OwnerEmail, req.OwnerEmail)
 	}

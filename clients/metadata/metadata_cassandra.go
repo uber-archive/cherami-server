@@ -101,6 +101,7 @@ const (
 	columnConsumerGroupUUID              = "consumer_group_uuid"
 	columnConsumerGroupVisibility        = "consumer_group_visibility"
 	columnCreatedTime                    = "created_time"
+	columnDelaySeconds                   = "delay_seconds"
 	columnDLQConsumerGroup               = "dlq_consumer_group"
 	columnDLQMergeBefore                 = "dlq_merge_before"
 	columnDLQPurgeBefore                 = "dlq_purge_before"
@@ -544,6 +545,7 @@ func getUtilConsumerGroupDescription() *shared.ConsumerGroupDescription {
 	result.LockTimeoutSeconds = common.Int32Ptr(0)
 	result.MaxDeliveryCount = common.Int32Ptr(0)
 	result.SkipOlderMessagesSeconds = common.Int32Ptr(0)
+	result.DelaySeconds = common.Int32Ptr(0)
 	result.OwnerEmail = common.StringPtr("")
 	result.IsMultiZone = common.BoolPtr(false)
 	result.ActiveZone = common.StringPtr("")
@@ -1137,6 +1139,7 @@ const (
 		columnLockTimeoutSeconds + `: ?, ` +
 		columnMaxDeliveryCount + `: ?, ` +
 		columnSkipOlderMessagesSeconds + `: ?, ` +
+		columnDelaySeconds + `: ?, ` +
 		columnDeadLetterQueueDestinationUUID + `: ?, ` +
 		columnOwnerEmail + `: ?, ` +
 		columnIsMultiZone + `: ?, ` +
@@ -1167,6 +1170,7 @@ const (
 		columnConsumerGroup + `.` + columnLockTimeoutSeconds + "," +
 		columnConsumerGroup + `.` + columnMaxDeliveryCount + "," +
 		columnConsumerGroup + `.` + columnSkipOlderMessagesSeconds + "," +
+		columnConsumerGroup + `.` + columnDelaySeconds + "," +
 		columnConsumerGroup + `.` + columnDeadLetterQueueDestinationUUID + "," +
 		columnConsumerGroup + `.` + columnOwnerEmail + "," +
 		columnConsumerGroup + `.` + columnIsMultiZone + "," +
@@ -1184,6 +1188,7 @@ const (
 		columnConsumerGroup + `.` + columnLockTimeoutSeconds + "," +
 		columnConsumerGroup + `.` + columnMaxDeliveryCount + "," +
 		columnConsumerGroup + `.` + columnSkipOlderMessagesSeconds + "," +
+		columnConsumerGroup + `.` + columnDelaySeconds + "," +
 		columnConsumerGroup + `.` + columnDeadLetterQueueDestinationUUID + "," +
 		columnConsumerGroup + `.` + columnOwnerEmail + "," +
 		columnConsumerGroup + `.` + columnIsMultiZone + "," +
@@ -1202,6 +1207,7 @@ const (
 		columnConsumerGroup + `.` + columnLockTimeoutSeconds + "," +
 		columnConsumerGroup + `.` + columnMaxDeliveryCount + "," +
 		columnConsumerGroup + `.` + columnSkipOlderMessagesSeconds + "," +
+		columnConsumerGroup + `.` + columnDelaySeconds + "," +
 		columnConsumerGroup + `.` + columnDeadLetterQueueDestinationUUID + "," +
 		columnConsumerGroup + `.` + columnOwnerEmail + "," +
 		columnConsumerGroup + `.` + columnIsMultiZone + "," +
@@ -1291,6 +1297,7 @@ func (s *CassandraMetadataService) CreateConsumerGroupUUID(ctx thrift.Context, r
 		createRequest.GetLockTimeoutSeconds(),
 		createRequest.GetMaxDeliveryCount(),
 		createRequest.GetSkipOlderMessagesSeconds(),
+		createRequest.GetDelaySeconds(),
 		dlqUUID,
 		createRequest.GetOwnerEmail(),
 		createRequest.GetIsMultiZone(),
@@ -1316,6 +1323,7 @@ func (s *CassandraMetadataService) CreateConsumerGroupUUID(ctx thrift.Context, r
 		createRequest.GetLockTimeoutSeconds(),
 		createRequest.GetMaxDeliveryCount(),
 		createRequest.GetSkipOlderMessagesSeconds(),
+		createRequest.GetDelaySeconds(),
 		dlqUUID,
 		createRequest.GetOwnerEmail(),
 		createRequest.GetIsMultiZone(),
@@ -1359,6 +1367,7 @@ func (s *CassandraMetadataService) CreateConsumerGroupUUID(ctx thrift.Context, r
 		LockTimeoutSeconds:             common.Int32Ptr(createRequest.GetLockTimeoutSeconds()),
 		MaxDeliveryCount:               common.Int32Ptr(createRequest.GetMaxDeliveryCount()),
 		SkipOlderMessagesSeconds:       common.Int32Ptr(createRequest.GetSkipOlderMessagesSeconds()),
+		DelaySeconds:                   common.Int32Ptr(createRequest.GetDelaySeconds()),
 		DeadLetterQueueDestinationUUID: dlqUUID,
 		OwnerEmail:                     common.StringPtr(createRequest.GetOwnerEmail()),
 		IsMultiZone:                    common.BoolPtr(createRequest.GetIsMultiZone()),
@@ -1415,6 +1424,7 @@ func (s *CassandraMetadataService) readConsumerGroupByDstUUID(dstUUID string, cg
 		result.LockTimeoutSeconds,
 		result.MaxDeliveryCount,
 		result.SkipOlderMessagesSeconds,
+		result.DelaySeconds,
 		&result.DeadLetterQueueDestinationUUID,
 		result.OwnerEmail,
 		result.IsMultiZone,
@@ -1485,6 +1495,7 @@ func (s *CassandraMetadataService) ReadConsumerGroupByUUID(ctx thrift.Context, r
 		result.LockTimeoutSeconds,
 		result.MaxDeliveryCount,
 		result.SkipOlderMessagesSeconds,
+		result.DelaySeconds,
 		&result.DeadLetterQueueDestinationUUID,
 		result.OwnerEmail,
 		result.IsMultiZone,
@@ -1522,6 +1533,11 @@ func updateCGDescIfChanged(req *shared.UpdateConsumerGroupRequest, cgDesc *share
 	if req.IsSetSkipOlderMessagesSeconds() && req.GetSkipOlderMessagesSeconds() != cgDesc.GetSkipOlderMessagesSeconds() {
 		isChanged = true
 		cgDesc.SkipOlderMessagesSeconds = common.Int32Ptr(req.GetSkipOlderMessagesSeconds())
+	}
+
+	if req.IsSetDelaySeconds() && req.GetDelaySeconds() != cgDesc.GetDelaySeconds() {
+		isChanged = true
+		cgDesc.DelaySeconds = common.Int32Ptr(req.GetDelaySeconds())
 	}
 
 	if req.IsSetStatus() && req.GetStatus() != cgDesc.GetStatus() {
@@ -1587,6 +1603,7 @@ func (s *CassandraMetadataService) UpdateConsumerGroup(ctx thrift.Context, reque
 		newCG.GetLockTimeoutSeconds(),
 		newCG.GetMaxDeliveryCount(),
 		newCG.GetSkipOlderMessagesSeconds(),
+		newCG.GetDelaySeconds(),
 		newCG.DeadLetterQueueDestinationUUID, // May be null
 		newCG.GetOwnerEmail(),
 		newCG.GetIsMultiZone(),
@@ -1606,6 +1623,7 @@ func (s *CassandraMetadataService) UpdateConsumerGroup(ctx thrift.Context, reque
 		newCG.GetLockTimeoutSeconds(),
 		newCG.GetMaxDeliveryCount(),
 		newCG.GetSkipOlderMessagesSeconds(),
+		newCG.GetDelaySeconds(),
 		newCG.DeadLetterQueueDestinationUUID, // May be null
 		newCG.GetOwnerEmail(),
 		newCG.GetIsMultiZone(),
@@ -1725,6 +1743,7 @@ func (s *CassandraMetadataService) DeleteConsumerGroup(ctx thrift.Context, reque
 		existingCG.GetLockTimeoutSeconds(),
 		existingCG.GetMaxDeliveryCount(),
 		existingCG.GetSkipOlderMessagesSeconds(),
+		existingCG.GetDelaySeconds(),
 		existingCG.DeadLetterQueueDestinationUUID, // May be Null
 		existingCG.GetOwnerEmail(),
 		existingCG.GetIsMultiZone(),
@@ -1828,6 +1847,7 @@ func (s *CassandraMetadataService) ListConsumerGroups(ctx thrift.Context, reques
 		cg.LockTimeoutSeconds,
 		cg.MaxDeliveryCount,
 		cg.SkipOlderMessagesSeconds,
+		cg.DelaySeconds,
 		&cg.DeadLetterQueueDestinationUUID,
 		cg.OwnerEmail,
 		cg.IsMultiZone,
@@ -1890,6 +1910,7 @@ func (s *CassandraMetadataService) ListAllConsumerGroups(ctx thrift.Context, req
 		cg.LockTimeoutSeconds,
 		cg.MaxDeliveryCount,
 		cg.SkipOlderMessagesSeconds,
+		cg.DelaySeconds,
 		&cg.DeadLetterQueueDestinationUUID,
 		cg.OwnerEmail,
 		cg.IsMultiZone,

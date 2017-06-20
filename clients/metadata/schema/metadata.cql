@@ -214,6 +214,7 @@ CREATE TYPE consumer_group (
   lock_timeout_seconds int,
   max_delivery_count int,
   skip_older_messages_seconds int,
+  delay_seconds int,
   dead_letter_queue_destination_uuid uuid,
   owner_email text,
   is_multi_zone boolean,

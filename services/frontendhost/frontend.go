@@ -380,6 +380,7 @@ func convertCreateCGRequestToInternal(createRequest *c.CreateConsumerGroupReques
 	internalCreateRequest.LockTimeoutSeconds = common.Int32Ptr(createRequest.GetLockTimeoutInSeconds())
 	internalCreateRequest.MaxDeliveryCount = common.Int32Ptr(createRequest.GetMaxDeliveryCount())
 	internalCreateRequest.SkipOlderMessagesSeconds = common.Int32Ptr(createRequest.GetSkipOlderMessagesInSeconds())
+	internalCreateRequest.DelaySeconds = common.Int32Ptr(createRequest.GetDelaySeconds())
 	internalCreateRequest.StartFrom = common.Int64Ptr(startFrom)
 	internalCreateRequest.OwnerEmail = common.StringPtr(createRequest.GetOwnerEmail())
 	internalCreateRequest.IsMultiZone = common.BoolPtr(createRequest.GetIsMultiZone())
@@ -407,6 +408,9 @@ func convertUpdateCGRequestToInternal(updateRequest *c.UpdateConsumerGroupReques
 	}
 	if updateRequest.IsSetSkipOlderMessagesInSeconds() {
 		internalUpdateRequest.SkipOlderMessagesSeconds = common.Int32Ptr(updateRequest.GetSkipOlderMessagesInSeconds())
+	}
+	if updateRequest.IsSetDelaySeconds() {
+		internalUpdateRequest.DelaySeconds = common.Int32Ptr(updateRequest.GetDelaySeconds())
 	}
 	if updateRequest.IsSetStatus() {
 		internalUpdateRequest.Status = common.InternalConsumerGroupStatusPtr(shared.ConsumerGroupStatus(updateRequest.GetStatus()))
@@ -472,6 +476,7 @@ func (h *Frontend) convertConsumerGroupFromInternal(ctx thrift.Context, _cgDesc 
 	cgDesc.Status = c.ConsumerGroupStatusPtr(c.ConsumerGroupStatus(_cgDesc.GetStatus()))
 	cgDesc.StartFrom = common.Int64Ptr(_cgDesc.GetStartFrom())
 	cgDesc.SkipOlderMessagesInSeconds = common.Int32Ptr(_cgDesc.GetSkipOlderMessagesSeconds())
+	cgDesc.DelaySeconds = common.Int32Ptr(_cgDesc.GetDelaySeconds())
 	cgDesc.MaxDeliveryCount = common.Int32Ptr(_cgDesc.GetMaxDeliveryCount())
 	cgDesc.LockTimeoutInSeconds = common.Int32Ptr(_cgDesc.GetLockTimeoutSeconds())
 	cgDesc.DeadLetterQueueDestinationUUID = common.StringPtr(_cgDesc.GetDeadLetterQueueDestinationUUID())
