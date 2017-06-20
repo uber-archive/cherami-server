@@ -262,7 +262,8 @@ loop:
 				enqueueTime := common.UnixNanoTime(msg.Message.GetEnqueueTimeUtc())
 				now := common.Now()
 
-				// check if the messages have already 'expired'; ie, if it falls outside the skip-older window
+				// check if the messages have already 'expired'; ie, if it falls outside the
+				// skip-older window. ignore (ie, don't skip any messages), if skip-older is '0'.
 				if skipOlderNanos > 0 && enqueueTime < (now-skipOlderNanos) {
 					continue loop
 				}
