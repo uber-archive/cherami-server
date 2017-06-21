@@ -190,7 +190,7 @@ func (conn *replicaConnection) readMessagesPump() {
 
 	var skipOlderNanos = common.UnixNanoTime(conn.extCache.skipOlder * int32(time.Second))
 	var delayNanos = common.UnixNanoTime(conn.extCache.delay * int32(time.Second))
-	var delayTimer = time.NewTimer(time.Hour)
+	var delayTimer = common.NewTimer(time.Hour)
 
 loop:
 	for {
@@ -273,11 +273,6 @@ loop:
 
 					// compute visibility time based on the enqueue-time and specified delay
 					if visibilityTime := enqueueTime + delayNanos; visibilityTime > now {
-
-						// ref: https://golang.org/pkg/time/#Timer.Reset
-						if !delayTimer.Stop() {
-							<-delayTimer.C
-						}
 
 						delayTimer.Reset(time.Duration(visibilityTime - now))
 
