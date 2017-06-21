@@ -652,12 +652,23 @@ func (h *Frontend) CreateDestination(ctx thrift.Context, createRequest *c.Create
 		return nil, err
 	}
 
-	// Add Read/Update/Delete permissions for the current user on the destination
-	dstResource := common.GetResourceURNOperateDestination(h.SCommon, createRequest.Path)
-	h.addPermissions(authSubject,
-		dstResource,
-		[]common.Operation{common.OperationRead, common.OperationUpdate, common.OperationDelete},
-		lclLg)
+	// Add Read/Update/Delete permissions for the current user and owner on the destination
+	subjects := []common.Subject{authSubject}
+	if createRequest.OwnerEmail != nil && *createRequest.OwnerEmail != "" && *createRequest.OwnerEmail != authSubject.Name {
+		ownerSubject := common.Subject{
+			Type: common.SubjectTypeEmployee,
+			Name: *createRequest.OwnerEmail,
+		}
+		subjects = append(subjects, ownerSubject)
+	}
+
+	for _, subject := range subjects {
+		dstResource := common.GetResourceURNOperateDestination(h.SCommon, createRequest.Path)
+		h.addPermissions(subject,
+			dstResource,
+			[]common.Operation{common.OperationRead, common.OperationUpdate, common.OperationDelete},
+			lclLg)
+	}
 
 	lclLg.WithFields(bark.Fields{
 		common.TagDst:                 common.FmtDst(destDesc.GetDestinationUUID()),
@@ -980,6 +991,20 @@ func (h *Frontend) UpdateDestination(ctx thrift.Context, updateRequest *c.Update
 		return
 	}
 
+	if updateRequest.OwnerEmail != nil && *updateRequest.OwnerEmail != "" {
+		// Add Read/Update/Delete permissions for the owner on the destination
+		// TODO check whether the new owner is different from old one, delete old permissions for old owner
+		ownerSubject := common.Subject{
+			Type: common.SubjectTypeEmployee,
+			Name: *updateRequest.OwnerEmail,
+		}
+		dstResource := common.GetResourceURNOperateDestination(h.SCommon, updateRequest.Path)
+		h.addPermissions(ownerSubject,
+			dstResource,
+			[]common.Operation{common.OperationRead, common.OperationUpdate, common.OperationDelete},
+			lclLg)
+	}
+
 	lclLg.WithFields(bark.Fields{
 		`Type`:                        destDesc.GetType(),
 		`Status`:                      destDesc.GetStatus(),
@@ -1101,6 +1126,12 @@ func (h *Frontend) DeleteConsumerGroup(ctx thrift.Context, deleteRequest *c.Dele
 		common.TagCnsPth: common.FmtCnsPth(deleteRequest.GetConsumerGroupName()),
 	})
 
+	authResource := common.GetResourceURNOperateConsumerGroup(h.SCommon, deleteRequest.DestinationPath, deleteRequest.ConsumerGroupName)
+	_, err = h.checkAuth(ctx, authResource, common.OperationDelete, lclLg)
+	if err != nil {
+		return err
+	}
+
 	// Request to controller
 	cClient, err := h.getControllerClient()
 	if err != nil {
@@ -1174,20 +1205,31 @@ func (h *Frontend) CreateConsumerGroup(ctx thrift.Context, createRequest *c.Crea
 		return nil, err
 	}
 
-	// Add Read/Update/Delete permissions for the current user on the consumer group
-	cgResource := common.GetResourceURNOperateConsumerGroup(h.SCommon, createRequest.DestinationPath, createRequest.ConsumerGroupName)
-	h.addPermissions(authSubject,
-		cgResource,
-		[]common.Operation{common.OperationRead, common.OperationUpdate, common.OperationDelete},
-		lclLg)
+	// Add permissions for the current user and owner on the consumer group
+	subjects := []common.Subject{authSubject}
+	if createRequest.OwnerEmail != nil && *createRequest.OwnerEmail != "" && *createRequest.OwnerEmail != authSubject.Name {
+		ownerSubject := common.Subject{
+			Type: common.SubjectTypeEmployee,
+			Name: *createRequest.OwnerEmail,
+		}
+		subjects = append(subjects, ownerSubject)
+	}
 
-	if _cgDesc.DeadLetterQueueDestinationUUID != nil && *_cgDesc.DeadLetterQueueDestinationUUID != "" {
-		// Add Read/Update permissions for the current user on the DLQ destination
-		dlqDstResource := common.GetResourceURNOperateDestination(h.SCommon, _cgDesc.DeadLetterQueueDestinationUUID)
-		h.addPermissions(authSubject,
-			dlqDstResource,
-			[]common.Operation{common.OperationRead, common.OperationUpdate},
+	for _, subject := range subjects {
+		cgResource := common.GetResourceURNOperateConsumerGroup(h.SCommon, createRequest.DestinationPath, createRequest.ConsumerGroupName)
+		h.addPermissions(subject,
+			cgResource,
+			[]common.Operation{common.OperationRead, common.OperationUpdate, common.OperationDelete},
 			lclLg)
+
+		if _cgDesc.DeadLetterQueueDestinationUUID != nil && *_cgDesc.DeadLetterQueueDestinationUUID != "" {
+			// Add Read/Update permissions for the user on the DLQ destination
+			dlqDstResource := common.GetResourceURNOperateDestination(h.SCommon, _cgDesc.DeadLetterQueueDestinationUUID)
+			h.addPermissions(subject,
+				dlqDstResource,
+				[]common.Operation{common.OperationRead, common.OperationUpdate},
+				lclLg)
+		}
 	}
 
 	lclLg.Info("Created consumer group")
@@ -1227,6 +1269,29 @@ func (h *Frontend) UpdateConsumerGroup(ctx thrift.Context, updateRequest *c.Upda
 	if cgDesc == nil { // err != nil
 		lclLg.WithField(common.TagErr, err).Error(`Error updating consumer group`)
 		return nil, err
+	}
+
+	if updateRequest.OwnerEmail != nil && *updateRequest.OwnerEmail != "" {
+		// Add permissions for the owner on the consumer group
+		// TODO check whether the new owner is different from old one, delete old permissions for old owner
+		ownerSubject := common.Subject{
+			Type: common.SubjectTypeEmployee,
+			Name: *updateRequest.OwnerEmail,
+		}
+		cgResource := common.GetResourceURNOperateConsumerGroup(h.SCommon, updateRequest.DestinationPath, updateRequest.ConsumerGroupName)
+		h.addPermissions(ownerSubject,
+			cgResource,
+			[]common.Operation{common.OperationRead, common.OperationUpdate, common.OperationDelete},
+			lclLg)
+
+		if _cgDesc.DeadLetterQueueDestinationUUID != nil && *_cgDesc.DeadLetterQueueDestinationUUID != "" {
+			// Add Read/Update permissions for the owner on the DLQ destination
+			dlqDstResource := common.GetResourceURNOperateDestination(h.SCommon, _cgDesc.DeadLetterQueueDestinationUUID)
+			h.addPermissions(ownerSubject,
+				dlqDstResource,
+				[]common.Operation{common.OperationRead, common.OperationUpdate},
+				lclLg)
+		}
 	}
 
 	lclLg.Info("Updated consumer group")
@@ -1732,6 +1797,10 @@ func (h *Frontend) checkAuth(ctx thrift.Context, authResource string, operation 
 }
 
 func (h *Frontend) addPermissions(authSubject common.Subject, authResource string, operations []common.Operation, logger bark.Logger) error {
+	if authSubject.Name == "" {
+		return nil
+	}
+
 	for _, operation := range operations {
 		err := h.GetAuthManager().AddPermission(authSubject, operation, common.Resource(authResource))
 		if err != nil {
