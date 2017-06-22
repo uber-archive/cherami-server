@@ -62,7 +62,6 @@ type (
 		creditNotifyCh      <-chan int32 // read only channel to get credits
 		localCreditCh       chan int32   // local credit channel which is used to get credits from redelivery cache
 		startingSequence    common.SequenceNumber
-		time                common.TimeSource
 
 		lk     sync.RWMutex
 		opened bool
@@ -72,8 +71,9 @@ type (
 		// one message at a time, and read on close after the pumps
 		// are done; therefore, these do not require to be protected
 		// for concurrent access
-		sentCreds int32 // total credits sent
-		recvMsgs  int32 // total messages received
+		sentCreds     int32 // total credits sent
+		recvMsgs      int32 // total messages received
+		skipOlderMsgs int32 // messages skipped
 
 		// consumerM3Client for metrics per consumer group
 		consumerM3Client metrics.Client
@@ -97,7 +97,6 @@ func newReplicaConnection(stream storeStream.BStoreOpenReadStreamOutCall, extCac
 		localCreditCh:       make(chan int32, 5),
 		logger:              logger.WithFields(bark.Fields{common.TagModule: `replConn`}),
 		startingSequence:    startingSequence,
-		time:                common.NewRealTimeSource(),
 		consumerM3Client:    extCache.consumerM3Client,
 	}
 
@@ -114,7 +113,11 @@ func (conn *replicaConnection) open() {
 		go conn.writeCreditsPump()
 
 		conn.opened = true
-		conn.logger.Info("replConn opened")
+		conn.logger.WithFields(bark.Fields{
+			`delay`:            conn.extCache.delay,
+			`skipOlder`:        conn.extCache.skipOlder,
+			`startingSequence`: conn.startingSequence,
+		}).Info("replConn opened")
 	}
 }
 
@@ -134,8 +137,9 @@ func (conn *replicaConnection) close(err error) {
 		}
 
 		conn.logger.WithFields(bark.Fields{
-			`sentCreds`: conn.sentCreds,
-			`recvMsgs`:  conn.recvMsgs,
+			`sentCreds`:     conn.sentCreds,
+			`recvMsgs`:      conn.recvMsgs,
+			`skipOlderMsgs`: conn.skipOlderMsgs,
 		}).Info("replConn closed")
 	}
 	conn.lk.Unlock()
@@ -188,10 +192,11 @@ func (conn *replicaConnection) readMessagesPump() {
 	// monotonically increasing
 	var lastSeqNum = int64(conn.startingSequence)
 
-	var skipOlderNanos = common.UnixNanoTime(conn.extCache.skipOlder * int32(time.Second))
-	var delayNanos = common.UnixNanoTime(conn.extCache.delay * int32(time.Second))
+	// Note: the skip-older should apply to the 'visibility time' (ie, after the delay is added). so
+	// we push out the skip-older by the delay amount, if any
+	var skipOlderNanos = common.UnixNanoTime(conn.extCache.skipOlder+conn.extCache.delay) * common.UnixNanoTime(time.Second)
+	var delayNanos = common.UnixNanoTime(conn.extCache.delay) * common.UnixNanoTime(time.Second)
 	var delayTimer = common.NewTimer(time.Hour)
-
 loop:
 	for {
 		if localReadMsgs >= minReadBatchSize {
@@ -264,7 +269,10 @@ loop:
 
 				// check if the messages have already 'expired'; ie, if it falls outside the
 				// skip-older window. ignore (ie, don't skip any messages), if skip-older is '0'.
-				if skipOlderNanos > 0 && enqueueTime < (now-skipOlderNanos) {
+				// NB: messages coming from KFC may not have enqueue-time set; the logic below
+				// ignores (ie, does not skip) messages that have no/zero enqueue-time.
+				if skipOlderNanos > 0 && enqueueTime > 0 && enqueueTime < (now-skipOlderNanos) {
+					conn.skipOlderMsgs++
 					continue loop
 				}
 
