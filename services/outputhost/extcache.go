@@ -241,8 +241,15 @@ func (extCache *extentCache) loadReplicaStream(startAddress int64, startSequence
 			// time that was specified, by offsetting the time appropriately. we apply the 'start-from'
 			// and 'skip-older' to the "visibility time" (enqueue-time + delay) of the message as opposed
 			// to the enqueue-time.
-			startFrom := common.MinInt64(extCache.startFrom.Add(-extCache.delay).UnixNano(),
-				time.Now().Add(-extCache.skipOlder).Add(-extCache.delay).UnixNano())
+
+			var startFrom int64
+
+			// compute start-from as the max(skip-older-time, start-from), adjusting for 'delay', if any
+			if time.Now().Add(-extCache.skipOlder).After(extCache.startFrom) {
+				startFrom = time.Now().Add(-extCache.skipOlder).Add(-extCache.delay).UnixNano()
+			} else {
+				startFrom = extCache.startFrom.Add(-extCache.delay).UnixNano()
+			}
 
 			// TODO: if the consumer group wants to start from the beginning, we should still calculate the earliest address
 			//       that they can get. To do otherwise means that will will get spurious 'skipped messages' warnings

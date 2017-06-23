@@ -1314,8 +1314,14 @@ func (s *OutputHostSuite) TestOutputHostSkipOlder() {
 func (s *OutputHostSuite) TestOutputHostDelay() {
 
 	count := 60
-	visibleCount := 20
-	delay := int32(60) // seconds
+	delay := int32(60)     // seconds
+	skipOlder := int32(60) // seconds
+
+	skipCount := 20
+	nonSkipCount := count - skipCount
+
+	startFrom := time.Now().UnixNano()
+	startFromExpected := startFrom - int64(delay)*int64(time.Second)
 
 	outputHost, _ := NewOutputHost("outputhost-test", s.mockService, s.mockMeta, nil, nil, nil)
 	httpRequest := utilGetHTTPRequestWithPath("foo")
@@ -1332,6 +1338,8 @@ func (s *OutputHostSuite) TestOutputHostDelay() {
 	cgDesc.ConsumerGroupUUID = common.StringPtr(uuid.New())
 	cgDesc.DestinationUUID = common.StringPtr(destUUID)
 	cgDesc.DelaySeconds = common.Int32Ptr(delay)
+	cgDesc.SkipOlderMessagesSeconds = common.Int32Ptr(skipOlder)
+	cgDesc.StartFrom = common.Int64Ptr(startFrom)
 	s.mockMeta.On("ReadConsumerGroup", mock.Anything, mock.Anything).Return(cgDesc, nil).Twice()
 
 	cgExt := shared.NewConsumerGroupExtent()
@@ -1343,13 +1351,22 @@ func (s *OutputHostSuite) TestOutputHostDelay() {
 	s.mockMeta.On("ReadConsumerGroupExtents", mock.Anything, mock.Anything).Return(cgRes, nil).Once()
 	s.mockRead.On("Write", mock.Anything).Return(nil)
 
-	// set enqueue times older that 'now - delay'
-	tVisible := time.Now().UnixNano() - int64(delay)*int64(time.Second)
+	s.mockStore.On("GetAddressFromTimestamp", mock.Anything, mock.Anything).Return(&store.GetAddressFromTimestampResult_{
+		Address:        common.Int64Ptr(1234000000),
+		SequenceNumber: common.Int64Ptr(1),
+		Sealed:         common.BoolPtr(false),
+	}, nil).Run(func(args mock.Arguments) {
+
+		req := args.Get(1).(*store.GetAddressFromTimestampRequest)
+		s.Equal(req.GetTimestamp(), startFromExpected)
+	})
+
+	tSkipOlder := time.Now().UnixNano() - int64(skipOlder)*int64(time.Second)
+	tVisible := tSkipOlder - int64(delay)*int64(time.Second)
 
 	writeDoneCh := make(chan struct{})
 
 	var recvMsgs int
-
 	s.mockCons.On("Write", mock.Anything).Return(nil).Run(func(args mock.Arguments) {
 
 		ohc := args.Get(0).(*cherami.OutputHostCommand)
@@ -1360,11 +1377,12 @@ func (s *OutputHostSuite) TestOutputHostDelay() {
 			msg := ohc.GetMessage()
 
 			// compute visible time
-			tVisible, now := msg.GetEnqueueTimeUtc()+int64(delay)*int64(time.Second), time.Now().UnixNano()
+			msgVisibilityTime := msg.GetEnqueueTimeUtc() + int64(delay)*int64(time.Second)
 
-			s.True(tVisible < now) // ensure the message is expected to be 'visible'
+			s.True(tSkipOlder < msgVisibilityTime)
+			s.True(time.Now().UnixNano() > msgVisibilityTime) // ensure the message is expected to be 'visible'
 
-			if recvMsgs == count {
+			if recvMsgs == nonSkipCount {
 				close(writeDoneCh)
 			}
 		}
@@ -1389,7 +1407,8 @@ func (s *OutputHostSuite) TestOutputHostDelay() {
 		aMsg.SequenceNumber = common.Int64Ptr(seqnum)
 		// set the enqueue-time such that 'visibleCount' messages are readily visible (ie, past delay)
 		// while the rest get visible one every 100ms
-		aMsg.EnqueueTimeUtc = common.Int64Ptr(tVisible - (int64(visibleCount)-seqnum)*int64(100*time.Millisecond))
+		aMsg.EnqueueTimeUtc = common.Int64Ptr(tVisible - (int64(skipCount)-seqnum)*int64(100*time.Millisecond))
+
 		pMsg := cherami.NewPutMessage()
 		pMsg.ID = common.StringPtr(strconv.Itoa(int(seqnum)))
 		pMsg.Data = []byte(fmt.Sprintf("seqnum=%d", seqnum))
@@ -1443,7 +1462,7 @@ func (s *OutputHostSuite) TestOutputHostDelay() {
 	<-streamDoneCh
 
 	s.mockHTTPResponse.AssertNotCalled(s.T(), "WriteHeader", mock.Anything)
-	s.Equal(int64(count), conn.sentMsgs, "wrong sentMsgs count")
+	s.Equal(int64(nonSkipCount), conn.sentMsgs, "wrong sentMsgs count")
 	s.Equal(conn.sentMsgs, conn.sentToMsgCache, "sentMsgs != sentToMsgCache")
 	outputHost.Shutdown()
 }
