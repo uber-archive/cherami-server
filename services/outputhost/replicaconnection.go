@@ -192,12 +192,6 @@ func (conn *replicaConnection) readMessagesPump() {
 	// monotonically increasing
 	var lastSeqNum = int64(conn.startingSequence)
 
-	// if skipOlder is '0', then don't skip any messages
-	var doSkipOlder bool = conn.extCache.skipOlder > 0
-	var doDelay bool = conn.extCache.delay > 0
-
-	// Note: the skip-older should apply to the 'visibility time' (ie, after the delay is added). so
-	// we push out the skip-older by the delay amount, if any
 	var skipOlderNanos = int64(conn.extCache.skipOlder)
 	var delayNanos = int64(conn.extCache.delay)
 	var delayTimer = common.NewTimer(time.Hour)
@@ -232,6 +226,7 @@ loop:
 			msg := rmc.GetMessage()
 			msgSeqNum := common.SequenceNumber(msg.Message.GetSequenceNumber())
 			msgAddr := msg.GetAddress()
+			visibilityTime := msg.Message.GetEnqueueTimeUtc()
 
 			// XXX: Sequence number check to make sure we get monotonically increasing
 			// sequence number.
@@ -266,12 +261,10 @@ loop:
 
 			cMsg.AckId = common.StringPtr(conn.extCache.ackMgr.getNextAckID(storeHostAddress(msgAddr), msgSeqNum))
 
-			if conn.extCache.destType != shared.DestinationType_TIMER {
+			if conn.extCache.destType != shared.DestinationType_TIMER && visibilityTime > 0 {
 
-				// compute the 'visibility-time' of the message, taking into account the specified 'delay', if any.
-				visibilityTime := msg.Message.GetEnqueueTimeUtc()
-
-				if doDelay && visibilityTime > 0 {
+				// offset visibilityTime by the specified delay, if any
+				if delayNanos > 0 {
 					visibilityTime += delayNanos
 				}
 
@@ -281,7 +274,7 @@ loop:
 				// skip-older window. ignore (ie, don't skip any messages), if skip-older is '0'.
 				// NB: messages coming from KFC may not have enqueue-time set; the logic below
 				// ignores (ie, does not skip) messages that have no/zero enqueue-time.
-				if doSkipOlder && (visibilityTime > 0) && (visibilityTime < (now - skipOlderNanos)) {
+				if skipOlderNanos > 0 && (visibilityTime < (now - skipOlderNanos)) {
 
 					conn.skipOlderMsgs++
 					continue loop
@@ -289,7 +282,7 @@ loop:
 
 				// check if this is a delayed-cg, and if so delay messages appropriately
 				// compute visibility time based on the enqueue-time and specified delay
-				if doDelay && visibilityTime > now {
+				if delayNanos > 0 && visibilityTime > now {
 
 					delayTimer.Reset(time.Duration(visibilityTime - now))
 
