@@ -71,8 +71,9 @@ type (
 		// one message at a time, and read on close after the pumps
 		// are done; therefore, these do not require to be protected
 		// for concurrent access
-		sentCreds int32 // total credits sent
-		recvMsgs  int32 // total messages received
+		sentCreds     int32 // total credits sent
+		recvMsgs      int32 // total messages received
+		skipOlderMsgs int32 // messages skipped
 
 		// consumerM3Client for metrics per consumer group
 		consumerM3Client metrics.Client
@@ -112,7 +113,11 @@ func (conn *replicaConnection) open() {
 		go conn.writeCreditsPump()
 
 		conn.opened = true
-		conn.logger.Info("replConn opened")
+		conn.logger.WithFields(bark.Fields{
+			`delay`:            conn.extCache.delay,
+			`skipOlder`:        conn.extCache.skipOlder,
+			`startingSequence`: conn.startingSequence,
+		}).Info("replConn opened")
 	}
 }
 
@@ -132,8 +137,9 @@ func (conn *replicaConnection) close(err error) {
 		}
 
 		conn.logger.WithFields(bark.Fields{
-			`sentCreds`: conn.sentCreds,
-			`recvMsgs`:  conn.recvMsgs,
+			`sentCreds`:     conn.sentCreds,
+			`recvMsgs`:      conn.recvMsgs,
+			`skipOlderMsgs`: conn.skipOlderMsgs,
 		}).Info("replConn closed")
 	}
 	conn.lk.Unlock()
@@ -186,124 +192,183 @@ func (conn *replicaConnection) readMessagesPump() {
 	// monotonically increasing
 	var lastSeqNum = int64(conn.startingSequence)
 
+	// if skipOlder is '0', then don't skip any messages
+	var doSkipOlder bool = conn.extCache.skipOlder > 0
+	var doDelay bool = conn.extCache.delay > 0
+
+	// Note: the skip-older should apply to the 'visibility time' (ie, after the delay is added). so
+	// we push out the skip-older by the delay amount, if any
+	var skipOlderNanos = int64(conn.extCache.skipOlder)
+	var delayNanos = int64(conn.extCache.delay)
+	var delayTimer = common.NewTimer(time.Hour)
+loop:
 	for {
-		select {
-		default:
-			if localReadMsgs >= minReadBatchSize {
-				// Issue more credits
-				select {
-				case conn.readMsgsCh <- int32(localReadMsgs):
-					localReadMsgs = 0
-				default:
-					// if we are unable to renew credits at this time accumulate it
-					conn.logger.WithField(`credits`, localReadMsgs).
-						Debug("readMessagesPump: blocked sending credits; accumulating credits to send later")
-				}
+		if localReadMsgs >= minReadBatchSize {
+			// Issue more credits
+			select {
+			case conn.readMsgsCh <- int32(localReadMsgs):
+				localReadMsgs = 0
+			default:
+				// if we are unable to renew credits at this time accumulate it
+				conn.logger.WithField(`credits`, localReadMsgs).
+					Debug("readMessagesPump: blocked sending credits; accumulating credits to send later")
+			}
+		}
+
+		rmc, err := conn.call.Read()
+		if err != nil {
+			// any error here means our stream is done. close the connection
+			conn.logger.WithField(common.TagErr, err).Error(`Error reading msg from store`)
+			go conn.close(err)
+			<-conn.closeChannel
+			return
+		}
+
+		hb.Beat()
+
+		switch rmc.GetType() {
+		case store.ReadMessageContentType_MESSAGE:
+
+			msg := rmc.GetMessage()
+			msgSeqNum := common.SequenceNumber(msg.Message.GetSequenceNumber())
+			msgAddr := msg.GetAddress()
+
+			// XXX: Sequence number check to make sure we get monotonically increasing
+			// sequence number.
+			// We just log and move forward
+			// XXX: Note we skip the first message check here because we can start from
+			// a bigger sequence number in case of restarts
+			if conn.extCache.destType == shared.DestinationType_TIMER {
+
+				// T471157 For timers, do not signal discontinuities to ack manager, since discontinuities are frequent
+				msgSeqNum = 0
+
+			} else if lastSeqNum+1 != int64(msgSeqNum) {
+
+				// FIXME: add metric to help alert this case
+				expectedSeqNum := 1 + lastSeqNum
+				skippedMessages := int64(msgSeqNum) - lastSeqNum
+
+				conn.logger.WithFields(bark.Fields{
+					"msgSeqNum":       msgSeqNum,
+					"expectedSeqNum":  expectedSeqNum,
+					"skippedMessages": skippedMessages,
+				}).Error("sequence number out of order")
 			}
 
-			rmc, err := conn.call.Read()
-			if err != nil {
-				// any error here means our stream is done. close the connection
-				conn.logger.WithField(common.TagErr, err).Error(`Error reading msg from store`)
-				go conn.close(err)
-				<-conn.closeChannel
-				return
-			}
+			// update the lastSeqNum to this value
+			lastSeqNum = msg.Message.GetSequenceNumber()
 
-			hb.Beat()
+			// convert this to an outMessage
+			cMsg := cherami.NewConsumerMessage()
+			cMsg.EnqueueTimeUtc = msg.Message.EnqueueTimeUtc
+			cMsg.Payload = msg.Message.Payload
 
-			switch rmc.GetType() {
-			case store.ReadMessageContentType_MESSAGE:
+			cMsg.AckId = common.StringPtr(conn.extCache.ackMgr.getNextAckID(storeHostAddress(msgAddr), msgSeqNum))
 
-				msg := rmc.GetMessage()
-				msgSeqNum := common.SequenceNumber(msg.Message.GetSequenceNumber())
+			if conn.extCache.destType != shared.DestinationType_TIMER {
 
-				// XXX: Sequence number check to make sure we get monotonically increasing
-				// sequence number.
-				// We just log and move forward
-				// XXX: Note we skip the first message check here because we can start from
-				// a bigger sequence number in case of restarts
-				if conn.extCache.destType != shared.DestinationType_TIMER {
-					if lastSeqNum+1 != int64(msgSeqNum) {
-						// FIXME: add metric to help alert this case
-						expectedSeqNum := 1 + lastSeqNum
-						skippedMessages := int64(msgSeqNum) - lastSeqNum
+				// compute the 'visibility-time' of the message, taking into account the specified 'delay', if any.
+				visibilityTime := msg.Message.GetEnqueueTimeUtc()
 
-						conn.logger.WithFields(bark.Fields{
-							"msgSeqNum":       msgSeqNum,
-							"expectedSeqNum":  expectedSeqNum,
-							"skippedMessages": skippedMessages,
-						}).Error("sequence number out of order")
-					}
-				} else {
-					// T471157 For timers, do not signal discontinuities to ack manager, since discontinuities are frequent
-					msgSeqNum = 0
+				if doDelay && visibilityTime > 0 {
+					visibilityTime += delayNanos
 				}
 
-				// update the lastSeqNum to this value
-				lastSeqNum = msg.Message.GetSequenceNumber()
+				now := time.Now().UnixNano()
 
-				// convert this to an outMessage
-				cMsg := cherami.NewConsumerMessage()
-				cMsg.EnqueueTimeUtc = msg.Message.EnqueueTimeUtc
-				cMsg.Payload = msg.Message.Payload
+				// check if the messages have already 'expired'; ie, if it falls outside the
+				// skip-older window. ignore (ie, don't skip any messages), if skip-older is '0'.
+				// NB: messages coming from KFC may not have enqueue-time set; the logic below
+				// ignores (ie, does not skip) messages that have no/zero enqueue-time.
+				if doSkipOlder && (visibilityTime > 0) && (visibilityTime < (now - skipOlderNanos)) {
 
-				cMsg.AckId = common.StringPtr(conn.extCache.ackMgr.getNextAckID(storeHostAddress(msg.GetAddress()), msgSeqNum))
-				// write the message to the msgsCh so that it can be delivered
-				// after being stored on the cache.
-				// 1. either there are no listeners
-				// 2. the buffer is full
-				// Wait until the there are some listeners or we are shutting down
-				select {
-				case conn.msgsCh <- cMsg:
-					// written successfully. Now accumulate credits
-					// TODO: one message is now assumed to take one credit
-					// we might need to change it to be based on size later.
-					// we accumulate a bunch of credits and then send it in a batch to store
-					conn.updateSuccessfulSendToMsgsCh(&localReadMsgs, int64(len(cMsg.Payload.GetData())))
-				default:
-					// we were unable to write it above which probably means the channel is full
-					// now do it in a blocking way except shutdown.
+					conn.skipOlderMsgs++
+					continue loop
+				}
+
+				// check if this is a delayed-cg, and if so delay messages appropriately
+				// compute visibility time based on the enqueue-time and specified delay
+				if doDelay && visibilityTime > now {
+
+					delayTimer.Reset(time.Duration(visibilityTime - now))
+
+					// wait unil the message should be made 'visible'
 					select {
-					case conn.msgsCh <- cMsg:
-						// written successfully. Now accumulate credits
-						conn.updateSuccessfulSendToMsgsCh(&localReadMsgs, int64(len(cMsg.Payload.GetData())))
-					// TODO: Make sure we listen on the close channel if and only if, all the
-					// consumers are gone as well. (i.e, separate out the close channel).
+					case <-delayTimer.C: // sleep until delay expiry
+						// continue down, to send message to cache
+
 					case <-conn.closeChannel:
 						conn.logger.WithFields(bark.Fields{
 							common.TagMsgID: common.FmtMsgID(cMsg.GetAckId()),
-							`Offset`:        msg.GetAddress(),
-						}).Info("writing msg to the client channel failed because of shutdown.")
+							`Offset`:        msgAddr,
+						}).Info("aborting delay and failing msg because of shutdown")
 						// We need to update the ackMgr here to *not* have this message in the local map
 						// since we couldn't even write this message out to the msgsCh.
 						// Note: we need to just update this last message because this is a synchronous
 						// pump which reads message after message and once we are here we immediately break
 						// the pump. So there is absolute guarantee that we cannot call getNextAckID() on this
 						// pump parallely.
-						conn.extCache.ackMgr.resetMsg(msg.GetAddress())
+						conn.extCache.ackMgr.resetMsg(msgAddr)
 						return
 					}
 				}
-
-			case store.ReadMessageContentType_SEALED:
-
-				seal := rmc.GetSealed()
-				conn.logger.WithField(common.TagSeq, seal.GetSequenceNumber()).Info(`extent seal`)
-				// Notify the extent cache with an extent sealed error so that
-				// it can notify the ackMgr and wait for the extent to be consumed
-				go conn.close(seal)
-				return
-			case store.ReadMessageContentType_ERROR:
-
-				msgErr := rmc.GetError()
-				conn.logger.WithField(common.TagErr, msgErr.GetMessage()).Error(`received error from storehost`)
-				// close the connection
-				go conn.close(err)
-				return
-			default:
-				conn.logger.WithField(`Type`, rmc.GetType()).Error(`received ReadMessageContent with unrecognized type`)
 			}
+
+			// write the message to the msgsCh so that it can be delivered
+			// after being stored on the cache.
+			// 1. either there are no listeners
+			// 2. the buffer is full
+			// Wait until the there are some listeners or we are shutting down
+			select {
+			case conn.msgsCh <- cMsg:
+				// written successfully. Now accumulate credits
+				// TODO: one message is now assumed to take one credit
+				// we might need to change it to be based on size later.
+				// we accumulate a bunch of credits and then send it in a batch to store
+				conn.updateSuccessfulSendToMsgsCh(&localReadMsgs, int64(len(cMsg.Payload.GetData())))
+			default:
+				// we were unable to write it above which probably means the channel is full
+				// now do it in a blocking way except shutdown.
+				select {
+				case conn.msgsCh <- cMsg:
+					// written successfully. Now accumulate credits
+					conn.updateSuccessfulSendToMsgsCh(&localReadMsgs, int64(len(cMsg.Payload.GetData())))
+				// TODO: Make sure we listen on the close channel if and only if, all the
+				// consumers are gone as well. (i.e, separate out the close channel).
+				case <-conn.closeChannel:
+					conn.logger.WithFields(bark.Fields{
+						common.TagMsgID: common.FmtMsgID(cMsg.GetAckId()),
+						`Offset`:        msgAddr,
+					}).Info("writing msg to the client channel failed because of shutdown.")
+					// We need to update the ackMgr here to *not* have this message in the local map
+					// since we couldn't even write this message out to the msgsCh.
+					// Note: we need to just update this last message because this is a synchronous
+					// pump which reads message after message and once we are here we immediately break
+					// the pump. So there is absolute guarantee that we cannot call getNextAckID() on this
+					// pump parallely.
+					conn.extCache.ackMgr.resetMsg(msgAddr)
+					return
+				}
+			}
+
+		case store.ReadMessageContentType_SEALED:
+
+			seal := rmc.GetSealed()
+			conn.logger.WithField(common.TagSeq, seal.GetSequenceNumber()).Info(`extent seal`)
+			// Notify the extent cache with an extent sealed error so that
+			// it can notify the ackMgr and wait for the extent to be consumed
+			go conn.close(seal)
+			return
+		case store.ReadMessageContentType_ERROR:
+
+			msgErr := rmc.GetError()
+			conn.logger.WithField(common.TagErr, msgErr.GetMessage()).Error(`received error from storehost`)
+			// close the connection
+			go conn.close(err)
+			return
+		default:
+			conn.logger.WithField(`Type`, rmc.GetType()).Error(`received ReadMessageContent with unrecognized type`)
 		}
 	}
 }
