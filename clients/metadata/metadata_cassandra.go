@@ -3111,9 +3111,9 @@ func (s *CassandraMetadataService) MoveExtent(ctx thrift.Context, request *m.Mov
 		return err
 	}
 
-	// Can't move the extent if it is not in the SEALED state, since it would interfere with the seal.
+	// Can't move the extent if it is not in the SEALED/CONSUMED state, since it would interfere with the seal.
 	status := stats.GetExtentStats().GetStatus()
-	if status != shared.ExtentStatus_SEALED {
+	if status != shared.ExtentStatus_SEALED && status != shared.ExtentStatus_CONSUMED {
 		return &m.IllegalStateError{Message: fmt.Sprintf("Cannot move extent, extentStatus=%v", status)}
 	}
 

@@ -25,6 +25,7 @@ language: go
 directories:
     - $HOME/.glide/cache
 go:
+  - 1.8
   - 1.7
 
 env:

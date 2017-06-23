@@ -1027,6 +1027,7 @@ func (s *CassandraSuite) TestMoveExtent() {
 		LockTimeoutSeconds:       common.Int32Ptr(10),
 		MaxDeliveryCount:         common.Int32Ptr(5),
 		SkipOlderMessagesSeconds: common.Int32Ptr(60),
+		DelaySeconds:             common.Int32Ptr(60),
 		OwnerEmail:               common.StringPtr("consumer_test@uber.com"),
 	}
 
@@ -1671,6 +1672,7 @@ func assertConsumerGroupsEqual(s *CassandraSuite, expected, got *shared.Consumer
 	s.Equal(expected.GetLockTimeoutSeconds(), got.GetLockTimeoutSeconds(), "Wrong LockTimeoutSeconds")
 	s.Equal(expected.GetMaxDeliveryCount(), got.GetMaxDeliveryCount(), "Wrong MaxDeliveryCount")
 	s.Equal(expected.GetSkipOlderMessagesSeconds(), got.GetSkipOlderMessagesSeconds(), "Wrong SkipOlderMessagesSeconds")
+	s.Equal(expected.GetDelaySeconds(), got.GetDelaySeconds(), "Wrong DelaySeconds")
 	s.Equal(expected.GetOwnerEmail(), got.GetOwnerEmail(), "Wrong OwnerEmail")
 	s.Equal(expected.GetDeadLetterQueueDestinationUUID(), got.GetDeadLetterQueueDestinationUUID(), "Wrong DeadLetterQueueDestinationUUID")
 	s.Equal(expected.GetActiveZone(), got.GetActiveZone(), "Wrong ActiveZone")
@@ -1693,6 +1695,7 @@ func (s *CassandraSuite) TestDeleteConsumerGroupDeletesDLQ() {
 		LockTimeoutSeconds:       common.Int32Ptr(10),
 		MaxDeliveryCount:         common.Int32Ptr(5),
 		SkipOlderMessagesSeconds: common.Int32Ptr(60),
+		DelaySeconds:             common.Int32Ptr(60),
 		OwnerEmail:               common.StringPtr("consumer_test@uber.com"),
 	}
 
@@ -1759,6 +1762,7 @@ func (s *CassandraSuite) TestConsumerGroupCRUD() {
 		LockTimeoutSeconds:       common.Int32Ptr(10),
 		MaxDeliveryCount:         common.Int32Ptr(5),
 		SkipOlderMessagesSeconds: common.Int32Ptr(60),
+		DelaySeconds:             common.Int32Ptr(60),
 		OwnerEmail:               common.StringPtr("consumer_test@uber.com"),
 		IsMultiZone:              common.BoolPtr(true),
 		ActiveZone:               common.StringPtr("zone1"),
@@ -1773,6 +1777,7 @@ func (s *CassandraSuite) TestConsumerGroupCRUD() {
 		LockTimeoutSeconds:       common.Int32Ptr(createReq.GetLockTimeoutSeconds()),
 		MaxDeliveryCount:         common.Int32Ptr(createReq.GetMaxDeliveryCount()),
 		SkipOlderMessagesSeconds: common.Int32Ptr(createReq.GetSkipOlderMessagesSeconds()),
+		DelaySeconds:             common.Int32Ptr(createReq.GetDelaySeconds()),
 		OwnerEmail:               common.StringPtr(createReq.GetOwnerEmail()),
 		IsMultiZone:              common.BoolPtr(createReq.GetIsMultiZone()),
 		ActiveZone:               common.StringPtr(createReq.GetActiveZone()),
@@ -1833,6 +1838,7 @@ func (s *CassandraSuite) TestConsumerGroupCRUD() {
 			LockTimeoutSeconds:       common.Int32Ptr(99),
 			MaxDeliveryCount:         common.Int32Ptr(99),
 			SkipOlderMessagesSeconds: common.Int32Ptr(100),
+			DelaySeconds:             common.Int32Ptr(100),
 			OwnerEmail:               common.StringPtr("consumer_test@uber.com"),
 		}
 
@@ -1846,6 +1852,7 @@ func (s *CassandraSuite) TestConsumerGroupCRUD() {
 		expectedCG.LockTimeoutSeconds = common.Int32Ptr(updateReq.GetLockTimeoutSeconds())
 		expectedCG.MaxDeliveryCount = common.Int32Ptr(updateReq.GetMaxDeliveryCount())
 		expectedCG.SkipOlderMessagesSeconds = common.Int32Ptr(updateReq.GetSkipOlderMessagesSeconds())
+		expectedCG.DelaySeconds = common.Int32Ptr(updateReq.GetDelaySeconds())
 		expectedCG.OwnerEmail = common.StringPtr(updateReq.GetOwnerEmail())
 		expectedCG.ActiveZone = common.StringPtr(updateReq.GetActiveZone())
 
@@ -1914,6 +1921,7 @@ func (s *CassandraSuite) TestCGCRUDOnPhantomDestination() {
 		LockTimeoutSeconds:       common.Int32Ptr(10),
 		MaxDeliveryCount:         common.Int32Ptr(5),
 		SkipOlderMessagesSeconds: common.Int32Ptr(6),
+		DelaySeconds:             common.Int32Ptr(6),
 		OwnerEmail:               common.StringPtr("consumer_test@uber.com"),
 	}
 
@@ -1929,6 +1937,7 @@ func (s *CassandraSuite) TestCGCRUDOnPhantomDestination() {
 		LockTimeoutSeconds:       common.Int32Ptr(99),
 		MaxDeliveryCount:         common.Int32Ptr(99),
 		SkipOlderMessagesSeconds: common.Int32Ptr(99),
+		DelaySeconds:             common.Int32Ptr(99),
 		OwnerEmail:               common.StringPtr("consumer_test@uber.com"),
 	}
 	_, err = s.client.UpdateConsumerGroup(nil, updateReq)
@@ -1968,6 +1977,7 @@ func (s *CassandraSuite) TestReCreateConsumerGroup() {
 		LockTimeoutSeconds:       common.Int32Ptr(10),
 		MaxDeliveryCount:         common.Int32Ptr(5),
 		SkipOlderMessagesSeconds: common.Int32Ptr(60),
+		DelaySeconds:             common.Int32Ptr(60),
 		OwnerEmail:               common.StringPtr("consumer_test@uber.com"),
 	}
 
@@ -2019,6 +2029,7 @@ func (s *CassandraSuite) TestListConsumerGroups() {
 			LockTimeoutSeconds:       common.Int32Ptr(10),
 			MaxDeliveryCount:         common.Int32Ptr(5),
 			SkipOlderMessagesSeconds: common.Int32Ptr(60),
+			DelaySeconds:             common.Int32Ptr(60),
 			OwnerEmail:               common.StringPtr("consumer_test@uber.com"),
 		}
 
@@ -2099,6 +2110,7 @@ func (s *CassandraSuite) TestListAllConsumerGroups() {
 			LockTimeoutSeconds:       common.Int32Ptr(10),
 			MaxDeliveryCount:         common.Int32Ptr(5),
 			SkipOlderMessagesSeconds: common.Int32Ptr(60),
+			DelaySeconds:             common.Int32Ptr(60),
 			OwnerEmail:               common.StringPtr("consumer_test@uber.com"),
 		}
 
@@ -2128,6 +2140,7 @@ func (s *CassandraSuite) TestListAllConsumerGroups() {
 					s.Equal(int32(10), gotCG.GetLockTimeoutSeconds())
 					s.Equal(int32(5), gotCG.GetMaxDeliveryCount())
 					s.Equal(int32(60), gotCG.GetSkipOlderMessagesSeconds())
+					s.Equal(int32(60), gotCG.GetDelaySeconds())
 					s.Equal(string("consumer_test@uber.com"), gotCG.GetOwnerEmail())
 					delete(groupMap, gotCG.GetConsumerGroupName())
 				}
@@ -2164,6 +2177,7 @@ func (s *CassandraSuite) TestSameCGNameOnDifferentDestinations() {
 		LockTimeoutSeconds:       common.Int32Ptr(10),
 		MaxDeliveryCount:         common.Int32Ptr(5),
 		SkipOlderMessagesSeconds: common.Int32Ptr(60),
+		DelaySeconds:             common.Int32Ptr(60),
 		OwnerEmail:               common.StringPtr("consumer_test@uber.com"),
 	}
 
