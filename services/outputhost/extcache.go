@@ -252,7 +252,7 @@ func (extCache *extentCache) loadReplicaStream(startAddress int64, startSequence
 				var startFrom int64
 
 				// compute start-from as the max(skip-older-time, start-from), adjusting for 'delay', if any
-				if time.Now().Add(-extCache.skipOlder).After(extCache.startFrom) {
+				if extCache.skipOlder > 0 && time.Now().Add(-extCache.skipOlder).After(extCache.startFrom) {
 					startFrom = time.Now().Add(-extCache.skipOlder).Add(-extCache.delay).UnixNano()
 				} else {
 					startFrom = extCache.startFrom.Add(-extCache.delay).UnixNano()
