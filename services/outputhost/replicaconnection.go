@@ -192,10 +192,14 @@ func (conn *replicaConnection) readMessagesPump() {
 	// monotonically increasing
 	var lastSeqNum = int64(conn.startingSequence)
 
+	// if skipOlder is '0', then don't skip any messages
+	var doSkipOlder bool = conn.extCache.skipOlder > 0
+	var doDelay bool = conn.extCache.delay > 0
+
 	// Note: the skip-older should apply to the 'visibility time' (ie, after the delay is added). so
 	// we push out the skip-older by the delay amount, if any
-	var skipOlderNanos = common.UnixNanoTime(conn.extCache.skipOlder+conn.extCache.delay) * common.UnixNanoTime(time.Second)
-	var delayNanos = common.UnixNanoTime(conn.extCache.delay) * common.UnixNanoTime(time.Second)
+	var skipOlderNanos = int64(conn.extCache.skipOlder)
+	var delayNanos = int64(conn.extCache.delay)
 	var delayTimer = common.NewTimer(time.Hour)
 loop:
 	for {
@@ -264,45 +268,49 @@ loop:
 
 			if conn.extCache.destType != shared.DestinationType_TIMER {
 
-				enqueueTime := common.UnixNanoTime(msg.Message.GetEnqueueTimeUtc())
-				now := common.Now()
+				// compute the 'visibility-time' of the message, taking into account the specified 'delay', if any.
+				visibilityTime := msg.Message.GetEnqueueTimeUtc()
+
+				if doDelay && visibilityTime > 0 {
+					visibilityTime += delayNanos
+				}
+
+				now := time.Now().UnixNano()
 
 				// check if the messages have already 'expired'; ie, if it falls outside the
 				// skip-older window. ignore (ie, don't skip any messages), if skip-older is '0'.
 				// NB: messages coming from KFC may not have enqueue-time set; the logic below
 				// ignores (ie, does not skip) messages that have no/zero enqueue-time.
-				if skipOlderNanos > 0 && enqueueTime > 0 && enqueueTime < (now-skipOlderNanos) {
+				if doSkipOlder && (visibilityTime > 0) && (visibilityTime < (now - skipOlderNanos)) {
+
 					conn.skipOlderMsgs++
 					continue loop
 				}
 
 				// check if this is a delayed-cg, and if so delay messages appropriately
-				if delayNanos > 0 {
+				// compute visibility time based on the enqueue-time and specified delay
+				if doDelay && visibilityTime > now {
 
-					// compute visibility time based on the enqueue-time and specified delay
-					if visibilityTime := enqueueTime + delayNanos; visibilityTime > now {
+					delayTimer.Reset(time.Duration(visibilityTime - now))
 
-						delayTimer.Reset(time.Duration(visibilityTime - now))
+					// wait unil the message should be made 'visible'
+					select {
+					case <-delayTimer.C: // sleep until delay expiry
+						// continue down, to send message to cache
 
-						// wait unil the message should be made 'visible'
-						select {
-						case <-delayTimer.C: // sleep until delay expiry
-							// continue down, to send message to cache
-
-						case <-conn.closeChannel:
-							conn.logger.WithFields(bark.Fields{
-								common.TagMsgID: common.FmtMsgID(cMsg.GetAckId()),
-								`Offset`:        msgAddr,
-							}).Info("aborting delay and failing msg because of shutdown")
-							// We need to update the ackMgr here to *not* have this message in the local map
-							// since we couldn't even write this message out to the msgsCh.
-							// Note: we need to just update this last message because this is a synchronous
-							// pump which reads message after message and once we are here we immediately break
-							// the pump. So there is absolute guarantee that we cannot call getNextAckID() on this
-							// pump parallely.
-							conn.extCache.ackMgr.resetMsg(msgAddr)
-							return
-						}
+					case <-conn.closeChannel:
+						conn.logger.WithFields(bark.Fields{
+							common.TagMsgID: common.FmtMsgID(cMsg.GetAckId()),
+							`Offset`:        msgAddr,
+						}).Info("aborting delay and failing msg because of shutdown")
+						// We need to update the ackMgr here to *not* have this message in the local map
+						// since we couldn't even write this message out to the msgsCh.
+						// Note: we need to just update this last message because this is a synchronous
+						// pump which reads message after message and once we are here we immediately break
+						// the pump. So there is absolute guarantee that we cannot call getNextAckID() on this
+						// pump parallely.
+						conn.extCache.ackMgr.resetMsg(msgAddr)
+						return
 					}
 				}
 			}

@@ -86,14 +86,14 @@ type extentCache struct {
 	// numExtents is the total number of extents within the CG. this is used to determine the initial credits
 	numExtents int
 
-	// startFrom is the offset to start from
-	startFrom int64
+	// startFrom is the time to start-from
+	startFrom time.Time
 
 	// skipOlder indicates that the CG wants to skip any messages older than this value, in seconds
-	skipOlder int32
+	skipOlder time.Duration
 
 	// delay indicates that the CG wants to delay every message by the specified value, in seconds
-	delay int32
+	delay time.Duration
 
 	// msgsCh is the channel where we write the message to the client as we read from replica
 	msgsCh chan<- *cherami.ConsumerMessage
@@ -161,7 +161,7 @@ var kafkaLogSetup sync.Once
 const extentLoadReportingInterval = 2 * time.Second
 
 // kafkaDefaultRetention is the default value of log.retention.hours in the Kafka system
-const kafkaDefaultRetention = common.UnixNanoTime(time.Hour * 24 * 7)
+const kafkaDefaultRetention = time.Hour * 24 * 7
 
 func (extCache *extentCache) load(
 	outputHostUUID,
@@ -169,7 +169,6 @@ func (extCache *extentCache) load(
 	cgName,
 	kafkaCluster string,
 	kafkaTopics []string,
-	startFrom common.UnixNanoTime,
 	metaClient metadata.TChanMetadataService,
 	cge *shared.ConsumerGroupExtent,
 	metricsClient metrics.Client,
@@ -186,7 +185,7 @@ func (extCache *extentCache) load(
 
 	if common.IsKafkaConsumerGroupExtent(cge) {
 		extCache.connectedStoreUUID = kafkaConnectedStoreUUID
-		extCache.connection, err = extCache.loadKafkaStream(cgName, outputHostUUID, startFrom, kafkaCluster, kafkaTopics, metricsClient)
+		extCache.connection, err = extCache.loadKafkaStream(cgName, outputHostUUID, kafkaCluster, kafkaTopics, metricsClient)
 	} else {
 		extCache.connection, extCache.pickedIndex, err =
 			extCache.loadReplicaStream(cge.GetAckLevelOffset(), common.SequenceNumber(cge.GetAckLevelSeqNo()), rand.Intn(len(extCache.storeUUIDs)))
@@ -237,8 +236,13 @@ func (extCache *extentCache) loadReplicaStream(startAddress int64, startSequence
 
 		// First try to start from the already set offset in metadata
 		if startAddress == 0 {
-			// If consumer group wants to start from a timestamp, get the address from the store
-			startFrom := extCache.startFrom
+			// If consumer group wants to start from a timestamp, get the address from the store.
+			// Note: we take into account any 'delay' that is associated with the CG and the 'skip-older'
+			// time that was specified, by offsetting the time appropriately. we apply the 'start-from'
+			// and 'skip-older' to the "visibility time" (enqueue-time + delay) of the message as opposed
+			// to the enqueue-time.
+			startFrom := common.MinInt64(extCache.startFrom.Add(-extCache.delay).UnixNano(),
+				time.Now().Add(-extCache.skipOlder).Add(-extCache.delay).UnixNano())
 
 			// TODO: if the consumer group wants to start from the beginning, we should still calculate the earliest address
 			//       that they can get. To do otherwise means that will will get spurious 'skipped messages' warnings
@@ -338,7 +342,6 @@ func (extCache *extentCache) loadReplicaStream(startAddress int64, startSequence
 func (extCache *extentCache) loadKafkaStream(
 	cgName string,
 	outputHostUUID string,
-	startFrom common.UnixNanoTime,
 	kafkaCluster string,
 	kafkaTopics []string,
 	metricsClient metrics.Client,
@@ -366,7 +369,8 @@ func (extCache *extentCache) loadKafkaStream(
 	// TODO: Use Sarama GetMetadata to get the list of partitions, then build the offset request
 	// to use with GetAvailableOffsets, and then "somehow" manually commit it so that sarama-cluster
 	// starts from the right place
-	if common.Now()-startFrom > kafkaDefaultRetention/2 {
+
+	if time.Now().Sub(extCache.startFrom) > kafkaDefaultRetention/2 {
 		cfg.Config.Consumer.Offsets.Initial = sarama.OffsetOldest
 	}
 
