@@ -1141,3 +1141,338 @@ func (s *OutputHostSuite) TestOutputHostReplicaRollover() {
 	s.Equal(conn.sentMsgs, conn.sentToMsgCache, "sentMsgs != sentToMsgCache")
 	outputHost.Shutdown()
 }
+
+func (s *OutputHostSuite) TestOutputHostSkipOlder() {
+
+	count := 60
+	skipCount := 20
+	nonSkipCount := count - skipCount
+	skipOlder := 60 * time.Second
+
+	outputHost, _ := NewOutputHost("outputhost-test", s.mockService, s.mockMeta, nil, nil, nil)
+	httpRequest := utilGetHTTPRequestWithPath("foo")
+
+	destUUID := uuid.New()
+	destDesc := shared.NewDestinationDescription()
+	destDesc.Path = common.StringPtr("/foo/bar")
+	destDesc.DestinationUUID = common.StringPtr(destUUID)
+	destDesc.Status = common.InternalDestinationStatusPtr(shared.DestinationStatus_ENABLED)
+	s.mockMeta.On("ReadDestination", mock.Anything, mock.Anything).Return(destDesc, nil).Once()
+	s.mockMeta.On("ReadExtentStats", mock.Anything, mock.Anything).Return(nil, fmt.Errorf(`foo`))
+
+	cgDesc := shared.NewConsumerGroupDescription()
+	cgDesc.ConsumerGroupUUID = common.StringPtr(uuid.New())
+	cgDesc.DestinationUUID = common.StringPtr(destUUID)
+	cgDesc.SkipOlderMessagesSeconds = common.Int32Ptr(int32(skipOlder.Seconds()))
+	s.mockMeta.On("ReadConsumerGroup", mock.Anything, mock.Anything).Return(cgDesc, nil).Twice()
+
+	cgExt := shared.NewConsumerGroupExtent()
+	cgExt.ExtentUUID = common.StringPtr(uuid.New())
+	cgExt.StoreUUIDs = []string{"mock"}
+
+	cgRes := &shared.ReadConsumerGroupExtentsResult_{}
+	cgRes.Extents = append(cgRes.Extents, cgExt)
+	s.mockMeta.On("ReadConsumerGroupExtents", mock.Anything, mock.Anything).Return(cgRes, nil).Once()
+	s.mockRead.On("Write", mock.Anything).Return(nil)
+
+	s.mockStore.On("GetAddressFromTimestamp", mock.Anything, mock.Anything).Once().Return(&store.GetAddressFromTimestampResult_{
+		Address:        common.Int64Ptr(1234000000),
+		SequenceNumber: common.Int64Ptr(1),
+		Sealed:         common.BoolPtr(false),
+	}, nil).Run(func(args mock.Arguments) {
+
+		req := args.Get(1).(*store.GetAddressFromTimestampRequest)
+		s.True(req.GetTimestamp() <= time.Now().Add(-skipOlder).UnixNano())
+	})
+
+	// set enqueue times older that 'now - skip-older'
+	tSkipOlder := time.Now().UnixNano() - int64(skipOlder)
+
+	writeDoneCh := make(chan struct{})
+
+	var recvMsgs int
+	s.mockCons.On("Write", mock.Anything).Return(nil).Run(func(args mock.Arguments) {
+
+		ohc := args.Get(0).(*cherami.OutputHostCommand)
+
+		if ohc.GetType() == cherami.OutputHostCommandType_MESSAGE {
+
+			recvMsgs++
+			msg := ohc.GetMessage()
+			tEnq := msg.GetEnqueueTimeUtc()
+			s.True(tEnq == 0 || tEnq > tSkipOlder) // ensure all messages are strictly over the skip-older threshold
+
+			if recvMsgs == nonSkipCount {
+				close(writeDoneCh)
+			}
+		}
+
+	}).Times(count)
+
+	cFlow := cherami.NewControlFlow()
+	cFlow.Credits = common.Int32Ptr(int32(count))
+
+	connOpenedCh := make(chan struct{})
+	s.mockCons.On("Read").Return(cFlow, nil).Once().Run(func(args mock.Arguments) { close(connOpenedCh) })
+
+	rmc := store.NewReadMessageContent()
+	rmc.Type = store.ReadMessageContentTypePtr(store.ReadMessageContentType_MESSAGE)
+
+	var seqnum int64
+
+	// send 'skipCount' messages older than tSkipOlder
+	s.mockRead.On("Read").Return(rmc, nil).Run(func(args mock.Arguments) {
+
+		seqnum++
+		aMsg := store.NewAppendMessage()
+		aMsg.SequenceNumber = common.Int64Ptr(seqnum)
+		aMsg.EnqueueTimeUtc = common.Int64Ptr(tSkipOlder - (int64(skipCount)-seqnum)*int64(time.Second))
+		pMsg := cherami.NewPutMessage()
+		pMsg.ID = common.StringPtr(strconv.Itoa(int(seqnum)))
+		pMsg.Data = []byte(fmt.Sprintf("seqnum=%d", seqnum))
+		aMsg.Payload = pMsg
+		rMsg := store.NewReadMessage()
+		rMsg.Message = aMsg
+		rMsg.Address = common.Int64Ptr(1234000000 + seqnum)
+		rmc.Message = rMsg
+
+	}).Times(skipCount)
+
+	// send 'nonSkipCount - 1' messages that are current
+	s.mockRead.On("Read").Return(rmc, nil).Run(func(args mock.Arguments) {
+
+		seqnum++
+		aMsg := store.NewAppendMessage()
+		aMsg.SequenceNumber = common.Int64Ptr(seqnum)
+		aMsg.EnqueueTimeUtc = common.Int64Ptr(time.Now().UnixNano())
+		pMsg := cherami.NewPutMessage()
+		pMsg.ID = common.StringPtr(strconv.Itoa(int(seqnum)))
+		pMsg.Data = []byte(fmt.Sprintf("seqnum=%d", seqnum))
+		aMsg.Payload = pMsg
+		rMsg := store.NewReadMessage()
+		rMsg.Message = aMsg
+		rMsg.Address = common.Int64Ptr(1234000000 + seqnum)
+		rmc.Message = rMsg
+
+	}).Times(nonSkipCount - 1)
+
+	// send one message with no enqueue-time (that we should receive)
+	s.mockRead.On("Read").Return(rmc, nil).Run(func(args mock.Arguments) {
+
+		seqnum++
+		aMsg := store.NewAppendMessage()
+		aMsg.SequenceNumber = common.Int64Ptr(seqnum)
+		// aMsg.EnqueueTimeUtc = common.Int64Ptr(tSkipOlder - (int64(skipCount)-seqnum)*int64(time.Second))
+		pMsg := cherami.NewPutMessage()
+		pMsg.ID = common.StringPtr(strconv.Itoa(int(seqnum)))
+		pMsg.Data = []byte(fmt.Sprintf("seqnum=%d", seqnum))
+		aMsg.Payload = pMsg
+		rMsg := store.NewReadMessage()
+		rMsg.Message = aMsg
+		rMsg.Address = common.Int64Ptr(1234000000 + seqnum)
+		rmc.Message = rMsg
+
+	}).Times(1)
+
+	s.mockRead.On("Read").Return(&store.ReadMessageContent{
+		Type:   store.ReadMessageContentTypePtr(store.ReadMessageContentType_SEALED),
+		Sealed: store.NewExtentSealedError(),
+	}, nil).Once()
+
+	streamDoneCh := make(chan struct{})
+	go func() {
+		outputHost.OpenConsumerStreamHandler(s.mockHTTPResponse, httpRequest)
+		close(streamDoneCh)
+	}()
+
+	// close the read stream
+	creditUnblockCh := make(chan struct{})
+	s.mockRead.On("Read").Return(nil, io.EOF)
+	s.mockCons.On("Read").Return(nil, io.EOF).Run(func(args mock.Arguments) {
+		<-writeDoneCh
+		<-creditUnblockCh
+	})
+
+	<-connOpenedCh // wait for the consConnection to open
+
+	// look up cgcache and the underlying client connnection
+	outputHost.cgMutex.RLock()
+	cgCache, ok := outputHost.cgCache[cgDesc.GetConsumerGroupUUID()]
+	outputHost.cgMutex.RUnlock()
+	s.True(ok, "cannot find cgcache entry")
+
+	var nConns = 0
+	var conn *consConnection
+	cgCache.extMutex.RLock()
+	for _, conn = range cgCache.connections {
+		break
+	}
+	nConns = len(cgCache.connections)
+	cgCache.extMutex.RUnlock()
+	s.Equal(1, nConns, "wrong number of consumer connections")
+	s.NotNil(conn, "failed to find consConnection within cgcache")
+
+	creditUnblockCh <- struct{}{} // now unblock the readCreditsPump on the consconnection
+	<-streamDoneCh
+
+	s.mockHTTPResponse.AssertNotCalled(s.T(), "WriteHeader", mock.Anything)
+	s.Equal(int64(nonSkipCount), conn.sentMsgs, "wrong sentMsgs count")
+	s.Equal(conn.sentMsgs, conn.sentToMsgCache, "sentMsgs != sentToMsgCache")
+	outputHost.Shutdown()
+}
+
+func (s *OutputHostSuite) TestOutputHostDelay() {
+
+	count := 60
+	delay := 50 * time.Second
+	skipOlder := 20 * time.Second
+
+	skipCount := 20
+	nonSkipCount := count - skipCount
+
+	startFrom := time.Now()
+	startFromExpected := startFrom.Add(-delay)
+
+	outputHost, _ := NewOutputHost("outputhost-test", s.mockService, s.mockMeta, nil, nil, nil)
+	httpRequest := utilGetHTTPRequestWithPath("foo")
+
+	destUUID := uuid.New()
+	destDesc := shared.NewDestinationDescription()
+	destDesc.Path = common.StringPtr("/foo/bar")
+	destDesc.DestinationUUID = common.StringPtr(destUUID)
+	destDesc.Status = common.InternalDestinationStatusPtr(shared.DestinationStatus_ENABLED)
+	s.mockMeta.On("ReadDestination", mock.Anything, mock.Anything).Return(destDesc, nil).Once()
+	s.mockMeta.On("ReadExtentStats", mock.Anything, mock.Anything).Return(nil, fmt.Errorf(`foo`))
+
+	cgDesc := shared.NewConsumerGroupDescription()
+	cgDesc.ConsumerGroupUUID = common.StringPtr(uuid.New())
+	cgDesc.DestinationUUID = common.StringPtr(destUUID)
+	cgDesc.DelaySeconds = common.Int32Ptr(int32(delay.Seconds()))
+	cgDesc.SkipOlderMessagesSeconds = common.Int32Ptr(int32(skipOlder.Seconds()))
+	cgDesc.StartFrom = common.Int64Ptr(startFrom.UnixNano())
+	s.mockMeta.On("ReadConsumerGroup", mock.Anything, mock.Anything).Return(cgDesc, nil).Twice()
+
+	cgExt := shared.NewConsumerGroupExtent()
+	cgExt.ExtentUUID = common.StringPtr(uuid.New())
+	cgExt.StoreUUIDs = []string{"mock"}
+
+	cgRes := &shared.ReadConsumerGroupExtentsResult_{}
+	cgRes.Extents = append(cgRes.Extents, cgExt)
+	s.mockMeta.On("ReadConsumerGroupExtents", mock.Anything, mock.Anything).Return(cgRes, nil).Once()
+	s.mockRead.On("Write", mock.Anything).Return(nil)
+
+	s.mockStore.On("GetAddressFromTimestamp", mock.Anything, mock.Anything).Once().Return(&store.GetAddressFromTimestampResult_{
+		Address:        common.Int64Ptr(1234000000),
+		SequenceNumber: common.Int64Ptr(1),
+		Sealed:         common.BoolPtr(false),
+	}, nil).Run(func(args mock.Arguments) {
+
+		req := args.Get(1).(*store.GetAddressFromTimestampRequest)
+		s.Equal(req.GetTimestamp(), startFromExpected.UnixNano())
+	})
+
+	tSkipOlder := time.Now().Add(-skipOlder)
+	tVisible := time.Now().Add(-skipOlder).Add(-delay)
+
+	writeDoneCh := make(chan struct{})
+
+	var recvMsgs int
+	s.mockCons.On("Write", mock.Anything).Return(nil).Run(func(args mock.Arguments) {
+
+		ohc := args.Get(0).(*cherami.OutputHostCommand)
+
+		if ohc.GetType() == cherami.OutputHostCommandType_MESSAGE {
+
+			recvMsgs++
+			msg := ohc.GetMessage()
+
+			// compute visible time
+			msgVisibilityTime := time.Unix(0, msg.GetEnqueueTimeUtc()).Add(delay)
+
+			s.True(tSkipOlder.Before(msgVisibilityTime)) // message should not have been skipped
+			s.True(time.Now().After(msgVisibilityTime))  // message is expected to be 'visible'
+
+			if recvMsgs == nonSkipCount {
+				close(writeDoneCh)
+			}
+		}
+
+	}).Times(count)
+
+	cFlow := cherami.NewControlFlow()
+	cFlow.Credits = common.Int32Ptr(int32(count))
+
+	connOpenedCh := make(chan struct{})
+	s.mockCons.On("Read").Return(cFlow, nil).Once().Run(func(args mock.Arguments) { close(connOpenedCh) })
+
+	rmc := store.NewReadMessageContent()
+	rmc.Type = store.ReadMessageContentTypePtr(store.ReadMessageContentType_MESSAGE)
+
+	var seqnum int64
+
+	s.mockRead.On("Read").Return(rmc, nil).Run(func(args mock.Arguments) {
+
+		seqnum++
+		aMsg := store.NewAppendMessage()
+		aMsg.SequenceNumber = common.Int64Ptr(seqnum)
+		// set the enqueue-time such that 'visibleCount' messages are readily visible (ie, past delay)
+		// while the rest get visible one every 100ms
+		aMsg.EnqueueTimeUtc = common.Int64Ptr(tVisible.UnixNano() - (int64(skipCount)-seqnum)*int64(100*time.Millisecond))
+
+		pMsg := cherami.NewPutMessage()
+		pMsg.ID = common.StringPtr(strconv.Itoa(int(seqnum)))
+		pMsg.Data = []byte(fmt.Sprintf("seqnum=%d", seqnum))
+		aMsg.Payload = pMsg
+		rMsg := store.NewReadMessage()
+		rMsg.Message = aMsg
+		rMsg.Address = common.Int64Ptr(1234000000 + seqnum)
+		rmc.Message = rMsg
+
+	}).Times(count)
+
+	s.mockRead.On("Read").Return(&store.ReadMessageContent{
+		Type:   store.ReadMessageContentTypePtr(store.ReadMessageContentType_SEALED),
+		Sealed: store.NewExtentSealedError(),
+	}, nil).Once()
+
+	streamDoneCh := make(chan struct{})
+	go func() {
+		outputHost.OpenConsumerStreamHandler(s.mockHTTPResponse, httpRequest)
+		close(streamDoneCh)
+	}()
+
+	// close the read stream
+	creditUnblockCh := make(chan struct{})
+	s.mockRead.On("Read").Return(nil, io.EOF)
+	s.mockCons.On("Read").Return(nil, io.EOF).Run(func(args mock.Arguments) {
+		<-writeDoneCh
+		<-creditUnblockCh
+	})
+
+	<-connOpenedCh // wait for the consConnection to open
+
+	// look up cgcache and the underlying client connnection
+	outputHost.cgMutex.RLock()
+	cgCache, ok := outputHost.cgCache[cgDesc.GetConsumerGroupUUID()]
+	outputHost.cgMutex.RUnlock()
+	s.True(ok, "cannot find cgcache entry")
+
+	var nConns = 0
+	var conn *consConnection
+	cgCache.extMutex.RLock()
+	for _, conn = range cgCache.connections {
+		break
+	}
+	nConns = len(cgCache.connections)
+	cgCache.extMutex.RUnlock()
+	s.Equal(1, nConns, "wrong number of consumer connections")
+	s.NotNil(conn, "failed to find consConnection within cgcache")
+
+	creditUnblockCh <- struct{}{} // now unblock the readCreditsPump on the consconnection
+	<-streamDoneCh
+
+	s.mockHTTPResponse.AssertNotCalled(s.T(), "WriteHeader", mock.Anything)
+	s.Equal(int64(nonSkipCount), conn.sentMsgs, "wrong sentMsgs count")
+	s.Equal(conn.sentMsgs, conn.sentToMsgCache, "sentMsgs != sentToMsgCache")
+	outputHost.Shutdown()
+}
