@@ -32,6 +32,7 @@ import:
 - package: github.com/uber-common/bark
   version: fix-logrus-8841a0f
 - package: github.com/uber/cherami-client-go
+  version: v1.22.0
   subpackages:
   - client/cherami
   - common
@@ -39,6 +40,7 @@ import:
   - common/websocket
   - stream
 - package: github.com/uber/cherami-thrift
+  version: v1.22.0-rc1
   subpackages:
   - .generated/go/admin
   - .generated/go/cherami
