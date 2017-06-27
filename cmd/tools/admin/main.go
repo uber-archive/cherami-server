@@ -71,6 +71,10 @@ func main() {
 			Usage:  "Host:port for frontend host",
 			EnvVar: "CHERAMI_FRONTEND_HOSTPORT",
 		},
+		cli.BoolTFlag{
+			Name:  "admin_mode",
+			Usage: "use admin mode (bypass range checking for input arguments)",
+		},
 	}
 	app.Commands = []cli.Command{
 		{

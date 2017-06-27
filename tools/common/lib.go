@@ -73,27 +73,57 @@ const (
 	ConsumerGroupType = "CG"
 	// MinUnconsumedMessagesRetentionForMultiZoneDest is the minimum unconsumed retention allowed
 	MinUnconsumedMessagesRetentionForMultiZoneDest = 3 * 24 * 3600
+	// MinConsumedMessagesRetention is the minimum consumed retention
+	MinConsumedMessagesRetention = 180
+	// MaxConsumedMessagesRetention is the maximum consumed retention
+	MaxConsumedMessagesRetention = 7 * 24 * 3600
+	// MinUnconsumedMessagesRetention is the minimum unconsumed retention
+	MinUnconsumedMessagesRetention = 180
+	// MaxUnconsumedMessagesRetention is the maximum unconsumed retention
+	MaxUnconsumedMessagesRetention = 7 * 24 * 3600
+	// MinLockTimeoutSeconds is the minimum lock timeout seconds
+	MinLockTimeoutSeconds = 10
+	// MaxLockTimeoutSeconds is the maximum lock timeout seconds
+	MaxLockTimeoutSeconds = 3600
+	// MinMaxDeliveryCount is the minimum value for max delivery count
+	MinMaxDeliveryCount = 1
+	// MaxMaxDeliveryCount is the maximum value for max delivery count
+	MaxMaxDeliveryCount = 1000
+	// MinSkipOlderMessageSeconds is the minimum value for skipping older message
+	MinSkipOlderMessageSeconds = 1800
+	// MaxSkipOlderMessageSeconds is the maximum value for skipping older message
+	MaxSkipOlderMessageSeconds = 2 * 24 * 3600
+	// MinDelayMessageSeconds is the minimum value for delaying message
+	MinDelayMessageSeconds = 0
+	// MaxDelayMessageSeconds is the maximum value for delaying message
+	MaxDelayMessageSeconds = 2 * 24 * 3600
 
 	// Kafka prefix is a required prefix for all Kafka type destinations and consumer groups
 	kafkaPrefix = `/kafka_`
 )
 
 const (
-	strNotEnoughArgs                 = "Not enough arguments. Try \"--help\""
-	strTooManyArgs                   = "Too many arguments. Try \"--help\""
-	strNoChange                      = "Update must update something. Try \"--help\""
-	strCGSpecIncorrectArgs           = "Incorrect consumer group specification. Use \"<cg_uuid>\" or \"<dest_path> <cg_name>\""
-	strDestStatus                    = "Destination status must be \"enabled\", \"disabled\", \"sendonly\", or \"recvonly\""
-	strCGStatus                      = "Consumer group status must be \"enabled\", or \"disabled\""
-	strWrongDestZoneConfig           = "Format of destination zone config is wrong, should be \"ZoneName,AllowPublish,AllowConsume,ReplicaCount\". For example: \"zone1,true,true,3\""
-	strWrongReplicaCount             = "Replica count must be within 1 to 3"
-	strWrongZoneConfigCount          = "Multi zone destination or consumer group must have at least 2 zone configs"
-	strWrongCgZoneConfig             = "Format of consumer group zone config is wrong, should be \"ZoneName,PreferedActiveZone\". For example: \"zone1,false\""
-	strMultiZoneCgWithSingleZoneDest = "Multi zone consumer group must be created with a multi zone destination"
-	strMultiplePreferedActiveZone    = "At most one zone can be prefered active zone"
-	strUnconsumedRetentionTooSmall   = "Unconsumed retention period for multi zone destination should be at least 3 days"
-	strKafkaNaming                   = "Kafka destinations and consumer groups must begin with \"" + kafkaPrefix + "\""
-	strKafkaNotEnoughArgs            = "Kafka destinations must specify the Kafka cluster and at least one topic"
+	strNotEnoughArgs                  = "Not enough arguments. Try \"--help\""
+	strTooManyArgs                    = "Too many arguments. Try \"--help\""
+	strNoChange                       = "Update must update something. Try \"--help\""
+	strCGSpecIncorrectArgs            = "Incorrect consumer group specification. Use \"<cg_uuid>\" or \"<dest_path> <cg_name>\""
+	strDestStatus                     = "Destination status must be \"enabled\", \"disabled\", \"sendonly\", or \"recvonly\""
+	strCGStatus                       = "Consumer group status must be \"enabled\", or \"disabled\""
+	strWrongDestZoneConfig            = "Format of destination zone config is wrong, should be \"ZoneName,AllowPublish,AllowConsume,ReplicaCount\". For example: \"zone1,true,true,3\""
+	strWrongReplicaCount              = "Replica count must be within 1 to 3"
+	strWrongZoneConfigCount           = "Multi zone destination or consumer group must have at least 2 zone configs"
+	strWrongCgZoneConfig              = "Format of consumer group zone config is wrong, should be \"ZoneName,PreferedActiveZone\". For example: \"zone1,false\""
+	strMultiZoneCgWithSingleZoneDest  = "Multi zone consumer group must be created with a multi zone destination"
+	strMultiplePreferedActiveZone     = "At most one zone can be prefered active zone"
+	strUnconsumedRetentionTooSmall    = "Unconsumed retention period for multi zone destination should be at least 3 days"
+	strKafkaNaming                    = "Kafka destinations and consumer groups must begin with \"" + kafkaPrefix + "\""
+	strKafkaNotEnoughArgs             = "Kafka destinations must specify the Kafka cluster and at least one topic"
+	strInvalidConsumedRetention       = "Invalid consumed message retention %v (must be between %v and %v), please contact cherami team"
+	strInvalidUnconsumedRetention     = "Invalid unconsumed message retention %v (must be between %v and %v), please contact cherami team"
+	strInvalidLockTimeoutSeconds      = "Invalid lock timeout seconds %v (must be between %v and %v), please contact cherami team"
+	strInvalidMaxDeliveryCount        = "Invalid max delivery count %v (must be between %v and %v), please contact cherami team"
+	strInvalidSkipOlderMessageSeconds = "Invalid skip older message seconds %v (must be zero or between %v and %v), please contact cherami team"
+	strInvalidDelayMessageSeconds     = "Invalid delay message seconds %v (must be between %v and %v), please contact cherami team"
 )
 
 var uuidRegex, _ = regexp.Compile(`^[[:xdigit:]]{8}-[[:xdigit:]]{4}-[[:xdigit:]]{4}-[[:xdigit:]]{4}-[[:xdigit:]]{12}$`)
@@ -202,6 +232,9 @@ func CreateDestination(c *cli.Context, cClient ccli.Client, cliHelper common.Cli
 	if len(c.Args()) < 1 {
 		ExitIfError(errors.New(strNotEnoughArgs))
 	}
+
+	adminMode := c.GlobalBool("admin_mode")
+
 	path := c.Args().First()
 	kafkaCluster := c.String("kafka_cluster")
 	kafkaTopics := c.StringSlice("kafka_topics")
@@ -221,7 +254,15 @@ func CreateDestination(c *cli.Context, cClient ccli.Client, cliHelper common.Cli
 	}
 
 	consumedMessagesRetention := int32(c.Int("consumed_messages_retention"))
+	if !adminMode && (consumedMessagesRetention < MinConsumedMessagesRetention || consumedMessagesRetention > MaxConsumedMessagesRetention) {
+		ExitIfError(fmt.Errorf(strInvalidConsumedRetention, consumedMessagesRetention, MinConsumedMessagesRetention, MaxConsumedMessagesRetention))
+	}
+
 	unconsumedMessagesRetention := int32(c.Int("unconsumed_messages_retention"))
+	if !adminMode && (unconsumedMessagesRetention < MinUnconsumedMessagesRetention || unconsumedMessagesRetention > MaxUnconsumedMessagesRetention) {
+		ExitIfError(fmt.Errorf(strInvalidUnconsumedRetention, unconsumedMessagesRetention, MinUnconsumedMessagesRetention, MaxUnconsumedMessagesRetention))
+	}
+
 	checksumOption := getChecksumOptionParam(string(c.String("checksum_option")))
 	ownerEmail := string(c.String("owner_email"))
 	if len(ownerEmail) == 0 {
@@ -363,6 +404,8 @@ func CreateConsumerGroup(c *cli.Context, cClient ccli.Client, mClient mcli.Clien
 		ExitIfError(errors.New(strNotEnoughArgs))
 	}
 
+	adminMode := c.GlobalBool("admin_mode")
+
 	path := c.Args()[0]
 	name := c.Args()[1]
 
@@ -373,10 +416,27 @@ func CreateConsumerGroup(c *cli.Context, cClient ccli.Client, mClient mcli.Clien
 
 	// StartFrom is a 64-bit value with nano-second precision
 	startTime := int64(c.Int("start_time")) * 1e9
+
 	lockTimeout := int32(c.Int("lock_timeout_seconds"))
+	if !adminMode && (lockTimeout < MinLockTimeoutSeconds || lockTimeout > MaxLockTimeoutSeconds) {
+		ExitIfError(fmt.Errorf(strInvalidLockTimeoutSeconds, lockTimeout, MinLockTimeoutSeconds, MaxLockTimeoutSeconds))
+	}
+
 	maxDelivery := int32(c.Int("max_delivery_count"))
+	if !adminMode && (maxDelivery < MinMaxDeliveryCount || maxDelivery > MaxMaxDeliveryCount) {
+		ExitIfError(fmt.Errorf(strInvalidMaxDeliveryCount, maxDelivery, MinMaxDeliveryCount, MaxMaxDeliveryCount))
+	}
+
 	skipOlder := int32(c.Int("skip_older_messages_in_seconds"))
+	if !adminMode && skipOlder != 0 && (skipOlder < MinSkipOlderMessageSeconds || skipOlder > MaxSkipOlderMessageSeconds) {
+		ExitIfError(fmt.Errorf(strInvalidSkipOlderMessageSeconds, skipOlder, MinSkipOlderMessageSeconds, MaxSkipOlderMessageSeconds))
+	}
+
 	delay := int32(c.Int("delay_seconds"))
+	if !adminMode && (delay < MinDelayMessageSeconds || delay > MaxDelayMessageSeconds) {
+		ExitIfError(fmt.Errorf(strInvalidDelayMessageSeconds, delay, MinDelayMessageSeconds, MaxDelayMessageSeconds))
+	}
+
 	ownerEmail := string(c.String("owner_email"))
 
 	// Override default startFrom for DLQ consumer groups
