@@ -535,6 +535,7 @@ func UpdateConsumerGroup(c *cli.Context, cClient ccli.Client, mClient mcli.Clien
 		respDest, err := mClient.ReadDestination(&shared.ReadDestinationRequest{
 			DestinationUUID: respCG.DestinationUUID,
 		})
+		ExitIfError(err)
 
 		path, name = respDest.GetPath(), respCG.GetConsumerGroupName()
 
