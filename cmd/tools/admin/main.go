@@ -141,8 +141,8 @@ func main() {
 						},
 						cli.IntFlag{
 							Name:  "skip_older_messages_in_seconds, k",
-							Value: 7200,
-							Usage: "Skip messages older than this duration in seconds.",
+							Value: 0,
+							Usage: "Skip messages older than this duration in seconds ('0' to skip none).",
 						},
 						cli.IntFlag{
 							Name:  "delay_seonds, d",
@@ -330,7 +330,7 @@ func main() {
 				{
 					Name:    "consumergroup",
 					Aliases: []string{"c", "cg"},
-					Usage:   "update consumergroup <destination_path> <consumer_group_name>",
+					Usage:   "update consumergroup (<consumer_group_uuid> | <destination_path> <consumer_group_name>)",
 					Flags: []cli.Flag{
 						cli.StringFlag{
 							Name:  "status, s",

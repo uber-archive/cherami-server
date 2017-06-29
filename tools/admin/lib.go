@@ -529,7 +529,7 @@ func ReadCgQueue(c *cli.Context) {
 			toolscommon.ExitIfError(err)
 
 			for _, cgExtent := range mResp.GetExtents() {
-				// if --status option not provide, show all the extent queue
+				// if -status option not provide, show all the extent queue
 				status := cgExtent.GetStatus()
 				if len(extentStatus) == 0 || matchExtentStatus(extentStatus, status) {
 					printCgExtent(cgExtent, mClient)
@@ -726,7 +726,7 @@ func ListAllDestinations(c *cli.Context) {
 				}
 			}
 
-			// if --status option not provide, show all the destination path
+			// if -status option not provide, show all the destination path
 			status := desc.GetStatus()
 			if len(destStatus) == 0 || matchDestAllStatus(destStatus, status) {
 				outputDest := &destAllJSONOutputFields{

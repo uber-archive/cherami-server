@@ -34,8 +34,8 @@ const (
 
 	strMaxDeliveryCount = "Maximum number of times a message is delivered\n\tbefore it is sent to the dead-letter queue (DLQ)"
 
-	strSkipOlderMessagesInSeconds = `Skip messages older than this duration in seconds.`
-	intSkipOlderMessagesInSeconds = 999999999 // More than 30 years
+	strSkipOlderMessagesInSeconds = `Skip messages older than this duration in seconds ('0' to skip none)`
+	intSkipOlderMessagesInSeconds = 0 // 0 -> skip none
 
 	strDelaySeconds = `Delay to introduce to all messages, in seconds.`
 	intDelaySeconds = 0 // zero delay, by default
@@ -93,7 +93,7 @@ func main() {
 			Subcommands: []cli.Command{
 				{
 					Name:    "destination",
-					Aliases: []string{"d", "dst"},
+					Aliases: []string{"d", "dst", "dest"},
 					Usage:   "create destination <path> [options]",
 					Flags: []cli.Flag{
 						cli.StringFlag{
@@ -191,13 +191,12 @@ func main() {
 			Subcommands: []cli.Command{
 				{
 					Name:    "destination",
-					Aliases: []string{"d", "dst"},
+					Aliases: []string{"d", "dst", "dest"},
 					Usage:   "show destination <name>",
 					Flags: []cli.Flag{
-						cli.StringFlag{
-							Name:  "showcg, sc",
-							Value: "false",
-							Usage: "show consumer group(false, true), default to false",
+						cli.BoolFlag{
+							Name:  "show_cg, cg",
+							Usage: "show consumer groups for the destination",
 						},
 					},
 					Action: func(c *cli.Context) {
@@ -245,7 +244,7 @@ func main() {
 			Subcommands: []cli.Command{
 				{
 					Name:    "destination",
-					Aliases: []string{"d", "dst"},
+					Aliases: []string{"d", "dst", "dest"},
 					Usage:   "update destination <name>",
 					Flags: []cli.Flag{
 						cli.StringFlag{
@@ -285,7 +284,7 @@ func main() {
 				{
 					Name:    "consumergroup",
 					Aliases: []string{"c", "cg"},
-					Usage:   "update consumergroup <destination_path> <consumer_group_name>",
+					Usage:   "update consumergroup (<consumer_group_uuid> | <destination_path> <consumer_group_name>)",
 					Flags: []cli.Flag{
 						cli.StringFlag{
 							Name:  "status, s",
@@ -340,7 +339,7 @@ func main() {
 			Subcommands: []cli.Command{
 				{
 					Name:    "destination",
-					Aliases: []string{"d", "dst"},
+					Aliases: []string{"d", "dst", "dest"},
 					Usage:   "delete destination <name>",
 					Action: func(c *cli.Context) {
 						lib.DeleteDestination(c)
@@ -365,7 +364,7 @@ func main() {
 			Subcommands: []cli.Command{
 				{
 					Name:    "destination",
-					Aliases: []string{"d", "dst"},
+					Aliases: []string{"d", "dst", "dest"},
 					Usage:   "list destination [options]",
 					Flags: []cli.Flag{
 						cli.StringFlag{

@@ -103,9 +103,9 @@ const (
 )
 
 const (
-	strNotEnoughArgs                  = "Not enough arguments. Try \"--help\""
-	strTooManyArgs                    = "Too many arguments. Try \"--help\""
-	strNoChange                       = "Update must update something. Try \"--help\""
+	strNotEnoughArgs                  = "Not enough arguments. Try \"-help\""
+	strTooManyArgs                    = "Too many arguments. Try \"-help\""
+	strNoChange                       = "Update must update something. Try \"-help\""
 	strCGSpecIncorrectArgs            = "Incorrect consumer group specification. Use \"<cg_uuid>\" or \"<dest_path> <cg_name>\""
 	strDestStatus                     = "Destination status must be \"enabled\", \"disabled\", \"sendonly\", or \"recvonly\""
 	strCGStatus                       = "Consumer group status must be \"enabled\", or \"disabled\""
@@ -131,7 +131,7 @@ var uuidRegex, _ = regexp.Compile(`^[[:xdigit:]]{8}-[[:xdigit:]]{4}-[[:xdigit:]]
 // ExitIfError exit while err is not nil and print the calling stack also
 func ExitIfError(err error) {
 	const stacksEnv = `CHERAMI_SHOW_STACKS`
-	envReminder := "\n--env=staging is now the default. Did you mean '--env=prod' ?\n"
+	envReminder := "\n-env=staging is now the default. Did you mean '-env=prod' ?\n"
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err.Error())
 		fmt.Fprintln(os.Stderr, envReminder)
@@ -518,12 +518,30 @@ func getCgZoneConfigs(c *cli.Context, mClient mcli.Client, cliHelper common.CliH
 
 // UpdateConsumerGroup update the consumer group based on cli.Context
 func UpdateConsumerGroup(c *cli.Context, cClient ccli.Client, mClient mcli.Client, cliHelper common.CliHelper) {
-	if len(c.Args()) < 2 {
+
+	var path, name string
+
+	switch {
+	case len(c.Args()) < 1:
 		ExitIfError(errors.New(strNotEnoughArgs))
+
+	case len(c.Args()) == 1: // assume the arg is a uuid
+
+		respCG, err := mClient.ReadConsumerGroupByUUID(&shared.ReadConsumerGroupRequest{
+			ConsumerGroupUUID: &c.Args()[0],
+		})
+		ExitIfError(err)
+
+		respDest, err := mClient.ReadDestination(&shared.ReadDestinationRequest{
+			DestinationUUID: respCG.DestinationUUID,
+		})
+
+		path, name = respDest.GetPath(), respCG.GetConsumerGroupName()
+
+	default:
+		path, name = c.Args()[0], c.Args()[1]
 	}
 
-	path := c.Args()[0]
-	name := c.Args()[1]
 	status := cherami.ConsumerGroupStatus_ENABLED
 	if c.String("status") == "disabled" {
 		status = cherami.ConsumerGroupStatus_DISABLED
@@ -1245,7 +1263,7 @@ func ListDestinations(c *cli.Context, mClient mcli.Client) {
 				}
 			}
 
-			// if --status option not provide, show all the destination path
+			// if -status option not provide, show all the destination path
 			status := desc.GetStatus()
 			if len(destStatus) == 0 || matchDestStatus(destStatus, status) {
 				outputDest := &destJSONOutputFields{
