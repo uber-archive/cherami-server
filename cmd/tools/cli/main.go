@@ -195,7 +195,7 @@ func main() {
 					Usage:   "show destination <name>",
 					Flags: []cli.Flag{
 						cli.BoolFlag{
-							Name:  "show_cg, cg",
+							Name:  "showcg, cg",
 							Usage: "show consumer groups for the destination",
 						},
 					},
