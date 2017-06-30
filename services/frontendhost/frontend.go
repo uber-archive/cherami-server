@@ -947,16 +947,17 @@ func (h *Frontend) UpdateDestination(ctx thrift.Context, updateRequest *c.Update
 		return
 	}
 
-	// Disallow delete destination for non-test destinations without a password
-	// TODO: remove when appropriate authentication is in place
-	if !allowMutate {
-		err := &c.BadRequestError{Message: fmt.Sprintf("Contact Cherami team to update this path: %v", updateRequest.GetPath())}
-		h.logger.WithField(common.TagErr, err).Error("Error updating destination")
-		return nil, err
-	}
-
 	// Local logger with additional fields
 	lclLg := h.logger.WithField(common.TagDstPth, common.FmtDstPth(updateRequest.GetPath()))
+
+	// To keep backward compatiblity, only check auth when no password is provided for DeleteDestination
+	if !allowMutate {
+		authResource := common.GetResourceURNOperateDestination(h.SCommon, updateRequest.Path)
+		_, err = h.checkAuth(ctx, authResource, common.OperationUpdate, lclLg)
+		if err != nil {
+			return
+		}
+	}
 
 	// Lookup the destination UUID
 	// TODO Caching? Seems like update destination will be low volume
@@ -1248,6 +1249,12 @@ func (h *Frontend) UpdateConsumerGroup(ctx thrift.Context, updateRequest *c.Upda
 		common.TagDstPth: common.FmtDstPth(updateRequest.GetDestinationPath()),
 		common.TagCnsPth: common.FmtCnsPth(updateRequest.GetConsumerGroupName()),
 	})
+
+	authResource := common.GetResourceURNOperateConsumerGroup(h.SCommon, updateRequest.DestinationPath, updateRequest.ConsumerGroupName)
+	_, err = h.checkAuth(ctx, authResource, common.OperationUpdate, lclLg)
+	if err != nil {
+		return
+	}
 
 	// Request to controller
 	var cClient controller.TChanController
