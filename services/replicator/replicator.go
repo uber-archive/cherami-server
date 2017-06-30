@@ -219,6 +219,10 @@ func (r *Replicator) OpenReplicationReadStreamHandler(w http.ResponseWriter, req
 		}).Error("Can't open store host read stream")
 		r.m3Client.IncCounter(metrics.OpenReplicationReadScope, metrics.ReplicatorCreateOutStreamFailure)
 		r.m3Client.IncCounter(metrics.OpenReplicationReadScope, metrics.ReplicatorFailures)
+
+		// Must close the connection on server side because closing on client side doesn't actually close the
+		// underlying TCP connection
+		inStream.Done()
 		return
 	}
 	outConn := newOutConnection(extUUID, outStream, r.logger, r.m3Client, metrics.OpenReplicationReadScope)
@@ -276,6 +280,10 @@ func (r *Replicator) OpenReplicationRemoteReadStreamHandler(w http.ResponseWrite
 		}).Error("Can't open remote replication read stream")
 		r.m3Client.IncCounter(metrics.OpenReplicationRemoteReadScope, metrics.ReplicatorCreateOutStreamFailure)
 		r.m3Client.IncCounter(metrics.OpenReplicationRemoteReadScope, metrics.ReplicatorFailures)
+
+		// Must close the connection on server side because closing on client side doesn't actually close the
+		// underlying TCP connection
+		inStream.Done()
 		return
 	}
 	outConn := newOutConnection(extUUID, outStream, r.logger, r.m3Client, metrics.OpenReplicationRemoteReadScope)
