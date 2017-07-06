@@ -194,7 +194,7 @@ func NewCassandraMetadataService(cfg configure.CommonMetadataConfig) (*Cassandra
 	cluster.ProtoVersion = cassandraProtoVersion
 
 	cms := new(CassandraMetadataService)
-	cms.lowConsLevel = gocql.One
+	cms.lowConsLevel = gocql.Two
 	cms.midConsLevel = gocql.Two
 	cms.highConsLevel = gocql.ParseConsistency(cfg.GetConsistency())
 	cms.clusterName = cfg.GetClusterName()
