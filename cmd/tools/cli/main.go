@@ -27,18 +27,17 @@ import (
 	"github.com/codegangsta/cli"
 	"github.com/uber/cherami-server/common"
 	lib "github.com/uber/cherami-server/tools/cli"
+	com "github.com/uber/cherami-server/tools/common"
 )
 
 const (
-	strLockTimeoutSeconds = `Acknowledgement timeout for prefetched/received messages`
-
-	strMaxDeliveryCount = "Maximum number of times a message is delivered\n\tbefore it is sent to the dead-letter queue (DLQ)"
-
-	strSkipOlderMessagesInSeconds = `Skip messages older than this duration in seconds ('0' to skip none)`
-	intSkipOlderMessagesInSeconds = 0 // 0 -> skip none
-
-	strDelaySeconds = `Delay to introduce to all messages, in seconds.`
-	intDelaySeconds = 0 // zero delay, by default
+	usageCGStartTime                  = `Consume messages newer than this time in unix-nanos (default: Now; ie, consume no previously published messages)`
+	usageCGLockTimeoutSeconds         = `Acknowledgement timeout for prefetched/received messages`
+	usageCGMaxDeliveryCount           = `Max number of times a message is delivered before it is sent to the DLQ (dead-letter queue)`
+	usageCGSkipOlderMessagesInSeconds = `Skip messages older than this duration, in seconds ('0' to skip none)`
+	usageCGDelaySeconds               = `Delay, in seconds, to defer all messages by`
+	usageCGOwnerEmail                 = "Owner email"
+	usageCGZoneConfig                 = "Zone configs for multi-zone CG. For each zone, specify \"Zone,PreferedActiveZone\"; ex: \"dca1a,false\""
 )
 
 func main() {
@@ -103,12 +102,12 @@ func main() {
 						},
 						cli.IntFlag{
 							Name:  "consumed_messages_retention, cr",
-							Value: 3600,
+							Value: com.DefaultConsumedMessagesRetention,
 							Usage: "Consumed messages retention period specified in seconds. Default is 1 hour.",
 						},
 						cli.IntFlag{
 							Name:  "unconsumed_messages_retention, ur",
-							Value: 7200,
+							Value: com.DefaultUnconsumedMessagesRetention,
 							Usage: "Unconsumed messages retention period specified in seconds. Default is two hours.",
 						},
 						cli.StringFlag{
@@ -123,7 +122,7 @@ func main() {
 						},
 						cli.StringSliceFlag{
 							Name:  "zone_config, zc",
-							Usage: "Zone configs for multi_zone destinations. Format for each zone should be \"ZoneName,AllowPublish,AllowConsume,ReplicaCount\". For example: \"zone1,true,true,3\"",
+							Usage: "Zone configs for multi_zone destinations. Format for each zone should be \"Zone,AllowPublish,AllowConsume,ReplicaCount\". Ex: \"sjc1a,true,true,3\"",
 						},
 						cli.StringFlag{
 							Name:  "kafka_cluster, kc",
@@ -146,36 +145,36 @@ func main() {
 						cli.IntFlag{
 							Name:  "start_time, s",
 							Value: int(time.Now().Unix()),
-							Usage: "Consume messages newer than this UNIX timestamp.\n\tDefault: now (i.e. consume no existing messages)\n\tUse `date -d \"2017-06-11 6:42:42 -7:00\" +%s` to determine a value for this.",
+							Usage: usageCGStartTime,
 						},
 						cli.IntFlag{
 							Name:  "lock_timeout_seconds, l",
-							Value: 60,
-							Usage: strLockTimeoutSeconds,
+							Value: com.DefaultLockTimeoutSeconds,
+							Usage: usageCGLockTimeoutSeconds,
 						},
 						cli.IntFlag{
 							Name:  "max_delivery_count, m",
-							Value: 10,
-							Usage: strMaxDeliveryCount,
+							Value: com.DefaultMaxDeliveryCount,
+							Usage: usageCGMaxDeliveryCount,
 						},
 						cli.IntFlag{
 							Name:  "skip_older_messages_in_seconds, k",
-							Value: intSkipOlderMessagesInSeconds,
-							Usage: strSkipOlderMessagesInSeconds,
+							Value: com.DefaultSkipOlderMessageSeconds,
+							Usage: usageCGSkipOlderMessagesInSeconds,
 						},
 						cli.IntFlag{
 							Name:  "delay_seconds, d",
-							Value: intDelaySeconds,
-							Usage: strDelaySeconds,
+							Value: com.DefaultDelayMessageSeconds,
+							Usage: usageCGDelaySeconds,
 						},
 						cli.StringFlag{
 							Name:  "owner_email, oe",
 							Value: cliHelper.GetDefaultOwnerEmail(),
-							Usage: "The owner's email. Default is the $USER@uber.com",
+							Usage: usageCGOwnerEmail,
 						},
 						cli.StringSliceFlag{
 							Name:  "zone_config, zc",
-							Usage: "Zone configs for multi_zone consumer group. Format for each zone should be \"ZoneName,PreferedActiveZone\". For example: \"zone1,false\"",
+							Usage: usageCGZoneConfig,
 						},
 					},
 					Action: func(c *cli.Context) {
@@ -249,27 +248,22 @@ func main() {
 					Flags: []cli.Flag{
 						cli.StringFlag{
 							Name:  "status, s",
-							Value: "enabled",
 							Usage: "status: enabled | disabled | sendonly | recvonly",
 						},
 						cli.IntFlag{
 							Name:  "consumed_messages_retention, cr",
-							Value: 3600,
 							Usage: "Consumed messages retention period specified in seconds. Default is one hour.",
 						},
 						cli.IntFlag{
 							Name:  "unconsumed_messages_retention, ur",
-							Value: 7200,
 							Usage: "Unconsumed messages retention period specified in seconds. Default is two hours.",
 						},
 						cli.StringFlag{
 							Name:  "checksum_option, co",
-							Value: "",
 							Usage: "Checksum_options, can be one of the crcIEEE, md5",
 						},
 						cli.StringFlag{
 							Name:  "owner_email, oe",
-							Value: cliHelper.GetDefaultOwnerEmail(),
 							Usage: "The updated owner's email",
 						},
 						cli.StringSliceFlag{
@@ -288,37 +282,30 @@ func main() {
 					Flags: []cli.Flag{
 						cli.StringFlag{
 							Name:  "status, s",
-							Value: "enabled",
 							Usage: "status: enabled | disabled",
 						},
 						cli.IntFlag{
 							Name:  "lock_timeout_seconds, l",
-							Value: 60,
-							Usage: strLockTimeoutSeconds,
+							Usage: usageCGLockTimeoutSeconds,
 						},
 						cli.IntFlag{
 							Name:  "max_delivery_count, m",
-							Value: 10,
-							Usage: strMaxDeliveryCount,
+							Usage: usageCGMaxDeliveryCount,
 						},
 						cli.IntFlag{
 							Name:  "skip_older_messages_in_seconds, k",
-							Value: intSkipOlderMessagesInSeconds,
-							Usage: strSkipOlderMessagesInSeconds,
+							Usage: usageCGSkipOlderMessagesInSeconds,
 						},
 						cli.IntFlag{
 							Name:  "delay_seconds, d",
-							Value: intDelaySeconds,
-							Usage: strDelaySeconds,
+							Usage: usageCGDelaySeconds,
 						},
 						cli.StringFlag{
 							Name:  "owner_email, oe",
-							Value: cliHelper.GetDefaultOwnerEmail(),
 							Usage: "The updated owner's email",
 						},
 						cli.StringFlag{
 							Name:  "active_zone, az",
-							Value: "",
 							Usage: "The updated active zone",
 						},
 						cli.StringSliceFlag{
