@@ -302,7 +302,7 @@ func main() {
 						},
 						cli.StringFlag{
 							Name:  "owner_email, oe",
-							Usage: "The updated owner's email",
+							Usage: usageCGOwnerEmail,
 						},
 						cli.StringFlag{
 							Name:  "active_zone, az",
