@@ -22,10 +22,22 @@ package main
 
 import (
 	"os"
+	"time"
 
 	"github.com/codegangsta/cli"
 	"github.com/uber/cherami-server/common"
 	"github.com/uber/cherami-server/tools/admin"
+	com "github.com/uber/cherami-server/tools/common"
+)
+
+const (
+	usageCGStartTime                  = `Consume messages newer than this time in unix-nanos (default: Now; ie, consume no previously published messages)`
+	usageCGLockTimeoutSeconds         = `Acknowledgement timeout for prefetched/received messages`
+	usageCGMaxDeliveryCount           = `Max number of times a message is delivered before it is sent to the DLQ (dead-letter queue)`
+	usageCGSkipOlderMessagesInSeconds = `Skip messages older than this duration, in seconds ('0' to skip none)`
+	usageCGDelaySeconds               = `Delay, in seconds, to defer all messages by`
+	usageCGOwnerEmail                 = "Owner email"
+	usageCGZoneConfig                 = "Zone configs for multi-zone CG. For each zone, specify \"Zone,PreferedActiveZone\"; ex: \"dca1a,false\""
 )
 
 func main() {
@@ -95,13 +107,13 @@ func main() {
 
 						cli.IntFlag{
 							Name:  "consumed_messages_retention, cr",
-							Value: 3600,
+							Value: com.DefaultConsumedMessagesRetention,
 							Usage: "Consumed messages retention period specified in seconds. Default is 1 hour.",
 						},
 
 						cli.IntFlag{
 							Name:  "unconsumed_messages_retention, ur",
-							Value: 7200,
+							Value: com.DefaultUnconsumedMessagesRetention,
 							Usage: "Unconsumed messages retention period specified in seconds. Default is two hours.",
 						},
 						cli.StringFlag{
@@ -111,7 +123,7 @@ func main() {
 						},
 						cli.StringFlag{
 							Name:  "owner_email, oe",
-							Value: "",
+							Value: cliHelper.GetDefaultOwnerEmail(),
 							Usage: "The owner's email who commits the request. Default is the $USER@uber.com",
 						},
 					},
@@ -126,33 +138,37 @@ func main() {
 					Flags: []cli.Flag{
 						cli.IntFlag{
 							Name:  "start_time, s",
-							Value: 0,
-							Usage: "Start this consumer group at this UNIX timestamp; by default we start at this Unix timestamp (seconds since 1970-1-1)",
+							Value: int(time.Now().Unix()),
+							Usage: usageCGStartTime,
 						},
 						cli.IntFlag{
 							Name:  "lock_timeout_seconds, l",
-							Value: 60,
-							Usage: "Ack timeout for each message",
+							Value: com.DefaultLockTimeoutSeconds,
+							Usage: usageCGLockTimeoutSeconds,
 						},
 						cli.IntFlag{
 							Name:  "max_delivery_count, m",
-							Value: 10,
-							Usage: "Maximum delivery count for a message before it sents to dead-letter queue",
+							Value: com.DefaultMaxDeliveryCount,
+							Usage: usageCGMaxDeliveryCount,
 						},
 						cli.IntFlag{
 							Name:  "skip_older_messages_in_seconds, k",
-							Value: 0,
-							Usage: "Skip messages older than this duration in seconds ('0' to skip none).",
+							Value: com.DefaultSkipOlderMessageSeconds,
+							Usage: usageCGSkipOlderMessagesInSeconds,
 						},
 						cli.IntFlag{
-							Name:  "delay_seonds, d",
-							Value: 0,
-							Usage: "Delay to add to every message, in seconds.",
+							Name:  "delay_seconds, d",
+							Value: com.DefaultDelayMessageSeconds,
+							Usage: usageCGDelaySeconds,
 						},
 						cli.StringFlag{
 							Name:  "owner_email, oe",
-							Value: "",
-							Usage: "The owner's email who commits the request. Default is the $USER@uber.com",
+							Value: cliHelper.GetDefaultOwnerEmail(),
+							Usage: usageCGOwnerEmail,
+						},
+						cli.StringSliceFlag{
+							Name:  "zone_config, zc",
+							Usage: usageCGZoneConfig,
 						},
 					},
 					Action: func(c *cli.Context) {
@@ -295,27 +311,22 @@ func main() {
 					Flags: []cli.Flag{
 						cli.StringFlag{
 							Name:  "status, s",
-							Value: "enabled",
 							Usage: "status: enabled | disabled | sendonly | recvonly",
 						},
 						cli.IntFlag{
 							Name:  "consumed_messages_retention, cr",
-							Value: 3600,
 							Usage: "Consumed messages retention period specified in seconds. Default is one hour.",
 						},
 						cli.IntFlag{
 							Name:  "unconsumed_messages_retention, ur",
-							Value: 7200,
 							Usage: "Unconsumed messages retention period specified in seconds. Default is two hours.",
 						},
 						cli.StringFlag{
 							Name:  "checksum_option, co",
-							Value: "",
 							Usage: "Checksum_options, can be one of the crcIEEE, md5",
 						},
 						cli.StringFlag{
 							Name:  "owner_email, oe",
-							Value: "",
 							Usage: "The updated owner's email",
 						},
 						cli.StringSliceFlag{
@@ -334,37 +345,30 @@ func main() {
 					Flags: []cli.Flag{
 						cli.StringFlag{
 							Name:  "status, s",
-							Value: "enabled",
 							Usage: "status: enabled | disabled",
 						},
 						cli.IntFlag{
 							Name:  "lock_timeout_seconds, l",
-							Value: 60,
 							Usage: "Ack timeout for each message",
 						},
 						cli.IntFlag{
 							Name:  "max_delivery_count, m",
-							Value: 10,
 							Usage: "Maximum delivery count for a message before it sents to dead-letter queue",
 						},
 						cli.IntFlag{
 							Name:  "skip_older_messages_in_seconds, k",
-							Value: 7200,
 							Usage: "Skip messages older than this duration in seconds.",
 						},
 						cli.IntFlag{
 							Name:  "delay_seonds, d",
-							Value: 0,
 							Usage: "Delay to add to every message, in seconds.",
 						},
 						cli.StringFlag{
 							Name:  "owner_email, oe",
-							Value: "",
 							Usage: "The updated owner's email",
 						},
 						cli.StringFlag{
 							Name:  "active_zone, az",
-							Value: "",
 							Usage: "The updated active zone",
 						},
 						cli.StringSliceFlag{
