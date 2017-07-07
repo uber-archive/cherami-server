@@ -27,7 +27,7 @@ import (
 	"github.com/codegangsta/cli"
 	"github.com/uber/cherami-server/common"
 	"github.com/uber/cherami-server/tools/admin"
-	com "github.com/uber/cherami-server/tools/common"
+	toolscommon "github.com/uber/cherami-server/tools/common"
 )
 
 const (
@@ -107,13 +107,13 @@ func main() {
 
 						cli.IntFlag{
 							Name:  "consumed_messages_retention, cr",
-							Value: com.DefaultConsumedMessagesRetention,
+							Value: toolscommon.DefaultConsumedMessagesRetention,
 							Usage: "Consumed messages retention period specified in seconds. Default is 1 hour.",
 						},
 
 						cli.IntFlag{
 							Name:  "unconsumed_messages_retention, ur",
-							Value: com.DefaultUnconsumedMessagesRetention,
+							Value: toolscommon.DefaultUnconsumedMessagesRetention,
 							Usage: "Unconsumed messages retention period specified in seconds. Default is two hours.",
 						},
 						cli.StringFlag{
@@ -143,22 +143,22 @@ func main() {
 						},
 						cli.IntFlag{
 							Name:  "lock_timeout_seconds, l",
-							Value: com.DefaultLockTimeoutSeconds,
+							Value: toolscommon.DefaultLockTimeoutSeconds,
 							Usage: usageCGLockTimeoutSeconds,
 						},
 						cli.IntFlag{
 							Name:  "max_delivery_count, m",
-							Value: com.DefaultMaxDeliveryCount,
+							Value: toolscommon.DefaultMaxDeliveryCount,
 							Usage: usageCGMaxDeliveryCount,
 						},
 						cli.IntFlag{
 							Name:  "skip_older_messages_in_seconds, k",
-							Value: com.DefaultSkipOlderMessageSeconds,
+							Value: toolscommon.DefaultSkipOlderMessageSeconds,
 							Usage: usageCGSkipOlderMessagesInSeconds,
 						},
 						cli.IntFlag{
 							Name:  "delay_seconds, d",
-							Value: com.DefaultDelayMessageSeconds,
+							Value: toolscommon.DefaultDelayMessageSeconds,
 							Usage: usageCGDelaySeconds,
 						},
 						cli.StringFlag{

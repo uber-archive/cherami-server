@@ -72,9 +72,9 @@ const (
 	// ConsumerGroupType is the name for entity type for consumer group in listEntityOps
 	ConsumerGroupType = "CG"
 	// DefaultUnconsumedMessagesRetention is the default value for unconsumed messages retention
-	DefaultUnconsumedMessagesRetention = 7200
+	DefaultUnconsumedMessagesRetention = 3 * 24 * 3600 // 3 days
 	// DefaultConsumedMessagesRetention is the default value for consumed messages retention
-	DefaultConsumedMessagesRetention = 3600
+	DefaultConsumedMessagesRetention = 1 * 24 * 3600 // 1 day
 	// MinUnconsumedMessagesRetentionForMultiZoneDest is the minimum unconsumed retention allowed
 	MinUnconsumedMessagesRetentionForMultiZoneDest = 3 * 24 * 3600
 	// MinConsumedMessagesRetention is the minimum consumed retention
