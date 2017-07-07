@@ -71,6 +71,10 @@ const (
 	DestinationType = "DST"
 	// ConsumerGroupType is the name for entity type for consumer group in listEntityOps
 	ConsumerGroupType = "CG"
+	// DefaultUnconsumedMessagesRetention is the default value for unconsumed messages retention
+	DefaultUnconsumedMessagesRetention = 3 * 24 * 3600 // 3 days
+	// DefaultConsumedMessagesRetention is the default value for consumed messages retention
+	DefaultConsumedMessagesRetention = 1 * 24 * 3600 // 1 day
 	// MinUnconsumedMessagesRetentionForMultiZoneDest is the minimum unconsumed retention allowed
 	MinUnconsumedMessagesRetentionForMultiZoneDest = 3 * 24 * 3600
 	// MinConsumedMessagesRetention is the minimum consumed retention
@@ -81,18 +85,26 @@ const (
 	MinUnconsumedMessagesRetention = 180
 	// MaxUnconsumedMessagesRetention is the maximum unconsumed retention
 	MaxUnconsumedMessagesRetention = 7 * 24 * 3600
+	// DefaultLockTimeoutSeconds is the default value for lock timeout seconds
+	DefaultLockTimeoutSeconds = 60
 	// MinLockTimeoutSeconds is the minimum lock timeout seconds
 	MinLockTimeoutSeconds = 10
 	// MaxLockTimeoutSeconds is the maximum lock timeout seconds
 	MaxLockTimeoutSeconds = 3600
+	// DefaultMaxDeliveryCount is the default value for max delivery count
+	DefaultMaxDeliveryCount = 10
 	// MinMaxDeliveryCount is the minimum value for max delivery count
 	MinMaxDeliveryCount = 1
 	// MaxMaxDeliveryCount is the maximum value for max delivery count
 	MaxMaxDeliveryCount = 1000
+	// DefaultSkipOlderMessageSeconds is the default value for skipping older message
+	DefaultSkipOlderMessageSeconds = 0
 	// MinSkipOlderMessageSeconds is the minimum value for skipping older message
 	MinSkipOlderMessageSeconds = 1800
 	// MaxSkipOlderMessageSeconds is the maximum value for skipping older message
 	MaxSkipOlderMessageSeconds = 2 * 24 * 3600
+	// DefaultDelayMessageSeconds is the default value for delaying message
+	DefaultDelayMessageSeconds = 0
 	// MinDelayMessageSeconds is the minimum value for delaying message
 	MinDelayMessageSeconds = 0
 	// MaxDelayMessageSeconds is the maximum value for delaying message
