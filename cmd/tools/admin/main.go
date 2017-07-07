@@ -37,7 +37,7 @@ const (
 	usageCGSkipOlderMessagesInSeconds = `Skip messages older than this duration, in seconds ('0' to skip none)`
 	usageCGDelaySeconds               = `Delay, in seconds, to defer all messages by`
 	usageCGOwnerEmail                 = "Owner email"
-	usageCGZoneConfig                 = "Zone configs for multi-zone CG. For each zone, specify \"Zone,PreferedActiveZone\"; ex: \"dca1a,false\""
+	usageCGZoneConfig                 = "Zone configs for multi-zone CG. For each zone, specify \"Zone,PreferedActiveZone\"; ex: \"zone1,false\""
 )
 
 func main() {
