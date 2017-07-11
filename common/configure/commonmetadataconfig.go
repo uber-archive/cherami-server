@@ -20,10 +20,18 @@
 
 package configure
 
+// Authentication holds the authentication info to our metadata
+type Authentication struct {
+	Enabled  bool   `yaml:"Enabled"`
+	Username string `yaml:"Username"`
+	Password string `yaml:"Password"`
+}
+
 // MetadataConfig holds the config info related to our metadata
 type MetadataConfig struct {
 	CassandraHosts string            `yaml:"CassandraHosts"`
 	Keyspace       string            `yaml:"Keyspace"`
+	Authentication Authentication    `yaml:"Authentication"`
 	Consistency    string            `yaml:"Consistency"`
 	ClusterName    string            `yaml:"ClusterName"`
 	NumConns       int               `yaml:"NumConns"`
@@ -45,6 +53,11 @@ func (r *MetadataConfig) GetCassandraHosts() string {
 // GetKeyspace returns the keyspace to be used for cherami cluster
 func (r *MetadataConfig) GetKeyspace() string {
 	return r.Keyspace
+}
+
+// GetAuthentication returns the authentication info to be used for cherami cluster
+func (r *MetadataConfig) GetAuthentication() Authentication {
+	return r.Authentication
 }
 
 // GetConsistency returns the consistency level to be used for cherami cluster

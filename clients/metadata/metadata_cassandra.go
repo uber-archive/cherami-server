@@ -193,6 +193,14 @@ func NewCassandraMetadataService(cfg configure.CommonMetadataConfig) (*Cassandra
 	cluster.Keyspace = cfg.GetKeyspace()
 	cluster.ProtoVersion = cassandraProtoVersion
 
+	auth := cfg.GetAuthentication()
+	if auth.Enabled {
+		cluster.Authenticator = gocql.PasswordAuthenticator{
+			Username: auth.Username,
+			Password: auth.Password,
+		}
+	}
+
 	cms := new(CassandraMetadataService)
 	cms.lowConsLevel = gocql.Two
 	cms.midConsLevel = gocql.Two

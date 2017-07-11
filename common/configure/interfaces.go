@@ -147,6 +147,8 @@ type (
 		GetCassandraHosts() string
 		// GetKeyspace returns the keyspace for our cassandra cluster
 		GetKeyspace() string
+		// GetAuthentication returns the authentication info for our cassandra cluster
+		GetAuthentication() Authentication
 		// GetConsistency returns the configured consistency level
 		GetConsistency() string
 		// GetDcFilter returns the dc filter map for the cassandra cluster
