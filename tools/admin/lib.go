@@ -31,7 +31,6 @@ import (
 	"time"
 
 	"github.com/codegangsta/cli"
-	cherami2 "github.com/uber/cherami-client-go/client/cherami"
 	mcli "github.com/uber/cherami-server/clients/metadata"
 	"github.com/uber/cherami-server/common"
 	toolscommon "github.com/uber/cherami-server/tools/common"
@@ -43,129 +42,6 @@ import (
 const (
 	adminToolService = "cherami-admin"
 )
-
-// CreateDestination creates a destination
-func CreateDestination(c *cli.Context, cliHelper common.CliHelper) {
-	CreateDestinationSecure(c, cliHelper, nil)
-}
-
-// CreateDestinationSecure creates a destination with security enabled
-func CreateDestinationSecure(c *cli.Context, cliHelper common.CliHelper, authProvider cherami2.AuthProvider) {
-	cClient := toolscommon.GetCClientSecure(c, adminToolService, authProvider)
-	toolscommon.CreateDestination(c, cClient, cliHelper)
-}
-
-// UpdateDestination updates properties of a destination
-func UpdateDestination(c *cli.Context, cliHelper common.CliHelper) {
-	cClient := toolscommon.GetCClient(c, adminToolService)
-	mClient := toolscommon.GetMClient(c, adminToolService)
-	toolscommon.UpdateDestination(c, cClient, mClient, cliHelper)
-}
-
-// UpdateDestinationSecure updates properties of a destination with security enabled
-func UpdateDestinationSecure(c *cli.Context, cliHelper common.CliHelper, authProvider cherami2.AuthProvider) {
-	cClient := toolscommon.GetCClientSecure(c, adminToolService, authProvider)
-	mClient := toolscommon.GetMClient(c, adminToolService)
-	toolscommon.UpdateDestination(c, cClient, mClient, cliHelper)
-}
-
-// CreateConsumerGroup creates a consumer group
-func CreateConsumerGroup(c *cli.Context, cliHelper common.CliHelper) {
-	CreateConsumerGroupSecure(c, cliHelper, nil)
-}
-
-// CreateConsumerGroupSecure creates a consumer group with security enabled
-func CreateConsumerGroupSecure(c *cli.Context, cliHelper common.CliHelper, authProvider cherami2.AuthProvider) {
-	cClient := toolscommon.GetCClientSecure(c, adminToolService, authProvider)
-	mClient := toolscommon.GetMClient(c, adminToolService)
-	toolscommon.CreateConsumerGroup(c, cClient, mClient, cliHelper)
-}
-
-// UpdateConsumerGroup updates properties of a consumer group
-func UpdateConsumerGroup(c *cli.Context, cliHelper common.CliHelper) {
-	cClient := toolscommon.GetCClient(c, adminToolService)
-	mClient := toolscommon.GetMClient(c, adminToolService)
-	toolscommon.UpdateConsumerGroup(c, cClient, mClient, cliHelper)
-}
-
-// UpdateConsumerGroupSecure updates properties of a consumer group with security enabled
-func UpdateConsumerGroupSecure(c *cli.Context, cliHelper common.CliHelper, authProvider cherami2.AuthProvider) {
-	cClient := toolscommon.GetCClientSecure(c, adminToolService, authProvider)
-	mClient := toolscommon.GetMClient(c, adminToolService)
-	toolscommon.UpdateConsumerGroup(c, cClient, mClient, cliHelper)
-}
-
-// ReadDestination reads a destination
-func ReadDestination(c *cli.Context) {
-	mClient := toolscommon.GetMClient(c, adminToolService)
-	toolscommon.ReadDestination(c, mClient)
-}
-
-// ReadDlq read Dlq properties
-func ReadDlq(c *cli.Context) {
-	mClient := toolscommon.GetMClient(c, adminToolService)
-	toolscommon.ReadDlq(c, mClient)
-}
-
-// DeleteDestination deletes a destination
-func DeleteDestination(c *cli.Context) {
-	cClient := toolscommon.GetCClient(c, adminToolService)
-	toolscommon.DeleteDestination(c, cClient)
-}
-
-// DeleteDestinationSecure deletes a destination with security enabled
-func DeleteDestinationSecure(c *cli.Context, authProvider cherami2.AuthProvider) {
-	cClient := toolscommon.GetCClientSecure(c, adminToolService, authProvider)
-	toolscommon.DeleteDestination(c, cClient)
-}
-
-// DeleteConsumerGroup deletes a consumer group
-func DeleteConsumerGroup(c *cli.Context) {
-	cClient := toolscommon.GetCClient(c, adminToolService)
-	toolscommon.DeleteConsumerGroup(c, cClient)
-}
-
-// DeleteConsumerGroupSecure deletes a consumer group with security enabled
-func DeleteConsumerGroupSecure(c *cli.Context, authProvider cherami2.AuthProvider) {
-	cClient := toolscommon.GetCClientSecure(c, adminToolService, authProvider)
-	toolscommon.DeleteConsumerGroup(c, cClient)
-}
-
-// ReadConsumerGroup reads properties of a consumer group
-func ReadConsumerGroup(c *cli.Context) {
-	mClient := toolscommon.GetMClient(c, adminToolService)
-	toolscommon.ReadConsumerGroup(c, mClient)
-}
-
-// ReadMessage read a message from store directly
-func ReadMessage(c *cli.Context) {
-	mClient := toolscommon.GetMClient(c, adminToolService)
-	toolscommon.ReadMessage(c, mClient)
-}
-
-// ListDestinations lists the destinations of matching names
-func ListDestinations(c *cli.Context) {
-	mClient := toolscommon.GetMClient(c, adminToolService)
-	toolscommon.ListDestinations(c, mClient)
-}
-
-// ListConsumerGroups lists the consumer groups of matching names
-func ListConsumerGroups(c *cli.Context) {
-	cClient := toolscommon.GetCClient(c, adminToolService)
-	toolscommon.ListConsumerGroups(c, cClient)
-}
-
-// Publish publishs messages
-func Publish(c *cli.Context) {
-	cClient := toolscommon.GetCClient(c, adminToolService)
-	toolscommon.Publish(c, cClient)
-}
-
-// Consume consumes message
-func Consume(c *cli.Context) {
-	cClient := toolscommon.GetCClient(c, adminToolService)
-	toolscommon.Consume(c, cClient)
-}
 
 // UnloadConsumerGroup unloads the CG on the given outputhost
 func UnloadConsumerGroup(c *cli.Context) {
@@ -181,12 +57,6 @@ func ListAllCgs(c *cli.Context) {
 // GetCgState gets the cg state on the given outputhost
 func GetCgState(c *cli.Context) {
 	toolscommon.GetConsumerGroupState(c)
-}
-
-// ReadCgBacklog reads cg backlog
-func ReadCgBacklog(c *cli.Context) {
-	cClient := toolscommon.GetCClient(c, adminToolService)
-	toolscommon.ReadCgBacklog(c, cClient)
 }
 
 type cgAckIDJSONOutputFields struct {

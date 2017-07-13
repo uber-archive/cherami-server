@@ -240,7 +240,9 @@ func getChecksumOptionParam(optionStr string) cherami.ChecksumOption {
 }
 
 // CreateDestination create destination
-func CreateDestination(c *cli.Context, cClient ccli.Client, cliHelper common.CliHelper) {
+func CreateDestination(c *cli.Context, cliHelper common.CliHelper, serviceName string) {
+	cClient := GetCClientSecure(c, serviceName, nil)
+
 	if len(c.Args()) < 1 {
 		ExitIfError(errors.New(strNotEnoughArgs))
 	}
@@ -344,7 +346,10 @@ func getDestZoneConfigs(c *cli.Context, cliHelper common.CliHelper) cherami.Dest
 }
 
 // UpdateDestination update destination based on cli
-func UpdateDestination(c *cli.Context, cClient ccli.Client, mClient mcli.Client, cliHelper common.CliHelper) {
+func UpdateDestination(c *cli.Context, cliHelper common.CliHelper, serviceName string) {
+	mClient := GetMClient(c, serviceName)
+	cClient := GetCClient(c, serviceName)
+
 	if len(c.Args()) < 1 {
 		ExitIfError(errors.New(strNotEnoughArgs))
 	}
@@ -411,7 +416,10 @@ func UpdateDestination(c *cli.Context, cClient ccli.Client, mClient mcli.Client,
 }
 
 // CreateConsumerGroup create consumer group based on cli.Context
-func CreateConsumerGroup(c *cli.Context, cClient ccli.Client, mClient mcli.Client, cliHelper common.CliHelper) {
+func CreateConsumerGroup(c *cli.Context, cliHelper common.CliHelper, serviceName string) {
+	mClient := GetMClient(c, serviceName)
+	cClient := GetCClientSecure(c, serviceName, nil)
+
 	if len(c.Args()) < 2 {
 		ExitIfError(errors.New(strNotEnoughArgs))
 	}
@@ -529,7 +537,9 @@ func getCgZoneConfigs(c *cli.Context, mClient mcli.Client, cliHelper common.CliH
 }
 
 // UpdateConsumerGroup update the consumer group based on cli.Context
-func UpdateConsumerGroup(c *cli.Context, cClient ccli.Client, mClient mcli.Client, cliHelper common.CliHelper) {
+func UpdateConsumerGroup(c *cli.Context, cliHelper common.CliHelper, serviceName string) {
+	cClient := GetCClient(c, serviceName)
+	mClient := GetMClient(c, serviceName)
 
 	var path, name string
 
@@ -855,8 +865,10 @@ func printDest(dest *shared.DestinationDescription) {
 	fmt.Fprintln(os.Stdout, string(outputStr))
 }
 
-// ReadDestination return the detail for dest, and also consumer group for this dest
-func ReadDestination(c *cli.Context, mClient mcli.Client) {
+// ReadDestinationr return the detail for dest, and also consumer group for this dest
+func ReadDestination(c *cli.Context, serviceName string) {
+	mClient := GetMClient(c, serviceName)
+
 	if len(c.Args()) < 1 {
 		ExitIfError(errors.New(strNotEnoughArgs))
 	}
@@ -908,7 +920,9 @@ func readDestinationFromMetadata(mClient mcli.Client, path string) (*shared.Dest
 }
 
 // ReadDlq return the info for dlq dest and related consumer group
-func ReadDlq(c *cli.Context, mClient mcli.Client) {
+func ReadDlq(c *cli.Context, serviceName string) {
+	mClient := GetMClient(c, serviceName)
+
 	if len(c.Args()) < 1 {
 		ExitIfError(errors.New(strNotEnoughArgs))
 	}
@@ -934,7 +948,9 @@ func ReadDlq(c *cli.Context, mClient mcli.Client) {
 }
 
 // ReadCgBacklog reads the CG back log
-func ReadCgBacklog(c *cli.Context, cClient ccli.Client) {
+func ReadCgBacklog(c *cli.Context, serviceName string) {
+	cClient := GetCClient(c, serviceName)
+
 	var cg, dst string
 	var dstPtr *string
 	if len(c.Args()) < 1 {
@@ -968,7 +984,9 @@ func ReadCgBacklog(c *cli.Context, cClient ccli.Client) {
 }
 
 // DeleteDestination delete the destination based on Cli.Context
-func DeleteDestination(c *cli.Context, cClient ccli.Client) {
+func DeleteDestination(c *cli.Context, serviceName string) {
+	cClient := GetCClient(c, serviceName)
+
 	if len(c.Args()) < 1 {
 		ExitIfError(errors.New(strNotEnoughArgs))
 	}
@@ -981,7 +999,9 @@ func DeleteDestination(c *cli.Context, cClient ccli.Client) {
 }
 
 // DeleteConsumerGroup delete the consumer group based on Cli.Context
-func DeleteConsumerGroup(c *cli.Context, cClient ccli.Client) {
+func DeleteConsumerGroup(c *cli.Context, serviceName string) {
+	cClient := GetCClient(c, serviceName)
+
 	if len(c.Args()) < 2 {
 		ExitIfError(errors.New(strNotEnoughArgs))
 	}
@@ -1035,7 +1055,9 @@ func printCG(cg *shared.ConsumerGroupDescription) {
 }
 
 // ReadConsumerGroup return the consumer group information
-func ReadConsumerGroup(c *cli.Context, mClient mcli.Client) {
+func ReadConsumerGroup(c *cli.Context, serviceName string) {
+	mClient := GetMClient(c, serviceName)
+
 	if len(c.Args()) < 1 {
 		ExitIfError(errors.New(strCGSpecIncorrectArgs))
 	}
@@ -1064,7 +1086,9 @@ func ReadConsumerGroup(c *cli.Context, mClient mcli.Client) {
 }
 
 // MergeDLQForConsumerGroup return the consumer group information
-func MergeDLQForConsumerGroup(c *cli.Context, cClient ccli.Client) {
+func MergeDLQForConsumerGroup(c *cli.Context, serviceName string) {
+	cClient := GetCClient(c, serviceName)
+
 	var err error
 	switch len(c.Args()) {
 	default:
@@ -1087,7 +1111,9 @@ func MergeDLQForConsumerGroup(c *cli.Context, cClient ccli.Client) {
 }
 
 // PurgeDLQForConsumerGroup return the consumer group information
-func PurgeDLQForConsumerGroup(c *cli.Context, cClient ccli.Client) {
+func PurgeDLQForConsumerGroup(c *cli.Context, serviceName string) {
+	cClient := GetCClient(c, serviceName)
+
 	var err error
 	switch len(c.Args()) {
 	default:
@@ -1144,7 +1170,9 @@ func matchDestStatus(status string, wantStatus shared.DestinationStatus) bool {
 }
 
 // ReadMessage implement for show msg command line
-func ReadMessage(c *cli.Context, mClient mcli.Client) {
+func ReadMessage(c *cli.Context, serviceName string) {
+	mClient := GetMClient(c, serviceName)
+
 	if len(c.Args()) < 2 {
 		ExitIfError(errors.New("not enough arguments, need to specify both extent uuid and message address"))
 	}
@@ -1211,7 +1239,8 @@ type messageJSONOutputFields struct {
 }
 
 // ListDestinations return destinations based on the Cli.Context
-func ListDestinations(c *cli.Context, mClient mcli.Client) {
+func ListDestinations(c *cli.Context, serviceName string) {
+	mClient := GetMClient(c, serviceName)
 
 	prefix := string(c.String("prefix"))
 	included := string(c.String("include"))
@@ -1316,7 +1345,9 @@ func ListDestinations(c *cli.Context, mClient mcli.Client) {
 }
 
 // ListConsumerGroups return the consumer groups based on the destination provided
-func ListConsumerGroups(c *cli.Context, cClient ccli.Client) {
+func ListConsumerGroups(c *cli.Context, serviceName string) {
+	cClient := GetCClient(c, serviceName)
+
 	if len(c.Args()) < 1 {
 		ExitIfError(errors.New(strNotEnoughArgs))
 	}
@@ -1349,7 +1380,9 @@ func ListConsumerGroups(c *cli.Context, cClient ccli.Client) {
 }
 
 // Publish start to pusblish to the destination provided
-func Publish(c *cli.Context, cClient ccli.Client) {
+func Publish(c *cli.Context, serviceName string) {
+	cClient := GetCClient(c, serviceName)
+
 	if len(c.Args()) < 1 {
 		ExitIfError(errors.New(strNotEnoughArgs))
 	}
@@ -1423,7 +1456,9 @@ type kafkaMessageJSON struct {
 }
 
 // Consume start to consume from the destination
-func Consume(c *cli.Context, cClient ccli.Client) {
+func Consume(c *cli.Context, serviceName string) {
+	cClient := GetCClient(c, serviceName)
+
 	var err error
 	if len(c.Args()) < 2 {
 		ExitIfError(errors.New(strNotEnoughArgs))
