@@ -26,6 +26,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/uber-common/bark"
+	"github.com/uber/cherami-server/common/metrics"
 	"github.com/uber/cherami-thrift/.generated/go/admin"
 	"github.com/uber/cherami-thrift/.generated/go/shared"
 )
@@ -381,4 +383,19 @@ func FmtExtentStatus(status shared.ExtentStatus) string {
 // FmtCGExtentStatus formats ConsumerGroupExtent to be used with TagCGExtentStatus
 func FmtCGExtentStatus(status shared.ConsumerGroupExtentStatus) string {
 	return fmt.Sprintf("%v", status.String())
+}
+
+// GetDestinationTags returns tags for a provided destination path
+func GetDestinationTags(destPath string, logger bark.Logger) map[string]string {
+	destTagValue, tagErr := GetTagsFromPath(destPath)
+	if tagErr != nil {
+		destTagValue = metrics.UnknownDirectoryTagValue
+		logger.WithField(TagDstPth, destPath).
+			WithField(TagUnknowPth, metrics.UnknownDirectoryTagValue).
+			Error("unknow destination path, return default name")
+	}
+	tags := map[string]string{
+		metrics.DestinationTagName: destTagValue,
+	}
+	return tags
 }

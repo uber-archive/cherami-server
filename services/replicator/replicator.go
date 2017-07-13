@@ -40,6 +40,7 @@ import (
 	mm "github.com/uber/cherami-server/common/metadata"
 	"github.com/uber/cherami-server/common/metrics"
 	storeStream "github.com/uber/cherami-server/stream"
+	"github.com/uber/cherami-thrift/.generated/go/admin"
 	"github.com/uber/cherami-thrift/.generated/go/metadata"
 	rgen "github.com/uber/cherami-thrift/.generated/go/replicator"
 	"github.com/uber/cherami-thrift/.generated/go/shared"
@@ -133,7 +134,7 @@ func NewReplicator(serviceName string, sVice common.SCommon, metadataClient meta
 	r.uconfigClient = sVice.GetDConfigClient()
 	r.dynamicConfigManage()
 
-	return r, []thrift.TChanServer{rgen.NewTChanReplicatorServer(r)}
+	return r, []thrift.TChanServer{rgen.NewTChanReplicatorServer(r), admin.NewTChanReplicatorAdminServer(r)}
 }
 
 // Start starts the replicator service
@@ -225,11 +226,29 @@ func (r *Replicator) OpenReplicationReadStreamHandler(w http.ResponseWriter, req
 		inStream.Done()
 		return
 	}
-	outConn := newOutConnection(extUUID, outStream, r.logger, r.m3Client, metrics.OpenReplicationReadScope)
+
+	destDesc, err := r.metaClient.ReadDestination(nil, &shared.ReadDestinationRequest{
+		DestinationUUID: common.StringPtr(destUUID),
+	})
+	if err != nil {
+		r.logger.WithFields(bark.Fields{
+			common.TagErr: err,
+			common.TagExt: common.FmtExt(*request.OpenReadStreamRequest.ExtentUUID),
+			common.TagDst: common.FmtDst(*request.OpenReadStreamRequest.DestinationUUID),
+		}).Error("Failed to read destination")
+		r.m3Client.IncCounter(metrics.OpenReplicationReadScope, metrics.ReplicatorFailures)
+
+		// Must close the connection on server side because closing on client side doesn't actually close the
+		// underlying TCP connection
+		inStream.Done()
+		return
+	}
+
+	outConn := newOutConnection(extUUID, destDesc.GetPath(), outStream, r.logger, r.m3Client, metrics.OpenReplicationReadScope)
 	outConn.open()
 	r.addStoreHostConn(extUUID, outConn)
 
-	inConn := newInConnection(extUUID, inStream, outConn.msgsCh, r.logger, r.m3Client, metrics.OpenReplicationReadScope)
+	inConn := newInConnection(extUUID, destDesc.GetPath(), inStream, outConn.msgsCh, r.logger, r.m3Client, metrics.OpenReplicationReadScope, metrics.OpenReplicationReadPerDestScope)
 	inConn.open()
 
 	go r.manageInOutConn(inConn, outConn)
@@ -286,11 +305,29 @@ func (r *Replicator) OpenReplicationRemoteReadStreamHandler(w http.ResponseWrite
 		inStream.Done()
 		return
 	}
-	outConn := newOutConnection(extUUID, outStream, r.logger, r.m3Client, metrics.OpenReplicationRemoteReadScope)
+
+	destDesc, err := r.metaClient.ReadDestination(nil, &shared.ReadDestinationRequest{
+		DestinationUUID: common.StringPtr(destUUID),
+	})
+	if err != nil {
+		r.logger.WithFields(bark.Fields{
+			common.TagErr: err,
+			common.TagExt: common.FmtExt(*request.OpenReadStreamRequest.ExtentUUID),
+			common.TagDst: common.FmtDst(*request.OpenReadStreamRequest.DestinationUUID),
+		}).Error("Failed to read destination")
+		r.m3Client.IncCounter(metrics.OpenReplicationRemoteReadScope, metrics.ReplicatorFailures)
+
+		// Must close the connection on server side because closing on client side doesn't actually close the
+		// underlying TCP connection
+		inStream.Done()
+		return
+	}
+
+	outConn := newOutConnection(extUUID, destDesc.GetPath(), outStream, r.logger, r.m3Client, metrics.OpenReplicationRemoteReadScope)
 	outConn.open()
 	r.addRemoteReplicatorConn(extUUID, outConn)
 
-	inConn := newInConnection(extUUID, inStream, outConn.msgsCh, r.logger, r.m3Client, metrics.OpenReplicationRemoteReadScope)
+	inConn := newInConnection(extUUID, destDesc.GetPath(), inStream, outConn.msgsCh, r.logger, r.m3Client, metrics.OpenReplicationRemoteReadScope, metrics.OpenReplicationRemoteReadPerDestScope)
 	inConn.open()
 
 	go r.manageInOutConn(inConn, outConn)

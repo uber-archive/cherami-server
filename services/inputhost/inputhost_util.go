@@ -59,20 +59,6 @@ const (
 
 var errPathCacheUnloading = &cherami.InternalServiceError{Message: "InputHost pathCache is being unloaded"}
 
-func (h *InputHost) getDestinationTags(destPath string) map[string]string {
-	destTagValue, tagErr := common.GetTagsFromPath(destPath)
-	if tagErr != nil {
-		destTagValue = metrics.UnknownDirectoryTagValue
-		h.logger.WithField(common.TagDstPth, destPath).
-			WithField(common.TagUnknowPth, metrics.UnknownDirectoryTagValue).
-			Error("unknow destination path, return default name")
-	}
-	tags := map[string]string{
-		metrics.DestinationTagName: destTagValue,
-	}
-	return tags
-}
-
 func (h *InputHost) checkAndLoadPathCache(destPath string, destUUID string, destType shared.DestinationType, logger bark.Logger, m3Client metrics.Client, hostMetrics *load.HostMetrics) (pathCache *inPathCache, exists bool) {
 
 	h.pathMutex.Lock()
@@ -105,7 +91,7 @@ func (h *InputHost) checkAndLoadPathCache(destPath string, destUUID string, dest
 		pathCache.loadReporter.Start()
 		//  the destM3Client is the destination specific client to report destination specific metrics
 		//  the m3Client above is the overall host client to report host-level metrics.
-		pathCache.destM3Client = metrics.NewClientWithTags(pathCache.m3Client, metrics.Inputhost, h.getDestinationTags(destPath))
+		pathCache.destM3Client = metrics.NewClientWithTags(pathCache.m3Client, metrics.Inputhost, common.GetDestinationTags(destPath, logger))
 		pathCache.startEventLoop()
 	}
 	h.pathMutex.Unlock()

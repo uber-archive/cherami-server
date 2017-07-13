@@ -1042,7 +1042,7 @@ func (s *InputHostSuite) TestInputExtHostShutdown() {
 
 	pathCache.loadReporter = inputHost.GetLoadReporterDaemonFactory().CreateReporter(time.Minute, pathCache, logger)
 
-	pathCache.destM3Client = metrics.NewClientWithTags(pathCache.m3Client, metrics.Inputhost, inputHost.getDestinationTags(destinationPath))
+	pathCache.destM3Client = metrics.NewClientWithTags(pathCache.m3Client, metrics.Inputhost, common.GetDestinationTags(destinationPath, logger))
 
 	var connection *extHost
 	for _, extent := range extents {
@@ -1147,7 +1147,7 @@ func (s *InputHostSuite) TestInputExtHostRateLimit() {
 	}
 
 	pathCache.loadReporter = inputHost.GetLoadReporterDaemonFactory().CreateReporter(time.Minute, pathCache, logger)
-	pathCache.destM3Client = metrics.NewClientWithTags(pathCache.m3Client, metrics.Inputhost, inputHost.getDestinationTags(destinationPath))
+	pathCache.destM3Client = metrics.NewClientWithTags(pathCache.m3Client, metrics.Inputhost, common.GetDestinationTags(destinationPath, logger))
 
 	var connection *extHost
 	for _, extent := range extents {
@@ -1307,7 +1307,7 @@ func (s *InputHostSuite) TestInputExtHostSizeLimit() {
 	}
 
 	pathCache.loadReporter = inputHost.GetLoadReporterDaemonFactory().CreateReporter(time.Minute, pathCache, logger)
-	pathCache.destM3Client = metrics.NewClientWithTags(pathCache.m3Client, metrics.Inputhost, inputHost.getDestinationTags(destinationPath))
+	pathCache.destM3Client = metrics.NewClientWithTags(pathCache.m3Client, metrics.Inputhost, common.GetDestinationTags(destinationPath, logger))
 	var connection *extHost
 	for _, extent := range extents {
 		connection = newExtConnection(

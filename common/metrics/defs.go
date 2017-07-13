@@ -417,6 +417,10 @@ const (
 	OpenReplicationRemoteReadScope
 	// OpenReplicationReadScope represents OpenReplicationRead API
 	OpenReplicationReadScope
+	// OpenReplicationRemoteReadPerDestScope represents OpenReplicationRemoteRead API (per destination)
+	OpenReplicationRemoteReadPerDestScope
+	// OpenReplicationReadPerDestScope represents OpenReplicationRead API (per destination)
+	OpenReplicationReadPerDestScope
 	// ReplicatorCreateDestUUIDScope represents replicator CreateDestinationUUID API
 	ReplicatorCreateDestUUIDScope
 	// ReplicatorCreateRmtDestUUIDScope represents replicator CreateRemoteDestinationUUID API
@@ -664,6 +668,11 @@ var dynamicScopeDefs = map[ServiceIdx]map[int]scopeDefinition{
 	// Controller Scope Names
 	Controller: {
 		QueueDepthBacklogCGScope: {operation: "QueueDepthBacklog"},
+	},
+
+	Replicator: {
+		OpenReplicationRemoteReadPerDestScope: {operation: "OpenReplicationRemoteReadStreamPerDest"},
+		OpenReplicationReadPerDestScope:       {operation: "OpenReplicationReadStreamPerDest"},
 	},
 }
 
@@ -1067,6 +1076,10 @@ const (
 	ReplicatorInConnCreditsReceived
 	// ReplicatorInConnMsgWritten indicates how many messages InConn writes to client
 	ReplicatorInConnMsgWritten
+	// ReplicatorInConnPerDestMsgWritten indicates how many messages InConn writes to client per destination
+	ReplicatorInConnPerDestMsgWritten
+	// ReplicatorInConnPerDestMsgLatency indicates the per destination replication latency
+	ReplicatorInConnPerDestMsgLatency
 	// ReplicatorOutConnCreditsSent indicates how many credits OutConn sent
 	ReplicatorOutConnCreditsSent
 	// ReplicatorOutConnMsgRead indicates how many messages OutConn read
@@ -1359,6 +1372,10 @@ var dynamicMetricDefs = map[ServiceIdx]map[int]metricDefinition{
 		ControllerCGBacklogInflight:    {Gauge, "controller.backlog.inflight.cg"},
 		ControllerCGBacklogDLQ:         {Gauge, "controller.backlog.DLQ.cg"},
 		ControllerCGBacklogProgress:    {Gauge, "controller.backlog.progress.cg"},
+	},
+	Replicator: {
+		ReplicatorInConnPerDestMsgWritten: {Counter, "replicator.inconn.perdestmsgwritten"},
+		ReplicatorInConnPerDestMsgLatency: {Timer, "replicator.inconn.perdestmsglatency"},
 	},
 }
 

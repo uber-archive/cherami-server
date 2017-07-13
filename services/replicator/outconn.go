@@ -22,6 +22,8 @@ package replicator
 
 import (
 	"sync"
+	"sync/atomic"
+	"time"
 
 	"github.com/uber-common/bark"
 	"github.com/uber/cherami-server/common"
@@ -33,13 +35,17 @@ import (
 
 type (
 	outConnection struct {
-		extUUID string
-		stream  storeStream.BStoreOpenReadStreamOutCall
-		msgsCh  chan *store.ReadMessageContent
+		startTime int64
+		extUUID   string
+		stream    storeStream.BStoreOpenReadStreamOutCall
+		msgsCh    chan *store.ReadMessageContent
 
-		logger     bark.Logger
-		m3Client   metrics.Client
-		metricsTag int
+		logger       bark.Logger
+		m3Client     metrics.Client
+		metricsScope int
+
+		lastMsgReplicatedTime int64
+		totalMsgReplicated    int32
 
 		readMsgCountChannel chan int32    // channel to pass read msg count from readMsgStream to writeCreditsStream in order to issue more credits
 		closeChannel        chan struct{} // channel to indicate the connection should be closed
@@ -58,14 +64,20 @@ const (
 	creditBatchSize = initialCreditSize / 10
 )
 
-func newOutConnection(extUUID string, stream storeStream.BStoreOpenReadStreamOutCall, logger bark.Logger, m3Client metrics.Client, metricsTag int) *outConnection {
+func newOutConnection(extUUID string, destPath string, stream storeStream.BStoreOpenReadStreamOutCall, logger bark.Logger, m3Client metrics.Client, metricsScope int) *outConnection {
+	localLogger := logger.WithFields(bark.Fields{
+		common.TagExt:    extUUID,
+		common.TagDstPth: destPath,
+		`scope`:          `outConnection`,
+	})
 	conn := &outConnection{
+		startTime:           time.Now().UnixNano(),
 		extUUID:             extUUID,
 		stream:              stream,
 		msgsCh:              make(chan *store.ReadMessageContent, msgBufferSize),
-		logger:              logger.WithField(common.TagExt, extUUID).WithField(`scope`, "outConnection"),
+		logger:              localLogger,
 		m3Client:            m3Client,
-		metricsTag:          metricsTag,
+		metricsScope:        metricsScope,
 		readMsgCountChannel: make(chan int32, 10),
 		closeChannel:        make(chan struct{}),
 	}
@@ -138,8 +150,8 @@ func (conn *outConnection) readMsgStream() {
 	var lastSeqNum int64 = -1
 
 	var sealMsgRead bool
-
 	var numMsgsRead int32
+
 	for {
 		select {
 		case <-conn.closeChannel:
@@ -189,13 +201,15 @@ func (conn *outConnection) readMsgStream() {
 				// update the lastSeqNum to this value
 				lastSeqNum = msg.Message.GetSequenceNumber()
 
-				conn.m3Client.IncCounter(conn.metricsTag, metrics.ReplicatorOutConnMsgRead)
+				conn.m3Client.IncCounter(conn.metricsScope, metrics.ReplicatorOutConnMsgRead)
 
 				// now push msg to the msg channel (which will in turn be pushed to client)
 				// Note this is a blocking call here
 				select {
 				case conn.msgsCh <- rmc:
 					numMsgsRead++
+					atomic.AddInt32(&conn.totalMsgReplicated, 1)
+					atomic.StoreInt64(&conn.lastMsgReplicatedTime, time.Now().UnixNano())
 				case <-conn.closeChannel:
 					conn.logger.Info(`writing msg to the channel failed because of shutdown`)
 					return
@@ -211,6 +225,8 @@ func (conn *outConnection) readMsgStream() {
 				select {
 				case conn.msgsCh <- rmc:
 					numMsgsRead++
+					atomic.AddInt32(&conn.totalMsgReplicated, 1)
+					atomic.StoreInt64(&conn.lastMsgReplicatedTime, time.Now().UnixNano())
 				case <-conn.closeChannel:
 					conn.logger.Info(`writing msg to the channel failed because of shutdown`)
 					return
@@ -237,7 +253,7 @@ func (conn *outConnection) sendCredits(credits int32) error {
 		err = conn.stream.Flush()
 	}
 
-	conn.m3Client.AddCounter(conn.metricsTag, metrics.ReplicatorOutConnCreditsSent, int64(credits))
+	conn.m3Client.AddCounter(conn.metricsScope, metrics.ReplicatorOutConnCreditsSent, int64(credits))
 
 	return err
 }

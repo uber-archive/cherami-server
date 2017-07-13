@@ -38,9 +38,11 @@ type (
 		stream  storeStream.BStoreOpenReadStreamInCall
 		msgCh   <-chan *store.ReadMessageContent
 
-		logger     bark.Logger
-		m3Client   metrics.Client
-		metricsTag int
+		logger              bark.Logger
+		m3Client            metrics.Client
+		destM3Client        metrics.Client
+		metricsScope        int
+		perDestMetricsScope int
 
 		closeChannel         chan struct{} // channel to indicate the connection should be closed
 		creditsCh            chan int32    // channel to pass credits from readCreditsStream to writeMsgsStream
@@ -58,14 +60,21 @@ const (
 	flushTimeout = 50 * time.Millisecond
 )
 
-func newInConnection(extUUID string, stream storeStream.BStoreOpenReadStreamInCall, msgCh <-chan *store.ReadMessageContent, logger bark.Logger, m3Client metrics.Client, metricsTag int) *inConnection {
+func newInConnection(extUUID string, destPath string, stream storeStream.BStoreOpenReadStreamInCall, msgCh <-chan *store.ReadMessageContent, logger bark.Logger, m3Client metrics.Client, metricsScope int, perDestMetricsScope int) *inConnection {
+	localLogger := logger.WithFields(bark.Fields{
+		common.TagExt:    extUUID,
+		common.TagDstPth: destPath,
+		`scope`:          `inConnection`,
+	})
 	conn := &inConnection{
 		extUUID:              extUUID,
 		stream:               stream,
 		msgCh:                msgCh,
-		logger:               logger.WithField(common.TagExt, extUUID).WithField(`scope`, "inConnection"),
+		logger:               localLogger,
 		m3Client:             m3Client,
-		metricsTag:           metricsTag,
+		destM3Client:         metrics.NewClientWithTags(m3Client, metrics.Replicator, common.GetDestinationTags(destPath, localLogger)),
+		metricsScope:         metricsScope,
+		perDestMetricsScope:  perDestMetricsScope,
 		closeChannel:         make(chan struct{}),
 		creditsCh:            make(chan int32, 5),
 		creditFlowExpiration: time.Now().Add(creditFlowTimeout),
@@ -111,7 +120,7 @@ func (conn *inConnection) readCreditsStream() {
 				return
 			}
 
-			conn.m3Client.AddCounter(conn.metricsTag, metrics.ReplicatorInConnCreditsReceived, int64(msg.GetCredits()))
+			conn.m3Client.AddCounter(conn.metricsScope, metrics.ReplicatorInConnCreditsReceived, int64(msg.GetCredits()))
 
 			// send this to writeMsgsPump which keeps track of the local credits
 			// Make this non-blocking because writeMsgsStream could be closed before this
@@ -162,7 +171,16 @@ func (conn *inConnection) writeMsgsStream() {
 					conn.logger.Info(`sealed msg read`)
 				}
 
-				conn.m3Client.IncCounter(conn.metricsTag, metrics.ReplicatorInConnMsgWritten)
+				conn.m3Client.IncCounter(conn.metricsScope, metrics.ReplicatorInConnMsgWritten)
+
+				// Update per destination metrics after msg is sent to local store (call is OpenReplicationRemoteRead)
+				// so they're most accurate.
+				if conn.metricsScope == metrics.OpenReplicationRemoteReadScope {
+					conn.destM3Client.IncCounter(conn.perDestMetricsScope, metrics.ReplicatorInConnPerDestMsgWritten)
+					latency := time.Duration(time.Now().UnixNano() - msg.GetMessage().Message.GetEnqueueTimeUtc())
+					conn.destM3Client.RecordTimer(conn.perDestMetricsScope, metrics.ReplicatorInConnPerDestMsgLatency, latency)
+				}
+
 				localCredits--
 			case credit := <-conn.creditsCh:
 				conn.extentCreditExpiration()

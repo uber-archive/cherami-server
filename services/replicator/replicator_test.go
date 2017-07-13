@@ -140,6 +140,10 @@ func (s *ReplicatorSuite) TestReplicatorReadMessage() {
 	mReadExtentStatsRes.ExtentStats = mExtentStats
 	s.mockMeta.On("ReadExtentStats", mock.Anything, mock.Anything).Return(mReadExtentStatsRes, nil).Once()
 
+	mDestDesc := shared.NewDestinationDescription()
+	mDestDesc.Path = common.StringPtr(`/a/b`)
+	s.mockMeta.On("ReadDestination", mock.Anything, mock.Anything).Return(mDestDesc, nil).Once()
+
 	s.mockOutStream.On("Write", mock.Anything).Return(nil)
 
 	cFlow := cherami.NewControlFlow()
