@@ -164,7 +164,7 @@ func (tb *testBase) setupSuiteImpl(t *testing.T) {
 	tb.NoError(err)
 
 	authentication := configure.Authentication{
-		Enabled: true,
+		Enabled:  true,
 		Username: "cassandra",
 		Password: "cassandra",
 	}
