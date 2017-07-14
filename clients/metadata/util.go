@@ -73,7 +73,10 @@ func LoadSchema(cqlshpath string, fileName string, keyspace string) (err error) 
 	// Using cqlsh as I couldn't find a way to execute multiple commands through gocql.Session
 	var out bytes.Buffer
 	var stderr bytes.Buffer
-	cmd := exec.Command(cqlshpath, fmt.Sprintf("--keyspace=%v", keyspace), fmt.Sprintf("--file=%v", fileName), `127.0.0.1`)
+	cmd := exec.Command(cqlshpath,
+		fmt.Sprintf("-u cassandra -p cassandra"),
+		fmt.Sprintf("--keyspace=%v", keyspace),
+		fmt.Sprintf("--file=%v", fileName), `127.0.0.1`)
 	cmd.Stdout = &out
 	cmd.Stderr = &stderr
 	err = cmd.Run()
