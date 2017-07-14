@@ -156,7 +156,7 @@ imports:
   - swim
   - util
 - name: github.com/uber/tchannel-go
-  version: 4a23f3aae76694b21107f118ece763a61b98ea07
+  version: b99c1d7cecb0fdc882bed0098e7cae6ec7459059
   subpackages:
   - hyperbahn
   - hyperbahn/gen-go/hyperbahn
