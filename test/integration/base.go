@@ -159,21 +159,21 @@ func (tb *testBase) setupSuiteImpl(t *testing.T) {
 	tb.keyspace = "integration_test"
 	tb.Assertions = require.New(tb.T())
 
-	// create the keyspace first
-	err := metadata.CreateKeyspaceNoSession("127.0.0.1", tb.keyspace, 1, true)
-	tb.NoError(err)
-
-	authentication := configure.Authentication{
+	auth := configure.Authentication{
 		Enabled:  true,
 		Username: "cassandra",
 		Password: "cassandra",
 	}
 
+	// create the keyspace first
+	err := metadata.CreateKeyspaceNoSession("127.0.0.1", tb.keyspace, 1, true, auth)
+	tb.NoError(err)
+
 	tb.mClient, _ = metadata.NewCassandraMetadataService(&configure.MetadataConfig{
 		CassandraHosts: "127.0.0.1",
 		Keyspace:       tb.keyspace,
 		Consistency:    "One",
-		Authentication: authentication,
+		Authentication: auth,
 	})
 	tb.NotNil(tb.mClient)
 

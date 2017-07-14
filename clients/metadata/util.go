@@ -97,7 +97,13 @@ func newCluster(clusterHosts string) *gocql.ClusterConfig {
 }
 
 // CreateKeyspaceNoSession is used to create a keyspace when we don't have a session
-func CreateKeyspaceNoSession(clusterHosts string, keyspace string, replicas int, overwrite bool) error {
+func CreateKeyspaceNoSession(
+	clusterHosts string,
+	keyspace string,
+	replicas int,
+	overwrite bool,
+	auth configure.Authentication,
+) error {
 	// open a session to the "system" keyspace just to create the new keyspace
 	// TODO: Find out if we can do this "outside" of a session (cqlsh?)
 	cluster := newCluster(clusterHosts)
@@ -105,6 +111,12 @@ func CreateKeyspaceNoSession(clusterHosts string, keyspace string, replicas int,
 	cluster.Keyspace = "system"
 	cluster.Timeout = 40 * time.Second
 	cluster.ProtoVersion = cassandraProtoVersion
+	if auth.Enabled {
+		cluster.Authenticator = gocql.PasswordAuthenticator{
+			Username: auth.Username,
+			Password: auth.Password,
+		}
+	}
 	session, err := cluster.CreateSession()
 	if err != nil {
 		log.WithField(common.TagErr, err).Error(`CreateKeyspaceNoSession: unable to create session`)
