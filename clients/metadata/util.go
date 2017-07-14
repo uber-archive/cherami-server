@@ -74,7 +74,7 @@ func LoadSchema(cqlshpath string, fileName string, keyspace string) (err error) 
 	var out bytes.Buffer
 	var stderr bytes.Buffer
 	cmd := exec.Command(cqlshpath,
-		fmt.Sprintf("-u cassandra -p cassandra"),
+		fmt.Sprintf("--username=cassandra --password=cassandra"),
 		fmt.Sprintf("--keyspace=%v", keyspace),
 		fmt.Sprintf("--file=%v", fileName), `127.0.0.1`)
 	cmd.Stdout = &out
