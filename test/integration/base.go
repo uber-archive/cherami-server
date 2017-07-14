@@ -163,10 +163,17 @@ func (tb *testBase) setupSuiteImpl(t *testing.T) {
 	err := metadata.CreateKeyspaceNoSession("127.0.0.1", tb.keyspace, 1, true)
 	tb.NoError(err)
 
+	authentication := configure.Authentication{
+		Enabled: true,
+		Username: "cassandra",
+		Password: "cassandra",
+	}
+
 	tb.mClient, _ = metadata.NewCassandraMetadataService(&configure.MetadataConfig{
 		CassandraHosts: "127.0.0.1",
 		Keyspace:       tb.keyspace,
 		Consistency:    "One",
+		Authentication: authentication,
 	})
 	tb.NotNil(tb.mClient)
 
