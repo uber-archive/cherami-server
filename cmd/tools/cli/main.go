@@ -24,6 +24,7 @@ import (
 	"os"
 
 	"github.com/codegangsta/cli"
+	"github.com/uber/cherami-client-go/client/cherami"
 	lib "github.com/uber/cherami-server/cmd/tools/common"
 )
 
@@ -37,9 +38,14 @@ func main() {
 	app.Usage = "A command-line tool for cherami users"
 	app.Version = "1.1.10"
 
-	lib.SetCommonFlags(&app.Flags)
+	lib.SetCommonFlags(&app.Flags, false)
 
-	lib.SetCommonCommands(&app.Commands, serviceName)
+	cliHelper := lib.GetCommonCliHelper()
+
+	lib.SetCommonCommands(&app.Commands, cliHelper, serviceName, false,
+		func(c *cli.Context) cherami.AuthProvider {
+			return nil
+		})
 
 	app.Run(os.Args)
 }
