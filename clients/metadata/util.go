@@ -163,11 +163,18 @@ func (s *TestCluster) SetupTestCluster() {
 	s.createKeyspace(1)
 	s.loadSchema("schema/metadata.cql")
 
+	auth := configure.Authentication{
+		Enabled:  true,
+		Username: "cassandra",
+		Password: "cassandra",
+	}
+
 	var err error
 	s.client, err = NewCassandraMetadataService(&configure.MetadataConfig{
 		CassandraHosts: ip,
 		Keyspace:       s.keyspace,
 		Consistency:    "One",
+		Authentication: auth,
 	})
 	if err != nil {
 		log.Fatal(err)
@@ -186,6 +193,10 @@ func (s *TestCluster) createCluster(clusterHosts string, cons gocql.Consistency,
 	s.cluster.Keyspace = "system"
 	s.cluster.Timeout = 40 * time.Second
 	s.cluster.ProtoVersion = cassandraProtoVersion
+	s.cluster.Authenticator = gocql.PasswordAuthenticator{
+		Username: "cassandra",
+		Password: "cassandra",
+	}
 	var err error
 	s.session, err = s.cluster.CreateSession()
 	if err != nil {
