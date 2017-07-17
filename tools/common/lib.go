@@ -905,7 +905,7 @@ func printDest(dest *shared.DestinationDescription) {
 	fmt.Fprintln(os.Stdout, string(outputStr))
 }
 
-// ReadDestinationr return the detail for dest, and also consumer group for this dest
+// ReadDestination return the detail for dest, and also consumer group for this dest
 func ReadDestination(c *cli.Context, serviceName string) {
 	mClient := GetMClient(c, serviceName)
 
