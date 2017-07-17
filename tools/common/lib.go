@@ -239,9 +239,19 @@ func getChecksumOptionParam(optionStr string) cherami.ChecksumOption {
 	return cherami.ChecksumOption_CRC32IEEE
 }
 
-// CreateDestination create destination
+// CreateDestination creates destination
 func CreateDestination(c *cli.Context, cliHelper common.CliHelper, serviceName string) {
-	cClient := GetCClientSecure(c, serviceName, nil)
+	CreateDestinationSecure(c, cliHelper, serviceName, nil)
+}
+
+// CreateDestinationSecure creates destination with security enabled
+func CreateDestinationSecure(
+	c *cli.Context,
+	cliHelper common.CliHelper,
+	serviceName string,
+	authProvider ccli.AuthProvider,
+) {
+	cClient := GetCClientSecure(c, serviceName, authProvider)
 
 	if len(c.Args()) < 1 {
 		ExitIfError(errors.New(strNotEnoughArgs))
@@ -345,10 +355,20 @@ func getDestZoneConfigs(c *cli.Context, cliHelper common.CliHelper) cherami.Dest
 	return zoneConfigs
 }
 
-// UpdateDestination update destination based on cli
+// UpdateDestination updates destination
 func UpdateDestination(c *cli.Context, cliHelper common.CliHelper, serviceName string) {
+	UpdateDestinationSecure(c, cliHelper, serviceName, nil)
+}
+
+// UpdateDestinationSecure updates destination with security enabled
+func UpdateDestinationSecure(
+	c *cli.Context,
+	cliHelper common.CliHelper,
+	serviceName string,
+	authProvider ccli.AuthProvider,
+) {
 	mClient := GetMClient(c, serviceName)
-	cClient := GetCClient(c, serviceName)
+	cClient := GetCClientSecure(c, serviceName, authProvider)
 
 	if len(c.Args()) < 1 {
 		ExitIfError(errors.New(strNotEnoughArgs))
@@ -415,10 +435,20 @@ func UpdateDestination(c *cli.Context, cliHelper common.CliHelper, serviceName s
 	fmt.Printf("%v\n", Jsonify(desc))
 }
 
-// CreateConsumerGroup create consumer group based on cli.Context
+// CreateConsumerGroup creates consumer group based on cli.Context
 func CreateConsumerGroup(c *cli.Context, cliHelper common.CliHelper, serviceName string) {
+	CreateConsumerGroupSecure(c, cliHelper, serviceName, nil)
+}
+
+// CreateConsumerGroupSecure creates consumer group based on cli.Context
+func CreateConsumerGroupSecure(
+	c *cli.Context,
+	cliHelper common.CliHelper,
+	serviceName string,
+	authProvider ccli.AuthProvider,
+) {
 	mClient := GetMClient(c, serviceName)
-	cClient := GetCClientSecure(c, serviceName, nil)
+	cClient := GetCClientSecure(c, serviceName, authProvider)
 
 	if len(c.Args()) < 2 {
 		ExitIfError(errors.New(strNotEnoughArgs))
@@ -536,10 +566,20 @@ func getCgZoneConfigs(c *cli.Context, mClient mcli.Client, cliHelper common.CliH
 	return zoneConfigs
 }
 
-// UpdateConsumerGroup update the consumer group based on cli.Context
+// UpdateConsumerGroup updates the consumer group
 func UpdateConsumerGroup(c *cli.Context, cliHelper common.CliHelper, serviceName string) {
-	cClient := GetCClient(c, serviceName)
+	UpdateConsumerGroupSecure(c, cliHelper, serviceName, nil)
+}
+
+// UpdateConsumerGroupSecure updates the consumer group with security enabled
+func UpdateConsumerGroupSecure(
+	c *cli.Context,
+	cliHelper common.CliHelper,
+	serviceName string,
+	authProvider ccli.AuthProvider,
+) {
 	mClient := GetMClient(c, serviceName)
+	cClient := GetCClientSecure(c, serviceName, authProvider)
 
 	var path, name string
 
@@ -983,9 +1023,14 @@ func ReadCgBacklog(c *cli.Context, serviceName string) {
 	fmt.Println(backlog.GetValue())
 }
 
-// DeleteDestination delete the destination based on Cli.Context
+// DeleteDestination deletes the destination
 func DeleteDestination(c *cli.Context, serviceName string) {
-	cClient := GetCClient(c, serviceName)
+	DeleteDestinationSecure(c, serviceName, nil)
+}
+
+// DeleteDestinationSecure deletes the destination with security enabled
+func DeleteDestinationSecure(c *cli.Context, serviceName string, authProvider ccli.AuthProvider) {
+	cClient := GetCClientSecure(c, serviceName, authProvider)
 
 	if len(c.Args()) < 1 {
 		ExitIfError(errors.New(strNotEnoughArgs))
@@ -998,9 +1043,14 @@ func DeleteDestination(c *cli.Context, serviceName string) {
 	ExitIfError(err)
 }
 
-// DeleteConsumerGroup delete the consumer group based on Cli.Context
+// DeleteConsumerGroup deletes the consumer group
 func DeleteConsumerGroup(c *cli.Context, serviceName string) {
-	cClient := GetCClient(c, serviceName)
+	DeleteConsumerGroupSecure(c, serviceName, nil)
+}
+
+// DeleteConsumerGroupSecure deletes the consumer group with security enabled
+func DeleteConsumerGroupSecure(c *cli.Context, serviceName string, authProvider ccli.AuthProvider) {
+	cClient := GetCClientSecure(c, serviceName, authProvider)
 
 	if len(c.Args()) < 2 {
 		ExitIfError(errors.New(strNotEnoughArgs))
