@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/codegangsta/cli"
+	"github.com/uber/cherami-client-go/client/cherami"
 	"github.com/uber/cherami-server/common"
 	"github.com/uber/cherami-server/tools/admin"
 	toolscommon "github.com/uber/cherami-server/tools/common"
@@ -36,8 +37,25 @@ const (
 	strDelaySeconds               = `Delay, in seconds, to defer all messages by`
 )
 
+// GetCommonCliHelper returns the common cli helper for both cli and admin commands
+func GetCommonCliHelper() common.CliHelper {
+	cliHelper := common.NewCliHelper()
+	// SetCanonicalZones. For now just "zone1", "zone2", "z1"
+	// and "z2" are valid and they map to "zone1" and "zone2"
+	// canonical zones.
+	// We can use this API to set any valid zones
+	cliHelper.SetCanonicalZones(map[string]string{
+		"zone1": "zone1",
+		"zone2": "zone2",
+		"z1":    "zone1",
+		"z2":    "zone2",
+	})
+
+	return cliHelper
+}
+
 // SetCommonFlags sets the common flags for both cli and admin commands
-func SetCommonFlags(flags *[]cli.Flag) {
+func SetCommonFlags(flags *[]cli.Flag, includeAuth bool) {
 	*flags = append(*flags, []cli.Flag{
 		cli.BoolTFlag{
 			Name:  "hyperbahn",
@@ -66,6 +84,26 @@ func SetCommonFlags(flags *[]cli.Flag) {
 			EnvVar: "CHERAMI_FRONTEND_HOSTPORT",
 		},
 	}...)
+
+	if includeAuth {
+		*flags = append(*flags, []cli.Flag{
+			cli.StringFlag{
+				Name:  "user_identity, user",
+				Value: "",
+				Usage: "The user identity to issue the action. Could be a user name or service name. Use empty value for current user.",
+			},
+			cli.StringFlag{
+				Name:  "private_key, pr",
+				Value: "",
+				Usage: "The private key file path for the user identity specified by -user_identity argument. Use empty value for current user.",
+			},
+			cli.StringFlag{
+				Name:  "disable_auth, da",
+				Value: "false",
+				Usage: "Disable authentication in the client.",
+			},
+		}...)
+	}
 }
 
 // SetAdminFlags sets the admin flags
@@ -77,19 +115,14 @@ func SetAdminFlags(flags *[]cli.Flag) {
 }
 
 // SetCommonCommands sets the common commands for both cli and admin commands
-func SetCommonCommands(commands *[]cli.Command, serviceName string) {
-	cliHelper := common.NewCliHelper()
-	// SetCanonicalZones. For now just "zone1", "zone2", "z1"
-	// and "z2" are valid and they map to "zone1" and "zone2"
-	// canonical zones.
-	// We can use this API to set any valid zones
-	cliHelper.SetCanonicalZones(map[string]string{
-		"zone1": "zone1",
-		"zone2": "zone2",
-		"z1":    "zone1",
-		"z2":    "zone2",
-	})
-
+// getAuthProvider is meaningful if and only if authEnabled is true
+func SetCommonCommands(
+	commands *[]cli.Command,
+	cliHelper common.CliHelper,
+	serviceName string,
+	authEnabled bool,
+	getAuthProvider func(*cli.Context) cherami.AuthProvider,
+) {
 	*commands = append(*commands, []cli.Command{
 		{
 			Name:    "create",
@@ -140,7 +173,12 @@ func SetCommonCommands(commands *[]cli.Command, serviceName string) {
 						},
 					},
 					Action: func(c *cli.Context) {
-						toolscommon.CreateDestination(c, cliHelper, serviceName)
+						if authEnabled {
+							authProvider := getAuthProvider(c)
+							toolscommon.CreateDestinationSecure(c, cliHelper, serviceName, authProvider)
+						} else {
+							toolscommon.CreateDestination(c, cliHelper, serviceName)
+						}
 					},
 				},
 				{
@@ -184,7 +222,12 @@ func SetCommonCommands(commands *[]cli.Command, serviceName string) {
 						},
 					},
 					Action: func(c *cli.Context) {
-						toolscommon.CreateConsumerGroup(c, cliHelper, serviceName)
+						if authEnabled {
+							authProvider := getAuthProvider(c)
+							toolscommon.CreateConsumerGroupSecure(c, cliHelper, serviceName, authProvider)
+						} else {
+							toolscommon.CreateConsumerGroup(c, cliHelper, serviceName)
+						}
 					},
 				},
 			},
@@ -278,7 +321,12 @@ func SetCommonCommands(commands *[]cli.Command, serviceName string) {
 						},
 					},
 					Action: func(c *cli.Context) {
-						toolscommon.UpdateDestination(c, cliHelper, serviceName)
+						if authEnabled {
+							authProvider := getAuthProvider(c)
+							toolscommon.UpdateDestinationSecure(c, cliHelper, serviceName, authProvider)
+						} else {
+							toolscommon.UpdateDestination(c, cliHelper, serviceName)
+						}
 					},
 				},
 				{
@@ -320,7 +368,12 @@ func SetCommonCommands(commands *[]cli.Command, serviceName string) {
 						},
 					},
 					Action: func(c *cli.Context) {
-						toolscommon.UpdateConsumerGroup(c, cliHelper, serviceName)
+						if authEnabled {
+							authProvider := getAuthProvider(c)
+							toolscommon.UpdateConsumerGroupSecure(c, cliHelper, serviceName, authProvider)
+						} else {
+							toolscommon.UpdateConsumerGroup(c, cliHelper, serviceName)
+						}
 					},
 				},
 			},
@@ -335,7 +388,12 @@ func SetCommonCommands(commands *[]cli.Command, serviceName string) {
 					Aliases: []string{"d", "dst", "dest"},
 					Usage:   "delete destination <name>",
 					Action: func(c *cli.Context) {
-						toolscommon.DeleteDestination(c, serviceName)
+						if authEnabled {
+							authProvider := getAuthProvider(c)
+							toolscommon.DeleteDestinationSecure(c, serviceName, authProvider)
+						} else {
+							toolscommon.DeleteDestination(c, serviceName)
+						}
 						println("deleted destination: ", c.Args().First())
 					},
 				},
@@ -344,7 +402,12 @@ func SetCommonCommands(commands *[]cli.Command, serviceName string) {
 					Aliases: []string{"c", "cg"},
 					Usage:   "delete consumergroup [<destination_path>|<DLQ_UUID>] <consumer_group_name>",
 					Action: func(c *cli.Context) {
-						toolscommon.DeleteConsumerGroup(c, serviceName)
+						if authEnabled {
+							authProvider := getAuthProvider(c)
+							toolscommon.DeleteConsumerGroupSecure(c, serviceName, authProvider)
+						} else {
+							toolscommon.DeleteConsumerGroup(c, serviceName)
+						}
 						println("deleted consumergroup: ", c.Args()[0], c.Args()[1])
 					},
 				},
