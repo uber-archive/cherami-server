@@ -46,8 +46,8 @@ func (t *syncset) Clear() {
 // Empty checks if the set is empty
 func (t *syncset) Empty() bool {
 
-	t.Lock()
-	defer t.Unlock()
+	t.RLock()
+	defer t.RUnlock()
 
 	return t.set.Empty()
 }
@@ -55,8 +55,8 @@ func (t *syncset) Empty() bool {
 // Count returns the size of the set
 func (t *syncset) Count() int {
 
-	t.Lock()
-	defer t.Unlock()
+	t.RLock()
+	defer t.RUnlock()
 
 	return t.set.Count()
 }
