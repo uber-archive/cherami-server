@@ -36,6 +36,8 @@ func newTestSet(setType string, cap int) (s Set) {
 		s = NewSortedSet(0)
 	case "MapSet":
 		s = NewMapSet(0)
+	case "SyncSet":
+		s = NewSyncSet(New(0))
 	}
 
 	return s
@@ -55,6 +57,8 @@ func TestSet(t *testing.T) {
 		{"MapSet", "SliceSet"},
 		{"MapSet", "SortedSet"},
 		{"MapSet", "MapSet"},
+		{"SyncSet", "SyncSet"},
+		{"SyncSet", "MapSet"},
 	}
 
 	for _, tc := range testCases {
