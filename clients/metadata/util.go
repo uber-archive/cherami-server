@@ -32,6 +32,7 @@ import (
 
 	"github.com/gocql/gocql"
 	log "github.com/sirupsen/logrus"
+	"github.com/uber-common/bark"
 	"github.com/uber/cherami-server/common"
 	"github.com/uber/cherami-server/common/configure"
 	m "github.com/uber/cherami-thrift/.generated/go/metadata"
@@ -175,7 +176,8 @@ func (s *TestCluster) SetupTestCluster() {
 		Keyspace:       s.keyspace,
 		Consistency:    "One",
 		Authentication: auth,
-	})
+	}, bark.NewLoggerFromLogrus(log.StandardLogger()))
+
 	if err != nil {
 		log.Fatal(err)
 	}
