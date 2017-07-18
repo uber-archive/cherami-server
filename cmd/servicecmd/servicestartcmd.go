@@ -57,97 +57,101 @@ const (
 func StartInputHostService() {
 	serviceName := common.InputServiceName
 	cfg := common.SetupServerConfig(configure.NewCommonConfigure())
-	if e := os.Setenv("port", fmt.Sprintf("%d", cfg.GetServiceConfig(serviceName).GetPort())); e != nil {
+	svcCfg := cfg.GetServiceConfig(serviceName)
+	if e := os.Setenv("port", fmt.Sprintf("%d", svcCfg.GetPort())); e != nil {
 		log.Panic(e)
 	}
 
-	meta, err := metadata.NewCassandraMetadataService(cfg.GetMetadataConfig())
+	meta, err := metadata.NewCassandraMetadataService(cfg.GetMetadataConfig(), svcCfg.GetLogger())
 	if err != nil {
 		log.WithField(common.TagErr, err).Fatal(`inputhost: unable to instantiate metadata client`)
 	}
 
 	hwInfoReader := common.NewHostHardwareInfoReader(meta)
-	reporter := common.NewMetricReporterWithHostname(cfg.GetServiceConfig(serviceName))
-	dClient := dconfigclient.NewDconfigClient(cfg.GetServiceConfig(serviceName), serviceName)
+	reporter := common.NewMetricReporterWithHostname(svcCfg)
+	dClient := dconfigclient.NewDconfigClient(svcCfg, serviceName)
 
-	sCommon := common.NewService(serviceName, uuid.New(), cfg.GetServiceConfig(serviceName), common.NewUUIDResolver(meta), hwInfoReader, reporter, dClient, common.NewBypassAuthManager())
+	sCommon := common.NewService(serviceName, uuid.New(), svcCfg, common.NewUUIDResolver(meta), hwInfoReader, reporter, dClient, common.NewBypassAuthManager())
 	h, tc := inputhost.NewInputHost(serviceName, sCommon, meta, nil)
 	h.Start(tc)
 
 	// start websocket server
-	common.WSStart(cfg.GetServiceConfig(serviceName).GetListenAddress().String(),
-		cfg.GetServiceConfig(serviceName).GetWebsocketPort(), h)
+	common.WSStart(svcCfg.GetListenAddress().String(),
+		svcCfg.GetWebsocketPort(), h)
 
 	// start diagnosis local http server
-	common.ServiceLoop(cfg.GetServiceConfig(serviceName).GetPort()+diagnosticPortOffset, cfg, h)
+	common.ServiceLoop(svcCfg.GetPort()+diagnosticPortOffset, cfg, h)
 }
 
 //StartControllerService starts the controller service of cherami
 func StartControllerService() {
 	serviceName := common.ControllerServiceName
 	cfg := common.SetupServerConfig(configure.NewCommonConfigure())
-	if e := os.Setenv("port", fmt.Sprintf("%d", cfg.GetServiceConfig(serviceName).GetPort())); e != nil {
+	svcCfg := cfg.GetServiceConfig(serviceName)
+	if e := os.Setenv("port", fmt.Sprintf("%d", svcCfg.GetPort())); e != nil {
 		log.Panic(e)
 	}
 
-	meta, err := metadata.NewCassandraMetadataService(cfg.GetMetadataConfig())
+	meta, err := metadata.NewCassandraMetadataService(cfg.GetMetadataConfig(), svcCfg.GetLogger())
 	if err != nil {
 		// no metadata service - just fail early
 		log.WithField(common.TagErr, err).Fatal(`unable to instantiate metadata service (did you run ./scripts/setup_cassandra_schema.sh?)`)
 	}
 	hwInfoReader := common.NewHostHardwareInfoReader(meta)
-	reporter := common.NewMetricReporterWithHostname(cfg.GetServiceConfig(serviceName))
-	dClient := dconfigclient.NewDconfigClient(cfg.GetServiceConfig(serviceName), serviceName)
-	sVice := common.NewService(serviceName, uuid.New(), cfg.GetServiceConfig(serviceName), common.NewUUIDResolver(meta), hwInfoReader, reporter, dClient, common.NewBypassAuthManager())
+	reporter := common.NewMetricReporterWithHostname(svcCfg)
+	dClient := dconfigclient.NewDconfigClient(svcCfg, serviceName)
+	sVice := common.NewService(serviceName, uuid.New(), svcCfg, common.NewUUIDResolver(meta), hwInfoReader, reporter, dClient, common.NewBypassAuthManager())
 	mcp, tc := controllerhost.NewController(cfg, sVice, meta, common.NewDummyZoneFailoverManager())
 	mcp.Start(tc)
-	common.ServiceLoop(cfg.GetServiceConfig(serviceName).GetPort()+diagnosticPortOffset, cfg, mcp.Service)
+	common.ServiceLoop(svcCfg.GetPort()+diagnosticPortOffset, cfg, mcp.Service)
 }
 
 //StartFrontendHostService starts the frontendhost service of cherami
 func StartFrontendHostService() {
 	serviceName := common.FrontendServiceName
 	cfg := common.SetupServerConfig(configure.NewCommonConfigure())
-	if e := os.Setenv("port", fmt.Sprintf("%d", cfg.GetServiceConfig(serviceName).GetPort())); e != nil {
+	svcCfg := cfg.GetServiceConfig(serviceName)
+	if e := os.Setenv("port", fmt.Sprintf("%d", svcCfg.GetPort())); e != nil {
 		log.Panic(e)
 	}
 
-	meta, err := metadata.NewCassandraMetadataService(cfg.GetMetadataConfig())
+	meta, err := metadata.NewCassandraMetadataService(cfg.GetMetadataConfig(), svcCfg.GetLogger())
 	if err != nil {
 		// no metadata service - just fail early
 		log.WithField(common.TagErr, err).Fatal(`frontendhost: unable to instantiate metadata service`)
 	}
 
 	hwInfoReader := common.NewHostHardwareInfoReader(meta)
-	reporter := common.NewMetricReporterWithHostname(cfg.GetServiceConfig(serviceName))
-	dClient := dconfigclient.NewDconfigClient(cfg.GetServiceConfig(serviceName), serviceName)
-	sCommon := common.NewService(serviceName, uuid.New(), cfg.GetServiceConfig(serviceName), common.NewUUIDResolver(meta), hwInfoReader, reporter, dClient, common.NewBypassAuthManager())
+	reporter := common.NewMetricReporterWithHostname(svcCfg)
+	dClient := dconfigclient.NewDconfigClient(svcCfg, serviceName)
+	sCommon := common.NewService(serviceName, uuid.New(), svcCfg, common.NewUUIDResolver(meta), hwInfoReader, reporter, dClient, common.NewBypassAuthManager())
 	h, tc := frontendhost.NewFrontendHost(serviceName, sCommon, meta, cfg)
 
 	// frontend host also exposes non-streaming metadata methods
 	tc = append(tc, m.NewTChanMetadataExposableServer(meta))
 	h.Start(tc)
-	common.ServiceLoop(cfg.GetServiceConfig(serviceName).GetPort()+diagnosticPortOffset, cfg, sCommon)
+	common.ServiceLoop(svcCfg.GetPort()+diagnosticPortOffset, cfg, sCommon)
 }
 
 //StartOutputHostService starts the outputhost service of cherami
 func StartOutputHostService() {
 	serviceName := common.OutputServiceName
 	cfg := common.SetupServerConfig(configure.NewCommonConfigure())
-	if e := os.Setenv("port", fmt.Sprintf("%d", cfg.GetServiceConfig(serviceName).GetPort())); e != nil {
+	svcCfg := cfg.GetServiceConfig(serviceName)
+	if e := os.Setenv("port", fmt.Sprintf("%d", svcCfg.GetPort())); e != nil {
 		log.Panic(e)
 	}
 
-	meta, err := metadata.NewCassandraMetadataService(cfg.GetMetadataConfig())
+	meta, err := metadata.NewCassandraMetadataService(cfg.GetMetadataConfig(), svcCfg.GetLogger())
 	if err != nil {
 		// no metadata service - just fail early
 		log.WithField(common.TagErr, err).Fatal(`frontendhost: unable to instantiate metadata service`)
 	}
 
 	hwInfoReader := common.NewHostHardwareInfoReader(meta)
-	reporter := common.NewMetricReporterWithHostname(cfg.GetServiceConfig(serviceName))
-	dClient := dconfigclient.NewDconfigClient(cfg.GetServiceConfig(serviceName), serviceName)
-	sCommon := common.NewService(serviceName, uuid.New(), cfg.GetServiceConfig(serviceName), common.NewUUIDResolver(meta), hwInfoReader, reporter, dClient, common.NewBypassAuthManager())
+	reporter := common.NewMetricReporterWithHostname(svcCfg)
+	dClient := dconfigclient.NewDconfigClient(svcCfg, serviceName)
+	sCommon := common.NewService(serviceName, uuid.New(), svcCfg, common.NewUUIDResolver(meta), hwInfoReader, reporter, dClient, common.NewBypassAuthManager())
 
 	// Instantiate a frontend server. Don't call frontendhost.Start(), since that would advertise in Hyperbahn,
 	// and since we aren't using thrift anyway. We are selfish with our Frontend.
@@ -157,30 +161,31 @@ func StartOutputHostService() {
 	h.Start(tc)
 
 	// start websocket server
-	common.WSStart(cfg.GetServiceConfig(serviceName).GetListenAddress().String(),
-		cfg.GetServiceConfig(serviceName).GetWebsocketPort(), h)
+	common.WSStart(svcCfg.GetListenAddress().String(),
+		svcCfg.GetWebsocketPort(), h)
 
 	// start diagnosis local http server
-	common.ServiceLoop(cfg.GetServiceConfig(serviceName).GetPort()+diagnosticPortOffset, cfg, sCommon)
+	common.ServiceLoop(svcCfg.GetPort()+diagnosticPortOffset, cfg, sCommon)
 }
 
 //StartStoreHostService starts the storehost service of cherami
 func StartStoreHostService() {
 	serviceName := common.StoreServiceName
 	cfg := common.SetupServerConfig(configure.NewCommonConfigure())
-	if e := os.Setenv("port", fmt.Sprintf("%d", cfg.GetServiceConfig(serviceName).GetPort())); e != nil {
+	svcCfg := cfg.GetServiceConfig(serviceName)
+	if e := os.Setenv("port", fmt.Sprintf("%d", svcCfg.GetPort())); e != nil {
 		log.Panic(e)
 	}
 
-	meta, err := metadata.NewCassandraMetadataService(cfg.GetMetadataConfig())
+	meta, err := metadata.NewCassandraMetadataService(cfg.GetMetadataConfig(), svcCfg.GetLogger())
 	if err != nil {
 		log.WithField(common.TagErr, err).Fatal(`storehost: unable to instantiate metadata client`)
 	}
 
 	hwInfoReader := common.NewHostHardwareInfoReader(meta)
-	reporter := common.NewMetricReporterWithHostname(cfg.GetServiceConfig(serviceName))
-	dClient := dconfigclient.NewDconfigClient(cfg.GetServiceConfig(serviceName), serviceName)
-	sCommon := common.NewService(serviceName, cfg.GetStorageConfig().GetHostUUID(), cfg.GetServiceConfig(serviceName), common.NewUUIDResolver(meta), hwInfoReader, reporter, dClient, common.NewBypassAuthManager())
+	reporter := common.NewMetricReporterWithHostname(svcCfg)
+	dClient := dconfigclient.NewDconfigClient(svcCfg, serviceName)
+	sCommon := common.NewService(serviceName, cfg.GetStorageConfig().GetHostUUID(), svcCfg, common.NewUUIDResolver(meta), hwInfoReader, reporter, dClient, common.NewBypassAuthManager())
 
 	// parse args and pass them into NewStoreHost
 	var storeStr, baseDir string
@@ -229,38 +234,39 @@ func StartStoreHostService() {
 	h.Start(tc)
 
 	// start websocket server
-	common.WSStart(cfg.GetServiceConfig(serviceName).GetListenAddress().String(),
-		cfg.GetServiceConfig(serviceName).GetWebsocketPort(), h)
+	common.WSStart(svcCfg.GetListenAddress().String(),
+		svcCfg.GetWebsocketPort(), h)
 
 	// start diagnosis local http server
-	common.ServiceLoop(cfg.GetServiceConfig(serviceName).GetPort()+diagnosticPortOffset, cfg, sCommon)
+	common.ServiceLoop(svcCfg.GetPort()+diagnosticPortOffset, cfg, sCommon)
 }
 
 //StartReplicatorService starts the repliator service of cherami
 func StartReplicatorService() {
 	serviceName := common.ReplicatorServiceName
 	cfg := common.SetupServerConfig(configure.NewCommonConfigure())
-	if e := os.Setenv("port", fmt.Sprintf("%d", cfg.GetServiceConfig(serviceName).GetPort())); e != nil {
+	svcCfg := cfg.GetServiceConfig(serviceName)
+	if e := os.Setenv("port", fmt.Sprintf("%d", svcCfg.GetPort())); e != nil {
 		log.Panic(e)
 	}
 
-	meta, err := metadata.NewCassandraMetadataService(cfg.GetMetadataConfig())
+	meta, err := metadata.NewCassandraMetadataService(cfg.GetMetadataConfig(), svcCfg.GetLogger())
 	if err != nil {
 		// no metadata service - just fail early
 		log.WithField(common.TagErr, err).Fatal(`frontendhost: unable to instantiate metadata service`)
 	}
 	hwInfoReader := common.NewHostHardwareInfoReader(meta)
-	reporter := common.NewMetricReporterWithHostname(cfg.GetServiceConfig(serviceName))
-	dClient := dconfigclient.NewDconfigClient(cfg.GetServiceConfig(serviceName), serviceName)
-	sCommon := common.NewService(serviceName, uuid.New(), cfg.GetServiceConfig(serviceName), common.NewUUIDResolver(meta), hwInfoReader, reporter, dClient, common.NewBypassAuthManager())
+	reporter := common.NewMetricReporterWithHostname(svcCfg)
+	dClient := dconfigclient.NewDconfigClient(svcCfg, serviceName)
+	sCommon := common.NewService(serviceName, uuid.New(), svcCfg, common.NewUUIDResolver(meta), hwInfoReader, reporter, dClient, common.NewBypassAuthManager())
 
 	h, tc := replicator.NewReplicator(serviceName, sCommon, meta, replicator.NewReplicatorClientFactory(cfg, common.GetDefaultLogger()), cfg)
 	h.Start(tc)
 
 	// start websocket server
-	common.WSStart(cfg.GetServiceConfig(serviceName).GetListenAddress().String(),
-		cfg.GetServiceConfig(serviceName).GetWebsocketPort(), h)
+	common.WSStart(svcCfg.GetListenAddress().String(),
+		svcCfg.GetWebsocketPort(), h)
 
 	// start diagnosis local http server
-	common.ServiceLoop(cfg.GetServiceConfig(serviceName).GetPort()+diagnosticPortOffset, cfg, sCommon)
+	common.ServiceLoop(svcCfg.GetPort()+diagnosticPortOffset, cfg, sCommon)
 }
