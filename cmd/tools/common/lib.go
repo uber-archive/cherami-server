@@ -37,6 +37,7 @@ const (
 	strDelaySeconds               = `Delay, in seconds, to defer all messages by`
 )
 
+// GetCommonCliHelper returns the common cli helper for both cli and admin commands
 func GetCommonCliHelper() common.CliHelper {
 	cliHelper := common.NewCliHelper()
 	// SetCanonicalZones. For now just "zone1", "zone2", "z1"
