@@ -64,3 +64,10 @@ func New(cap int) Set {
 		return NewSliceSet(cap)
 	}
 }
+
+// NewConcurrent initializes a new concurrent set, picking the appropriate underlying
+// implementation based on the specified expected capacity
+func NewConcurrent(cap int) Set {
+
+	return NewSyncSet(New(cap))
+}

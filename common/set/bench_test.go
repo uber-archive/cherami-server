@@ -37,7 +37,7 @@ func BenchmarkSetInsert(b *testing.B) {
 			keys = append(keys, uuid.New().String())
 		}
 
-		for _, set := range []string{"SliceSet", "SortedSet", "MapSet"} {
+		for _, set := range []string{"SliceSet", "SortedSet", "MapSet", "SyncSet"} {
 
 			s := newTestSet(set, n)
 
@@ -62,7 +62,7 @@ func BenchmarkSetContains(b *testing.B) {
 			keys = append(keys, uuid.New().String())
 		}
 
-		for _, set := range []string{"SliceSet", "SortedSet", "MapSet"} {
+		for _, set := range []string{"SliceSet", "SortedSet", "MapSet", "SyncSet"} {
 
 			s := newTestSet(set, n)
 
