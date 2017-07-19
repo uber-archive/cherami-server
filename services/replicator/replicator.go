@@ -39,6 +39,7 @@ import (
 	dconfig "github.com/uber/cherami-server/common/dconfigclient"
 	mm "github.com/uber/cherami-server/common/metadata"
 	"github.com/uber/cherami-server/common/metrics"
+	"github.com/uber/cherami-server/common/set"
 	storeStream "github.com/uber/cherami-server/stream"
 	"github.com/uber/cherami-thrift/.generated/go/admin"
 	"github.com/uber/cherami-thrift/.generated/go/metadata"
@@ -66,6 +67,8 @@ type (
 		remoteReplicatorConnMutex sync.RWMutex
 		storehostConn             map[string]*outConnection
 		storehostConnMutex        sync.RWMutex
+
+		knownCgExtents set.Set
 
 		metadataReconciler MetadataReconciler
 	}
@@ -127,6 +130,7 @@ func NewReplicator(serviceName string, sVice common.SCommon, metadataClient meta
 		replicatorclientFactory:  replicatorClientFactory,
 		remoteReplicatorConn:     make(map[string]*outConnection),
 		storehostConn:            make(map[string]*outConnection),
+		knownCgExtents:           set.NewConcurrent(0),
 	}
 
 	r.metaClient = mm.NewMetadataMetricsMgr(metadataClient, r.m3Client, r.logger)
@@ -1101,6 +1105,23 @@ func (r *Replicator) SetAckOffset(ctx thrift.Context, request *shared.SetAckOffs
 		common.TagExt:  common.FmtExt(request.GetExtentUUID()),
 	})
 	r.m3Client.IncCounter(metrics.ReplicatorSetAckOffsetScope, metrics.ReplicatorRequests)
+
+	if !r.knownCgExtents.Contains(request.GetExtentUUID()) {
+		// make sure the cg extent is created locally before accepting the SetAckOffset call.
+		// otherwise SetAckOffset will create the cg extent entry with no store uuid or output host uuid
+		// and we may not be able to clean up the entry eventually.
+		_, err := r.metaClient.ReadConsumerGroupExtent(nil, &metadata.ReadConsumerGroupExtentRequest{
+			ConsumerGroupUUID: common.StringPtr(request.GetConsumerGroupUUID()),
+			ExtentUUID:        common.StringPtr(request.GetExtentUUID()),
+		})
+		if err != nil {
+			lcllg.WithField(common.TagErr, err).Error(`SetAckOffset: Failed to read cg extent locally`)
+			r.m3Client.IncCounter(metrics.ReplicatorSetAckOffsetScope, metrics.ReplicatorFailures)
+			return err
+		}
+
+		r.knownCgExtents.Insert(request.GetExtentUUID())
+	}
 
 	err := r.metaClient.SetAckOffset(nil, request)
 	if err != nil {
