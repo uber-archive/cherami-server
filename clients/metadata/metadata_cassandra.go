@@ -34,6 +34,7 @@ import (
 
 	"github.com/gocql/gocql"
 	"github.com/pborman/uuid"
+	"github.com/sirupsen/logrus"
 	"github.com/uber-common/bark"
 	"github.com/uber/tchannel-go/thrift"
 )
@@ -190,6 +191,10 @@ var _ m.TChanMetadataService = (*CassandraMetadataService)(nil)
 
 // NewCassandraMetadataService creates an instance of TChanMetadataServiceClient backed up by Cassandra.
 func NewCassandraMetadataService(cfg configure.CommonMetadataConfig, log bark.Logger) (*CassandraMetadataService, error) {
+
+	if log == nil {
+		log = bark.NewLoggerFromLogrus(logrus.StandardLogger())
+	}
 
 	lowCons, midCons, highCons := gocql.Two, gocql.Two, gocql.ParseConsistency(cfg.GetConsistency())
 
