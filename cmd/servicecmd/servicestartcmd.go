@@ -26,7 +26,8 @@ import (
 	"os"
 	"strings"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
+	"github.com/uber-common/bark"
 
 	"github.com/uber/cherami-server/clients/metadata"
 	"github.com/uber/cherami-server/common"
@@ -59,10 +60,18 @@ func StartInputHostService() {
 	cfg := common.SetupServerConfig(configure.NewCommonConfigure())
 	svcCfg := cfg.GetServiceConfig(serviceName)
 	if e := os.Setenv("port", fmt.Sprintf("%d", svcCfg.GetPort())); e != nil {
-		log.Panic(e)
+		logrus.Panic(e)
 	}
 
-	meta, err := metadata.NewCassandraMetadataService(cfg.GetMetadataConfig(), svcCfg.GetLogger())
+	hostID := uuid.New()
+	deploymentName := svcCfg.GetDeploymentName()
+
+	log := svcCfg.GetLogger().WithFields(bark.Fields{
+		common.TagIn:      common.FmtIn(hostID),
+		common.TagDplName: common.FmtDplName(deploymentName),
+	})
+
+	meta, err := metadata.NewCassandraMetadataService(cfg.GetMetadataConfig(), log)
 	if err != nil {
 		log.WithField(common.TagErr, err).Fatal(`inputhost: unable to instantiate metadata client`)
 	}
@@ -71,7 +80,7 @@ func StartInputHostService() {
 	reporter := common.NewMetricReporterWithHostname(svcCfg)
 	dClient := dconfigclient.NewDconfigClient(svcCfg, serviceName)
 
-	sCommon := common.NewService(serviceName, uuid.New(), svcCfg, common.NewUUIDResolver(meta), hwInfoReader, reporter, dClient, common.NewBypassAuthManager())
+	sCommon := common.NewService(serviceName, hostID, svcCfg, common.NewUUIDResolver(meta), hwInfoReader, reporter, dClient, common.NewBypassAuthManager())
 	h, tc := inputhost.NewInputHost(serviceName, sCommon, meta, nil)
 	h.Start(tc)
 
@@ -89,10 +98,18 @@ func StartControllerService() {
 	cfg := common.SetupServerConfig(configure.NewCommonConfigure())
 	svcCfg := cfg.GetServiceConfig(serviceName)
 	if e := os.Setenv("port", fmt.Sprintf("%d", svcCfg.GetPort())); e != nil {
-		log.Panic(e)
+		logrus.Panic(e)
 	}
 
-	meta, err := metadata.NewCassandraMetadataService(cfg.GetMetadataConfig(), svcCfg.GetLogger())
+	hostID := uuid.New()
+	deploymentName := svcCfg.GetDeploymentName()
+
+	log := svcCfg.GetLogger().WithFields(bark.Fields{
+		common.TagCtrl:    common.FmtCtrl(hostID),
+		common.TagDplName: common.FmtDplName(deploymentName),
+	})
+
+	meta, err := metadata.NewCassandraMetadataService(cfg.GetMetadataConfig(), log)
 	if err != nil {
 		// no metadata service - just fail early
 		log.WithField(common.TagErr, err).Fatal(`unable to instantiate metadata service (did you run ./scripts/setup_cassandra_schema.sh?)`)
@@ -100,7 +117,7 @@ func StartControllerService() {
 	hwInfoReader := common.NewHostHardwareInfoReader(meta)
 	reporter := common.NewMetricReporterWithHostname(svcCfg)
 	dClient := dconfigclient.NewDconfigClient(svcCfg, serviceName)
-	sVice := common.NewService(serviceName, uuid.New(), svcCfg, common.NewUUIDResolver(meta), hwInfoReader, reporter, dClient, common.NewBypassAuthManager())
+	sVice := common.NewService(serviceName, hostID, svcCfg, common.NewUUIDResolver(meta), hwInfoReader, reporter, dClient, common.NewBypassAuthManager())
 	mcp, tc := controllerhost.NewController(cfg, sVice, meta, common.NewDummyZoneFailoverManager())
 	mcp.Start(tc)
 	common.ServiceLoop(svcCfg.GetPort()+diagnosticPortOffset, cfg, mcp.Service)
@@ -112,10 +129,18 @@ func StartFrontendHostService() {
 	cfg := common.SetupServerConfig(configure.NewCommonConfigure())
 	svcCfg := cfg.GetServiceConfig(serviceName)
 	if e := os.Setenv("port", fmt.Sprintf("%d", svcCfg.GetPort())); e != nil {
-		log.Panic(e)
+		logrus.Panic(e)
 	}
 
-	meta, err := metadata.NewCassandraMetadataService(cfg.GetMetadataConfig(), svcCfg.GetLogger())
+	hostID := uuid.New()
+	deploymentName := svcCfg.GetDeploymentName()
+
+	log := svcCfg.GetLogger().WithFields(bark.Fields{
+		common.TagFrnt:    common.FmtFrnt(hostID),
+		common.TagDplName: common.FmtDplName(deploymentName),
+	})
+
+	meta, err := metadata.NewCassandraMetadataService(cfg.GetMetadataConfig(), log)
 	if err != nil {
 		// no metadata service - just fail early
 		log.WithField(common.TagErr, err).Fatal(`frontendhost: unable to instantiate metadata service`)
@@ -124,7 +149,7 @@ func StartFrontendHostService() {
 	hwInfoReader := common.NewHostHardwareInfoReader(meta)
 	reporter := common.NewMetricReporterWithHostname(svcCfg)
 	dClient := dconfigclient.NewDconfigClient(svcCfg, serviceName)
-	sCommon := common.NewService(serviceName, uuid.New(), svcCfg, common.NewUUIDResolver(meta), hwInfoReader, reporter, dClient, common.NewBypassAuthManager())
+	sCommon := common.NewService(serviceName, hostID, svcCfg, common.NewUUIDResolver(meta), hwInfoReader, reporter, dClient, common.NewBypassAuthManager())
 	h, tc := frontendhost.NewFrontendHost(serviceName, sCommon, meta, cfg)
 
 	// frontend host also exposes non-streaming metadata methods
@@ -139,10 +164,18 @@ func StartOutputHostService() {
 	cfg := common.SetupServerConfig(configure.NewCommonConfigure())
 	svcCfg := cfg.GetServiceConfig(serviceName)
 	if e := os.Setenv("port", fmt.Sprintf("%d", svcCfg.GetPort())); e != nil {
-		log.Panic(e)
+		logrus.Panic(e)
 	}
 
-	meta, err := metadata.NewCassandraMetadataService(cfg.GetMetadataConfig(), svcCfg.GetLogger())
+	hostID := uuid.New()
+	deploymentName := svcCfg.GetDeploymentName()
+
+	log := svcCfg.GetLogger().WithFields(bark.Fields{
+		common.TagOut:     common.FmtOut(hostID),
+		common.TagDplName: common.FmtDplName(deploymentName),
+	})
+
+	meta, err := metadata.NewCassandraMetadataService(cfg.GetMetadataConfig(), log)
 	if err != nil {
 		// no metadata service - just fail early
 		log.WithField(common.TagErr, err).Fatal(`frontendhost: unable to instantiate metadata service`)
@@ -151,7 +184,7 @@ func StartOutputHostService() {
 	hwInfoReader := common.NewHostHardwareInfoReader(meta)
 	reporter := common.NewMetricReporterWithHostname(svcCfg)
 	dClient := dconfigclient.NewDconfigClient(svcCfg, serviceName)
-	sCommon := common.NewService(serviceName, uuid.New(), svcCfg, common.NewUUIDResolver(meta), hwInfoReader, reporter, dClient, common.NewBypassAuthManager())
+	sCommon := common.NewService(serviceName, hostID, svcCfg, common.NewUUIDResolver(meta), hwInfoReader, reporter, dClient, common.NewBypassAuthManager())
 
 	// Instantiate a frontend server. Don't call frontendhost.Start(), since that would advertise in Hyperbahn,
 	// and since we aren't using thrift anyway. We are selfish with our Frontend.
@@ -174,10 +207,18 @@ func StartStoreHostService() {
 	cfg := common.SetupServerConfig(configure.NewCommonConfigure())
 	svcCfg := cfg.GetServiceConfig(serviceName)
 	if e := os.Setenv("port", fmt.Sprintf("%d", svcCfg.GetPort())); e != nil {
-		log.Panic(e)
+		logrus.Panic(e)
 	}
 
-	meta, err := metadata.NewCassandraMetadataService(cfg.GetMetadataConfig(), svcCfg.GetLogger())
+	hostID := cfg.GetStorageConfig().GetHostUUID()
+	deploymentName := svcCfg.GetDeploymentName()
+
+	log := svcCfg.GetLogger().WithFields(bark.Fields{
+		common.TagStor:    common.FmtStor(hostID),
+		common.TagDplName: common.FmtDplName(deploymentName),
+	})
+
+	meta, err := metadata.NewCassandraMetadataService(cfg.GetMetadataConfig(), log)
 	if err != nil {
 		log.WithField(common.TagErr, err).Fatal(`storehost: unable to instantiate metadata client`)
 	}
@@ -185,7 +226,7 @@ func StartStoreHostService() {
 	hwInfoReader := common.NewHostHardwareInfoReader(meta)
 	reporter := common.NewMetricReporterWithHostname(svcCfg)
 	dClient := dconfigclient.NewDconfigClient(svcCfg, serviceName)
-	sCommon := common.NewService(serviceName, cfg.GetStorageConfig().GetHostUUID(), svcCfg, common.NewUUIDResolver(meta), hwInfoReader, reporter, dClient, common.NewBypassAuthManager())
+	sCommon := common.NewService(serviceName, hostID, svcCfg, common.NewUUIDResolver(meta), hwInfoReader, reporter, dClient, common.NewBypassAuthManager())
 
 	// parse args and pass them into NewStoreHost
 	var storeStr, baseDir string
@@ -247,10 +288,18 @@ func StartReplicatorService() {
 	cfg := common.SetupServerConfig(configure.NewCommonConfigure())
 	svcCfg := cfg.GetServiceConfig(serviceName)
 	if e := os.Setenv("port", fmt.Sprintf("%d", svcCfg.GetPort())); e != nil {
-		log.Panic(e)
+		logrus.Panic(e)
 	}
 
-	meta, err := metadata.NewCassandraMetadataService(cfg.GetMetadataConfig(), svcCfg.GetLogger())
+	hostID := uuid.New()
+	deploymentName := svcCfg.GetDeploymentName()
+
+	log := svcCfg.GetLogger().WithFields(bark.Fields{
+		common.TagReplicator: common.FmtOut(hostID),
+		common.TagDplName:    common.FmtDplName(deploymentName),
+	})
+
+	meta, err := metadata.NewCassandraMetadataService(cfg.GetMetadataConfig(), log)
 	if err != nil {
 		// no metadata service - just fail early
 		log.WithField(common.TagErr, err).Fatal(`frontendhost: unable to instantiate metadata service`)
@@ -258,7 +307,7 @@ func StartReplicatorService() {
 	hwInfoReader := common.NewHostHardwareInfoReader(meta)
 	reporter := common.NewMetricReporterWithHostname(svcCfg)
 	dClient := dconfigclient.NewDconfigClient(svcCfg, serviceName)
-	sCommon := common.NewService(serviceName, uuid.New(), svcCfg, common.NewUUIDResolver(meta), hwInfoReader, reporter, dClient, common.NewBypassAuthManager())
+	sCommon := common.NewService(serviceName, hostID, svcCfg, common.NewUUIDResolver(meta), hwInfoReader, reporter, dClient, common.NewBypassAuthManager())
 
 	allHosts := cfg.GetReplicatorConfig().GetReplicatorHosts()
 	allSplitHosts := make(map[string][]string)
