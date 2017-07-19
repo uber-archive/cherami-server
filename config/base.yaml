@@ -80,6 +80,10 @@ MetadataConfig:
   Consistency: "one"
   ClusterName: "base"
   NumConns: 1
+  Authentication:
+    Enabled: true
+    Username: cassandra
+    Password: cassandra
 
 # ReplicatorConfig specifies 
 ReplicatorConfig:

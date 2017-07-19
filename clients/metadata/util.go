@@ -73,7 +73,12 @@ func LoadSchema(cqlshpath string, fileName string, keyspace string) (err error) 
 	// Using cqlsh as I couldn't find a way to execute multiple commands through gocql.Session
 	var out bytes.Buffer
 	var stderr bytes.Buffer
-	cmd := exec.Command(cqlshpath, fmt.Sprintf("--keyspace=%v", keyspace), fmt.Sprintf("--file=%v", fileName), `127.0.0.1`)
+	cmd := exec.Command(cqlshpath,
+		"--username=cassandra",
+		"--password=cassandra",
+		fmt.Sprintf("--keyspace=%v", keyspace),
+		fmt.Sprintf("--file=%v", fileName),
+		`127.0.0.1`)
 	cmd.Stdout = &out
 	cmd.Stderr = &stderr
 	err = cmd.Run()
@@ -97,7 +102,13 @@ func newCluster(clusterHosts string) *gocql.ClusterConfig {
 }
 
 // CreateKeyspaceNoSession is used to create a keyspace when we don't have a session
-func CreateKeyspaceNoSession(clusterHosts string, keyspace string, replicas int, overwrite bool) error {
+func CreateKeyspaceNoSession(
+	clusterHosts string,
+	keyspace string,
+	replicas int,
+	overwrite bool,
+	auth configure.Authentication,
+) error {
 	// open a session to the "system" keyspace just to create the new keyspace
 	// TODO: Find out if we can do this "outside" of a session (cqlsh?)
 	cluster := newCluster(clusterHosts)
@@ -105,6 +116,12 @@ func CreateKeyspaceNoSession(clusterHosts string, keyspace string, replicas int,
 	cluster.Keyspace = "system"
 	cluster.Timeout = 40 * time.Second
 	cluster.ProtoVersion = cassandraProtoVersion
+	if auth.Enabled {
+		cluster.Authenticator = gocql.PasswordAuthenticator{
+			Username: auth.Username,
+			Password: auth.Password,
+		}
+	}
 	session, err := cluster.CreateSession()
 	if err != nil {
 		log.WithField(common.TagErr, err).Error(`CreateKeyspaceNoSession: unable to create session`)
@@ -146,11 +163,18 @@ func (s *TestCluster) SetupTestCluster() {
 	s.createKeyspace(1)
 	s.loadSchema("schema/metadata.cql")
 
+	auth := configure.Authentication{
+		Enabled:  true,
+		Username: "cassandra",
+		Password: "cassandra",
+	}
+
 	var err error
 	s.client, err = NewCassandraMetadataService(&configure.MetadataConfig{
 		CassandraHosts: ip,
 		Keyspace:       s.keyspace,
 		Consistency:    "One",
+		Authentication: auth,
 	})
 	if err != nil {
 		log.Fatal(err)
@@ -169,6 +193,10 @@ func (s *TestCluster) createCluster(clusterHosts string, cons gocql.Consistency,
 	s.cluster.Keyspace = "system"
 	s.cluster.Timeout = 40 * time.Second
 	s.cluster.ProtoVersion = cassandraProtoVersion
+	s.cluster.Authenticator = gocql.PasswordAuthenticator{
+		Username: "cassandra",
+		Password: "cassandra",
+	}
 	var err error
 	s.session, err = s.cluster.CreateSession()
 	if err != nil {
