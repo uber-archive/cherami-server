@@ -174,7 +174,7 @@ func (tb *testBase) setupSuiteImpl(t *testing.T) {
 		Keyspace:       tb.keyspace,
 		Consistency:    "One",
 		Authentication: auth,
-	})
+	}, nil)
 	tb.NotNil(tb.mClient)
 
 	// Drop the keyspace, if it exists. This preserves the keyspace for inspection if the test fails, and simplifies cleanup

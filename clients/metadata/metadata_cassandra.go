@@ -34,7 +34,8 @@ import (
 
 	"github.com/gocql/gocql"
 	"github.com/pborman/uuid"
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
+	"github.com/uber-common/bark"
 	"github.com/uber/tchannel-go/thrift"
 )
 
@@ -182,42 +183,46 @@ type CassandraMetadataService struct {
 	midConsLevel  gocql.Consistency
 	highConsLevel gocql.Consistency // Strongest cons level that can be used for this session
 	clusterName   string
+	log           bark.Logger
 }
 
 // interface implementation check
 var _ m.TChanMetadataService = (*CassandraMetadataService)(nil)
 
 // NewCassandraMetadataService creates an instance of TChanMetadataServiceClient backed up by Cassandra.
-func NewCassandraMetadataService(cfg configure.CommonMetadataConfig) (*CassandraMetadataService, error) {
-	cluster := newCluster(cfg.GetCassandraHosts())
-	cluster.Keyspace = cfg.GetKeyspace()
-	cluster.ProtoVersion = cassandraProtoVersion
+func NewCassandraMetadataService(cfg configure.CommonMetadataConfig, log bark.Logger) (*CassandraMetadataService, error) {
 
-	auth := cfg.GetAuthentication()
-	if auth.Enabled {
-		cluster.Authenticator = gocql.PasswordAuthenticator{
-			Username: auth.Username,
-			Password: auth.Password,
-		}
+	if log == nil {
+		log = bark.NewLoggerFromLogrus(logrus.StandardLogger())
 	}
 
-	cms := new(CassandraMetadataService)
-	cms.lowConsLevel = gocql.Two
-	cms.midConsLevel = gocql.Two
-	cms.highConsLevel = gocql.ParseConsistency(cfg.GetConsistency())
-	cms.clusterName = cfg.GetClusterName()
+	lowCons, midCons, highCons := gocql.Two, gocql.Two, gocql.ParseConsistency(cfg.GetConsistency())
 
-	if cms.highConsLevel == gocql.One {
+	if highCons == gocql.One {
+
 		envType := configure.NewCommonConfigure().GetEnvironment()
 		if envType == configure.EnvProduction {
 			log.Panic("Highest consistency level of ONE should only be used in TestEnvironment")
 		}
-		cms.midConsLevel = gocql.One
-		cms.lowConsLevel = gocql.One
+
+		lowCons, midCons = gocql.One, gocql.One
 	}
 
-	if len(cms.clusterName) < 1 {
-		cms.clusterName = "unknown"
+	clusterName := cfg.GetClusterName()
+	if len(clusterName) < 1 {
+		clusterName = "unknown"
+	}
+
+	cluster := newCluster(cfg.GetCassandraHosts())
+	cluster.Keyspace = cfg.GetKeyspace()
+	cluster.ProtoVersion = cassandraProtoVersion
+
+	if auth := cfg.GetAuthentication(); auth.Enabled {
+
+		cluster.Authenticator = gocql.PasswordAuthenticator{
+			Username: auth.Username,
+			Password: auth.Password,
+		}
 	}
 
 	// Our clusters usually don't span across
@@ -226,7 +231,7 @@ func NewCassandraMetadataService(cfg configure.CommonMetadataConfig) (*Cassandra
 	// limiting the host discovery to just the
 	// local DC. That way, all of your queries
 	// will be local.
-	if filter, ok := cfg.GetDcFilter()[cms.clusterName]; ok {
+	if filter, ok := cfg.GetDcFilter()[clusterName]; ok {
 		cluster.HostFilter = gocql.DataCentreHostFilter(strings.TrimSpace(filter))
 	}
 
@@ -237,15 +242,22 @@ func NewCassandraMetadataService(cfg configure.CommonMetadataConfig) (*Cassandra
 
 	// Highest consistency level applies to all sessions/queries derived from this cluster
 	// When lower consitency level is preferred, the APIs do a query level override
-	cluster.Consistency = cms.highConsLevel
+	cluster.Consistency = highCons
 	cluster.Timeout = defaultSessionTimeout
 	session, err := cluster.CreateSession()
 	if err != nil {
+		log.WithField(common.TagErr, err).Error("NewCassandraMetadataService failed")
 		return nil, fmt.Errorf("createSession: %v", err)
 	}
 
-	cms.session = session
-	return cms, nil
+	return &CassandraMetadataService{
+		session:       session,
+		lowConsLevel:  lowCons,
+		midConsLevel:  midCons,
+		highConsLevel: highCons,
+		clusterName:   clusterName,
+		log:           log,
+	}, nil
 }
 
 // GetSession returns the underlying cassandra sesion object
@@ -310,7 +322,7 @@ func (s *CassandraMetadataService) recordUserOperation(entityName string, entity
 		operationContent)
 
 	if err := s.session.ExecuteBatch(batch); err != nil {
-		log.WithFields(log.Fields{common.TagErr: err}).Error("recordUserOperation failed")
+		s.log.WithFields(bark.Fields{common.TagErr: err}).Error("recordUserOperation failed")
 		return fmt.Errorf("recordUserOperation error: %v", err)
 	}
 	return nil
@@ -481,7 +493,7 @@ func (s *CassandraMetadataService) CreateDestinationUUID(ctx thrift.Context, uui
 			deleteOrphanRecord := `DELETE FROM ` + tableDestinations + ` WHERE ` + columnUUID + `=?`
 			if err = s.session.Query(deleteOrphanRecord, destinationUUID).Exec(); err != nil {
 				// Just warn as orphaned records are not breaking correctness
-				log.WithFields(log.Fields{common.TagDst: common.FmtDst(destinationUUID), common.TagErr: err}).Warn(`CreateDestination failure deleting orphan record from destinations`)
+				s.log.WithFields(bark.Fields{common.TagDst: common.FmtDst(destinationUUID), common.TagErr: err}).Warn(`CreateDestination failure deleting orphan record from destinations`)
 			}
 			return nil, &shared.EntityAlreadyExistsError{
 				Message: fmt.Sprintf("CreateDestination: Destination \"%v\" already exists with id=%v",
@@ -1269,7 +1281,7 @@ func (s *CassandraMetadataService) CreateConsumerGroupUUID(ctx thrift.Context, r
 
 		dlqUUID = common.StringPtr(dlqDestDesc.GetDestinationUUID())
 	} else {
-		log.WithFields(log.Fields{common.TagCnsm: common.FmtCnsm(cgUUID)}).Info("DeadLetterQueue destination not being created")
+		s.log.WithFields(bark.Fields{common.TagCnsm: common.FmtCnsm(cgUUID)}).Info("DeadLetterQueue destination not being created")
 	}
 
 	dstInfo, err := s.ReadDestination(nil, &shared.ReadDestinationRequest{Path: common.StringPtr(createRequest.GetDestinationPath())})
@@ -1343,7 +1355,7 @@ func (s *CassandraMetadataService) CreateConsumerGroupUUID(ctx thrift.Context, r
 	applied, err := query.MapScanCAS(previous)
 	if !applied {
 		if err = s.session.Query(sqlDeleteCGByUUID, cgUUID).Exec(); err != nil {
-			log.WithFields(log.Fields{common.TagCnsm: common.FmtCnsm(cgUUID), common.TagErr: err}).Warn(`CreateConsumerGroup - failed to delete orphan record after a failed CAS attempt, ,`)
+			s.log.WithFields(bark.Fields{common.TagCnsm: common.FmtCnsm(cgUUID), common.TagErr: err}).Warn(`CreateConsumerGroup - failed to delete orphan record after a failed CAS attempt, ,`)
 		}
 		return nil, &shared.EntityAlreadyExistsError{
 			Message: fmt.Sprintf("CreateConsumerGroup - Group exists, dst=%v cg=%v err=%v", createRequest.GetDestinationPath(), createRequest.GetConsumerGroupName(), err),
@@ -1400,19 +1412,19 @@ func (s *CassandraMetadataService) createDlqDestination(cgUUID string, cgName st
 	if err != nil || dlqDestDesc == nil {
 		switch err.(type) {
 		case *shared.EntityAlreadyExistsError:
-			log.WithFields(log.Fields{common.TagCnsm: common.FmtCnsm(cgUUID)}).Info("DeadLetterQueue destination already existed")
+			s.log.WithFields(bark.Fields{common.TagCnsm: common.FmtCnsm(cgUUID)}).Info("DeadLetterQueue destination already existed")
 			mDLQReadRequest := shared.ReadDestinationRequest{
 				Path: dlqCreateRequest.Path,
 			}
 
 			dlqDestDesc, err = s.ReadDestination(nil, &mDLQReadRequest)
 			if err != nil || dlqDestDesc == nil {
-				log.WithFields(log.Fields{common.TagCnsm: common.FmtCnsm(cgUUID), common.TagErr: err}).Error(`Can't read existing DeadLetterQueue destination`)
+				s.log.WithFields(bark.Fields{common.TagCnsm: common.FmtCnsm(cgUUID), common.TagErr: err}).Error(`Can't read existing DeadLetterQueue destination`)
 				return nil, err
 			}
 			return dlqDestDesc, nil
 		default:
-			log.WithFields(log.Fields{common.TagCnsm: common.FmtCnsm(cgUUID), common.TagErr: err}).Error(`Can't create DeadLetterQueue destination`)
+			s.log.WithFields(bark.Fields{common.TagCnsm: common.FmtCnsm(cgUUID), common.TagErr: err}).Error(`Can't create DeadLetterQueue destination`)
 			return nil, err
 		}
 	}
@@ -2711,7 +2723,7 @@ func (s *CassandraMetadataService) ReadExtentStats(ctx thrift.Context, request *
 	var query *gocql.Query
 	if len(request.GetDestinationUUID()) == 0 {
 		if !common.IsDevelopmentEnvironment(s.clusterName) {
-			log.WithField(common.TagExt, common.FmtExt(request.GetExtentUUID())).
+			s.log.WithField(common.TagExt, common.FmtExt(request.GetExtentUUID())).
 				Error(`ReadExtentStats: ALLOW FILTERING being used in production`)
 		}
 		query = s.session.Query(sqlGetExtentStatsByExtentUUID).Consistency(s.lowConsLevel)
@@ -3276,7 +3288,7 @@ func (s *CassandraMetadataService) UpdateStoreExtentReplicaStats(ctx thrift.Cont
 		)
 	}
 	if err := s.session.ExecuteBatch(batch); err != nil {
-		log.WithField(common.TagExt, request.GetExtentUUID()).Error("UpdateExtentReplicaStats failed")
+		s.log.WithField(common.TagExt, request.GetExtentUUID()).Error("UpdateExtentReplicaStats failed")
 		return &shared.InternalServiceError{
 			Message: "UpdateStoreExtentReplicaStats: %v" + err.Error(),
 		}
@@ -3835,7 +3847,7 @@ func (s *CassandraMetadataService) ReadConsumerGroupExtent(ctx thrift.Context, r
 		// CreateConsumerGroupExtent succeeds
 		errMsg := fmt.Sprintf("ReadConsumerGroupExtent - got inconsistent record with no storehosts, dst=%v, cg=%v, ext=%v",
 			request.GetDestinationUUID(), request.GetConsumerGroupUUID(), request.GetExtentUUID())
-		log.WithFields(log.Fields{common.TagDst: common.FmtDst(request.GetDestinationUUID()), common.TagCnsm: common.FmtCnsm(request.GetConsumerGroupUUID()), common.TagExt: common.FmtExt(request.GetExtentUUID())}).Error("ReadConsumerGroupExtent - got inconsistent record with no storehosts")
+		s.log.WithFields(bark.Fields{common.TagDst: common.FmtDst(request.GetDestinationUUID()), common.TagCnsm: common.FmtCnsm(request.GetConsumerGroupUUID()), common.TagExt: common.FmtExt(request.GetExtentUUID())}).Error("ReadConsumerGroupExtent - got inconsistent record with no storehosts")
 		return nil, &shared.InternalServiceError{
 			Message: errMsg,
 		}
@@ -3924,7 +3936,7 @@ func (s *CassandraMetadataService) ReadConsumerGroupExtents(ctx thrift.Context, 
 		}
 
 		if len(storeUUIDs) < 1 {
-			ll := log.WithField(common.TagCnsm, common.FmtCnsm(request.GetConsumerGroupUUID()))
+			ll := s.log.WithField(common.TagCnsm, common.FmtCnsm(request.GetConsumerGroupUUID()))
 			if len(request.GetDestinationUUID()) > 0 {
 				ll = ll.WithField(common.TagDst, common.FmtDst(request.GetDestinationUUID()))
 			}

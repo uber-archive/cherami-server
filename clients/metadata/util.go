@@ -175,7 +175,8 @@ func (s *TestCluster) SetupTestCluster() {
 		Keyspace:       s.keyspace,
 		Consistency:    "One",
 		Authentication: auth,
-	})
+	}, nil)
+
 	if err != nil {
 		log.Fatal(err)
 	}
