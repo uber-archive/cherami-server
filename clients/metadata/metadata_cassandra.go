@@ -212,6 +212,15 @@ func NewCassandraMetadataService(cfg configure.CommonMetadataConfig, log bark.Lo
 	cluster.Keyspace = cfg.GetKeyspace()
 	cluster.ProtoVersion = cassandraProtoVersion
 
+  if auth := cfg.GetAuthentication(); auth.Enabled {
+
+		cluster.Authenticator = gocql.PasswordAuthenticator{
+			Username: auth.Username,
+			Password: auth.Password,
+		}
+	}
+
+
 	// Our clusters usually don't span across
 	// multiple DCs. If they do and the data lives
 	// in only one DC, the dc filter allows for

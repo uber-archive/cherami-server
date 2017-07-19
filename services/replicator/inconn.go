@@ -175,7 +175,7 @@ func (conn *inConnection) writeMsgsStream() {
 
 				// Update per destination metrics after msg is sent to local store (call is OpenReplicationRemoteRead)
 				// so they're most accurate.
-				if conn.metricsScope == metrics.OpenReplicationRemoteReadScope {
+				if conn.metricsScope == metrics.OpenReplicationRemoteReadScope && msg.GetType() == store.ReadMessageContentType_MESSAGE {
 					conn.destM3Client.IncCounter(conn.perDestMetricsScope, metrics.ReplicatorInConnPerDestMsgWritten)
 					latency := time.Duration(time.Now().UnixNano() - msg.GetMessage().Message.GetEnqueueTimeUtc())
 					conn.destM3Client.RecordTimer(conn.perDestMetricsScope, metrics.ReplicatorInConnPerDestMsgLatency, latency)

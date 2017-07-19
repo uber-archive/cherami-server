@@ -20,10 +20,15 @@
 
 package configure
 
+import (
+	"strings"
+)
+
 // ReplicatorConfig -- contains config info passed to replicator
 type ReplicatorConfig struct {
 	DefaultAuthoritativeZone string            `yaml:"DefaultAuthoritativeZone"`
 	ReplicatorHosts          map[string]string `yaml:"ReplicatorHosts"`
+	UseStandalone            string            `yaml:"UseStandalone"`
 }
 
 // NewCommonReplicatorConfig returns the replicator config
@@ -41,4 +46,15 @@ func (r *ReplicatorConfig) GetReplicatorHosts() map[string]string {
 // GetDefaultAuthoritativeZone returns the default authoritative zone
 func (r *ReplicatorConfig) GetDefaultAuthoritativeZone() string {
 	return r.DefaultAuthoritativeZone
+}
+
+// GetUseStandalone checks whether a specific deployment is using standalone deployment
+func (r *ReplicatorConfig) GetUseStandalone(deployment string) bool {
+	standaloneDeployments := strings.Split(r.UseStandalone, `,`)
+	for _, d := range standaloneDeployments {
+		if strings.EqualFold(deployment, d) {
+			return true
+		}
+	}
+	return false
 }

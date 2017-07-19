@@ -147,6 +147,8 @@ type (
 		GetCassandraHosts() string
 		// GetKeyspace returns the keyspace for our cassandra cluster
 		GetKeyspace() string
+		// GetAuthentication returns the authentication info for our cassandra cluster
+		GetAuthentication() Authentication
 		// GetConsistency returns the configured consistency level
 		GetConsistency() string
 		// GetDcFilter returns the dc filter map for the cassandra cluster
@@ -197,6 +199,8 @@ type (
 		GetReplicatorHosts() map[string]string
 		// GetDefaultAuthoritativeZone returns the default authoritative zone from config
 		GetDefaultAuthoritativeZone() string
+		// GetUseStandalone checks whether a specific deployment is using standalone deployment
+		GetUseStandalone(deployment string) bool
 	}
 
 	// CommonFrontendConfig holds the frontend related config

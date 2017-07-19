@@ -26,6 +26,10 @@ DefaultDestinationConfig:
 
 MetadataConfig:
   CassandraHosts: "127.0.0.1"
+  Authentication:
+    Enabled: false
+    Username:
+    Password:
 
 StorageConfig:
   BaseDir: /tmp/cherami-store

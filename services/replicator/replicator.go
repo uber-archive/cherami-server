@@ -39,6 +39,7 @@ import (
 	dconfig "github.com/uber/cherami-server/common/dconfigclient"
 	mm "github.com/uber/cherami-server/common/metadata"
 	"github.com/uber/cherami-server/common/metrics"
+	"github.com/uber/cherami-server/common/set"
 	storeStream "github.com/uber/cherami-server/stream"
 	"github.com/uber/cherami-thrift/.generated/go/admin"
 	"github.com/uber/cherami-thrift/.generated/go/metadata"
@@ -67,6 +68,8 @@ type (
 		storehostConn             map[string]*outConnection
 		storehostConnMutex        sync.RWMutex
 
+		knownCgExtents set.Set
+
 		metadataReconciler MetadataReconciler
 	}
 )
@@ -82,7 +85,7 @@ const (
 // interface implementation check
 var _ rgen.TChanReplicator = (*Replicator)(nil)
 
-func getAllZones(replicatorHosts map[string]string) map[string][]string {
+func getAllZones(replicatorHosts map[string][]string) map[string][]string {
 	allZones := make(map[string][]string)
 
 	// recognize all zones by tenancy from replicatorHosts config key
@@ -107,7 +110,7 @@ func getAllZones(replicatorHosts map[string]string) map[string][]string {
 func NewReplicator(serviceName string, sVice common.SCommon, metadataClient metadata.TChanMetadataService, replicatorClientFactory ClientFactory, config configure.CommonAppConfig) (*Replicator, []thrift.TChanServer) {
 	deployment := strings.ToLower(sVice.GetConfig().GetDeploymentName())
 	zone, tenancy := common.GetLocalClusterInfo(deployment)
-	allZones := getAllZones(config.GetReplicatorConfig().GetReplicatorHosts())
+	allZones := getAllZones(replicatorClientFactory.GetHostsForAllDeployment())
 	logger := (sVice.GetConfig().GetLogger()).WithFields(bark.Fields{
 		common.TagReplicator: common.FmtOut(sVice.GetHostUUID()),
 		common.TagDplName:    common.FmtDplName(deployment),
@@ -127,6 +130,7 @@ func NewReplicator(serviceName string, sVice common.SCommon, metadataClient meta
 		replicatorclientFactory:  replicatorClientFactory,
 		remoteReplicatorConn:     make(map[string]*outConnection),
 		storehostConn:            make(map[string]*outConnection),
+		knownCgExtents:           set.NewConcurrent(0),
 	}
 
 	r.metaClient = mm.NewMetadataMetricsMgr(metadataClient, r.m3Client, r.logger)
@@ -1102,6 +1106,23 @@ func (r *Replicator) SetAckOffset(ctx thrift.Context, request *shared.SetAckOffs
 	})
 	r.m3Client.IncCounter(metrics.ReplicatorSetAckOffsetScope, metrics.ReplicatorRequests)
 
+	if !r.knownCgExtents.Contains(request.GetExtentUUID()) {
+		// make sure the cg extent is created locally before accepting the SetAckOffset call.
+		// otherwise SetAckOffset will create the cg extent entry with no store uuid or output host uuid
+		// and we may not be able to clean up the entry eventually.
+		_, err := r.metaClient.ReadConsumerGroupExtent(nil, &metadata.ReadConsumerGroupExtentRequest{
+			ConsumerGroupUUID: common.StringPtr(request.GetConsumerGroupUUID()),
+			ExtentUUID:        common.StringPtr(request.GetExtentUUID()),
+		})
+		if err != nil {
+			lcllg.WithField(common.TagErr, err).Error(`SetAckOffset: Failed to read cg extent locally`)
+			r.m3Client.IncCounter(metrics.ReplicatorSetAckOffsetScope, metrics.ReplicatorFailures)
+			return err
+		}
+
+		r.knownCgExtents.Insert(request.GetExtentUUID())
+	}
+
 	err := r.metaClient.SetAckOffset(nil, request)
 	if err != nil {
 		lcllg.WithField(common.TagErr, err).Error(`Error calling metadata to set ack offset`)
@@ -1321,13 +1342,7 @@ func (r *Replicator) createRemoteReplicationReadStream(extUUID string, destUUID 
 
 	remoteZone := extentStatsResult.GetExtentStats().GetExtent().GetOriginZone()
 	remoteDeployment := fmt.Sprintf("%v_%v", r.tenancy, remoteZone)
-	if _, inCfg := r.AppConfig.GetReplicatorConfig().GetReplicatorHosts()[remoteDeployment]; !inCfg {
-		err = &shared.BadRequestError{Message: fmt.Sprintf("Deployment [%v] is not configured", remoteDeployment)}
-		r.logger.WithFields(bark.Fields{common.TagErr: err, common.TagDeploymentName: remoteDeployment}).Error("Deployment is not configured")
-		return
-	}
-
-	hosts := strings.Split(r.AppConfig.GetReplicatorConfig().GetReplicatorHosts()[remoteDeployment], ",")
+	hosts := r.replicatorclientFactory.GetHostsForDeployment(remoteDeployment)
 	if len(hosts) < 1 {
 		err = &shared.BadRequestError{Message: fmt.Sprintf("Deployment [%v] doesn't have any host in config", remoteDeployment)}
 		r.logger.WithFields(bark.Fields{common.TagErr: err, common.TagDeploymentName: remoteDeployment}).Error("Deployment doesn't have any host in config")

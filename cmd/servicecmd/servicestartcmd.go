@@ -260,7 +260,14 @@ func StartReplicatorService() {
 	dClient := dconfigclient.NewDconfigClient(svcCfg, serviceName)
 	sCommon := common.NewService(serviceName, uuid.New(), svcCfg, common.NewUUIDResolver(meta), hwInfoReader, reporter, dClient, common.NewBypassAuthManager())
 
-	h, tc := replicator.NewReplicator(serviceName, sCommon, meta, replicator.NewReplicatorClientFactory(cfg, common.GetDefaultLogger()), cfg)
+	allHosts := cfg.GetReplicatorConfig().GetReplicatorHosts()
+	allSplitHosts := make(map[string][]string)
+	for deployment, hosts := range allHosts {
+		allSplitHosts[deployment] = strings.Split(hosts, `,`)
+	}
+
+	replicatorClientFactory := replicator.NewReplicatorClientFactory(cfg, common.GetDefaultLogger(), allSplitHosts)
+	h, tc := replicator.NewReplicator(serviceName, sCommon, meta, replicatorClientFactory, cfg)
 	h.Start(tc)
 
 	// start websocket server
