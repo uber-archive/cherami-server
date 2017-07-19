@@ -85,7 +85,7 @@ const (
 // interface implementation check
 var _ rgen.TChanReplicator = (*Replicator)(nil)
 
-func getAllZones(replicatorHosts map[string]string) map[string][]string {
+func getAllZones(replicatorHosts map[string][]string) map[string][]string {
 	allZones := make(map[string][]string)
 
 	// recognize all zones by tenancy from replicatorHosts config key
@@ -110,7 +110,7 @@ func getAllZones(replicatorHosts map[string]string) map[string][]string {
 func NewReplicator(serviceName string, sVice common.SCommon, metadataClient metadata.TChanMetadataService, replicatorClientFactory ClientFactory, config configure.CommonAppConfig) (*Replicator, []thrift.TChanServer) {
 	deployment := strings.ToLower(sVice.GetConfig().GetDeploymentName())
 	zone, tenancy := common.GetLocalClusterInfo(deployment)
-	allZones := getAllZones(config.GetReplicatorConfig().GetReplicatorHosts())
+	allZones := getAllZones(replicatorClientFactory.GetHostsForAllDeployment())
 	logger := (sVice.GetConfig().GetLogger()).WithFields(bark.Fields{
 		common.TagReplicator: common.FmtOut(sVice.GetHostUUID()),
 		common.TagDplName:    common.FmtDplName(deployment),
@@ -1342,13 +1342,7 @@ func (r *Replicator) createRemoteReplicationReadStream(extUUID string, destUUID 
 
 	remoteZone := extentStatsResult.GetExtentStats().GetExtent().GetOriginZone()
 	remoteDeployment := fmt.Sprintf("%v_%v", r.tenancy, remoteZone)
-	if _, inCfg := r.AppConfig.GetReplicatorConfig().GetReplicatorHosts()[remoteDeployment]; !inCfg {
-		err = &shared.BadRequestError{Message: fmt.Sprintf("Deployment [%v] is not configured", remoteDeployment)}
-		r.logger.WithFields(bark.Fields{common.TagErr: err, common.TagDeploymentName: remoteDeployment}).Error("Deployment is not configured")
-		return
-	}
-
-	hosts := strings.Split(r.AppConfig.GetReplicatorConfig().GetReplicatorHosts()[remoteDeployment], ",")
+	hosts := r.replicatorclientFactory.GetHostsForDeployment(remoteDeployment)
 	if len(hosts) < 1 {
 		err = &shared.BadRequestError{Message: fmt.Sprintf("Deployment [%v] doesn't have any host in config", remoteDeployment)}
 		r.logger.WithFields(bark.Fields{common.TagErr: err, common.TagDeploymentName: remoteDeployment}).Error("Deployment doesn't have any host in config")

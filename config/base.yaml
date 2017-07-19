@@ -85,8 +85,9 @@ MetadataConfig:
 ReplicatorConfig:
   DefaultAuthoritativeZone: "zone1"
   ReplicatorHosts:
-    zone1: 192.168.0.1
-    zone2: 192.168.0.2
+    deployment1: 192.168.0.1
+    deployment2: 192.168.0.2
+  UseStandalone: "deployment1,deployment2"
 
 # KafkaConfig specifies
 KafkaConfig:

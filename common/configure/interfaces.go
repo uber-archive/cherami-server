@@ -197,6 +197,8 @@ type (
 		GetReplicatorHosts() map[string]string
 		// GetDefaultAuthoritativeZone returns the default authoritative zone from config
 		GetDefaultAuthoritativeZone() string
+		// GetUseStandalone checks whether a specific deployment is using standalone deployment
+		GetUseStandalone(deployment string) bool
 	}
 
 	// CommonFrontendConfig holds the frontend related config

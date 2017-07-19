@@ -73,6 +73,7 @@ func (s *ReplicatorSuite) SetupCommonMock() {
 	s.mockInStream = new(mockreplicator.MockBStoreOpenReadStreamInCallForReplicator)
 	s.mockOutStream = new(mockreplicator.MockBStoreOpenReadStreamOutCallForReplicator)
 	s.mockReplicatorClientFactory = new(mockreplicator.MockReplicatorClientFactory)
+	s.mockReplicatorClientFactory.On("GetHostsForAllDeployment").Return(nil)
 	s.mockStoreClient = new(mockStore.MockStoreHost)
 	s.mockControllerClient = new(mockcontroller.MockControllerHost)
 	s.mockClientFactory = new(mockcommon.MockClientFactory)

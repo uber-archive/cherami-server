@@ -461,6 +461,8 @@ const (
 	ReplicatorReadDestinationInRemoteZoneScope
 	// ReplicatorReadCgInRemoteZoneScope represents replicator ReadConsumerGroupInRemoteZone API
 	ReplicatorReadCgInRemoteZoneScope
+	// ReplicatorHostUpdaterScope represents the host updater scope
+	ReplicatorHostUpdaterScope
 	// ReplicatorReconcileScope represents replicator's reconcile process
 	ReplicatorReconcileScope
 )
@@ -608,6 +610,7 @@ var scopeDefs = map[ServiceIdx]map[int]scopeDefinition{
 		ReplicatorSetAckOffsetInRemoteScope:        {operation: "SetAckOffsetInRemote"},
 		ReplicatorReadDestinationInRemoteZoneScope: {operation: "ReadDestinationInRemoteZone"},
 		ReplicatorReadCgInRemoteZoneScope:          {operation: "ReadConsumerGroupInRemoteZone"},
+		ReplicatorHostUpdaterScope:                 {operation: "ReplicatorHostUpdater"},
 		ReplicatorReconcileScope:                   {operation: "ReplicatorReconcile"},
 	},
 
@@ -1125,6 +1128,10 @@ const (
 	ReplicatorReconcileCgExtentRemoteConsumedLocalMissing
 	// ReplicatorReconcileCgExtentRemoteDeletedLocalMissing indicates the reconcile for cg extent found a cg extent that is deleted on remote side and local is missing
 	ReplicatorReconcileCgExtentRemoteDeletedLocalMissing
+	// ReplicatorInvalidHostUpdates indicates an invalid update received for hosts update
+	ReplicatorInvalidHostsUpdate
+	// ReplicatorHostUpdated indicates a success hosts update
+	ReplicatorHostUpdated
 
 	numMetrics
 )
@@ -1307,6 +1314,8 @@ var metricDefs = map[ServiceIdx]map[int]metricDefinition{
 		ReplicatorReconcileCgExtentFoundMissing:                 {Gauge, "replicator.reconcile.cgextent.foundmissing"},
 		ReplicatorReconcileCgExtentRemoteConsumedLocalMissing:   {Gauge, "replicator.reconcile.cgextent.remote-consumed-local-missing"},
 		ReplicatorReconcileCgExtentRemoteDeletedLocalMissing:    {Gauge, "replicator.reconcile.cgextent.remote-deleted-local-missing"},
+		ReplicatorInvalidHostsUpdate:                            {Counter, "replicator.hostupdater.invalid"},
+		ReplicatorHostUpdated:                                   {Counter, "replicator.hostupdater.success"},
 	},
 }
 
