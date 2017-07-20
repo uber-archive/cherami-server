@@ -652,7 +652,7 @@ func (h *Frontend) CreateDestination(ctx thrift.Context, createRequest *c.Create
 		return nil, err
 	}
 
-	// Add Read/Update/Delete permissions for the current user and owner on the destination
+	// Add Update/Delete permissions for the current user and owner on the destination
 	subjects := []common.Subject{authSubject}
 	if createRequest.OwnerEmail != nil && *createRequest.OwnerEmail != "" && *createRequest.OwnerEmail != authSubject.Name {
 		ownerSubject := common.Subject{
@@ -666,7 +666,7 @@ func (h *Frontend) CreateDestination(ctx thrift.Context, createRequest *c.Create
 		dstResource := common.GetResourceURNOperateDestination(h.SCommon, createRequest.Path)
 		h.addPermissions(subject,
 			dstResource,
-			[]common.Operation{common.OperationRead, common.OperationUpdate, common.OperationDelete},
+			[]common.Operation{common.OperationUpdate, common.OperationDelete},
 			lclLg)
 	}
 
@@ -993,7 +993,7 @@ func (h *Frontend) UpdateDestination(ctx thrift.Context, updateRequest *c.Update
 	}
 
 	if updateRequest.OwnerEmail != nil && *updateRequest.OwnerEmail != "" {
-		// Add Read/Update/Delete permissions for the owner on the destination
+		// Add Update/Delete permissions for the owner on the destination
 		// TODO check whether the new owner is different from old one, delete old permissions for old owner
 		ownerSubject := common.Subject{
 			Type: common.SubjectTypeEmployee,
@@ -1002,7 +1002,7 @@ func (h *Frontend) UpdateDestination(ctx thrift.Context, updateRequest *c.Update
 		dstResource := common.GetResourceURNOperateDestination(h.SCommon, updateRequest.Path)
 		h.addPermissions(ownerSubject,
 			dstResource,
-			[]common.Operation{common.OperationRead, common.OperationUpdate, common.OperationDelete},
+			[]common.Operation{common.OperationUpdate, common.OperationDelete},
 			lclLg)
 	}
 
@@ -1163,15 +1163,8 @@ func (h *Frontend) CreateConsumerGroup(ctx thrift.Context, createRequest *c.Crea
 		common.TagCnsPth: common.FmtCnsPth(createRequest.GetConsumerGroupName()),
 	})
 
-	// Check auth for read destination
-	authResource := common.GetResourceURNOperateDestination(h.SCommon, createRequest.DestinationPath)
-	_, err = h.checkAuth(ctx, authResource, common.OperationRead, lclLg)
-	if err != nil {
-		return nil, err
-	}
-
 	// Check auth for create consumer group
-	authResource = common.GetResourceURNCreateConsumerGroup(h.SCommon, createRequest.ConsumerGroupName)
+	authResource := common.GetResourceURNCreateConsumerGroup(h.SCommon, createRequest.ConsumerGroupName)
 	authSubject, err := h.checkAuth(ctx, authResource, common.OperationCreate, lclLg)
 	if err != nil {
 		return nil, err
@@ -1220,15 +1213,15 @@ func (h *Frontend) CreateConsumerGroup(ctx thrift.Context, createRequest *c.Crea
 		cgResource := common.GetResourceURNOperateConsumerGroup(h.SCommon, createRequest.DestinationPath, createRequest.ConsumerGroupName)
 		h.addPermissions(subject,
 			cgResource,
-			[]common.Operation{common.OperationRead, common.OperationUpdate, common.OperationDelete},
+			[]common.Operation{common.OperationUpdate, common.OperationDelete},
 			lclLg)
 
 		if _cgDesc.DeadLetterQueueDestinationUUID != nil && *_cgDesc.DeadLetterQueueDestinationUUID != "" {
-			// Add Read/Update permissions for the user on the DLQ destination
+			// Add Update permissions for the user on the DLQ destination
 			dlqDstResource := common.GetResourceURNOperateDestination(h.SCommon, _cgDesc.DeadLetterQueueDestinationUUID)
 			h.addPermissions(subject,
 				dlqDstResource,
-				[]common.Operation{common.OperationRead, common.OperationUpdate},
+				[]common.Operation{common.OperationUpdate},
 				lclLg)
 		}
 	}
@@ -1288,15 +1281,15 @@ func (h *Frontend) UpdateConsumerGroup(ctx thrift.Context, updateRequest *c.Upda
 		cgResource := common.GetResourceURNOperateConsumerGroup(h.SCommon, updateRequest.DestinationPath, updateRequest.ConsumerGroupName)
 		h.addPermissions(ownerSubject,
 			cgResource,
-			[]common.Operation{common.OperationRead, common.OperationUpdate, common.OperationDelete},
+			[]common.Operation{common.OperationUpdate, common.OperationDelete},
 			lclLg)
 
 		if _cgDesc.DeadLetterQueueDestinationUUID != nil && *_cgDesc.DeadLetterQueueDestinationUUID != "" {
-			// Add Read/Update permissions for the owner on the DLQ destination
+			// Add Update permissions for the owner on the DLQ destination
 			dlqDstResource := common.GetResourceURNOperateDestination(h.SCommon, _cgDesc.DeadLetterQueueDestinationUUID)
 			h.addPermissions(ownerSubject,
 				dlqDstResource,
-				[]common.Operation{common.OperationRead, common.OperationUpdate},
+				[]common.Operation{common.OperationUpdate},
 				lclLg)
 		}
 	}
