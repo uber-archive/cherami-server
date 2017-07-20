@@ -196,7 +196,10 @@ func NewCassandraMetadataService(cfg configure.CommonMetadataConfig, log bark.Lo
 		log = bark.NewLoggerFromLogrus(logrus.StandardLogger())
 	}
 
-	lowCons, midCons, highCons := gocql.Two, gocql.Two, gocql.ParseConsistency(cfg.GetConsistency())
+	// use a minimum consistency of 'Two', so that reads from a recently added (non-current) cassandra
+	// host, does not result in inconsistent data.
+	lowCons, midCons := gocql.Two, gocql.Two
+	highCons := gocql.ParseConsistency(cfg.GetConsistency())
 
 	if highCons == gocql.One {
 
@@ -256,7 +259,7 @@ func NewCassandraMetadataService(cfg configure.CommonMetadataConfig, log bark.Lo
 		midConsLevel:  midCons,
 		highConsLevel: highCons,
 		clusterName:   clusterName,
-		log:           log,
+		log:           log.WithField(common.TagModule, `metadata`),
 	}, nil
 }
 
