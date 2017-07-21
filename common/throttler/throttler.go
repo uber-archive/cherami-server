@@ -18,15 +18,15 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-package storehost
+package throttler
 
 import (
 	"sync/atomic"
 	"time"
 )
 
-// This is a simple lockless token-bucket rate limiter, that provides a
-// fast/efficient mechanism to throttle requests.
+// Throttler imlpements a lockless token-bucket rate limiter, that provides
+// a fast/efficient mechanism to throttle requests.
 
 // Throttler holds the context for a throttler instance.
 type Throttler struct {
@@ -37,10 +37,10 @@ type Throttler struct {
 	interval int64  // duration (in nanoseconds) at which to refill
 }
 
-// NewThrottler instantiates a new Throttler object
+// New instantiates a new Throttler object
 // - refillTokens: number of tokens to issue every refillInterval (below)
 // - refillInterval: interval at which 'refillTokens' should be issued
-func NewThrottler(refillTokens uint64, refillInterval time.Duration) *Throttler {
+func New(refillTokens uint64, refillInterval time.Duration) *Throttler {
 	return &Throttler{refill: refillTokens, interval: refillInterval.Nanoseconds()}
 }
 
