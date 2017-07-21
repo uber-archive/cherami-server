@@ -34,6 +34,7 @@ import (
 	"github.com/uber/cherami-server/common"
 	mm "github.com/uber/cherami-server/common/metadata"
 	"github.com/uber/cherami-server/common/metrics"
+	"github.com/uber/cherami-server/common/throttler"
 	"github.com/uber/cherami-server/storage"
 	"github.com/uber/cherami-thrift/.generated/go/cherami"
 	"github.com/uber/cherami-thrift/.generated/go/metadata"
@@ -180,7 +181,7 @@ type (
 
 		numInConn, numOutConn int64 // number of active inConns/outConns respectively
 
-		sealExtentThrottler *Throttler
+		sealExtentThrottler *throttler.Throttler
 
 		//logger
 		logger bark.Logger
@@ -278,7 +279,7 @@ func (t *StoreHost) Start(thriftService []thrift.TChanServer) {
 
 	}
 
-	t.sealExtentThrottler = NewThrottler(sealExtentThrottleRequests, sealExtentThrottlePeriod)
+	t.sealExtentThrottler = throttler.New(sealExtentThrottleRequests, sealExtentThrottlePeriod)
 
 	t.xMgr = NewExtentManager(storeMgr, t.m3Client, t.hostMetrics, t.logger)
 
