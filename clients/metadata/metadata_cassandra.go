@@ -191,9 +191,8 @@ var _ m.TChanMetadataService = (*CassandraMetadataService)(nil)
 
 func parseConsistency(cfgCons string) (lowCons gocql.Consistency, midCons gocql.Consistency, highCons gocql.Consistency) {
 
-	// use a minimum default consistency of 'Two', so that reads from a recently
-	// added (non-current) cassandra host, does not result in inconsistent data.
-	lowCons, midCons, highCons = gocql.Two, gocql.Two, gocql.Two
+	// use a minimum default consistency of 'One'
+	lowCons, midCons, highCons = gocql.One, gocql.One, gocql.One
 
 	switch cons := strings.Split(cfgCons, ","); len(cons) {
 	case 1:
@@ -210,10 +209,6 @@ func parseConsistency(cfgCons string) (lowCons gocql.Consistency, midCons gocql.
 		highCons = gocql.ParseConsistency(strings.TrimSpace(cons[2]))
 	}
 
-	if highCons == gocql.One {
-		lowCons, midCons = gocql.One, gocql.One
-	}
-
 	return
 }
 
@@ -226,7 +221,7 @@ func NewCassandraMetadataService(cfg configure.CommonMetadataConfig, log bark.Lo
 
 	lowCons, midCons, highCons := parseConsistency(cfg.GetConsistency())
 
-	if configure.NewCommonConfigure().GetEnvironment() == configure.EnvProduction {
+	if highCons == gocql.One && configure.NewCommonConfigure().GetEnvironment() == configure.EnvProduction {
 		log.Panic("Highest consistency level of ONE should only be used in TestEnvironment")
 	}
 
