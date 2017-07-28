@@ -189,6 +189,34 @@ type CassandraMetadataService struct {
 // interface implementation check
 var _ m.TChanMetadataService = (*CassandraMetadataService)(nil)
 
+func parseConsistency(cfgCons string) (lowCons gocql.Consistency, midCons gocql.Consistency, highCons gocql.Consistency) {
+
+	// use a minimum default consistency of 'Two', so that reads from a recently
+	// added (non-current) cassandra host, does not result in inconsistent data.
+	lowCons, midCons, highCons = gocql.Two, gocql.Two, gocql.Two
+
+	switch cons := strings.Split(cfgCons, ","); len(cons) {
+	case 1:
+		highCons = gocql.ParseConsistency(strings.TrimSpace(cons[0]))
+
+	case 2:
+		lowCons = gocql.ParseConsistency(strings.TrimSpace(cons[0]))
+		midCons = lowCons
+		highCons = gocql.ParseConsistency(strings.TrimSpace(cons[1]))
+
+	case 3:
+		lowCons = gocql.ParseConsistency(strings.TrimSpace(cons[0]))
+		midCons = gocql.ParseConsistency(strings.TrimSpace(cons[1]))
+		highCons = gocql.ParseConsistency(strings.TrimSpace(cons[2]))
+	}
+
+	if highCons == gocql.One {
+		lowCons, midCons = gocql.One, gocql.One
+	}
+
+	return
+}
+
 // NewCassandraMetadataService creates an instance of TChanMetadataServiceClient backed up by Cassandra.
 func NewCassandraMetadataService(cfg configure.CommonMetadataConfig, log bark.Logger) (*CassandraMetadataService, error) {
 
@@ -196,19 +224,10 @@ func NewCassandraMetadataService(cfg configure.CommonMetadataConfig, log bark.Lo
 		log = bark.NewLoggerFromLogrus(logrus.StandardLogger())
 	}
 
-	// use a minimum consistency of 'Two', so that reads from a recently added (non-current) cassandra
-	// host, does not result in inconsistent data.
-	lowCons, midCons := gocql.Two, gocql.Two
-	highCons := gocql.ParseConsistency(cfg.GetConsistency())
+	lowCons, midCons, highCons := parseConsistency(cfg.GetConsistency())
 
-	if highCons == gocql.One {
-
-		envType := configure.NewCommonConfigure().GetEnvironment()
-		if envType == configure.EnvProduction {
-			log.Panic("Highest consistency level of ONE should only be used in TestEnvironment")
-		}
-
-		lowCons, midCons = gocql.One, gocql.One
+	if configure.NewCommonConfigure().GetEnvironment() == configure.EnvProduction {
+		log.Panic("Highest consistency level of ONE should only be used in TestEnvironment")
 	}
 
 	clusterName := cfg.GetClusterName()
