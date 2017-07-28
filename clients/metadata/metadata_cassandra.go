@@ -195,18 +195,19 @@ func parseConsistency(cfgCons string) (lowCons gocql.Consistency, midCons gocql.
 	lowCons, midCons, highCons = gocql.One, gocql.One, gocql.One
 
 	switch cons := strings.Split(cfgCons, ","); len(cons) {
-	case 1:
-		highCons = gocql.ParseConsistency(strings.TrimSpace(cons[0]))
+	case 3:
+		lowCons = gocql.ParseConsistency(strings.TrimSpace(cons[2]))
+		fallthrough
 
 	case 2:
-		lowCons = gocql.ParseConsistency(strings.TrimSpace(cons[0]))
-		midCons = lowCons
-		highCons = gocql.ParseConsistency(strings.TrimSpace(cons[1]))
-
-	case 3:
-		lowCons = gocql.ParseConsistency(strings.TrimSpace(cons[0]))
 		midCons = gocql.ParseConsistency(strings.TrimSpace(cons[1]))
-		highCons = gocql.ParseConsistency(strings.TrimSpace(cons[2]))
+		if len(cons) == 2 {
+			lowCons = midCons
+		}
+		fallthrough
+
+	case 1:
+		highCons = gocql.ParseConsistency(strings.TrimSpace(cons[0]))
 	}
 
 	return
