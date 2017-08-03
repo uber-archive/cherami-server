@@ -111,8 +111,6 @@ func (conn *outConnection) close() {
 }
 
 func (conn *outConnection) writeCreditsStream() {
-	defer conn.stream.Done()
-
 	if err := conn.sendCredits(initialCreditSize); err != nil {
 		conn.logger.Error(`error writing initial credits`)
 
@@ -152,11 +150,15 @@ func (conn *outConnection) readMsgStream() {
 	var sealMsgRead bool
 	var numMsgsRead int32
 
+	// Note we must continue read until we hit an error before returning from this function
+	// Because the websocket client only tear down the underlying connection when it gets a read error
+readloop:
 	for {
 		rmc, err := conn.stream.Read()
 		if err != nil {
 			conn.logger.WithField(common.TagErr, err).Error(`Error reading msg`)
 			go conn.close()
+			conn.stream.Done()
 			return
 		}
 
@@ -169,7 +171,8 @@ func (conn *outConnection) readMsgStream() {
 					"seqNum": msg.Message.GetSequenceNumber(),
 				}).Error("regular message read after seal message")
 				go conn.close()
-				return
+				conn.stream.Done()
+				continue readloop
 			}
 
 			// Sequence number check to make sure we get monotonically increasing sequence number.
@@ -181,7 +184,8 @@ func (conn *outConnection) readMsgStream() {
 					"expectedSeqNum": expectedSeqNum,
 				}).Error("sequence number out of order")
 				go conn.close()
-				return
+				conn.stream.Done()
+				continue readloop
 			}
 
 			// update the lastSeqNum to this value
@@ -198,7 +202,8 @@ func (conn *outConnection) readMsgStream() {
 				atomic.StoreInt64(&conn.lastMsgReplicatedTime, time.Now().UnixNano())
 			case <-conn.closeChannel:
 				conn.logger.Info(`writing msg to the channel failed because of shutdown`)
-				return
+				conn.stream.Done()
+				continue readloop
 			}
 
 		case store.ReadMessageContentType_SEALED:
@@ -215,15 +220,20 @@ func (conn *outConnection) readMsgStream() {
 				atomic.StoreInt64(&conn.lastMsgReplicatedTime, time.Now().UnixNano())
 			case <-conn.closeChannel:
 				conn.logger.Info(`writing msg to the channel failed because of shutdown`)
-				return
+				conn.stream.Done()
+				continue readloop
 			}
 
-			return
+			conn.stream.Done()
+			continue readloop
+
 		case store.ReadMessageContentType_ERROR:
 			msgErr := rmc.GetError()
 			conn.logger.WithField(`Message`, msgErr.GetMessage()).Error(`received error from reading msg`)
 			go conn.close()
-			return
+			conn.stream.Done()
+			continue readloop
+
 		default:
 			conn.logger.WithField(`Type`, rmc.GetType()).Error(`received ReadMessageContent with unrecognized type`)
 		}
