@@ -111,6 +111,7 @@ func (conn *outConnection) close() {
 }
 
 func (conn *outConnection) writeCreditsStream() {
+	defer conn.stream.Done()
 	if err := conn.sendCredits(initialCreditSize); err != nil {
 		conn.logger.Error(`error writing initial credits`)
 
@@ -158,7 +159,6 @@ readloop:
 		if err != nil {
 			conn.logger.WithField(common.TagErr, err).Error(`Error reading msg`)
 			go conn.close()
-			conn.stream.Done()
 			return
 		}
 
@@ -171,7 +171,6 @@ readloop:
 					"seqNum": msg.Message.GetSequenceNumber(),
 				}).Error("regular message read after seal message")
 				go conn.close()
-				conn.stream.Done()
 				continue readloop
 			}
 
@@ -184,7 +183,6 @@ readloop:
 					"expectedSeqNum": expectedSeqNum,
 				}).Error("sequence number out of order")
 				go conn.close()
-				conn.stream.Done()
 				continue readloop
 			}
 
@@ -202,7 +200,6 @@ readloop:
 				atomic.StoreInt64(&conn.lastMsgReplicatedTime, time.Now().UnixNano())
 			case <-conn.closeChannel:
 				conn.logger.Info(`writing msg to the channel failed because of shutdown`)
-				conn.stream.Done()
 				continue readloop
 			}
 
@@ -220,18 +217,14 @@ readloop:
 				atomic.StoreInt64(&conn.lastMsgReplicatedTime, time.Now().UnixNano())
 			case <-conn.closeChannel:
 				conn.logger.Info(`writing msg to the channel failed because of shutdown`)
-				conn.stream.Done()
-				continue readloop
 			}
 
-			conn.stream.Done()
 			continue readloop
 
 		case store.ReadMessageContentType_ERROR:
 			msgErr := rmc.GetError()
 			conn.logger.WithField(`Message`, msgErr.GetMessage()).Error(`received error from reading msg`)
 			go conn.close()
-			conn.stream.Done()
 			continue readloop
 
 		default:
