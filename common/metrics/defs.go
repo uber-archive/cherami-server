@@ -953,6 +953,8 @@ const (
 	StorageReplicationJobMaxConsecutiveFailures
 	// StorageReplicationJobCurrentFailures is the number of failed job in current run
 	StorageReplicationJobCurrentFailures
+	// StorageReplicationJobCurrentSuccess is the number of success job in current run
+	StorageReplicationJobCurrentSuccess
 
 	// -- Controller metrics -- //
 
@@ -1233,6 +1235,7 @@ var metricDefs = map[ServiceIdx]map[int]metricDefinition{
 		StorageOutFlushTChannelLatency:              {Timer, "storage.out.flush-tchannel-latency"},
 		StorageReplicationJobMaxConsecutiveFailures: {Gauge, "storage.replication-job.max-consecutive-failures"},
 		StorageReplicationJobCurrentFailures:        {Gauge, "storage.replication-job.current-failures"},
+		StorageReplicationJobCurrentSuccess:         {Gauge, "storage.replication-job.current-success"},
 	},
 
 	// definitions for Controller metrics
