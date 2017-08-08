@@ -30,7 +30,9 @@ import (
 	"sync"
 	"sync/atomic"
 	"syscall"
+	"time"
 
+	"github.com/pborman/uuid"
 	"github.com/tecbot/gorocksdb"
 	"github.com/uber-common/bark"
 	"github.com/uber/cherami-server/common"
@@ -827,14 +829,67 @@ func (t *Rock) Purge(purgeAddr s.Address) (nextAddr s.Address, nextKey s.Key, er
 			// there's a "change" in the extent content
 			t.notify(s.InvalidKey, s.InvalidAddr)
 
+			type dbgInfo struct {
+				filename string
+				maxAddr  s.Address
+				deleted  bool
+				duration time.Duration
+			}
+
+			var dbg []*dbgInfo
+
+			t0 := time.Now()
+
 			// run through all the SSTs and delete those whose range of
 			// keys are entirely less than the 'purgeAddr'
 
 			for _, file := range t.db.GetLiveFilesMetaData() {
 
+				di := &dbgInfo{filename: file.Name}
+
 				if maxAddr := t.deserializeAddr(file.LargestKey); maxAddr <= purgeAddr {
-					t.store.logger.WithFields(bark.Fields{`Name`: file.Name, `maxAddr`: maxAddr, `purgeAddr`: purgeAddr}).Debug(`PurgeFiles: deleted SST`)
+
+					t0d := time.Now()
 					t.db.DeleteFile(file.Name)
+					di.duration = time.Since(t0d)
+					di.maxAddr = maxAddr
+					di.deleted = true
+
+				} else {
+					di.deleted = false
+				}
+
+				dbg = append(dbg, di)
+			}
+
+			if duration := time.Since(t0); duration > 2*time.Second {
+
+				session := uuid.New()
+
+				t.store.logger.WithFields(bark.Fields{
+					`purgeAddr`:   purgeAddr,
+					common.TagExt: t.id,
+					`duration`:    duration,
+					`session`:     session,
+				}).Info(`Purge took too long!`)
+
+				for _, di := range dbg {
+
+					if di.deleted {
+						t.store.logger.WithFields(bark.Fields{
+							`filename`: di.filename,
+							`maxAddr`:  di.maxAddr,
+							`deleted`:  di.deleted,
+							`duration`: di.duration,
+							`session`:  session,
+						}).Info(`RocksDB.DeleteFile`)
+					} else {
+						t.store.logger.WithFields(bark.Fields{
+							`filename`: di.filename,
+							`deleted`:  di.deleted,
+							`session`:  session,
+						}).Info(`RocksDB.DeleteFile`)
+					}
 				}
 			}
 
