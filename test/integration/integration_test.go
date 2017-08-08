@@ -1499,7 +1499,7 @@ operationsLoop:
 
 }
 
-func (s *NetIntegrationSuiteParallelD) TestSmartRetryDisableDuringDLQMerge() {
+func (s *NetIntegrationSuiteParallelD) _TestSmartRetryDisableDuringDLQMerge() {
 	const (
 		destPath                   = `/test.runner.SmartRetry/SRDDDM` // This path ensures that throttling is limited for this test
 		cgPath                     = `/test.runner.SmartRetry/SRDDDMCG`
@@ -1806,7 +1806,7 @@ readLoop:
 	}
 }
 
-func (s *NetIntegrationSuiteParallelF) TestSmartRetry() {
+func (s *NetIntegrationSuiteParallelF) _TestSmartRetry() {
 	destPath := "/test.runner.SmartRetry/TestSmartRetry"
 	cgPath := "/test.runner.SmartRetry/TestSmartRetryCG"
 	testMsgCount := 100
