@@ -220,6 +220,10 @@ func SetCommonCommands(
 							Name:  "zone_config, zc",
 							Usage: "Zone configs for multi-zone CG. For each zone, specify \"Zone,PreferedActiveZone\"; ex: \"zone1,false\"",
 						},
+						cli.BoolFlag{
+							Name:  toolscommon.FlagDisableNackThrottling,
+							Usage: "Disable nack throttling for consumer group",
+						},
 					},
 					Action: func(c *cli.Context) {
 						if authEnabled {
@@ -365,6 +369,10 @@ func SetCommonCommands(
 						cli.StringSliceFlag{
 							Name:  "zone_config, zc",
 							Usage: "Zone configs for multi_zone consumer group. Format for each zone should be \"ZoneName,PreferedActiveZone\". For example: \"zone1,false\"",
+						},
+						cli.BoolFlag{
+							Name:  toolscommon.FlagDisableNackThrottling,
+							Usage: "Disable nack throttling for consumer group",
 						},
 					},
 					Action: func(c *cli.Context) {

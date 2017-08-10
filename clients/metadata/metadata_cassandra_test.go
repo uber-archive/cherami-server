@@ -52,7 +52,10 @@ type CassandraSuite struct {
 	TestCluster
 }
 
-const testPageSize = 2
+const (
+	testPageSize              = 2
+	FlagDisableNackThrottling = "disable_nack_throttling"
+)
 
 func TestCassandraSuite(t *testing.T) {
 	s := new(CassandraSuite)
@@ -1676,6 +1679,7 @@ func assertConsumerGroupsEqual(s *CassandraSuite, expected, got *shared.Consumer
 	s.Equal(expected.GetOwnerEmail(), got.GetOwnerEmail(), "Wrong OwnerEmail")
 	s.Equal(expected.GetDeadLetterQueueDestinationUUID(), got.GetDeadLetterQueueDestinationUUID(), "Wrong DeadLetterQueueDestinationUUID")
 	s.Equal(expected.GetActiveZone(), got.GetActiveZone(), "Wrong ActiveZone")
+	s.Equal(expected.GetOptions(), got.GetOptions(), "Wrong Options")
 }
 
 func (s *CassandraSuite) TestDeleteConsumerGroupDeletesDLQ() {
@@ -1753,6 +1757,9 @@ func (s *CassandraSuite) TestConsumerGroupCRUD() {
 		Visible: common.BoolPtr(false),
 	}
 
+	options := make(map[string]bool)
+	options[FlagDisableNackThrottling] = true
+
 	cgName := s.generateName("/foo/bar_consumer")
 
 	createReq := &shared.CreateConsumerGroupRequest{
@@ -1767,6 +1774,7 @@ func (s *CassandraSuite) TestConsumerGroupCRUD() {
 		IsMultiZone:              common.BoolPtr(true),
 		ActiveZone:               common.StringPtr("zone1"),
 		ZoneConfigs:              []*shared.ConsumerGroupZoneConfig{zoneConfig},
+		Options:                  options,
 	}
 
 	expectedCG := &shared.ConsumerGroupDescription{
@@ -1782,6 +1790,7 @@ func (s *CassandraSuite) TestConsumerGroupCRUD() {
 		IsMultiZone:              common.BoolPtr(createReq.GetIsMultiZone()),
 		ActiveZone:               common.StringPtr(createReq.GetActiveZone()),
 		ZoneConfigs:              createReq.GetZoneConfigs(),
+		Options:                  options,
 	}
 
 	expectedCGOrig := new(shared.ConsumerGroupDescription)
@@ -1827,6 +1836,8 @@ func (s *CassandraSuite) TestConsumerGroupCRUD() {
 		assert.Nil(err, "ReadConsumerGroup failed")
 		assertConsumerGroupsEqual(s, expectedCG, gotCG)
 
+		options[FlagDisableNackThrottling] = false
+
 		readReq.ConsumerGroupUUID = common.StringPtr(gotCG.GetConsumerGroupUUID())
 		gotCG, err = s.client.ReadConsumerGroupByUUID(nil, readReq)
 		assert.Nil(err, "ReadConsumerGroupByUUID failed")
@@ -1840,6 +1851,7 @@ func (s *CassandraSuite) TestConsumerGroupCRUD() {
 			SkipOlderMessagesSeconds: common.Int32Ptr(100),
 			DelaySeconds:             common.Int32Ptr(100),
 			OwnerEmail:               common.StringPtr("consumer_test@uber.com"),
+			Options:                  options,
 		}
 
 		if pass%2 == 0 {
@@ -1855,6 +1867,7 @@ func (s *CassandraSuite) TestConsumerGroupCRUD() {
 		expectedCG.DelaySeconds = common.Int32Ptr(updateReq.GetDelaySeconds())
 		expectedCG.OwnerEmail = common.StringPtr(updateReq.GetOwnerEmail())
 		expectedCG.ActiveZone = common.StringPtr(updateReq.GetActiveZone())
+		expectedCG.Options = options
 
 		gotCG = nil
 		gotCG, err = s.client.UpdateConsumerGroup(nil, updateReq)
@@ -2099,6 +2112,9 @@ func (s *CassandraSuite) TestListAllConsumerGroups() {
 	dstUUID := dstInfo.GetDestinationUUID()
 	groupMap := make(map[string]string)
 
+	options := make(map[string]bool)
+	options[FlagDisableNackThrottling] = true
+
 	for i := 0; i < 10; i++ {
 		name := s.generateName(fmt.Sprintf("foobar-consumer-%v", i))
 		var createReq *shared.CreateConsumerGroupRequest
@@ -2112,6 +2128,7 @@ func (s *CassandraSuite) TestListAllConsumerGroups() {
 			SkipOlderMessagesSeconds: common.Int32Ptr(60),
 			DelaySeconds:             common.Int32Ptr(60),
 			OwnerEmail:               common.StringPtr("consumer_test@uber.com"),
+			Options:                  options,
 		}
 
 		_, err = s.client.CreateConsumerGroup(nil, createReq)
@@ -2142,10 +2159,10 @@ func (s *CassandraSuite) TestListAllConsumerGroups() {
 					s.Equal(int32(60), gotCG.GetSkipOlderMessagesSeconds())
 					s.Equal(int32(60), gotCG.GetDelaySeconds())
 					s.Equal(string("consumer_test@uber.com"), gotCG.GetOwnerEmail())
+					s.Equal(options, gotCG.GetOptions())
 					delete(groupMap, gotCG.GetConsumerGroupName())
 				}
 			}
-
 		}
 		if len(listRes.GetNextPageToken()) == 0 {
 			break

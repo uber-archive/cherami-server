@@ -35,6 +35,7 @@ import (
 	mockcommon "github.com/uber/cherami-server/test/mocks/common"
 	mockctrl "github.com/uber/cherami-server/test/mocks/controllerhost"
 	mockmeta "github.com/uber/cherami-server/test/mocks/metadata"
+	toolscommon "github.com/uber/cherami-server/tools/common"
 	c "github.com/uber/cherami-thrift/.generated/go/cherami"
 	"github.com/uber/cherami-thrift/.generated/go/controller"
 	"github.com/uber/cherami-thrift/.generated/go/shared"
@@ -122,6 +123,7 @@ func cgCreateRequestToDesc(createRequest *c.CreateConsumerGroupRequest) *shared.
 			cgDesc.ZoneConfigs = append(cgDesc.ZoneConfigs, convertCGZoneConfigToInternal(cgZoneCfg))
 		}
 	}
+	cgDesc.Options = createRequest.GetOptions()
 	return cgDesc
 }
 
@@ -136,6 +138,7 @@ func cgUpdateRequestToDesc(updateRequest *c.UpdateConsumerGroupRequest) *shared.
 	cgDesc.SkipOlderMessagesSeconds = common.Int32Ptr(updateRequest.GetSkipOlderMessagesInSeconds())
 	cgDesc.DelaySeconds = common.Int32Ptr(updateRequest.GetDelaySeconds())
 	cgDesc.OwnerEmail = common.StringPtr(updateRequest.GetOwnerEmail())
+	cgDesc.Options = updateRequest.GetOptions()
 	return cgDesc
 }
 
@@ -825,6 +828,9 @@ func (s *FrontendHostSuite) TestFrontendHostCreateConsumerGroup() {
 	testCG := s.generateKey("/bar/CGName")
 	frontendHost, ctx := s.utilGetContextAndFrontend()
 
+	options := make(map[string]bool)
+	options[toolscommon.FlagDisableNackThrottling] = true
+
 	req := c.NewCreateConsumerGroupRequest()
 	req.DestinationPath = common.StringPtr(testPath)
 	req.ConsumerGroupName = common.StringPtr(testCG)
@@ -838,6 +844,8 @@ func (s *FrontendHostSuite) TestFrontendHostCreateConsumerGroup() {
 			},
 		},
 	}
+	req.Options = options
+
 	cgDesc := cgCreateRequestToDesc(req)
 	frontendHost.writeCacheDestinationPathForUUID(destinationUUID(cgDesc.GetDestinationUUID()), testPath)
 
@@ -858,6 +866,7 @@ func (s *FrontendHostSuite) TestFrontendHostCreateConsumerGroup() {
 		s.Equal(createReq.GetIsMultiZone(), req.GetIsMultiZone())
 		s.Equal(len(createReq.GetZoneConfigs()), len(req.GetZoneConfigs().GetConfigs()))
 		s.Equal(createReq.GetZoneConfigs()[0].GetVisible(), req.GetZoneConfigs().GetConfigs()[0].GetVisible())
+		s.Equal(createReq.GetOptions(), req.GetOptions())
 	})
 
 	cgd, err := frontendHost.CreateConsumerGroup(ctx, req)
@@ -1124,6 +1133,9 @@ func (s *FrontendHostSuite) TestFrontendHostUpdateConsumerGroup() {
 	testPath := s.generateKey("/foo/bax")
 	frontendHost, ctx := s.utilGetContextAndFrontend()
 
+	options := make(map[string]bool)
+	options[toolscommon.FlagDisableNackThrottling] = true
+
 	req := new(c.UpdateConsumerGroupRequest)
 	req.DestinationPath = common.StringPtr(testPath)
 	req.ConsumerGroupName = common.StringPtr(s.generateKey("/CG/Name"))
@@ -1133,6 +1145,8 @@ func (s *FrontendHostSuite) TestFrontendHostUpdateConsumerGroup() {
 	req.DelaySeconds = common.Int32Ptr(5)
 	req.Status = c.ConsumerGroupStatusPtr(c.ConsumerGroupStatus_DISABLED)
 	req.OwnerEmail = common.StringPtr("consumer_front_test@uber.com")
+	req.Options = options
+
 	newCGDesc := cgUpdateRequestToDesc(req)
 	frontendHost.writeCacheDestinationPathForUUID(destinationUUID(newCGDesc.GetDestinationUUID()), testPath)
 	s.mockController.On("UpdateConsumerGroup", mock.Anything, mock.Anything).Return(newCGDesc, nil)
@@ -1149,6 +1163,7 @@ func (s *FrontendHostSuite) TestFrontendHostUpdateConsumerGroup() {
 		s.Equal(cgd.DelaySeconds, req.DelaySeconds)
 		s.Equal(cgd.Status, req.Status)
 		s.Equal(cgd.OwnerEmail, req.OwnerEmail)
+		s.Equal(cgd.Options, req.Options)
 	}
 }
 

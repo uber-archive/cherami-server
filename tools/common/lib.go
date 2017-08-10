@@ -112,6 +112,9 @@ const (
 
 	// Kafka prefix is a required prefix for all Kafka type destinations and consumer groups
 	kafkaPrefix = `/kafka_`
+
+	// FlagDisableNackThrottling is the flag string for disabling Nack throttling
+	FlagDisableNackThrottling = "disable_nack_throttling"
 )
 
 const (
@@ -502,6 +505,12 @@ func CreateConsumerGroupSecure(
 	zoneConfigs := getCgZoneConfigs(c, mClient, cliHelper, path)
 	isMultiZone := len(zoneConfigs.GetConfigs()) > 0
 
+	options := make(map[string]bool)
+	disableNackThrottling := string(c.String(FlagDisableNackThrottling))
+	if disableNackThrottling == "true" {
+		options[FlagDisableNackThrottling] = true
+	}
+
 	desc, err := cClient.CreateConsumerGroup(&cherami.CreateConsumerGroupRequest{
 		DestinationPath:            &path,
 		ConsumerGroupName:          &name,
@@ -513,6 +522,7 @@ func CreateConsumerGroupSecure(
 		OwnerEmail:                 &ownerEmail,
 		IsMultiZone:                &isMultiZone,
 		ZoneConfigs:                &zoneConfigs,
+		Options:                    options,
 	})
 
 	ExitIfError(err)
@@ -626,6 +636,7 @@ func UpdateConsumerGroupSecure(
 		OwnerEmail:                 getIfSetString(c, `owner_email`, &setCount),
 		ActiveZone:                 getIfSetString(c, `active_zone`, &setCount),
 		ZoneConfigs:                getIfSetCgZoneConfig(c, mClient, cliHelper, path, &setCount),
+		Options:                    getIfSetOptions(c, &setCount),
 	}
 
 	if c.IsSet(`status`) {
@@ -1081,6 +1092,7 @@ type cgJSONOutputFields struct {
 	IsMultiZone              bool                              `json:"is_multi_zone"`
 	ZoneConfigs              []*shared.ConsumerGroupZoneConfig `json:"zone_Configs"`
 	ActiveZone               string                            `json:"active_zone"`
+	Options                  map[string]bool                   `json:"options"`
 }
 
 func printCG(cg *shared.ConsumerGroupDescription) {
@@ -1099,6 +1111,7 @@ func printCG(cg *shared.ConsumerGroupDescription) {
 		IsMultiZone:              cg.GetIsMultiZone(),
 		ZoneConfigs:              cg.GetZoneConfigs(),
 		ActiveZone:               cg.GetActiveZone(),
+		Options:                  cg.GetOptions(),
 	}
 	outputStr, _ := json.Marshal(output)
 	fmt.Fprintln(os.Stdout, string(outputStr))
@@ -1626,6 +1639,21 @@ func getIfSetCgZoneConfig(c *cli.Context, mClient mcli.Client, cliHelper common.
 	if len(zoneConfig.GetConfigs()) > 0 {
 		*setCount++
 		return &zoneConfig
+	}
+	return
+}
+
+func getIfSetOptions(c *cli.Context, setCount *int) (options map[string]bool) {
+	if c.IsSet(FlagDisableNackThrottling) {
+		disableNackThrottling := false
+		if string(c.String(FlagDisableNackThrottling)) == "true" {
+			disableNackThrottling = true
+		}
+
+		options = make(map[string]bool)
+		options[FlagDisableNackThrottling] = disableNackThrottling
+		*setCount++
+		return options
 	}
 	return
 }

@@ -32,6 +32,7 @@ import (
 	"github.com/uber/cherami-server/common"
 	"github.com/uber/cherami-server/common/metrics"
 	"github.com/uber/cherami-server/services/outputhost/load"
+	toolscommon "github.com/uber/cherami-server/tools/common"
 	"github.com/uber/cherami-thrift/.generated/go/cherami"
 	"github.com/uber/cherami-thrift/.generated/go/shared"
 )
@@ -959,7 +960,7 @@ func (msgCache *cgMsgCache) handleNack(ackID timestampedAckID, lclLg bark.Logger
 // updateConn is the utility routine to notify the connection
 // to either throttle up or throttle down.
 // If we get a NACK on this connection, we ask the connection to
-// slow down (throttle up)
+// slow down (throttle up), except it's disabled explicitly
 // If we get an ACK on this connection and we asked it to throttle
 // earlier, we ask the connection to stop throttling (throttle down!).
 func (msgCache *cgMsgCache) updateConn(connID int, event msgEvent, badConns map[int]int) {
@@ -973,6 +974,14 @@ func (msgCache *cgMsgCache) updateConn(connID int, event msgEvent, badConns map[
 			delete(badConns, connID)
 		}
 	} else {
+		if event == eventNACK {
+			// if NACK throttling is disabled for this cg, then no-op
+			throttlingDisabled, ok := msgCache.cgCache.cachedCGDesc.Options[toolscommon.FlagDisableNackThrottling]
+			if ok && throttlingDisabled { // no-op
+				return
+			}
+		}
+
 		// make sure to throttle the appropriate connection and update the
 		// bad connections map to keep track of the number of nacks
 		msgCache.notifier.Notify(connID, NotifyMsg{notifyType: ThrottleUp})

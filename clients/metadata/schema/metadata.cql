@@ -82,7 +82,8 @@ CREATE TYPE destination (
     checksum_option int,
     is_multi_zone boolean,
     zone_configs list<frozen<destination_zone_config>>,
-    schema_version int
+    schema_version int,
+    options map<text, boolean>,
 );
 
 CREATE TABLE destinations (
@@ -220,6 +221,7 @@ CREATE TYPE consumer_group (
   is_multi_zone boolean,
   active_zone text,
   zone_configs list<frozen<consumer_group_zone_config>>,
+  options map<text, boolean>,
 );
 
 CREATE TABLE consumer_groups (
