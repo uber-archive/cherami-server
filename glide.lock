@@ -80,7 +80,7 @@ imports:
 - name: github.com/google/uuid
   version: 064e2069ce9c359c118179501254f67d7d37ba24
 - name: github.com/gorilla/websocket
-  version: 3ab3a8b8831546bd18fd182c20687ca853b2bb13
+  version: a91eba7f97777409bc2c443f5534d41dd20c5720
 - name: github.com/hailocab/go-hostpool
   version: e80d13ce29ede4452c43dea11e79b9bc8a15b478
 - name: github.com/jmespath/go-jmespath
