@@ -1,8 +1,8 @@
-hash: 4c78ea3b3fe5a831e5f4fd07d62f35082bba0d89dfbeece4da2d924fdba9b9bc
-updated: 2017-08-10T16:13:33.838273108-07:00
+hash: b12fd38476eb4ee5e70317142d9f4b93947bb227b65effeab80625d3860a5970
+updated: 2017-08-10T16:40:49.314326452-07:00
 imports:
 - name: github.com/apache/thrift
-  version: 2f03618a6c0a938813ca36e6a2fcd9f517a64ee0
+  version: b2a4d4ae21c789b689dd162deb819665567f481c
   subpackages:
   - lib/go/thrift
 - name: github.com/aws/aws-sdk-go
@@ -156,7 +156,7 @@ imports:
   - swim
   - util
 - name: github.com/uber/tchannel-go
-  version: a7ad9ecb640b5f10a0395b38d6319175172b3ab2
+  version: b99c1d7cecb0fdc882bed0098e7cae6ec7459059
   subpackages:
   - hyperbahn
   - hyperbahn/gen-go/hyperbahn
