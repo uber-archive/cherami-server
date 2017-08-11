@@ -1,12 +1,12 @@
-hash: e0597d72a37b602320021f9eb130efa03eed8e1f089dbf1fb2814b02b86d5cbb
-updated: 2017-06-26T12:01:41.152060685-07:00
+hash: b12fd38476eb4ee5e70317142d9f4b93947bb227b65effeab80625d3860a5970
+updated: 2017-08-10T16:40:49.314326452-07:00
 imports:
 - name: github.com/apache/thrift
-  version: b8ee72de5bf9318d50846852082325d0f932682b
+  version: b2a4d4ae21c789b689dd162deb819665567f481c
   subpackages:
   - lib/go/thrift
 - name: github.com/aws/aws-sdk-go
-  version: 8a972b4459c2f2582b06f3e2d74448987cc6e19f
+  version: cf66c348f82c79de333bd788d4f782c4d623ebad
   subpackages:
   - aws
   - aws/awserr
@@ -38,9 +38,9 @@ imports:
 - name: github.com/benbjohnson/clock
   version: 7dc76406b6d3c05b5f71a86293cbcf3c4ea03b19
 - name: github.com/bsm/sarama-cluster
-  version: 5efe630369ab4ed5cc4cedeadd61b4d1b2523169
+  version: f1ef2fda9bccc377dad24d7f7522d46b6a9a817b
 - name: github.com/cactus/go-statsd-client
-  version: 1139cdac1a56e404b5382e3a3503a2c587d2c0c3
+  version: ad551ee7f9f3465fb1ce1695899c612f7808a06a
   subpackages:
   - statsd
 - name: github.com/cockroachdb/c-jemalloc
@@ -52,9 +52,9 @@ imports:
 - name: github.com/cockroachdb/c-snappy
   version: c0cd3c9ce92f195001595e1fbbe66f045daad34f
 - name: github.com/codegangsta/cli
-  version: cf33a9befefdd6c6ea1a236ab6d546e797a62cbf
+  version: b99aa811b4c1dd84cc6bccb8499c82c72098085a
 - name: github.com/davecgh/go-spew
-  version: 346938d642f2ec3594ed81d874461961cd0faa76
+  version: adab96458c51a58dc1783b3335dcce5461522e75
   subpackages:
   - spew
 - name: github.com/dgryski/go-farm
@@ -68,9 +68,9 @@ imports:
 - name: github.com/eapache/queue
   version: 44cc805cf13205b55f69e14bcb69867d1ae92f98
 - name: github.com/go-ini/ini
-  version: d3de07a94d22b4a0972deb4b96d790c2c0ce8333
+  version: 3d73f4b845efdf9989fffd4b4e562727744a34ba
 - name: github.com/gocql/gocql
-  version: 3e8b36f5e9e52cdeb265f385808c504a53db55fc
+  version: 77431609f517cb41ee9afdcdd373561c4d935316
   subpackages:
   - internal/lru
   - internal/murmur
@@ -86,7 +86,7 @@ imports:
 - name: github.com/jmespath/go-jmespath
   version: bd40a432e4c76585ef6b72d3fd96fb9b6dc7b68d
 - name: github.com/opentracing/opentracing-go
-  version: eaaf4e1eeb7a5373b38e70901270c83577dc6fb9
+  version: 8ebe5d4e236eed9fd88e593c288bfb804d630b8c
   subpackages:
   - ext
   - log
@@ -95,7 +95,7 @@ imports:
 - name: github.com/pierrec/lz4
   version: 5a3d2245f97fc249850e7802e3c01fad02a1c316
 - name: github.com/pierrec/xxHash
-  version: 5a004441f897722c627870a981d02b29924215fa
+  version: a0006b13c722f7f12368c00a3d3c2ae8a999a0c6
   subpackages:
   - xxHash32
 - name: github.com/pmezard/go-difflib
@@ -108,11 +108,11 @@ imports:
   version: c01858abb625b73a3af51d0798e4ad42c8147093
   repo: http://github.com/Shopify/sarama
 - name: github.com/sirupsen/logrus
-  version: 85b1699d505667d13f8ac4478c1debbf85d6c5de
+  version: 181d419aa9e2223811b824e8f0b4af96f9ba9302
 - name: github.com/stretchr/objx
   version: 1a9d0bb9f541897e62256577b352fdbc1fb4fd94
 - name: github.com/stretchr/testify
-  version: f6abca593680b2315d2075e0f5e2a9751e3f431a
+  version: 890a5c3458b43e6104ff5da8dfa139d013d77544
   subpackages:
   - assert
   - mock
@@ -123,9 +123,9 @@ imports:
 - name: github.com/uber-common/bark
   version: a2ce12437502dbd1511a6ab87745ed01ba138dbb
 - name: github.com/uber-go/atomic
-  version: 0506d69f5564c56e25797bf7183c28921d4c6360
+  version: 70bd1261d36be490ebd22a62b385a3c5d23b6240
 - name: github.com/uber/cherami-client-go
-  version: ebcbfe6c988c8ec8ffef86f9ecea08e6d76afb4a
+  version: c88dc4abaf53f64839bd48c2d6bbbc051bc9a910
   subpackages:
   - client/cherami
   - common
@@ -134,7 +134,7 @@ imports:
   - common/websocket
   - stream
 - name: github.com/uber/cherami-thrift
-  version: 19b1fc0b72e7d97fa72c1d9c51ed33376946fb3c
+  version: 2cb0e2eeb6570800a2dd86544909bf2693f50e7b
   subpackages:
   - .generated/go/admin
   - .generated/go/cherami
@@ -160,26 +160,38 @@ imports:
   subpackages:
   - hyperbahn
   - hyperbahn/gen-go/hyperbahn
+  - internal/argreader
   - json
   - raw
   - relay
   - thrift
   - thrift/gen-go/meta
   - tnet
+  - tos
   - trand
   - typed
-- name: golang.org/x/net
-  version: ddf80d0970594e2e4cccf5a98861cad3d9eaa4cd
+- name: golang.org/x/crypto
+  version: b176d7def5d71bdd214203491f89843ed217f420
   subpackages:
+  - ssh/terminal
+- name: golang.org/x/net
+  version: 1c05540f6879653db88113bc4a2b70aec4bd491f
+  subpackages:
+  - bpf
   - context
+  - internal/iana
+  - internal/socket
+  - ipv4
+  - ipv6
 - name: golang.org/x/sys
-  version: 0b25a408a50076fbbcae6b7ac0ea5fbb0b085e79
+  version: e42485b6e20ae7d2304ec72e535b103ed350cc02
   subpackages:
   - unix
+  - windows
 - name: gopkg.in/inf.v0
   version: 3887ee99ecf07df5b447e9b00d9c0b2adaa9f3e4
 - name: gopkg.in/validator.v2
   version: 07ffaad256c8e957050ad83d6472eb97d785013d
 - name: gopkg.in/yaml.v2
-  version: cd8b52f8269e0feb286dfeef29f8fe4d5b397e0b
+  version: 25c4ec802a7d637f88d584ab26798e94ad14c13b
 testImports: []
