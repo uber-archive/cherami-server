@@ -498,7 +498,7 @@ func SetCommonCommands(
 
 // SetAdminCommands sets the admin commands
 func SetAdminCommands(commands *[]cli.Command) {
-	showCommand := getCommand(commands, "show")
+	showCommand := getCommand(*commands, "show")
 	showCommand.Usage = "show (destination | consumergroup | extent | storehost | message | dlq | cgAckID | cgqueue | destqueue | cgBacklog)"
 	showCommand.Subcommands = append(showCommand.Subcommands, []cli.Command{
 		{
@@ -570,7 +570,7 @@ func SetAdminCommands(commands *[]cli.Command) {
 		},
 	}...)
 
-	listCommand := getCommand(commands, "list")
+	listCommand := getCommand(*commands, "list")
 	listCommand.Usage = "list (destination | consumergroup | extents | consumergroupextents | hosts)"
 	listCommand.Subcommands = append(listCommand.Subcommands, []cli.Command{
 		{
@@ -918,10 +918,10 @@ func SetAdminCommands(commands *[]cli.Command) {
 
 }
 
-func getCommand(commands *[]cli.Command, name string) *cli.Command {
-	for _, command := range *commands {
+func getCommand(commands []cli.Command, name string) *cli.Command {
+	for i, command := range commands {
 		if command.Name == name {
-			return &command
+			return &commands[i]
 		}
 	}
 	return &cli.Command{}
