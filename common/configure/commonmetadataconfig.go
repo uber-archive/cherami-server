@@ -30,6 +30,7 @@ type Authentication struct {
 // MetadataConfig holds the config info related to our metadata
 type MetadataConfig struct {
 	CassandraHosts string            `yaml:"CassandraHosts"`
+	Port           int               `yaml:"Port"`
 	Keyspace       string            `yaml:"Keyspace"`
 	Authentication Authentication    `yaml:"Authentication"`
 	Consistency    string            `yaml:"Consistency"`
@@ -48,6 +49,11 @@ func NewCommonMetadataConfig() *MetadataConfig {
 // GetCassandraHosts returns the cassandra seed hosts for our cluster
 func (r *MetadataConfig) GetCassandraHosts() string {
 	return r.CassandraHosts
+}
+
+// GetPort() gets the cassandra host port
+func (r *MetadataConfig) GetPort() int {
+	return r.Port
 }
 
 // GetKeyspace returns the keyspace to be used for cherami cluster

@@ -26,6 +26,7 @@ DefaultDestinationConfig:
 
 MetadataConfig:
   CassandraHosts: "127.0.0.1"
+  Ports: 9042
   Authentication:
     Enabled: false
     Username:

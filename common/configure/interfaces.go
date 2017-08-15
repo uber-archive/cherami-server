@@ -145,6 +145,8 @@ type (
 	CommonMetadataConfig interface {
 		// GetCassandraHosts gets the cassandra seed hosts
 		GetCassandraHosts() string
+		// GetPort() gets the cassandra host port
+		GetPort() int
 		// GetKeyspace returns the keyspace for our cassandra cluster
 		GetKeyspace() string
 		// GetAuthentication returns the authentication info for our cassandra cluster

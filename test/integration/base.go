@@ -166,7 +166,7 @@ func (tb *testBase) setupSuiteImpl(t *testing.T) {
 	}
 
 	// create the keyspace first
-	err := metadata.CreateKeyspaceNoSession("127.0.0.1", tb.keyspace, 1, true, auth)
+	err := metadata.CreateKeyspaceNoSession("127.0.0.1", 9042, tb.keyspace, 1, true, auth)
 	tb.NoError(err)
 
 	tb.mClient, _ = metadata.NewCassandraMetadataService(&configure.MetadataConfig{
