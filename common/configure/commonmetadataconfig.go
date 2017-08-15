@@ -51,7 +51,7 @@ func (r *MetadataConfig) GetCassandraHosts() string {
 	return r.CassandraHosts
 }
 
-// GetPort() gets the cassandra host port
+// GetPort gets the cassandra host port
 func (r *MetadataConfig) GetPort() int {
 	return r.Port
 }
