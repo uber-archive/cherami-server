@@ -112,9 +112,6 @@ const (
 
 	// Kafka prefix is a required prefix for all Kafka type destinations and consumer groups
 	kafkaPrefix = `/kafka_`
-
-	// FlagDisableNackThrottling is the flag string for disabling Nack throttling
-	FlagDisableNackThrottling = "disable_nack_throttling"
 )
 
 const (
@@ -505,10 +502,10 @@ func CreateConsumerGroupSecure(
 	zoneConfigs := getCgZoneConfigs(c, mClient, cliHelper, path)
 	isMultiZone := len(zoneConfigs.GetConfigs()) > 0
 
-	options := make(map[string]bool)
-	disableNackThrottling := string(c.String(FlagDisableNackThrottling))
+	options := make(map[string]string)
+	disableNackThrottling := strings.ToLower(c.String(common.FlagDisableNackThrottling))
 	if disableNackThrottling == "true" {
-		options[FlagDisableNackThrottling] = true
+		options[common.FlagDisableNackThrottling] = "true"
 	}
 
 	desc, err := cClient.CreateConsumerGroup(&cherami.CreateConsumerGroupRequest{
@@ -1092,7 +1089,7 @@ type cgJSONOutputFields struct {
 	IsMultiZone              bool                              `json:"is_multi_zone"`
 	ZoneConfigs              []*shared.ConsumerGroupZoneConfig `json:"zone_Configs"`
 	ActiveZone               string                            `json:"active_zone"`
-	Options                  map[string]bool                   `json:"options"`
+	Options                  map[string]string                 `json:"options"`
 }
 
 func printCG(cg *shared.ConsumerGroupDescription) {
@@ -1643,15 +1640,15 @@ func getIfSetCgZoneConfig(c *cli.Context, mClient mcli.Client, cliHelper common.
 	return
 }
 
-func getIfSetOptions(c *cli.Context, setCount *int) (options map[string]bool) {
-	if c.IsSet(FlagDisableNackThrottling) {
-		disableNackThrottling := false
-		if string(c.String(FlagDisableNackThrottling)) == "true" {
-			disableNackThrottling = true
+func getIfSetOptions(c *cli.Context, setCount *int) (options map[string]string) {
+	if c.IsSet(common.FlagDisableNackThrottling) {
+		disableNackThrottling := "false"
+		if strings.ToLower(c.String(common.FlagDisableNackThrottling)) == "true" {
+			disableNackThrottling = "true"
 		}
 
-		options = make(map[string]bool)
-		options[FlagDisableNackThrottling] = disableNackThrottling
+		options = make(map[string]string)
+		options[common.FlagDisableNackThrottling] = disableNackThrottling
 		*setCount++
 		return options
 	}

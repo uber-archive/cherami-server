@@ -54,7 +54,6 @@ type CassandraSuite struct {
 
 const (
 	testPageSize              = 2
-	FlagDisableNackThrottling = "disable_nack_throttling"
 )
 
 func TestCassandraSuite(t *testing.T) {
@@ -1757,8 +1756,8 @@ func (s *CassandraSuite) TestConsumerGroupCRUD() {
 		Visible: common.BoolPtr(false),
 	}
 
-	options := make(map[string]bool)
-	options[FlagDisableNackThrottling] = true
+	options := make(map[string]string)
+	options[common.FlagDisableNackThrottling] = "true"
 
 	cgName := s.generateName("/foo/bar_consumer")
 
@@ -1836,7 +1835,7 @@ func (s *CassandraSuite) TestConsumerGroupCRUD() {
 		assert.Nil(err, "ReadConsumerGroup failed")
 		assertConsumerGroupsEqual(s, expectedCG, gotCG)
 
-		options[FlagDisableNackThrottling] = false
+		options[common.FlagDisableNackThrottling] = "false"
 
 		readReq.ConsumerGroupUUID = common.StringPtr(gotCG.GetConsumerGroupUUID())
 		gotCG, err = s.client.ReadConsumerGroupByUUID(nil, readReq)
@@ -2112,8 +2111,8 @@ func (s *CassandraSuite) TestListAllConsumerGroups() {
 	dstUUID := dstInfo.GetDestinationUUID()
 	groupMap := make(map[string]string)
 
-	options := make(map[string]bool)
-	options[FlagDisableNackThrottling] = true
+	options := make(map[string]string)
+	options[common.FlagDisableNackThrottling] = "true"
 
 	for i := 0; i < 10; i++ {
 		name := s.generateName(fmt.Sprintf("foobar-consumer-%v", i))

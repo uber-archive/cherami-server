@@ -32,7 +32,6 @@ import (
 	"github.com/uber/cherami-server/common"
 	"github.com/uber/cherami-server/common/metrics"
 	"github.com/uber/cherami-server/services/outputhost/load"
-	toolscommon "github.com/uber/cherami-server/tools/common"
 	"github.com/uber/cherami-thrift/.generated/go/cherami"
 	"github.com/uber/cherami-thrift/.generated/go/shared"
 )
@@ -308,7 +307,7 @@ func getEventString(event msgEvent) string {
 	}
 }
 
-func (msgCache *cgMsgCache) utilHandleDeliveredMsg(cMsg cacheMsg, badConns map[int]int) {
+func (msgCache *cgMsgCache) utilHandleDeliveredMsg(cMsg cacheMsg) {
 	msgCache.startTimer(eventCache)
 
 	msg := cMsg.msg
@@ -380,7 +379,7 @@ func (msgCache *cgMsgCache) utilHandleRedeliveredMsg(cMsg cacheMsg) {
 	}
 }
 
-func (msgCache *cgMsgCache) utilHandleRedeliveryTicker(badConns map[int]int) {
+func (msgCache *cgMsgCache) utilHandleRedeliveryTicker() {
 	msgCache.startTimer(eventTimer)
 
 	var redeliveries int64
@@ -433,7 +432,7 @@ func (msgCache *cgMsgCache) utilHandleRedeliveryTicker(badConns map[int]int) {
 				// 2. We are not stalled
 				if cm.n > msgCache.GetMaxDeliveryCount() && !stalled && cm.dlqInhibit <= 0 {
 					msgCache.changeState(ackID, stateDLQDelivered, nil, eventTimer)
-					msgCache.publishToDLQ(cm, badConns)
+					msgCache.publishToDLQ(cm)
 				} else {
 					select {
 					case msgCache.msgsRedeliveryCh <- cm.msg:
@@ -478,7 +477,7 @@ func (msgCache *cgMsgCache) utilHandleRedeliveryTicker(badConns map[int]int) {
 	}
 }
 
-func (msgCache *cgMsgCache) utilHandleNackMsg(ackID timestampedAckID, badConns map[int]int) {
+func (msgCache *cgMsgCache) utilHandleNackMsg(ackID timestampedAckID) {
 	lclLg := msgCache.lclLg
 	msgCache.startTimer(eventNACK)
 
@@ -489,7 +488,7 @@ func (msgCache *cgMsgCache) utilHandleNackMsg(ackID timestampedAckID, badConns m
 	i := int64(1) // we always handle at least one ack, even if the channel is empty afterwards
 nackDrain:
 	for ; i < ackChannelSize*2; i++ { // Empty the channel twice, at most, to prevent starvation
-		msgCache.handleNack(ackID, lclLg, badConns)
+		msgCache.handleNack(ackID, lclLg)
 		select {
 		case ackID = <-msgCache.nackMsgCh:
 			continue nackDrain
@@ -501,7 +500,7 @@ nackDrain:
 	msgCache.consumerM3Client.AddCounter(metrics.ConsConnectionScope, metrics.OutputhostCGMessageSentNAck, i)
 }
 
-func (msgCache *cgMsgCache) utilHandleAckMsg(ackID timestampedAckID, badConns map[int]int) {
+func (msgCache *cgMsgCache) utilHandleAckMsg(ackID timestampedAckID) {
 	lclLg := msgCache.lclLg
 	msgCache.startTimer(eventACK)
 
@@ -512,7 +511,7 @@ func (msgCache *cgMsgCache) utilHandleAckMsg(ackID timestampedAckID, badConns ma
 	i := int64(1) // we always handle at least one ack, even if the channel is empty afterwards
 ackDrain:
 	for ; i < ackChannelSize*2; i++ { // Empty the channel twice, at most, to prevent starvation
-		msgCache.handleAck(ackID, lclLg, badConns)
+		msgCache.handleAck(ackID, lclLg)
 		select {
 		case ackID = <-msgCache.ackMsgCh:
 			continue ackDrain
@@ -740,7 +739,6 @@ func (msgCache *cgMsgCache) start() {
 func (msgCache *cgMsgCache) manageMessageDeliveryCache() {
 	msgCache.blockCheckingTimer = common.NewTimer(blockCheckingTimeout)
 	msgCache.dlqPublishCh = msgCache.dlq.getPublishCh()
-	badConns := make(map[int]int) // this is the map of all bad connections, i.e, connections which get Nacks and timeouts
 	lastPumpHealthLog := common.UnixNanoTime(0)
 	var creditBatchSize int32
 
@@ -766,11 +764,11 @@ func (msgCache *cgMsgCache) manageMessageDeliveryCache() {
 		select {
 		case cMsg := <-msgCache.msgCacheCh:
 			// this means we got a new message
-			msgCache.utilHandleDeliveredMsg(cMsg, badConns)
+			msgCache.utilHandleDeliveredMsg(cMsg)
 		case cMsg := <-msgCache.msgCacheRedeliveredCh:
 			msgCache.utilHandleRedeliveredMsg(cMsg)
 		case <-msgCache.redeliveryTicker.C:
-			msgCache.utilHandleRedeliveryTicker(badConns)
+			msgCache.utilHandleRedeliveryTicker()
 			// Incase we have a very low throughput destination, we might not
 			// accumulate enough messages. So renew credits irrespective if we have
 			// accumulated some acks.
@@ -779,9 +777,9 @@ func (msgCache *cgMsgCache) manageMessageDeliveryCache() {
 			}
 			msgCache.refreshCgConfig(msgCache.maxOutstandingMsgs)
 		case ackID := <-msgCache.nackMsgCh:
-			msgCache.utilHandleNackMsg(ackID, badConns)
+			msgCache.utilHandleNackMsg(ackID)
 		case ackID := <-msgCache.ackMsgCh:
-			msgCache.utilHandleAckMsg(ackID, badConns)
+			msgCache.utilHandleAckMsg(ackID)
 		case extUUID := <-msgCache.creditRequestCh:
 			// an extent is requesting credits, which means even if we have some
 			// credits to grant, grant it to this extent
@@ -854,7 +852,7 @@ func (msgCache *cgMsgCache) getOutstandingMsgs() int32 {
 	return int32(msgCache.countStateDelivered + msgCache.countStateEarlyNACK)
 }
 
-func (msgCache *cgMsgCache) handleAck(ackID timestampedAckID, lclLg bark.Logger, badConns map[int]int) {
+func (msgCache *cgMsgCache) handleAck(ackID timestampedAckID, lclLg bark.Logger) {
 	var badMessage bool
 	cm := msgCache.getState(ackID.AckID)
 	now := common.Now()
@@ -918,13 +916,13 @@ func (msgCache *cgMsgCache) handleAck(ackID timestampedAckID, lclLg bark.Logger,
 		}
 
 		// TODO: don't updateConn if we already had this ACK (stateConsumed); a worker in a bad loop could just ack the same message over and over
-		msgCache.updateConn(cm.lastConnID, eventACK, badConns)
+		msgCache.updateConn(cm.lastConnID, eventACK)
 	}
 
 	msgCache.numAcks++
 }
 
-func (msgCache *cgMsgCache) handleNack(ackID timestampedAckID, lclLg bark.Logger, badConns map[int]int) {
+func (msgCache *cgMsgCache) handleNack(ackID timestampedAckID, lclLg bark.Logger) {
 	cm := msgCache.getState(ackID.AckID)
 
 	switch cm.currentState {
@@ -954,7 +952,7 @@ func (msgCache *cgMsgCache) handleNack(ackID timestampedAckID, lclLg bark.Logger
 	// the notifier interface will let the appropriate connection know about this.
 	// the connections will take care of throttling based on the number of nacks
 	// received per second.
-	msgCache.updateConn(cm.lastConnID, eventNACK, badConns)
+	msgCache.updateConn(cm.lastConnID, eventNACK)
 }
 
 // updateConn is the utility routine to notify the connection
@@ -963,29 +961,19 @@ func (msgCache *cgMsgCache) handleNack(ackID timestampedAckID, lclLg bark.Logger
 // slow down (throttle up), except it's disabled explicitly
 // If we get an ACK on this connection and we asked it to throttle
 // earlier, we ask the connection to stop throttling (throttle down!).
-func (msgCache *cgMsgCache) updateConn(connID int, event msgEvent, badConns map[int]int) {
-	val, ok := badConns[connID]
+func (msgCache *cgMsgCache) updateConn(connID int, event msgEvent) {
 	if event == eventACK {
-		// if this connection was in the list of bad connections,
-		// then make sure to notify the connection asking to throttle
-		// down and remove this one from the bad connections map
-		if ok {
-			msgCache.notifier.Notify(connID, NotifyMsg{notifyType: ThrottleDown})
-			delete(badConns, connID)
-		}
+		msgCache.notifier.Notify(connID, NotifyMsg{notifyType: ThrottleDown})
 	} else {
-		if event == eventNACK {
-			// if NACK throttling is disabled for this cg, then no-op
-			throttlingDisabled, ok := msgCache.cgCache.cachedCGDesc.Options[toolscommon.FlagDisableNackThrottling]
-			if ok && throttlingDisabled { // no-op
-				return
-			}
+		// if NACK throttling is disabled for this cg, then no-op
+		throttlingDisabled, ok := msgCache.cgCache.cachedCGDesc.Options[common.FlagDisableNackThrottling]
+		if ok && throttlingDisabled == "true" { // no-op
+			return
 		}
 
 		// make sure to throttle the appropriate connection and update the
 		// bad connections map to keep track of the number of nacks
 		msgCache.notifier.Notify(connID, NotifyMsg{notifyType: ThrottleUp})
-		badConns[connID] = val + 1
 	}
 }
 
@@ -1045,7 +1033,7 @@ func newMessageDeliveryCache(
 	return msgCache
 }
 
-func (msgCache *cgMsgCache) publishToDLQ(cm *cachedMessage, badConns map[int]int) {
+func (msgCache *cgMsgCache) publishToDLQ(cm *cachedMessage) {
 	msg := cm.msg
 	msgCache.blockCheckingTimer.Reset(blockCheckingTimeout)
 	select {
@@ -1057,7 +1045,7 @@ func (msgCache *cgMsgCache) publishToDLQ(cm *cachedMessage, badConns map[int]int
 	// the notifier interface will let the appropriate connection know about this.
 	// the connections will take care of throttling based on the number of nacks
 	// received per second.
-	msgCache.updateConn(cm.lastConnID, eventNACK, badConns)
+	msgCache.updateConn(cm.lastConnID, eventNACK)
 }
 
 func (msgCache *cgMsgCache) startTimer(e msgEvent) {

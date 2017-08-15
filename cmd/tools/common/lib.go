@@ -221,7 +221,7 @@ func SetCommonCommands(
 							Usage: "Zone configs for multi-zone CG. For each zone, specify \"Zone,PreferedActiveZone\"; ex: \"zone1,false\"",
 						},
 						cli.BoolFlag{
-							Name:  toolscommon.FlagDisableNackThrottling,
+							Name:  common.FlagDisableNackThrottling,
 							Usage: "Disable nack throttling for consumer group",
 						},
 					},
@@ -371,7 +371,7 @@ func SetCommonCommands(
 							Usage: "Zone configs for multi_zone consumer group. Format for each zone should be \"ZoneName,PreferedActiveZone\". For example: \"zone1,false\"",
 						},
 						cli.BoolFlag{
-							Name:  toolscommon.FlagDisableNackThrottling,
+							Name:  common.FlagDisableNackThrottling,
 							Usage: "Disable nack throttling for consumer group",
 						},
 					},

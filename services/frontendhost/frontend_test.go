@@ -828,8 +828,8 @@ func (s *FrontendHostSuite) TestFrontendHostCreateConsumerGroup() {
 	testCG := s.generateKey("/bar/CGName")
 	frontendHost, ctx := s.utilGetContextAndFrontend()
 
-	options := make(map[string]bool)
-	options[toolscommon.FlagDisableNackThrottling] = true
+	options := make(map[string]string)
+	options[common.FlagDisableNackThrottling] = "true"
 
 	req := c.NewCreateConsumerGroupRequest()
 	req.DestinationPath = common.StringPtr(testPath)
@@ -1133,8 +1133,8 @@ func (s *FrontendHostSuite) TestFrontendHostUpdateConsumerGroup() {
 	testPath := s.generateKey("/foo/bax")
 	frontendHost, ctx := s.utilGetContextAndFrontend()
 
-	options := make(map[string]bool)
-	options[toolscommon.FlagDisableNackThrottling] = true
+	options := make(map[string]string)
+	options[common.FlagDisableNackThrottling] = "true"
 
 	req := new(c.UpdateConsumerGroupRequest)
 	req.DestinationPath = common.StringPtr(testPath)

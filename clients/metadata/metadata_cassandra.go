@@ -591,7 +591,7 @@ func getUtilConsumerGroupDescription() *shared.ConsumerGroupDescription {
 	result.IsMultiZone = common.BoolPtr(false)
 	result.ActiveZone = common.StringPtr("")
 	result.ZoneConfigs = shared.ConsumerGroupDescription_ZoneConfigs_DEFAULT
-	result.Options = make(map[string]bool, 0)
+	result.Options = make(map[string]string, 0)
 
 	return result
 }
