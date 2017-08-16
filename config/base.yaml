@@ -76,6 +76,7 @@ ServiceConfig:
 # MetadataConfig specifies location of the Cassandra and ketspace
 MetadataConfig:
   CassandraHosts: ""
+  Port: 9042
   Keyspace: "cherami"
   Consistency: "one"
   ClusterName: "base"

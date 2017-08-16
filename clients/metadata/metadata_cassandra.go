@@ -232,6 +232,7 @@ func NewCassandraMetadataService(cfg configure.CommonMetadataConfig, log bark.Lo
 	}
 
 	cluster := newCluster(cfg.GetCassandraHosts())
+	cluster.Port = cfg.GetPort()
 	cluster.Keyspace = cfg.GetKeyspace()
 	cluster.ProtoVersion = cassandraProtoVersion
 

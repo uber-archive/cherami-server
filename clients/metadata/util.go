@@ -104,6 +104,7 @@ func newCluster(clusterHosts string) *gocql.ClusterConfig {
 // CreateKeyspaceNoSession is used to create a keyspace when we don't have a session
 func CreateKeyspaceNoSession(
 	clusterHosts string,
+	port int,
 	keyspace string,
 	replicas int,
 	overwrite bool,
@@ -112,6 +113,7 @@ func CreateKeyspaceNoSession(
 	// open a session to the "system" keyspace just to create the new keyspace
 	// TODO: Find out if we can do this "outside" of a session (cqlsh?)
 	cluster := newCluster(clusterHosts)
+	cluster.Port = port
 	cluster.Consistency = gocql.One
 	cluster.Keyspace = "system"
 	cluster.Timeout = 40 * time.Second
@@ -159,7 +161,8 @@ func (s *TestCluster) SetupTestCluster() {
 	golangLog.SetOutput(ioutil.Discard)
 
 	ip := `127.0.0.1`
-	s.createCluster(ip, gocql.Consistency(1), generateRandomKeyspace(10))
+	port := 9042
+	s.createCluster(ip, port, gocql.Consistency(1), generateRandomKeyspace(10))
 	s.createKeyspace(1)
 	s.loadSchema("schema/metadata.cql")
 
@@ -172,6 +175,7 @@ func (s *TestCluster) SetupTestCluster() {
 	var err error
 	s.client, err = NewCassandraMetadataService(&configure.MetadataConfig{
 		CassandraHosts: ip,
+		Port:           port,
 		Keyspace:       s.keyspace,
 		Consistency:    "One",
 		Authentication: auth,
@@ -188,8 +192,9 @@ func (s *TestCluster) TearDownTestCluster() {
 	s.session.Close()
 }
 
-func (s *TestCluster) createCluster(clusterHosts string, cons gocql.Consistency, keyspace string) {
+func (s *TestCluster) createCluster(clusterHosts string, port int, cons gocql.Consistency, keyspace string) {
 	s.cluster = newCluster(clusterHosts)
+	s.cluster.Port = port
 	s.cluster.Consistency = cons
 	s.cluster.Keyspace = "system"
 	s.cluster.Timeout = 40 * time.Second
