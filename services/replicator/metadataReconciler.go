@@ -22,6 +22,7 @@ package replicator
 
 import (
 	"errors"
+	"reflect"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -358,6 +359,7 @@ func (r *metadataReconciler) reconcileCg(localCgs []*shared.ConsumerGroupDescrip
 					IsMultiZone:              common.BoolPtr(remoteCg.GetIsMultiZone()),
 					ActiveZone:               common.StringPtr(remoteCg.GetActiveZone()),
 					ZoneConfigs:              remoteCg.GetZoneConfigs(),
+					Options:                  remoteCg.Options,
 				},
 				ConsumerGroupUUID: common.StringPtr(remoteCg.GetConsumerGroupUUID()),
 			}
@@ -416,6 +418,10 @@ func (r *metadataReconciler) compareAndUpdateCg(remoteCg *shared.ConsumerGroupDe
 	}
 	if !common.AreCgZoneConfigsEqual(localCg.GetZoneConfigs(), remoteCg.GetZoneConfigs()) {
 		updateRequest.ZoneConfigs = remoteCg.GetZoneConfigs()
+		cgUpdated = true
+	}
+	if !reflect.DeepEqual(localCg.GetOptions(), remoteCg.GetOptions()) {
+		updateRequest.Options = remoteCg.GetOptions()
 		cgUpdated = true
 	}
 

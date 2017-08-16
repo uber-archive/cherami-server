@@ -23,6 +23,7 @@ package metadata
 import (
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"regexp"
 	"strings"
 	"time"
@@ -162,6 +163,7 @@ const (
 	columnVisible                        = "visible"
 	columnZone                           = "zone"
 	columnZoneConfigs                    = "zone_configs"
+	columnOptions                        = "options"
 )
 
 const userOperationTTL = "2592000" // 30 days
@@ -589,6 +591,7 @@ func getUtilConsumerGroupDescription() *shared.ConsumerGroupDescription {
 	result.IsMultiZone = common.BoolPtr(false)
 	result.ActiveZone = common.StringPtr("")
 	result.ZoneConfigs = shared.ConsumerGroupDescription_ZoneConfigs_DEFAULT
+	result.Options = make(map[string]string, 0)
 
 	return result
 }
@@ -1183,7 +1186,8 @@ const (
 		columnOwnerEmail + `: ?, ` +
 		columnIsMultiZone + `: ?, ` +
 		columnActiveZone + `: ?, ` +
-		columnZoneConfigs + `: ? }`
+		columnZoneConfigs + `: ?, ` +
+		columnOptions + `: ? }`
 
 	sqlInsertCGByUUID = `INSERT INTO ` + tableConsumerGroups +
 		`(` +
@@ -1214,7 +1218,8 @@ const (
 		columnConsumerGroup + `.` + columnOwnerEmail + "," +
 		columnConsumerGroup + `.` + columnIsMultiZone + "," +
 		columnConsumerGroup + `.` + columnActiveZone + "," +
-		columnConsumerGroup + `.` + columnZoneConfigs +
+		columnConsumerGroup + `.` + columnZoneConfigs + "," +
+		columnConsumerGroup + `.` + columnOptions +
 		` FROM ` + tableConsumerGroupsByName +
 		` WHERE ` + columnDestinationUUID + `=? and ` + columnName + `=?`
 
@@ -1232,7 +1237,8 @@ const (
 		columnConsumerGroup + `.` + columnOwnerEmail + "," +
 		columnConsumerGroup + `.` + columnIsMultiZone + "," +
 		columnConsumerGroup + `.` + columnActiveZone + "," +
-		columnConsumerGroup + `.` + columnZoneConfigs +
+		columnConsumerGroup + `.` + columnZoneConfigs + "," +
+		columnConsumerGroup + `.` + columnOptions +
 		` FROM ` + tableConsumerGroups
 
 	sqlGetCGByUUID = sqlGetCG + ` WHERE ` + columnUUID + `=?`
@@ -1251,7 +1257,8 @@ const (
 		columnConsumerGroup + `.` + columnOwnerEmail + "," +
 		columnConsumerGroup + `.` + columnIsMultiZone + "," +
 		columnConsumerGroup + `.` + columnActiveZone + "," +
-		columnConsumerGroup + `.` + columnZoneConfigs +
+		columnConsumerGroup + `.` + columnZoneConfigs + "," +
+		columnConsumerGroup + `.` + columnOptions +
 		` FROM ` + tableConsumerGroupsByName +
 		` WHERE ` + columnDestinationUUID + `=?`
 
@@ -1341,7 +1348,8 @@ func (s *CassandraMetadataService) CreateConsumerGroupUUID(ctx thrift.Context, r
 		createRequest.GetOwnerEmail(),
 		createRequest.GetIsMultiZone(),
 		createRequest.GetActiveZone(),
-		marshalCgZoneConfigs(createRequest.GetZoneConfigs())).Exec()
+		marshalCgZoneConfigs(createRequest.GetZoneConfigs()),
+		createRequest.GetOptions()).Exec()
 
 	if err != nil {
 		return nil, &shared.InternalServiceError{
@@ -1367,7 +1375,8 @@ func (s *CassandraMetadataService) CreateConsumerGroupUUID(ctx thrift.Context, r
 		createRequest.GetOwnerEmail(),
 		createRequest.GetIsMultiZone(),
 		createRequest.GetActiveZone(),
-		marshalCgZoneConfigs(createRequest.GetZoneConfigs()))
+		marshalCgZoneConfigs(createRequest.GetZoneConfigs()),
+		createRequest.GetOptions())
 
 	previous := make(map[string]interface{}) // We actually throw away the old values below, but passing nil causes a panic
 
@@ -1412,6 +1421,7 @@ func (s *CassandraMetadataService) CreateConsumerGroupUUID(ctx thrift.Context, r
 		IsMultiZone:                    common.BoolPtr(createRequest.GetIsMultiZone()),
 		ActiveZone:                     common.StringPtr(createRequest.GetActiveZone()),
 		ZoneConfigs:                    createRequest.GetZoneConfigs(),
+		Options:                        createRequest.GetOptions(),
 	}, nil
 }
 
@@ -1468,7 +1478,8 @@ func (s *CassandraMetadataService) readConsumerGroupByDstUUID(dstUUID string, cg
 		result.OwnerEmail,
 		result.IsMultiZone,
 		result.ActiveZone,
-		&zoneConfigsData); err != nil {
+		&zoneConfigsData,
+		&result.Options); err != nil {
 		if err == gocql.ErrNotFound {
 			return nil, &shared.EntityNotExistsError{
 				Message: fmt.Sprintf("ConsumerGroup %s of destinationUUID %s does not exist", cgName, dstUUID),
@@ -1539,7 +1550,8 @@ func (s *CassandraMetadataService) ReadConsumerGroupByUUID(ctx thrift.Context, r
 		result.OwnerEmail,
 		result.IsMultiZone,
 		result.ActiveZone,
-		&zoneConfigsData); err != nil {
+		&zoneConfigsData,
+		&result.Options); err != nil {
 		if err == gocql.ErrNotFound {
 			return nil, &shared.EntityNotExistsError{
 				Message: fmt.Sprintf("ConsumerGroup %s does not exist", *request.ConsumerGroupUUID),
@@ -1600,6 +1612,11 @@ func updateCGDescIfChanged(req *shared.UpdateConsumerGroupRequest, cgDesc *share
 		cgDesc.IsMultiZone = common.BoolPtr(true)
 	}
 
+	if req.IsSetOptions() && !reflect.DeepEqual(req.GetOptions(), cgDesc.GetOptions()) {
+		isChanged = true
+		cgDesc.Options = req.Options
+	}
+
 	return isChanged
 }
 
@@ -1648,6 +1665,7 @@ func (s *CassandraMetadataService) UpdateConsumerGroup(ctx thrift.Context, reque
 		newCG.GetIsMultiZone(),
 		newCG.GetActiveZone(),
 		marshalCgZoneConfigs(newCG.GetZoneConfigs()),
+		newCG.GetOptions(),
 		// Query columns
 		newCG.GetConsumerGroupUUID())
 
@@ -1668,6 +1686,7 @@ func (s *CassandraMetadataService) UpdateConsumerGroup(ctx thrift.Context, reque
 		newCG.GetIsMultiZone(),
 		newCG.GetActiveZone(),
 		marshalCgZoneConfigs(newCG.GetZoneConfigs()),
+		newCG.GetOptions(),
 		// Query columns
 		newCG.GetDestinationUUID(),
 		newCG.GetConsumerGroupName())
@@ -1788,6 +1807,7 @@ func (s *CassandraMetadataService) DeleteConsumerGroup(ctx thrift.Context, reque
 		existingCG.GetIsMultiZone(),
 		existingCG.GetActiveZone(),
 		marshalCgZoneConfigs(existingCG.GetZoneConfigs()),
+		existingCG.GetOptions(),
 		defaultDeleteTTLSeconds)
 
 	batch.Query(sqlDeleteCGByName,
@@ -1891,7 +1911,8 @@ func (s *CassandraMetadataService) ListConsumerGroups(ctx thrift.Context, reques
 		cg.OwnerEmail,
 		cg.IsMultiZone,
 		cg.ActiveZone,
-		&zoneConfigsData) {
+		&zoneConfigsData,
+		&cg.Options) {
 
 		// Get a new item within limit
 		if cg.GetStatus() == shared.ConsumerGroupStatus_DELETED {
@@ -1954,7 +1975,8 @@ func (s *CassandraMetadataService) ListAllConsumerGroups(ctx thrift.Context, req
 		cg.OwnerEmail,
 		cg.IsMultiZone,
 		cg.ActiveZone,
-		&zoneConfigsData) {
+		&zoneConfigsData,
+		&cg.Options) {
 
 		cg.ZoneConfigs = unmarshalCgZoneConfigs(zoneConfigsData)
 		result.ConsumerGroups = append(result.ConsumerGroups, cg)

@@ -70,3 +70,8 @@ const (
 	// KafkaPhantomExtentStorehost is placeholder/phantom storehost uuid used for Kafka extents
 	KafkaPhantomExtentStorehost = "00000000-0000-0000-0000-000000000000"
 )
+
+const (
+	// FlagDisableNackThrottling is the flag string for disabling Nack throttling
+	FlagDisableNackThrottling = "disable_nack_throttling"
+)

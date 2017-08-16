@@ -391,6 +391,7 @@ func convertCreateCGRequestToInternal(createRequest *c.CreateConsumerGroupReques
 			internalCreateRequest.ZoneConfigs = append(internalCreateRequest.ZoneConfigs, convertCGZoneConfigToInternal(cgZoneCfg))
 		}
 	}
+	internalCreateRequest.Options = createRequest.GetOptions()
 
 	return internalCreateRequest, nil
 }
@@ -426,6 +427,10 @@ func convertUpdateCGRequestToInternal(updateRequest *c.UpdateConsumerGroupReques
 		for _, cgZoneCfg := range updateRequest.GetZoneConfigs().GetConfigs() {
 			internalUpdateRequest.ZoneConfigs = append(internalUpdateRequest.ZoneConfigs, convertCGZoneConfigToInternal(cgZoneCfg))
 		}
+	}
+	if updateRequest.IsSetOptions() {
+		internalUpdateRequest.Options = updateRequest.GetOptions()
+
 	}
 	return internalUpdateRequest
 }
@@ -492,6 +497,7 @@ func (h *Frontend) convertConsumerGroupFromInternal(ctx thrift.Context, _cgDesc 
 		}
 		cgDesc.ZoneConfigs.ActiveZone = common.StringPtr(_cgDesc.GetActiveZone())
 	}
+	cgDesc.Options = _cgDesc.GetOptions()
 	return
 }
 

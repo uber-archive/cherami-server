@@ -1,0 +1,8 @@
+{
+	"CurrVersion": 16,
+	"MinCompatibleVersion": 8,
+	"Description": "Add options for cg and destination",
+	"SchemaUpdateCqlFiles": [
+		"201708090000_options.cql"
+	]
+}

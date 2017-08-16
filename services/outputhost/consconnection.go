@@ -175,7 +175,7 @@ func (conn *consConnection) sendCreditsToWritePump(localCredits *int32) {
 
 // readCreditsStream is the stream which keeps reading the credits from the client
 func (conn *consConnection) readCreditsStream() {
-	// start ticker to send  accumulated credits to the write pump
+	// start ticker to send accumulated credits to the write pump
 	// This is needed because imagine we are not able to send credits
 	// received from the client immediately. In that case we need to
 	// accumulate those credits and make sure we send those out to the
