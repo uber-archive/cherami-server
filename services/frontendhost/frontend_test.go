@@ -35,7 +35,6 @@ import (
 	mockcommon "github.com/uber/cherami-server/test/mocks/common"
 	mockctrl "github.com/uber/cherami-server/test/mocks/controllerhost"
 	mockmeta "github.com/uber/cherami-server/test/mocks/metadata"
-	toolscommon "github.com/uber/cherami-server/tools/common"
 	c "github.com/uber/cherami-thrift/.generated/go/cherami"
 	"github.com/uber/cherami-thrift/.generated/go/controller"
 	"github.com/uber/cherami-thrift/.generated/go/shared"
