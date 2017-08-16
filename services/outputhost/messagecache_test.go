@@ -117,14 +117,14 @@ func (s *MessageCacheSuite) TestTimerQueueCleanupAfterRedelivery() {
 		}
 
 		cMsg.msg.AckId = common.StringPtr(ackIDStr)
-		s.msgCache.utilHandleDeliveredMsg(cMsg, nil)
+		s.msgCache.utilHandleDeliveredMsg(cMsg)
 		ackIDMap[ackIDStr] = struct{}{}
 		ackID++
 	}
 
 	time.Sleep(time.Second)
 
-	s.msgCache.utilHandleRedeliveryTicker(nil)
+	s.msgCache.utilHandleRedeliveryTicker()
 	s.Equal(100, len(s.msgRedeliveryCh), "Unexpected message cache redelivery")
 
 	for i := 0; i < 100; i++ {
@@ -134,7 +134,7 @@ func (s *MessageCacheSuite) TestTimerQueueCleanupAfterRedelivery() {
 		delete(ackIDMap, m.GetAckId())
 	}
 
-	s.msgCache.utilHandleRedeliveryTicker(nil)
+	s.msgCache.utilHandleRedeliveryTicker()
 	s.Equal(0, len(s.msgRedeliveryCh), "Unexpected message cache redelivery")
 }
 
