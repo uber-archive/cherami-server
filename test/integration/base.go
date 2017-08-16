@@ -171,6 +171,7 @@ func (tb *testBase) setupSuiteImpl(t *testing.T) {
 
 	tb.mClient, _ = metadata.NewCassandraMetadataService(&configure.MetadataConfig{
 		CassandraHosts: "127.0.0.1",
+		Port:           9042,
 		Keyspace:       tb.keyspace,
 		Consistency:    "One",
 		Authentication: auth,
