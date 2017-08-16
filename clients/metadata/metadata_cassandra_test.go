@@ -53,7 +53,7 @@ type CassandraSuite struct {
 }
 
 const (
-	testPageSize              = 2
+	testPageSize = 2
 )
 
 func TestCassandraSuite(t *testing.T) {

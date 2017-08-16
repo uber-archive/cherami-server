@@ -74,5 +74,4 @@ const (
 const (
 	// FlagDisableNackThrottling is the flag string for disabling Nack throttling
 	FlagDisableNackThrottling = "disable_nack_throttling"
-
 )
