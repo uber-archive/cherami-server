@@ -53,16 +53,18 @@ type (
 		logger   bark.Logger
 		m3Client metrics.Client
 		common.SCommon
-		hostIDHeartbeater         common.HostIDHeartbeater
-		AppConfig                 configure.CommonAppConfig
-		uconfigClient             dconfig.Client
-		metaClient                metadata.TChanMetadataService
-		allZones                  map[string][]string
-		localZone                 string
-		authoritativeZone         string
-		tenancy                   string
-		defaultAuthoritativeZone  string
-		replicatorclientFactory   ClientFactory
+		hostIDHeartbeater        common.HostIDHeartbeater
+		AppConfig                configure.CommonAppConfig
+		uconfigClient            dconfig.Client
+		metaClient               metadata.TChanMetadataService
+		allZones                 map[string][]string
+		localZone                string
+		authoritativeZone        string
+		tenancy                  string
+		defaultAuthoritativeZone string
+		replicatorclientFactory  ClientFactory
+
+		// for debug via admin API only
 		remoteReplicatorConn      map[string]*outConnection
 		remoteReplicatorConnMutex sync.RWMutex
 		storehostConn             map[string]*outConnection
@@ -250,7 +252,8 @@ func (r *Replicator) OpenReplicationReadStreamHandler(w http.ResponseWriter, req
 
 	outConn := newOutConnection(extUUID, destDesc.GetPath(), outStream, r.logger, r.m3Client, metrics.OpenReplicationReadScope)
 	outConn.open()
-	r.addStoreHostConn(extUUID, outConn)
+	r.addStoreHostConn(outConn)
+	defer r.removeStoreHostConn(outConn)
 
 	inConn := newInConnection(extUUID, destDesc.GetPath(), inStream, outConn.msgsCh, r.logger, r.m3Client, metrics.OpenReplicationReadScope, metrics.OpenReplicationReadPerDestScope)
 	inConn.open()
@@ -258,6 +261,7 @@ func (r *Replicator) OpenReplicationReadStreamHandler(w http.ResponseWriter, req
 	go r.manageInOutConn(inConn, outConn)
 	<-inConn.closeChannel
 	<-outConn.closeChannel
+
 	return
 }
 
@@ -329,7 +333,8 @@ func (r *Replicator) OpenReplicationRemoteReadStreamHandler(w http.ResponseWrite
 
 	outConn := newOutConnection(extUUID, destDesc.GetPath(), outStream, r.logger, r.m3Client, metrics.OpenReplicationRemoteReadScope)
 	outConn.open()
-	r.addRemoteReplicatorConn(extUUID, outConn)
+	r.addRemoteReplicatorConn(outConn)
+	defer r.removeRemoteReplicatorConn(outConn)
 
 	inConn := newInConnection(extUUID, destDesc.GetPath(), inStream, outConn.msgsCh, r.logger, r.m3Client, metrics.OpenReplicationRemoteReadScope, metrics.OpenReplicationRemoteReadPerDestScope)
 	inConn.open()
@@ -337,6 +342,7 @@ func (r *Replicator) OpenReplicationRemoteReadStreamHandler(w http.ResponseWrite
 	go r.manageInOutConn(inConn, outConn)
 	<-inConn.closeChannel
 	<-outConn.closeChannel
+
 	return
 }
 
@@ -1306,24 +1312,28 @@ func (r *Replicator) createExtentRemoteCall(zone string, logger bark.Logger, cre
 	return nil
 }
 
-func (r *Replicator) addRemoteReplicatorConn(extUUID string, conn *outConnection) {
+func (r *Replicator) addRemoteReplicatorConn(conn *outConnection) {
 	r.remoteReplicatorConnMutex.Lock()
 	defer r.remoteReplicatorConnMutex.Unlock()
-	if existingConn, ok := r.remoteReplicatorConn[extUUID]; ok {
-		existingConn.close()
-		delete(r.remoteReplicatorConn, extUUID)
-	}
-	r.remoteReplicatorConn[extUUID] = conn
+	r.remoteReplicatorConn[conn.connUUID] = conn
 }
 
-func (r *Replicator) addStoreHostConn(extUUID string, conn *outConnection) {
+func (r *Replicator) removeRemoteReplicatorConn(conn *outConnection) {
+	r.remoteReplicatorConnMutex.Lock()
+	defer r.remoteReplicatorConnMutex.Unlock()
+	delete(r.remoteReplicatorConn, conn.connUUID)
+}
+
+func (r *Replicator) addStoreHostConn(conn *outConnection) {
 	r.storehostConnMutex.Lock()
 	defer r.storehostConnMutex.Unlock()
-	if existingConn, ok := r.storehostConn[extUUID]; ok {
-		existingConn.close()
-		delete(r.storehostConn, extUUID)
-	}
-	r.storehostConn[extUUID] = conn
+	r.storehostConn[conn.connUUID] = conn
+}
+
+func (r *Replicator) removeStoreHostConn(conn *outConnection) {
+	r.storehostConnMutex.Lock()
+	defer r.storehostConnMutex.Unlock()
+	delete(r.storehostConn, conn.connUUID)
 }
 
 func (r *Replicator) createRemoteReplicationReadStream(extUUID string, destUUID string, request *common.OpenReplicationRemoteReadStreamRequest) (stream storeStream.BStoreOpenReadStreamOutCall, err error) {

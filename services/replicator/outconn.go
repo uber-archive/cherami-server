@@ -25,6 +25,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/pborman/uuid"
 	"github.com/uber-common/bark"
 	"github.com/uber/cherami-server/common"
 	"github.com/uber/cherami-server/common/metrics"
@@ -37,6 +38,7 @@ type (
 	outConnection struct {
 		startTime int64
 		extUUID   string
+		connUUID  string
 		stream    storeStream.BStoreOpenReadStreamOutCall
 		msgsCh    chan *store.ReadMessageContent
 
@@ -73,6 +75,7 @@ func newOutConnection(extUUID string, destPath string, stream storeStream.BStore
 	conn := &outConnection{
 		startTime:           time.Now().UnixNano(),
 		extUUID:             extUUID,
+		connUUID:            uuid.New(),
 		stream:              stream,
 		msgsCh:              make(chan *store.ReadMessageContent, msgBufferSize),
 		logger:              localLogger,
