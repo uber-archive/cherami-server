@@ -66,16 +66,25 @@ const (
 )
 
 // newCQLClient returns a new instance of CQLClient
-func newCQLClient(hostsCsv string, keyspace string, protoVersion int) (CQLClient, error) {
-	hosts := parseHosts(hostsCsv)
+func newCQLClient(config *SchemaUpdaterConfig) (CQLClient, error) {
+	hosts := parseHosts(config.HostsCsv)
 	if len(hosts) == 0 {
 		return nil, errNoHosts
 	}
 	clusterCfg := gocql.NewCluster(hosts...)
-	clusterCfg.Keyspace = keyspace
+	clusterCfg.Port = config.Port
+	clusterCfg.Keyspace = config.Keyspace
 	clusterCfg.Timeout = defaultTimeout
-	clusterCfg.ProtoVersion = protoVersion
+	clusterCfg.ProtoVersion = config.ProtoVersion
 	clusterCfg.Consistency = gocql.ParseConsistency(defaultConsistency)
+
+	if config.Username != "" && config.Password != "" {
+		clusterCfg.Authenticator = gocql.PasswordAuthenticator{
+			Username: config.Username,
+			Password: config.Password,
+		}
+	}
+
 	cqlClient := new(cqlClient)
 	cqlClient.clusterConfig = clusterCfg
 	var err error

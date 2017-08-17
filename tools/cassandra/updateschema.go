@@ -48,6 +48,9 @@ func parseSchemaUpadaterConfig(args []string) *SchemaUpdaterConfig {
 	var config SchemaUpdaterConfig
 	cmd := flag.NewFlagSet("update-schema", flag.ExitOnError)
 	cmd.StringVar(&config.HostsCsv, "h", "", "Path to json file containing cassandra hosts")
+	cmd.IntVar(&config.Port, "port", 9042, "Port to cassandra hosts")
+	cmd.StringVar(&config.Username, "u", "", "Cassandra username")
+	cmd.StringVar(&config.Password, "pw", "", "Cassandra password")
 	cmd.StringVar(&config.Keyspace, "k", "", "Cassandra keyspace")
 	cmd.BoolVar(&config.IsDryRun, "d", true, "Dry run")
 	cmd.BoolVar(&config.SkipVersionCheck, "v", false, "Skip previous version check")
@@ -77,6 +80,12 @@ func printHelp() {
 	helpMessage := `updateSchema -h [cassandra_host1,host2..] -k [keyspace] -m [/tmp/manifest.json] [-d false] [-v false]
     -h
         List of cassandra hosts to connect to
+    -port
+        Port to cassandra cluster, 9042 by default
+    -u
+        Cassandra username
+    -pw
+        Cassandra password
     -k
         Cassandra keyspace
     -m

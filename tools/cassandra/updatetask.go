@@ -57,7 +57,7 @@ var (
 
 // NewSchemaUpdateTask creates and returns a new SchemaUpdateTask
 func NewSchemaUpdateTask(config *SchemaUpdaterConfig) (*SchemaUpdateTask, error) {
-	cqlClient, err := newCQLClient(config.HostsCsv, config.Keyspace, config.ProtoVersion)
+	cqlClient, err := newCQLClient(config)
 	if err != nil {
 		return nil, err
 	}
