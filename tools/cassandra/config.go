@@ -25,7 +25,10 @@ type (
 	// for the schema update task
 	SchemaUpdaterConfig struct {
 		Keyspace         string
+		Username         string
+		Password         string
 		HostsCsv         string
+		Port             int
 		IsDryRun         bool
 		SkipVersionCheck bool
 		ManifestFilePath string
