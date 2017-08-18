@@ -514,10 +514,9 @@ func SetAdminCommands(commands *[]cli.Command) {
 			Aliases: []string{"e"},
 			Usage:   "show extent <extent_uuid>",
 			Flags: []cli.Flag{
-				cli.StringFlag{
-					Name:  "showcg, sc",
-					Value: "false",
-					Usage: "show consumer group(false, true), default to false",
+				cli.BoolFlag{
+					Name:  "showcg, cg",
+					Usage: "show consumer group",
 				},
 			},
 			Action: func(c *cli.Context) {
@@ -852,6 +851,10 @@ func SetAdminCommands(commands *[]cli.Command) {
 					Name:  "prefix, pf",
 					Value: "/",
 					Usage: "only process destinations with prefix",
+				},
+				cli.BoolFlag{
+					Name:  "dlq",
+					Usage: "query and check corresopnding DLQ destinations",
 				},
 				cli.BoolFlag{
 					Name:  "seal",
