@@ -1077,7 +1077,11 @@ func (msgCache *cgMsgCache) isStalled() bool {
 	var m3St m3HealthState
 	var smartRetryDisabled bool
 
-	if atomic.LoadInt32(&msgCache.cgCache.dlqMerging) > 0 || strings.Contains(msgCache.GetOwnerEmail(), SmartRetryDisableString) {
+	smartRetryDisabledFlag, _ := msgCache.cgCache.cachedCGDesc.Options[common.FlagDisableSmartRetry]
+
+	if atomic.LoadInt32(&msgCache.cgCache.dlqMerging) > 0 ||
+		strings.Contains(msgCache.GetOwnerEmail(), SmartRetryDisableString) ||
+		smartRetryDisabledFlag == "true" {
 		smartRetryDisabled = true
 	}
 

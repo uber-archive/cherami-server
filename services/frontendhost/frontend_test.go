@@ -829,6 +829,7 @@ func (s *FrontendHostSuite) TestFrontendHostCreateConsumerGroup() {
 
 	options := make(map[string]string)
 	options[common.FlagDisableNackThrottling] = "true"
+	options[common.FlagDisableSmartRetry] = "true"
 
 	req := c.NewCreateConsumerGroupRequest()
 	req.DestinationPath = common.StringPtr(testPath)
@@ -1134,6 +1135,7 @@ func (s *FrontendHostSuite) TestFrontendHostUpdateConsumerGroup() {
 
 	options := make(map[string]string)
 	options[common.FlagDisableNackThrottling] = "true"
+	options[common.FlagDisableSmartRetry] = "true"
 
 	req := new(c.UpdateConsumerGroupRequest)
 	req.DestinationPath = common.StringPtr(testPath)

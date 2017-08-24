@@ -55,6 +55,9 @@ func (s *MessageCacheSuite) SetupTest() {
 
 	cgStatus := shared.ConsumerGroupStatus_ENABLED
 
+	options := make(map[string]string)
+	options[common.FlagDisableSmartRetry] = "true"
+
 	cgDesc := &shared.ConsumerGroupDescription{
 		ConsumerGroupUUID:  common.StringPtr(uuid.New()),
 		DestinationUUID:    common.StringPtr(uuid.New()),
@@ -62,7 +65,8 @@ func (s *MessageCacheSuite) SetupTest() {
 		Status:             &cgStatus,
 		MaxDeliveryCount:   common.Int32Ptr(10),
 		LockTimeoutSeconds: common.Int32Ptr(1),
-		OwnerEmail:         common.StringPtr("foo+smartRetryDisable@uber.com"),
+		OwnerEmail:         common.StringPtr("foo@uber.com"),
+		Options:            options,
 	}
 
 	s.msgRedeliveryCh = make(chan *cherami.ConsumerMessage, 128)

@@ -224,6 +224,10 @@ func SetCommonCommands(
 							Name:  common.FlagDisableNackThrottling,
 							Usage: "Disable nack throttling for consumer group",
 						},
+						cli.BoolFlag{
+							Name:  common.FlagDisableSmartRetry,
+							Usage: "Disable smart retry for consumer group",
+						},
 					},
 					Action: func(c *cli.Context) {
 						if authEnabled {
@@ -373,6 +377,10 @@ func SetCommonCommands(
 						cli.BoolFlag{
 							Name:  common.FlagDisableNackThrottling,
 							Usage: "Disable nack throttling for consumer group",
+						},
+						cli.BoolFlag{
+							Name:  common.FlagDisableSmartRetry,
+							Usage: "Disable smart retry for consumer group",
 						},
 					},
 					Action: func(c *cli.Context) {

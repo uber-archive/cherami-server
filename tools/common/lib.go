@@ -503,9 +503,15 @@ func CreateConsumerGroupSecure(
 	isMultiZone := len(zoneConfigs.GetConfigs()) > 0
 
 	options := make(map[string]string)
-	disableNackThrottling := strings.ToLower(c.String(common.FlagDisableNackThrottling))
-	if disableNackThrottling == "true" {
+
+	disableNackThrottling := c.Bool(common.FlagDisableNackThrottling)
+	if disableNackThrottling == true {
 		options[common.FlagDisableNackThrottling] = "true"
+	}
+
+	disableSmartRetry := c.Bool(common.FlagDisableSmartRetry)
+	if disableSmartRetry == true {
+		options[common.FlagDisableSmartRetry] = "true"
 	}
 
 	desc, err := cClient.CreateConsumerGroup(&cherami.CreateConsumerGroupRequest{
@@ -1641,14 +1647,20 @@ func getIfSetCgZoneConfig(c *cli.Context, mClient mcli.Client, cliHelper common.
 }
 
 func getIfSetOptions(c *cli.Context, setCount *int) (options map[string]string) {
-	if c.IsSet(common.FlagDisableNackThrottling) {
+	if c.IsSet(common.FlagDisableNackThrottling) || c.IsSet(common.FlagDisableSmartRetry) {
 		disableNackThrottling := "false"
-		if strings.ToLower(c.String(common.FlagDisableNackThrottling)) == "true" {
+		if c.Bool(common.FlagDisableNackThrottling) == true {
 			disableNackThrottling = "true"
+		}
+
+		disableSmartRetry := "false"
+		if c.Bool(common.FlagDisableSmartRetry) == true {
+			disableSmartRetry = "true"
 		}
 
 		options = make(map[string]string)
 		options[common.FlagDisableNackThrottling] = disableNackThrottling
+		options[common.FlagDisableSmartRetry] = disableSmartRetry
 		*setCount++
 		return options
 	}
