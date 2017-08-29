@@ -2966,7 +2966,7 @@ func (s *CassandraSuite) TestSealExtent() {
 
 	extent := cExtent()
 
-	archivalLoc := "cherami.s3.amazonaws.com"
+	archivalLoc := "archivalLoc"
 
 	for pass := 0; pass < 2; pass++ {
 
