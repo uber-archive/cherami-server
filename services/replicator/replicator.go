@@ -158,14 +158,13 @@ func (r *Replicator) Start(thriftService []thrift.TChanServer) {
 func (r *Replicator) Stop() {
 	r.hostIDHeartbeater.Stop()
 	for _, conn := range r.remoteReplicatorConn {
-		conn.close()
+		conn.shutdown()
 	}
 	for _, conn := range r.storehostConn {
-		conn.close()
+		conn.shutdown()
 	}
 	r.metadataReconciler.Stop()
 	r.SCommon.Stop()
-
 }
 
 // RegisterWSHandler is the implementation of WSService interface
@@ -258,10 +257,8 @@ func (r *Replicator) OpenReplicationReadStreamHandler(w http.ResponseWriter, req
 	inConn := newInConnection(extUUID, destDesc.GetPath(), inStream, outConn.msgsCh, r.logger, r.m3Client, metrics.OpenReplicationReadScope, metrics.OpenReplicationReadPerDestScope)
 	inConn.open()
 
-	go r.manageInOutConn(inConn, outConn)
-	<-inConn.closeChannel
-	<-outConn.closeChannel
-
+	outConn.WaitUntilDone()
+	inConn.WaitUntilDone()
 	return
 }
 
@@ -339,10 +336,8 @@ func (r *Replicator) OpenReplicationRemoteReadStreamHandler(w http.ResponseWrite
 	inConn := newInConnection(extUUID, destDesc.GetPath(), inStream, outConn.msgsCh, r.logger, r.m3Client, metrics.OpenReplicationRemoteReadScope, metrics.OpenReplicationRemoteReadPerDestScope)
 	inConn.open()
 
-	go r.manageInOutConn(inConn, outConn)
-	<-inConn.closeChannel
-	<-outConn.closeChannel
-
+	outConn.WaitUntilDone()
+	inConn.WaitUntilDone()
 	return
 }
 
@@ -1437,17 +1432,4 @@ func (r *Replicator) createStoreHostReadStream(destUUID string, extUUID string, 
 	}
 
 	return
-}
-
-func (r *Replicator) manageInOutConn(inConn *inConnection, outConn *outConnection) {
-	for {
-		select {
-		case <-inConn.closeChannel:
-			go outConn.close()
-			return
-		case <-outConn.closeChannel:
-			go inConn.close()
-			return
-		}
-	}
 }
