@@ -1756,7 +1756,7 @@ func (s *CassandraSuite) TestConsumerGroupCRUD() {
 
 	options := make(map[string]string)
 	options[common.FlagDisableNackThrottling] = "true"
-	options[common.FlagDisableSmartRetry] = "true"
+	options[common.FlagEnableSmartRetry] = "false"
 
 	cgName := s.generateName("/foo/bar_consumer")
 
@@ -1835,7 +1835,7 @@ func (s *CassandraSuite) TestConsumerGroupCRUD() {
 		assertConsumerGroupsEqual(s, expectedCG, gotCG)
 
 		options[common.FlagDisableNackThrottling] = "false"
-		options[common.FlagDisableSmartRetry] = "false"
+		options[common.FlagEnableSmartRetry] = "true"
 
 		readReq.ConsumerGroupUUID = common.StringPtr(gotCG.GetConsumerGroupUUID())
 		gotCG, err = s.client.ReadConsumerGroupByUUID(nil, readReq)
@@ -2113,7 +2113,7 @@ func (s *CassandraSuite) TestListAllConsumerGroups() {
 
 	options := make(map[string]string)
 	options[common.FlagDisableNackThrottling] = "true"
-	options[common.FlagDisableSmartRetry] = "true"
+	options[common.FlagEnableSmartRetry] = "false"
 
 	for i := 0; i < 10; i++ {
 		name := s.generateName(fmt.Sprintf("foobar-consumer-%v", i))

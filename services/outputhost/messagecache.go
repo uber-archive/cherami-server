@@ -1075,14 +1075,16 @@ func (msgCache *cgMsgCache) checkTimer() {
 
 func (msgCache *cgMsgCache) isStalled() bool {
 	var m3St m3HealthState
-	var smartRetryDisabled bool
+	var smartRetryEnabled bool
 
-	smartRetryDisabledFlag, _ := msgCache.cgCache.cachedCGDesc.Options[common.FlagDisableSmartRetry]
+	smartRetryEnabledFlag, ok := msgCache.cgCache.cachedCGDesc.Options[common.FlagEnableSmartRetry]
+	if ok && smartRetryEnabledFlag == "true" {
+		smartRetryEnabled = true
+	}
 
 	if atomic.LoadInt32(&msgCache.cgCache.dlqMerging) > 0 ||
-		strings.Contains(msgCache.GetOwnerEmail(), SmartRetryDisableString) ||
-		smartRetryDisabledFlag == "true" {
-		smartRetryDisabled = true
+		strings.Contains(msgCache.GetOwnerEmail(), SmartRetryDisableString) {
+		smartRetryEnabled = false
 	}
 
 	now := common.Now()
@@ -1188,7 +1190,7 @@ func (msgCache *cgMsgCache) isStalled() bool {
 	msgCache.consumerM3Client.UpdateGauge(metrics.ConsConnectionScope, metrics.OutputhostCGHealthState, int64(m3St))
 	msgCache.consumerM3Client.UpdateGauge(metrics.ConsConnectionScope, metrics.OutputhostCGOutstandingDeliveries, int64(msgCache.countStateDelivered+msgCache.countStateEarlyNACK))
 
-	if smartRetryDisabled {
+	if !smartRetryEnabled {
 		if stalled {
 			msgCache.lclLg.Warn("Smart Retry disabled while consumer group stalled")
 		}

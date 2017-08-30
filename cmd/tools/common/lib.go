@@ -225,8 +225,8 @@ func SetCommonCommands(
 							Usage: "Disable nack throttling for consumer group",
 						},
 						cli.BoolFlag{
-							Name:  common.FlagDisableSmartRetry,
-							Usage: "Disable smart retry for consumer group",
+							Name:  common.FlagEnableSmartRetry,
+							Usage: "Enable smart retry for consumer group",
 						},
 					},
 					Action: func(c *cli.Context) {
@@ -379,8 +379,8 @@ func SetCommonCommands(
 							Usage: "Disable nack throttling for consumer group",
 						},
 						cli.BoolFlag{
-							Name:  common.FlagDisableSmartRetry,
-							Usage: "Disable smart retry for consumer group",
+							Name:  common.FlagEnableSmartRetry,
+							Usage: "Enable smart retry for consumer group",
 						},
 					},
 					Action: func(c *cli.Context) {

@@ -75,6 +75,6 @@ const (
 	// FlagDisableNackThrottling is the flag string for disabling Nack throttling
 	FlagDisableNackThrottling = "disable_nack_throttling"
 
-	// FlagDisableSmartRetry is the flag string for disabling smart retry
-	FlagDisableSmartRetry = "disable_smart_retry"
+	// FlagEnableSmartRetry is the flag string for enabling smart retry
+	FlagEnableSmartRetry = "enable_smart_retry"
 )

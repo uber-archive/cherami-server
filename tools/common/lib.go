@@ -504,14 +504,12 @@ func CreateConsumerGroupSecure(
 
 	options := make(map[string]string)
 
-	disableNackThrottling := c.Bool(common.FlagDisableNackThrottling)
-	if disableNackThrottling == true {
+	if c.Bool(common.FlagDisableNackThrottling) == true {
 		options[common.FlagDisableNackThrottling] = "true"
 	}
 
-	disableSmartRetry := c.Bool(common.FlagDisableSmartRetry)
-	if disableSmartRetry == true {
-		options[common.FlagDisableSmartRetry] = "true"
+	if c.Bool(common.FlagEnableSmartRetry) == true {
+		options[common.FlagEnableSmartRetry] = "true"
 	}
 
 	desc, err := cClient.CreateConsumerGroup(&cherami.CreateConsumerGroupRequest{
@@ -579,6 +577,16 @@ func getCgZoneConfigs(c *cli.Context, mClient mcli.Client, cliHelper common.CliH
 	return zoneConfigs
 }
 
+func getCgFromMedatada(mClient mcli.Client, path string, name string) *shared.ConsumerGroupDescription {
+	cg, err := mClient.ReadConsumerGroup(&shared.ReadConsumerGroupRequest{
+		DestinationPath:   common.StringPtr(path),
+		ConsumerGroupName: common.StringPtr(name),
+	})
+	ExitIfError(err)
+
+	return cg
+}
+
 // UpdateConsumerGroup updates the consumer group
 func UpdateConsumerGroup(c *cli.Context, cliHelper common.CliHelper, serviceName string) {
 	UpdateConsumerGroupSecure(c, cliHelper, serviceName, nil)
@@ -639,7 +647,7 @@ func UpdateConsumerGroupSecure(
 		OwnerEmail:                 getIfSetString(c, `owner_email`, &setCount),
 		ActiveZone:                 getIfSetString(c, `active_zone`, &setCount),
 		ZoneConfigs:                getIfSetCgZoneConfig(c, mClient, cliHelper, path, &setCount),
-		Options:                    getIfSetOptions(c, &setCount),
+		Options:                    getIfSetOptions(c, mClient, path, name, &setCount),
 	}
 
 	if c.IsSet(`status`) {
@@ -1646,21 +1654,27 @@ func getIfSetCgZoneConfig(c *cli.Context, mClient mcli.Client, cliHelper common.
 	return
 }
 
-func getIfSetOptions(c *cli.Context, setCount *int) (options map[string]string) {
-	if c.IsSet(common.FlagDisableNackThrottling) || c.IsSet(common.FlagDisableSmartRetry) {
-		disableNackThrottling := "false"
-		if c.Bool(common.FlagDisableNackThrottling) == true {
-			disableNackThrottling = "true"
+func getIfSetOptions(c *cli.Context, mClient mcli.Client, path string, name string, setCount *int) (options map[string]string) {
+	if c.IsSet(common.FlagDisableNackThrottling) || c.IsSet(common.FlagEnableSmartRetry) {
+		cg := getCgFromMedatada(mClient, path, name)
+		options = cg.Options
+
+		if c.IsSet(common.FlagDisableNackThrottling) {
+			if c.Bool(common.FlagDisableNackThrottling) == true {
+				options[common.FlagDisableNackThrottling] = "true"
+			} else {
+				options[common.FlagDisableNackThrottling] = "false"
+			}
 		}
 
-		disableSmartRetry := "false"
-		if c.Bool(common.FlagDisableSmartRetry) == true {
-			disableSmartRetry = "true"
+		if c.IsSet(common.FlagEnableSmartRetry) {
+			if c.Bool(common.FlagEnableSmartRetry) == true {
+				options[common.FlagEnableSmartRetry] = "true"
+			} else {
+				options[common.FlagEnableSmartRetry] = "false"
+			}
 		}
 
-		options = make(map[string]string)
-		options[common.FlagDisableNackThrottling] = disableNackThrottling
-		options[common.FlagDisableSmartRetry] = disableSmartRetry
 		*setCount++
 		return options
 	}

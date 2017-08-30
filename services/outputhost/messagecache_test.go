@@ -56,7 +56,7 @@ func (s *MessageCacheSuite) SetupTest() {
 	cgStatus := shared.ConsumerGroupStatus_ENABLED
 
 	options := make(map[string]string)
-	options[common.FlagDisableSmartRetry] = "true"
+	options[common.FlagEnableSmartRetry] = "false"
 
 	cgDesc := &shared.ConsumerGroupDescription{
 		ConsumerGroupUUID:  common.StringPtr(uuid.New()),
