@@ -91,7 +91,7 @@ func buildRingpopHosts(ipaddr string, port int) []string {
 
 // CreateRingpop instantiates the ringpop for the provided channel and host,
 func CreateRingpop(service string, ch *tchannel.Channel, ipaddr string, port int) *(ringpop.Ringpop) {
-	rp, _ := ringpop.New(fmt.Sprintf("%s", rpAppNamePrefix), ringpop.Channel(ch), ringpop.Identity(fmt.Sprintf("%s:%d", ipaddr, port)))
+	rp, _ := ringpop.New(fmt.Sprintf("%s", rpAppNamePrefix), ringpop.Channel(ch), ringpop.Address(fmt.Sprintf("%s:%d", ipaddr, port)))
 
 	return rp
 }

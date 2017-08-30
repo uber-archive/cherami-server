@@ -72,7 +72,7 @@ func NewTestRingpopCluster(name string, size int, ipAddr string, seed string, sN
 		cluster.hostUUIDs[i] = uuid.New()
 		cluster.hostAddrs[i] = cluster.channels[i].PeerInfo().HostPort
 		cluster.hostInfoList[i] = HostInfo{UUID: cluster.hostUUIDs[i], Addr: cluster.hostAddrs[i]}
-		cluster.rings[i], _ = ringpop.New(name, ringpop.Channel(cluster.channels[i]), ringpop.Identity(cluster.hostAddrs[i]))
+		cluster.rings[i], err = ringpop.New(name, ringpop.Channel(cluster.channels[i]), ringpop.Address(cluster.hostAddrs[i]))
 	}
 
 	// if seed node is already supplied, use it; if not, set it
