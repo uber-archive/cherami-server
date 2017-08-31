@@ -77,4 +77,7 @@ const (
 
 	// FlagEnableSmartRetry is the flag string for enabling smart retry
 	FlagEnableSmartRetry = "enable_smart_retry"
+
+	// FlagEnableQueueDepthTabulation is the flag string for enabling queue depth tabulation
+	FlagEnableQueueDepthTabulation = "enable_queue_depth_tabulation"
 )

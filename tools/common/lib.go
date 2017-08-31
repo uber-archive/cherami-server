@@ -512,6 +512,10 @@ func CreateConsumerGroupSecure(
 		options[common.FlagEnableSmartRetry] = "true"
 	}
 
+	if c.Bool(common.FlagEnableQueueDepthTabulation) {
+		options[common.FlagEnableQueueDepthTabulation] = "true"
+	}
+
 	desc, err := cClient.CreateConsumerGroup(&cherami.CreateConsumerGroupRequest{
 		DestinationPath:            &path,
 		ConsumerGroupName:          &name,
@@ -1654,26 +1658,28 @@ func getIfSetCgZoneConfig(c *cli.Context, mClient mcli.Client, cliHelper common.
 	return
 }
 
+func checkOptionChange(c *cli.Context, options map[string]string, flag string) {
+	if c.IsSet(flag) {
+		if c.Bool(flag) {
+			options[flag] = "true"
+		} else {
+			options[flag] = "false"
+		}
+	}
+
+}
+
 func getIfSetOptions(c *cli.Context, mClient mcli.Client, path string, name string, setCount *int) (options map[string]string) {
-	if c.IsSet(common.FlagDisableNackThrottling) || c.IsSet(common.FlagEnableSmartRetry) {
+	if c.IsSet(common.FlagDisableNackThrottling) ||
+		c.IsSet(common.FlagEnableSmartRetry) ||
+		c.IsSet(common.FlagEnableQueueDepthTabulation) {
+
 		cg := getCgFromMedatada(mClient, path, name)
-		options = cg.Options
+		options := cg.GetOptions()
 
-		if c.IsSet(common.FlagDisableNackThrottling) {
-			if c.Bool(common.FlagDisableNackThrottling) {
-				options[common.FlagDisableNackThrottling] = "true"
-			} else {
-				options[common.FlagDisableNackThrottling] = "false"
-			}
-		}
-
-		if c.IsSet(common.FlagEnableSmartRetry) {
-			if c.Bool(common.FlagEnableSmartRetry) {
-				options[common.FlagEnableSmartRetry] = "true"
-			} else {
-				options[common.FlagEnableSmartRetry] = "false"
-			}
-		}
+		checkOptionChange(c, options, common.FlagDisableNackThrottling)
+		checkOptionChange(c, options, common.FlagEnableSmartRetry)
+		checkOptionChange(c, options, common.FlagEnableQueueDepthTabulation)
 
 		*setCount++
 		return options

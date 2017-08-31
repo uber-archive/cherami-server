@@ -228,6 +228,10 @@ func SetCommonCommands(
 							Name:  common.FlagEnableSmartRetry,
 							Usage: "Enable smart retry for consumer group",
 						},
+						cli.BoolFlag{
+							Name:  common.FlagEnableQueueDepthTabulation,
+							Usage: "Enable queue depth tabulation for consumer group",
+						},
 					},
 					Action: func(c *cli.Context) {
 						if authEnabled {
@@ -381,6 +385,10 @@ func SetCommonCommands(
 						cli.BoolFlag{
 							Name:  common.FlagEnableSmartRetry,
 							Usage: "Enable smart retry for consumer group",
+						},
+						cli.BoolFlag{
+							Name:  common.FlagEnableQueueDepthTabulation,
+							Usage: "Enable queue depth tabulation for consumer group",
 						},
 					},
 					Action: func(c *cli.Context) {
