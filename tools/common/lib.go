@@ -504,11 +504,11 @@ func CreateConsumerGroupSecure(
 
 	options := make(map[string]string)
 
-	if c.Bool(common.FlagDisableNackThrottling) == true {
+	if c.Bool(common.FlagDisableNackThrottling) {
 		options[common.FlagDisableNackThrottling] = "true"
 	}
 
-	if c.Bool(common.FlagEnableSmartRetry) == true {
+	if c.Bool(common.FlagEnableSmartRetry) {
 		options[common.FlagEnableSmartRetry] = "true"
 	}
 
@@ -1660,7 +1660,7 @@ func getIfSetOptions(c *cli.Context, mClient mcli.Client, path string, name stri
 		options = cg.Options
 
 		if c.IsSet(common.FlagDisableNackThrottling) {
-			if c.Bool(common.FlagDisableNackThrottling) == true {
+			if c.Bool(common.FlagDisableNackThrottling) {
 				options[common.FlagDisableNackThrottling] = "true"
 			} else {
 				options[common.FlagDisableNackThrottling] = "false"
@@ -1668,7 +1668,7 @@ func getIfSetOptions(c *cli.Context, mClient mcli.Client, path string, name stri
 		}
 
 		if c.IsSet(common.FlagEnableSmartRetry) {
-			if c.Bool(common.FlagEnableSmartRetry) == true {
+			if c.Bool(common.FlagEnableSmartRetry) {
 				options[common.FlagEnableSmartRetry] = "true"
 			} else {
 				options[common.FlagEnableSmartRetry] = "false"
