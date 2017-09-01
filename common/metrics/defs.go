@@ -955,6 +955,8 @@ const (
 	StorageReplicationJobCurrentFailures
 	// StorageReplicationJobCurrentSuccess is the number of success job in current run
 	StorageReplicationJobCurrentSuccess
+	// StorageReplicationJobRun indicates the replication job runs
+	StorageReplicationJobRun
 
 	// -- Controller metrics -- //
 
@@ -1236,6 +1238,7 @@ var metricDefs = map[ServiceIdx]map[int]metricDefinition{
 		StorageReplicationJobMaxConsecutiveFailures: {Gauge, "storage.replication-job.max-consecutive-failures"},
 		StorageReplicationJobCurrentFailures:        {Gauge, "storage.replication-job.current-failures"},
 		StorageReplicationJobCurrentSuccess:         {Gauge, "storage.replication-job.current-success"},
+		StorageReplicationJobRun:                    {Gauge, "storage.replication-job.run"},
 	},
 
 	// definitions for Controller metrics

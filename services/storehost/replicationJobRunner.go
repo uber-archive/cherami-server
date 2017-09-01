@@ -267,6 +267,7 @@ func (runner *replicationJobRunner) run() {
 	runner.m3Client.UpdateGauge(metrics.ReplicateExtentScope, metrics.StorageReplicationJobCurrentFailures, int64(len(currentFailedJobs)))
 	runner.m3Client.UpdateGauge(metrics.ReplicateExtentScope, metrics.StorageReplicationJobMaxConsecutiveFailures, int64(maxConsecutiveFailures))
 	runner.m3Client.UpdateGauge(metrics.ReplicateExtentScope, metrics.StorageReplicationJobCurrentSuccess, int64(jobsStarted))
+	runner.m3Client.UpdateGauge(metrics.ReplicateExtentScope, metrics.StorageReplicationJobRun, 1)
 
 	runner.logger.WithFields(bark.Fields{
 		`stats`: fmt.Sprintf(`total extents: %v, remote extents:%v, opened for replication: %v, primary: %v, secondary: %v, failed: %v, success: %v`,
