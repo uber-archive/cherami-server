@@ -1,12 +1,12 @@
-hash: c2668f227fd5a2c3d46a341831c46d19b30ce29bca0e23692fdc294aa090e37c
-updated: 2017-08-29T14:13:15.799272913-07:00
+hash: 6b14f6548e87d8a9b2b0289623c936c3174669a5d1ae814395c2a8b70d752107
+updated: 2017-09-06T19:49:49.632096921-07:00
 imports:
 - name: github.com/apache/thrift
   version: b2a4d4ae21c789b689dd162deb819665567f481c
   subpackages:
   - lib/go/thrift
 - name: github.com/aws/aws-sdk-go
-  version: d0fb36b0259edc7c6b6ac8b8456a5cb0cb0371ef
+  version: 8a972b4459c2f2582b06f3e2d74448987cc6e19f
   subpackages:
   - aws
   - aws/awserr
@@ -38,9 +38,9 @@ imports:
 - name: github.com/benbjohnson/clock
   version: 7dc76406b6d3c05b5f71a86293cbcf3c4ea03b19
 - name: github.com/bsm/sarama-cluster
-  version: f1ef2fda9bccc377dad24d7f7522d46b6a9a817b
+  version: 5efe630369ab4ed5cc4cedeadd61b4d1b2523169
 - name: github.com/cactus/go-statsd-client
-  version: ad551ee7f9f3465fb1ce1695899c612f7808a06a
+  version: ce77ca9ecdee1c3ffd097e32f9bb832825ccb203
   subpackages:
   - statsd
 - name: github.com/cockroachdb/c-jemalloc
@@ -52,9 +52,9 @@ imports:
 - name: github.com/cockroachdb/c-snappy
   version: c0cd3c9ce92f195001595e1fbbe66f045daad34f
 - name: github.com/codegangsta/cli
-  version: f017f86fccc5a039a98f23311f34fdf78b014f78
+  version: cf33a9befefdd6c6ea1a236ab6d546e797a62cbf
 - name: github.com/davecgh/go-spew
-  version: adab96458c51a58dc1783b3335dcce5461522e75
+  version: a476722483882dd40b8111f0eb64e1d7f43f56e4
   subpackages:
   - spew
 - name: github.com/dgryski/go-farm
@@ -68,9 +68,9 @@ imports:
 - name: github.com/eapache/queue
   version: 44cc805cf13205b55f69e14bcb69867d1ae92f98
 - name: github.com/go-ini/ini
-  version: c787282c39ac1fc618827141a1f762240def08a3
+  version: d3de07a94d22b4a0972deb4b96d790c2c0ce8333
 - name: github.com/gocql/gocql
-  version: 2029819581ab63a84cd2dd172fbe5604757f906e
+  version: 3e8b36f5e9e52cdeb265f385808c504a53db55fc
   subpackages:
   - internal/lru
   - internal/murmur
@@ -80,22 +80,22 @@ imports:
 - name: github.com/google/uuid
   version: 064e2069ce9c359c118179501254f67d7d37ba24
 - name: github.com/gorilla/websocket
-  version: a69d9f6de432e2c6b296a947d8a5ee88f68522cf
+  version: 3ab3a8b8831546bd18fd182c20687ca853b2bb13
 - name: github.com/hailocab/go-hostpool
   version: e80d13ce29ede4452c43dea11e79b9bc8a15b478
 - name: github.com/jmespath/go-jmespath
   version: bd40a432e4c76585ef6b72d3fd96fb9b6dc7b68d
 - name: github.com/opentracing/opentracing-go
-  version: 8ebe5d4e236eed9fd88e593c288bfb804d630b8c
+  version: 1949ddbfd147afd4d964a9f00b24eb291e0e7c38
   subpackages:
   - ext
   - log
 - name: github.com/pborman/uuid
   version: e790cca94e6cc75c7064b1332e63811d4aae1a53
 - name: github.com/pierrec/lz4
-  version: 08c27939df1bd95e881e2c2367a749964ad1fceb
+  version: 5a3d2245f97fc249850e7802e3c01fad02a1c316
 - name: github.com/pierrec/xxHash
-  version: a0006b13c722f7f12368c00a3d3c2ae8a999a0c6
+  version: 5a004441f897722c627870a981d02b29924215fa
   subpackages:
   - xxHash32
 - name: github.com/pmezard/go-difflib
@@ -108,7 +108,7 @@ imports:
   version: c01858abb625b73a3af51d0798e4ad42c8147093
   repo: http://github.com/Shopify/sarama
 - name: github.com/sirupsen/logrus
-  version: 89742aefa4b206dcf400792f3bd35b542998eb3b
+  version: 85b1699d505667d13f8ac4478c1debbf85d6c5de
 - name: github.com/stretchr/objx
   version: 1a9d0bb9f541897e62256577b352fdbc1fb4fd94
 - name: github.com/stretchr/testify
@@ -121,11 +121,11 @@ imports:
 - name: github.com/tecbot/gorocksdb
   version: 17991d3138a879b166adebf86f7c84da3c1517a7
 - name: github.com/uber-common/bark
-  version: dbf558e8a7b65e2b54e1e01c14ee0e4207a865f5
+  version: a2ce12437502dbd1511a6ab87745ed01ba138dbb
 - name: github.com/uber-go/atomic
-  version: 70bd1261d36be490ebd22a62b385a3c5d23b6240
+  version: e682c1008ac17bf26d2e4b5ad6cdd08520ed0b22
 - name: github.com/uber/cherami-client-go
-  version: c88dc4abaf53f64839bd48c2d6bbbc051bc9a910
+  version: 68b11fc98437d63fc3b4f1db2c95a62d881bcee7
   subpackages:
   - client/cherami
   - common
@@ -134,7 +134,7 @@ imports:
   - common/websocket
   - stream
 - name: github.com/uber/cherami-thrift
-  version: 98e566b96cbe7142446508e5991a11bc394ab343
+  version: 2cb0e2eeb6570800a2dd86544909bf2693f50e7b
   subpackages:
   - .generated/go/admin
   - .generated/go/cherami
@@ -144,7 +144,7 @@ imports:
   - .generated/go/shared
   - .generated/go/store
 - name: github.com/uber/ringpop-go
-  version: 08d399785ee54fdae8e4bd8b7b481673f52739cc
+  version: 8b703dfdab59e2a17e5479e62f8d456286ba50c7
   subpackages:
   - discovery
   - discovery/statichosts
@@ -152,7 +152,6 @@ imports:
   - forward
   - hashring
   - logging
-  - membership
   - shared
   - swim
   - util
@@ -171,10 +170,6 @@ imports:
   - tos
   - trand
   - typed
-- name: golang.org/x/crypto
-  version: 81e90905daefcd6fd217b62423c0908922eadb30
-  subpackages:
-  - ssh/terminal
 - name: golang.org/x/net
   version: 66aacef3dd8a676686c7ae3716979581e8b03c47
   subpackages:
@@ -185,14 +180,13 @@ imports:
   - ipv4
   - ipv6
 - name: golang.org/x/sys
-  version: ab9e364efd8b52800ff7ee48a9ffba4e0ed78dfb
+  version: 0b25a408a50076fbbcae6b7ac0ea5fbb0b085e79
   subpackages:
   - unix
-  - windows
 - name: gopkg.in/inf.v0
   version: 3887ee99ecf07df5b447e9b00d9c0b2adaa9f3e4
 - name: gopkg.in/validator.v2
-  version: 460c83432a98c35224a6fe352acf8b23e067ad06
+  version: 07ffaad256c8e957050ad83d6472eb97d785013d
 - name: gopkg.in/yaml.v2
   version: eb3733d160e74a9c7e442f435eb3bea458e1d19f
 testImports: []
