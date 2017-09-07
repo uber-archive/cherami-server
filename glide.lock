@@ -1,5 +1,5 @@
-hash: 6b14f6548e87d8a9b2b0289623c936c3174669a5d1ae814395c2a8b70d752107
-updated: 2017-09-06T19:49:49.632096921-07:00
+hash: 3f7d67c3cff6465a746df796f5e9a2b35b9339f22317640fadb8e6ff82f025ea
+updated: 2017-09-07T10:25:20.820440233-07:00
 imports:
 - name: github.com/apache/thrift
   version: b2a4d4ae21c789b689dd162deb819665567f481c
@@ -144,7 +144,7 @@ imports:
   - .generated/go/shared
   - .generated/go/store
 - name: github.com/uber/ringpop-go
-  version: 8b703dfdab59e2a17e5479e62f8d456286ba50c7
+  version: 08d399785ee54fdae8e4bd8b7b481673f52739cc
   subpackages:
   - discovery
   - discovery/statichosts
@@ -152,6 +152,7 @@ imports:
   - forward
   - hashring
   - logging
+  - membership
   - shared
   - swim
   - util

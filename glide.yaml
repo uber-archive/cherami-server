@@ -50,6 +50,7 @@ import:
   - .generated/go/shared
   - .generated/go/store
 - package: github.com/uber/ringpop-go
+  version: v0.8.5
   subpackages:
   - discovery
   - discovery/statichosts
