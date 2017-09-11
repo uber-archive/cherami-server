@@ -165,6 +165,7 @@ const defaultLockTimeoutInSeconds int32 = 42
 const defaultMaxDeliveryCount int32 = 2
 const blockCheckingTimeout time.Duration = time.Minute
 const redeliveryInterval = time.Second / 2
+const nackRedeliveryDelayInMillisecond int32 = 25
 
 // SmartRetryDisableString can be added to a destination or CG owner email to request smart retry to be disabled
 // Note that Google allows something like this: gbailey+smartRetryDisable@uber.com
@@ -329,8 +330,8 @@ func (msgCache *cgMsgCache) utilHandleDeliveredMsg(cMsg cacheMsg) {
 		msgCache.changeState(ackID, stateConsumed, msg, eventCache)
 	case stateEarlyNACK:
 		//lclLg.WithField("AckID", common.ShortenGUIDString(msg.GetAckId())).Debug("manageMessageDeliveryCache: Early NACKed message (delivering to DLQ)")
-		msgCache.changeState(ackID, stateDelivered, msg, eventCache) // Mark one delivery as complete, eligible for redelivery depending on max deliveries
-		cm.fireTime = msgCache.addTimer(0, ackID)                    // Try to redeliver immediately, rather than wait for the lock timeout
+		msgCache.changeState(ackID, stateDelivered, msg, eventCache)             // Mark one delivery as complete, eligible for redelivery depending on max deliveries
+		cm.fireTime = msgCache.addTimer(nackRedeliveryDelayInMillisecond, ackID) // Try to redeliver immediately, rather than wait for the lock timeout
 	case stateDelivered:
 		break // this happens on redelivery
 	case stateConsumed:
@@ -383,6 +384,7 @@ func (msgCache *cgMsgCache) utilHandleRedeliveryTicker() {
 	msgCache.startTimer(eventTimer)
 
 	var redeliveries int64
+	var timeouts int64
 
 	now := common.Now()
 
@@ -401,7 +403,7 @@ func (msgCache *cgMsgCache) utilHandleRedeliveryTicker() {
 		msgCache.reinjectlastAckMsg() // injects the last acked message if it is not already injected
 	}
 
-	for _, cache := range timerCaches {
+	for i, cache := range timerCaches {
 
 		nExpired := 0
 
@@ -439,6 +441,10 @@ func (msgCache *cgMsgCache) utilHandleRedeliveryTicker() {
 						redeliveries++
 						msgCache.consumerHealth.lastRedeliveryTime = now // don't use variable 'now', since processing may be very slow in degenerate cases; consider moving to utilHandleRedeliveredMsg
 
+						if i == 0 { // means the message is from the redeliveryTimerCache, where the timeout messages are
+							timeouts++
+						}
+
 						if !stalled && cm.dlqInhibit > 0 {
 							cm.dlqInhibit-- // Use up one of the 'extra lives', but only if the consumer group seems healthy
 						}
@@ -448,7 +454,7 @@ func (msgCache *cgMsgCache) utilHandleRedeliveryTicker() {
 						// lclLg.WithField(common.TagAckID, common.FmtAckID(string(ackID))).
 						//	Info("manageMessageDeliveryCache: no listeners on the redelivery channel. We will redeliver this message next time")
 
-						cm.fireTime = msgCache.addTimer(int(msgCache.GetLockTimeoutSeconds()), ackID)
+						cm.fireTime = msgCache.addTimer(msgCache.GetLockTimeoutSeconds()*1000, ackID)
 					}
 				}
 			case stateEarlyACK:
@@ -469,6 +475,11 @@ func (msgCache *cgMsgCache) utilHandleRedeliveryTicker() {
 		}
 
 	} // for timercaches
+
+	// Report timeout metrics
+	if timeouts > 0 {
+		msgCache.consumerM3Client.AddCounter(metrics.ConsConnectionScope, metrics.OutputhostCGMessageTimeout, timeouts)
+	}
 
 	// Report redelivery metrics; consider moving to utilHandleRedeliveredMsg
 	if redeliveries > 0 {
@@ -537,18 +548,18 @@ func (msgCache *cgMsgCache) utilRenewCredits() {
 	}
 }
 
-func (msgCache *cgMsgCache) addTimer(delaySeconds int, id AckID) common.UnixNanoTime {
+func (msgCache *cgMsgCache) addTimer(delayMilliSeconds int32, id AckID) common.UnixNanoTime {
 	now := common.Now()
 	entry := &timerCacheEntry{
 		AckID:    id,
-		fireTime: now + common.UnixNanoTime(int64(time.Second)*int64(delaySeconds)),
+		fireTime: now + common.UnixNanoTime(int64(time.Second)*int64(delayMilliSeconds)),
 	}
 
-	if delaySeconds == int(msgCache.GetLockTimeoutSeconds()*2) {
+	if delayMilliSeconds == msgCache.GetLockTimeoutSeconds()*2*1000 {
 		msgCache.cleanupTimerCache = append(msgCache.cleanupTimerCache, entry)
-	} else if delaySeconds == 0 {
+	} else if delayMilliSeconds == nackRedeliveryDelayInMillisecond {
 		msgCache.zeroTimerCache = append(msgCache.zeroTimerCache, entry)
-	} else if delaySeconds == int(msgCache.GetLockTimeoutSeconds()) {
+	} else if delayMilliSeconds == msgCache.GetLockTimeoutSeconds()*1000 {
 		msgCache.redeliveryTimerCache = append(msgCache.redeliveryTimerCache, entry)
 	} else {
 		msgCache.lclLg.Panic(`Don't have a timer queue to handle this delay`)
@@ -654,9 +665,9 @@ func (msgCache *cgMsgCache) changeState(id AckID, newState msgState, msg *cheram
 	case stateEarlyNACK:
 		fallthrough
 	case stateConsumed:
-		cm.fireTime = msgCache.addTimer(int(msgCache.GetLockTimeoutSeconds()*2), id)
+		cm.fireTime = msgCache.addTimer(msgCache.GetLockTimeoutSeconds()*2*1000, id)
 	case stateDelivered:
-		cm.fireTime = msgCache.addTimer(int(msgCache.GetLockTimeoutSeconds()), id)
+		cm.fireTime = msgCache.addTimer(msgCache.GetLockTimeoutSeconds()*1000, id)
 	case stateDLQDelivered:
 		cm.fireTime = 0 // Rely on the ACK from the DLQ to cleanup; No ACK = LEAK
 	default:
@@ -930,9 +941,9 @@ func (msgCache *cgMsgCache) handleNack(ackID timestampedAckID, lclLg bark.Logger
 		// just update the fire time to be immediate, for immediate redelivery
 		// utilHandleRedeliveredMsg will handle updating the redelivery count as appropriate
 		if cm.n+1 < msgCache.GetMaxDeliveryCount() { // If the next redelivery won't be the last before DLQ delivery, retry immediately
-			cm.fireTime = msgCache.addTimer(0, ackID.AckID)
+			cm.fireTime = msgCache.addTimer(nackRedeliveryDelayInMillisecond, ackID.AckID)
 		} else { // if this will be the final delivery attempt, delay for the lock timeout so that we can detect a stall before delivering to DLQ
-			cm.fireTime = msgCache.addTimer(int(msgCache.GetLockTimeoutSeconds()), ackID.AckID)
+			cm.fireTime = msgCache.addTimer(msgCache.GetLockTimeoutSeconds()*1000, ackID.AckID)
 		}
 	case stateNX:
 		msgCache.changeState(ackID.AckID, stateEarlyNACK, nil, eventNACK)
