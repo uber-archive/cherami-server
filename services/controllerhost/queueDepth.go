@@ -727,6 +727,11 @@ func (qdc *queueDepthCalculator) isPurgedDLQExtent(extent *metadata.DestinationE
 }
 
 func (qdc *queueDepthCalculator) isTabulationRequested(cgDesc *shared.ConsumerGroupDescription, dstDesc *shared.DestinationDescription) (tabulationRequested bool) {
+	options := cgDesc.GetOptions()
+	if enabled, ok := options[common.FlagEnableQueueDepthTabulation]; ok && enabled == "true" {
+		return true
+	}
+
 	for _, s := range []string{cgDesc.GetOwnerEmail(), dstDesc.GetOwnerEmail()} {
 		if strings.Contains(s, QueueDepthTabulationString) {
 			return true
