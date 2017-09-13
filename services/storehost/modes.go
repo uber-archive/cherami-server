@@ -55,6 +55,10 @@ func getModeForDestinationType(destType cherami.DestinationType) Mode {
 
 	case cherami.DestinationType_LOG:
 		return Log
+
+	case cherami.DestinationType_KAFKA:
+		return AppendOnly
+
 	default:
 		return Mode(0)
 	}
