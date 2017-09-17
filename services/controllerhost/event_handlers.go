@@ -813,13 +813,20 @@ func (event *ExtentDownEvent) Handle(context *Context) error {
 
 		case checkPreconditionState:
 			stats, err = context.mm.ReadExtentStats(event.dstID, event.extentID)
+
+			// if we cannot read the stats, we should fail immediately
 			if err != nil {
 				context.m3Client.IncCounter(metrics.ExtentDownEventScope, metrics.ControllerErrMetadataReadCounter)
 				context.m3Client.IncCounter(metrics.ExtentDownEventScope, metrics.ControllerFailures)
+				context.log.WithFields(bark.Fields{
+					common.TagDst: common.FmtDst(event.dstID),
+					common.TagExt: common.FmtExt(event.extentID),
+					`error`:       err,
+				}).Error("Cannot read extent stats")
 				return errRetryable
 			}
 
-			if err == nil && stats.GetStatus() != shared.ExtentStatus_OPEN {
+			if stats.GetStatus() != shared.ExtentStatus_OPEN {
 				context.m3Client.IncCounter(metrics.ExtentDownEventScope, metrics.ControllerFailures)
 				context.log.WithFields(bark.Fields{
 					common.TagDst: common.FmtDst(event.dstID),
@@ -828,16 +835,6 @@ func (event *ExtentDownEvent) Handle(context *Context) error {
 				return nil // non-retryable
 			}
 
-			// if we cannot read the stats, we should fail immediately
-			if err != nil {
-				context.m3Client.IncCounter(metrics.ExtentDownEventScope, metrics.ControllerErrMetadataReadCounter)
-				context.log.WithFields(bark.Fields{
-					common.TagDst: common.FmtDst(event.dstID),
-					common.TagExt: common.FmtExt(event.extentID),
-					`error`:       err,
-				}).Error("Cannot read extent stats")
-				return errRetryable
-			}
 			event.inputID = stats.GetExtent().GetInputHostUUID()
 			event.storeIDs = stats.GetExtent().GetStoreUUIDs()
 
