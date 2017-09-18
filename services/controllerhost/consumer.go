@@ -384,6 +384,11 @@ func findConsumableExtents(context *Context, dstUUID, cgUUID string,
 	dstExtents, err := context.mm.ListDestinationExtentsByStatus(dstUUID, filterBy)
 	if err != nil {
 		context.m3Client.IncCounter(m3Scope, metrics.ControllerErrMetadataReadCounter)
+		context.log.WithFields(bark.Fields{
+			common.TagDst:  dstUUID,
+			common.TagCnsm: cgUUID,
+			common.TagErr:  err,
+		}).Error("findConsumableExtents: ListDestinationExtentsByStatus failed")
 		return nil, 0, err
 	}
 
@@ -752,6 +757,11 @@ func refreshOutputHostsForConsGroup(context *Context,
 	dstDesc, err := readDestination(context, dstID, m3Scope)
 	if err != nil {
 		context.m3Client.IncCounter(m3Scope, metrics.ControllerFailures)
+		context.log.WithFields(bark.Fields{
+			common.TagDst:  dstID,
+			common.TagCnsm: cgID,
+			common.TagErr:  err,
+		}).Error("refreshOutputHostsForConsGroup: readDestination failed")
 		return nil, err
 	}
 
@@ -771,6 +781,11 @@ func refreshOutputHostsForConsGroup(context *Context,
 	if err != nil {
 		context.m3Client.IncCounter(m3Scope, metrics.ControllerErrMetadataReadCounter)
 		context.m3Client.IncCounter(m3Scope, metrics.ControllerFailures)
+		context.log.WithFields(bark.Fields{
+			common.TagDst:  dstID,
+			common.TagCnsm: cgID,
+			common.TagErr:  err,
+		}).Error("refreshOutputHostsForConsGroup: ReadConsumerGroup failed")
 		return nil, err
 	}
 	if err = validatCGStatus(cgDesc); err != nil {
@@ -797,6 +812,11 @@ func refreshOutputHostsForConsGroup(context *Context,
 		if err != nil {
 			context.m3Client.IncCounter(m3Scope, metrics.ControllerErrMetadataReadCounter)
 			context.m3Client.IncCounter(m3Scope, metrics.ControllerFailures)
+			context.log.WithFields(bark.Fields{
+				common.TagDst:  dstID,
+				common.TagCnsm: cgID,
+				common.TagErr:  err,
+			}).Error("refreshOutputHostsForConsGroup: getControllerDynamicConfig failed")
 			return nil, err
 		}
 
