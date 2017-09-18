@@ -177,6 +177,12 @@ func checkCGEExists(context *Context, dstUUID, cgUUID string, extUUID extentUUID
 	if _, ok := e.(*shared.EntityNotExistsError); !ok { // EntityNotExists is expected; for other errors, just give up on this extent
 		// Skip adding this extent and move along
 		context.m3Client.IncCounter(m3Scope, metrics.ControllerErrMetadataReadCounter)
+		context.log.WithFields(bark.Fields{
+			common.TagDst:  dstUUID,
+			common.TagCnsm: cgUUID,
+			common.TagExt:  extUUID,
+			common.TagErr:  e,
+		}).Error("checkCGEExists: ReadConsumerGroupExtent failed")
 		return true
 	}
 	return false
@@ -203,6 +209,11 @@ func listConsumerGroupExtents(context *Context, dstUUID string, cgUUID string, m
 	cgExtents, err := context.mm.ListExtentsByConsumerGroupLite(dstUUID, cgUUID, filterByStatus)
 	if err != nil {
 		context.m3Client.IncCounter(m3Scope, metrics.ControllerErrMetadataReadCounter)
+		context.log.WithFields(bark.Fields{
+			common.TagDst:  dstUUID,
+			common.TagCnsm: cgUUID,
+			common.TagErr:  err,
+		}).Error("listConsumerGroupExtents: ListExtentsByConsumerGroupLite failed")
 	}
 	return cgExtents, err
 }
@@ -229,6 +240,10 @@ func readDestination(context *Context, dstID string, m3Scope int) (*shared.Desti
 			context.m3Client.IncCounter(m3Scope, metrics.ControllerErrMetadataEntityNotFoundCounter)
 		} else {
 			context.m3Client.IncCounter(m3Scope, metrics.ControllerErrMetadataReadCounter)
+			context.log.WithFields(bark.Fields{
+				common.TagDst: dstID,
+				common.TagErr: err,
+			}).Error("readDestination: ReadDestination failed")
 		}
 		return nil, err
 	}
@@ -240,6 +255,10 @@ func findOpenExtents(context *Context, dstID string, m3Scope int) ([]*m.Destinat
 	extents, err := context.mm.ListDestinationExtentsByStatus(dstID, filterBy)
 	if err != nil {
 		context.m3Client.IncCounter(m3Scope, metrics.ControllerErrMetadataReadCounter)
+		context.log.WithFields(bark.Fields{
+			common.TagDst: dstID,
+			common.TagErr: err,
+		}).Error("findOpenExtents: ListDestinationExtentsByStatus failed")
 		return nil, err
 	}
 	return extents, err
