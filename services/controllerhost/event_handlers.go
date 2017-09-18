@@ -369,6 +369,12 @@ func (event *ConsGroupUpdatedEvent) Handle(context *Context) error {
 		}
 	} else {
 		context.m3Client.IncCounter(metrics.ConsGroupUpdatedEventScope, metrics.ControllerErrMetadataReadCounter)
+		context.log.WithFields(bark.Fields{
+			common.TagCnsm: event.consGroupID,
+			common.TagOut:  event.outputHostID,
+			common.TagExt:  event.extentID,
+			common.TagErr:  err,
+		}).Error("ConsGroupUpdatedEvent: ListExtentsByConsumerGroupLite failed")
 	}
 
 	notifyEvent := NewOutputHostNotificationEvent(event.dstID, event.consGroupID, event.outputHostID, notifyCGExtUpdated, event.extentID, admin.NotificationType_ALL)
