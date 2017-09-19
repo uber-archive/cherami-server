@@ -40,7 +40,7 @@ import:
   - common/websocket
   - stream
 - package: github.com/uber/cherami-thrift
-  version: v1.25.0-rc0
+  version: 5dea82cadfcd8b5faf7ba53c2d29fcd09860cfed
   subpackages:
   - .generated/go/admin
   - .generated/go/cherami
