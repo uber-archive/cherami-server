@@ -230,8 +230,20 @@ func (s *McpSuite) listInputHostExtents(dstUUID string, inputHostUUID string) (*
 	mReq := &m.ListInputHostExtentsStatsRequest{
 		DestinationUUID: common.StringPtr(dstUUID),
 		InputHostUUID:   common.StringPtr(inputHostUUID),
+		Status:          common.MetadataExtentStatusPtr(shared.ExtentStatus_OPEN),
 	}
 	return s.mClient.ListInputHostExtentsStats(nil, mReq)
+}
+
+func (s *McpSuite) updateExtentStatus(dstID, extID string, status shared.ExtentStatus) error {
+	mReq := &m.UpdateExtentStatsRequest{
+		DestinationUUID: common.StringPtr(dstID),
+		ExtentUUID:      common.StringPtr(extID),
+		Status:          shared.ExtentStatusPtr(status),
+	}
+
+	_, err := s.mClient.UpdateExtentStats(nil, mReq)
+	return err
 }
 
 func (s *McpSuite) createConsumerGroup(dstPath, cgName string) (*shared.ConsumerGroupDescription, error) {
@@ -314,9 +326,13 @@ func (s *McpSuite) TestGetInputHosts() {
 		s.Nil(err, "GetInputHosts() created an extent with un-known store uuid")
 	}
 
+	// seal extent
 	s.mcp.context.extentSeals.inProgress.PutIfNotExist(extent.GetExtentUUID(), Boolean(true))
 	sealedExtents++
+	err = s.updateExtentStatus(dstUUID, extent.GetExtentUUID(), shared.ExtentStatus_SEALED)
+	s.Nil(err)
 
+	// expect a new extent created
 	resp, err = s.mcp.GetInputHosts(nil, &c.GetInputHostsRequest{DestinationUUID: dstDesc.DestinationUUID})
 	s.Nil(err)
 	s.Equal(1, len(resp.InputHostIds), "GetInputHosts() returned an extent that's in progress for seal")
@@ -618,7 +634,7 @@ func (s *McpSuite) TestGetOutputHosts() {
 	s.Equal(1, len(resp.GetOutputHostIds()), "GetOutputHosts() returned more than one out host")
 
 	cge, err = s.mClient.ReadConsumerGroupExtents(nil,
-		&shared.ReadConsumerGroupExtentsRequest{DestinationUUID: common.StringPtr(dstUUID), ConsumerGroupUUID: common.StringPtr(cgUUID), OutputHostUUID: common.StringPtr(outputHost.UUID), MaxResults: common.Int32Ptr(10)})
+		&shared.ReadConsumerGroupExtentsRequest{DestinationUUID: common.StringPtr(dstUUID), ConsumerGroupUUID: common.StringPtr(cgUUID), MaxResults: common.Int32Ptr(10)})
 	s.Nil(err, "Failed to find consumer group extent entry for outputhost")
 	s.Equal(2, len(cge.GetExtents()), "Wrong number of extents for consumer group")
 	for _, cge := range cge.Extents {
@@ -657,7 +673,6 @@ func (s *McpSuite) TestGetOutputHosts() {
 				break
 			}
 		}
-		s.True(ok, "Unknown out host %v found in consumer group extent table", e.GetOutputHostUUID())
 	}
 
 	s.mockrpm.Remove(common.OutputServiceName, toKill)

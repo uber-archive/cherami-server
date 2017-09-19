@@ -34,6 +34,7 @@ import (
 )
 
 var errNoHosts = errors.New("Unable to find healthy hosts")
+var errNotEnoughHosts = errors.New("Unable to find enough hosts")
 var errNoInputHosts = errors.New("Unable to find healthy input host")
 var errNoOutputHosts = errors.New("Unable to find healthy output host")
 var errNoStoreHosts = errors.New("Unable to find healthy store hosts")
@@ -77,7 +78,7 @@ func toResources(hosts []*common.HostInfo) []string {
 // Helper function to pick hosts based on the predicates
 func (p *DistancePlacement) pickHosts(service string, poolHosts, sourceHosts []*common.HostInfo, count int, minDistance, maxDistance uint16) ([]*common.HostInfo, error) {
 	if p.distMap == nil {
-		return poolHosts[:count], nil
+		return p.pickRandomHosts(poolHosts, count)
 	}
 
 	sourceResources := toResources(sourceHosts)
@@ -204,16 +205,8 @@ func (p *DistancePlacement) PickStoreHosts(count int) ([]*common.HostInfo, error
 				return hosts, nil
 			}
 		}
-		if cnt := len(storeHosts); cnt >= count {
-			start := rand.Intn(cnt)
-			end := start + count
-			if end > cnt {
-				end = cnt
-			}
-			hosts := append([]*common.HostInfo{}, storeHosts[start:end]...)
-			hosts = append(hosts, storeHosts[:count-len(hosts)]...)
-			return hosts, nil
-		}
+
+		return p.pickRandomHosts(storeHosts, count)
 	}
 
 	return nil, errNoStoreHosts
@@ -303,4 +296,19 @@ func (p *DistancePlacement) findEligibleStoreHosts() ([]*common.HostInfo, error)
 	}
 
 	return result, nil
+}
+
+func (p *DistancePlacement) pickRandomHosts(source []*common.HostInfo, count int) ([]*common.HostInfo, error) {
+	if len(source) < count {
+		return nil, errNotEnoughHosts
+	}
+
+	pickedHosts := make([]*common.HostInfo, count)
+	for i, j := range rand.Perm(len(source)) {
+		if i >= count {
+			break
+		}
+		pickedHosts[i] = source[j]
+	}
+	return pickedHosts, nil
 }
