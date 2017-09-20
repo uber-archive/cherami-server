@@ -92,6 +92,7 @@ type (
 		hostMetrics       *load.HostMetrics
 		cfgMgr            cassDconfig.ConfigManager
 		kafkaCfg          configure.CommonKafkaConfig
+		kConverter        KafkaStreamConverter
 		common.SCommon
 	}
 
@@ -99,6 +100,8 @@ type (
 	OutOptions struct {
 		//CacheIdleTimeout
 		CacheIdleTimeout time.Duration
+		//KStreamConverter
+		KStreamConverter KafkaStreamConverter
 	}
 
 	ackMgrLoadMsg struct {
@@ -772,6 +775,7 @@ func NewOutputHost(
 		ackMgrIDGen:    common.NewHostAckIDGenerator(defaultAckMgrIDStartFrom),
 		hostMetrics:    load.NewHostMetrics(),
 		kafkaCfg:       kafkaCfg,
+		kConverter:     &kafkaStreamConverter{},
 	}
 
 	sarama.Logger = NewSaramaLoggerFromBark(bs.logger, `sarama`)
@@ -780,7 +784,12 @@ func NewOutputHost(
 
 	bs.m3Client = metrics.NewClient(sVice.GetMetricsReporter(), metrics.Outputhost)
 	if opts != nil {
-		bs.cacheTimeout = opts.CacheIdleTimeout
+		if opts.CacheIdleTimeout != 0 {
+			bs.cacheTimeout = opts.CacheIdleTimeout
+		}
+		if opts.KStreamConverter != nil {
+			bs.kConverter = opts.KStreamConverter
+		}
 	}
 
 	bs.metaClient = mm.NewMetadataMetricsMgr(metadataClient, bs.m3Client, bs.logger)
