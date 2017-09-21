@@ -121,7 +121,7 @@ imports:
 - name: github.com/tecbot/gorocksdb
   version: 17991d3138a879b166adebf86f7c84da3c1517a7
 - name: github.com/uber-common/bark
-  version: a2ce12437502dbd1511a6ab87745ed01ba138dbb
+  version: 11c68f25ea004a3f36e3c6ad90236835a4bd0971
 - name: github.com/uber-go/atomic
   version: e682c1008ac17bf26d2e4b5ad6cdd08520ed0b22
 - name: github.com/uber/cherami-client-go
