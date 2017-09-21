@@ -55,6 +55,8 @@ func validatCGStatus(cgDesc *shared.ConsumerGroupDescription) error {
 	switch cgDesc.GetStatus() {
 	case shared.ConsumerGroupStatus_ENABLED:
 		return nil
+	case shared.ConsumerGroupStatus_DELETING:
+		return ErrConsumerGroupNotExists
 	case shared.ConsumerGroupStatus_DELETED:
 		return ErrConsumerGroupNotExists
 	default:

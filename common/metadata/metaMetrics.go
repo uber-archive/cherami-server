@@ -498,6 +498,21 @@ func (m *metadataMetricsMgr) DeleteConsumerGroup(ctx thrift.Context, request *sh
 	return err
 }
 
+func (m *metadataMetricsMgr) DeleteConsumerGroupUUID(ctx thrift.Context, request *m.DeleteConsumerGroupUUIDRequest) (err error) {
+
+	m.m3.IncCounter(metrics.MetadataDeleteConsumerGroupUUIDScope, metrics.MetadataRequests)
+	sw := m.m3.StartTimer(metrics.MetadataDeleteConsumerGroupUUIDScope, metrics.MetadataLatency)
+	defer sw.Stop()
+
+	err = m.meta.DeleteConsumerGroupUUID(ctx, request)
+
+	if err != nil {
+		m.m3.IncCounter(metrics.MetadataDeleteConsumerGroupUUIDScope, metrics.MetadataFailures)
+	}
+
+	return err
+}
+
 func (m *metadataMetricsMgr) DeleteDestination(ctx thrift.Context, request *shared.DeleteDestinationRequest) (err error) {
 
 	m.m3.IncCounter(metrics.MetadataDeleteDestinationScope, metrics.MetadataRequests)

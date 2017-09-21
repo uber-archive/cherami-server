@@ -1319,7 +1319,7 @@ func (s *ReplicatorSuite) TestCgMetadataReconcileLocalMissingRemoteDeleted() {
 	var remoteCgs []*shared.ConsumerGroupDescription
 	remoteCgs = append(remoteCgs, &shared.ConsumerGroupDescription{
 		ConsumerGroupUUID: common.StringPtr(missingCgUUID),
-		Status:            common.InternalConsumerGroupStatusPtr(shared.ConsumerGroupStatus_DELETED),
+		Status:            common.InternalConsumerGroupStatusPtr(shared.ConsumerGroupStatus_DELETING),
 	})
 	reconciler.reconcileCg(localCgs, remoteCgs)
 	s.mockMeta.AssertExpectations(s.T())
@@ -1353,7 +1353,7 @@ func (s *ReplicatorSuite) TestCgMetadataReconcileRemoteDeleted() {
 		ConsumerGroupUUID: common.StringPtr(cgUUID),
 		ConsumerGroupName: common.StringPtr(cgName),
 		DestinationUUID:   common.StringPtr(destUUID),
-		Status:            common.InternalConsumerGroupStatusPtr(shared.ConsumerGroupStatus_DELETED),
+		Status:            common.InternalConsumerGroupStatusPtr(shared.ConsumerGroupStatus_DELETING),
 	})
 	reconciler.reconcileCg(localCgs, remoteCgs)
 	s.mockMeta.AssertExpectations(s.T())
@@ -1374,14 +1374,14 @@ func (s *ReplicatorSuite) TestCgMetadataReconcileRemoteLocalDeleted() {
 		ConsumerGroupUUID: common.StringPtr(cgUUID),
 		ConsumerGroupName: common.StringPtr(cgName),
 		DestinationUUID:   common.StringPtr(destUUID),
-		Status:            common.InternalConsumerGroupStatusPtr(shared.ConsumerGroupStatus_DELETED),
+		Status:            common.InternalConsumerGroupStatusPtr(shared.ConsumerGroupStatus_DELETING),
 	})
 	var remoteCgs []*shared.ConsumerGroupDescription
 	remoteCgs = append(remoteCgs, &shared.ConsumerGroupDescription{
 		ConsumerGroupUUID: common.StringPtr(cgUUID),
 		ConsumerGroupName: common.StringPtr(cgName),
 		DestinationUUID:   common.StringPtr(destUUID),
-		Status:            common.InternalConsumerGroupStatusPtr(shared.ConsumerGroupStatus_DELETED),
+		Status:            common.InternalConsumerGroupStatusPtr(shared.ConsumerGroupStatus_DELETING),
 	})
 	reconciler.reconcileCg(localCgs, remoteCgs)
 	s.mockMeta.AssertExpectations(s.T())
