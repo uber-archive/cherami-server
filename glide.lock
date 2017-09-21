@@ -1,5 +1,5 @@
-hash: 9a67e8f4d4283f7adbdb55678b4e7e6d5e7354ef9995481d8cd2cf020005bc54
-updated: 2017-09-19T11:29:54.862014684-07:00
+hash: 79cc68755e2fff0a68ef84580fb09717f455ded83f2f6dd5a2cc55e808eaf241
+updated: 2017-09-21T11:34:49.462678076-07:00
 imports:
 - name: github.com/apache/thrift
   version: b2a4d4ae21c789b689dd162deb819665567f481c
@@ -134,7 +134,7 @@ imports:
   - common/websocket
   - stream
 - name: github.com/uber/cherami-thrift
-  version: 5dea82cadfcd8b5faf7ba53c2d29fcd09860cfed
+  version: 45b0a9da65195b298b3967360a1a069907d5266a
   subpackages:
   - .generated/go/admin
   - .generated/go/cherami
