@@ -92,7 +92,7 @@ type (
 		hostMetrics       *load.HostMetrics
 		cfgMgr            cassDconfig.ConfigManager
 		kafkaCfg          configure.CommonKafkaConfig
-		kConverter        KafkaStreamConverter
+		kStreamFactory    KafkaStreamFactory
 		common.SCommon
 	}
 
@@ -100,8 +100,8 @@ type (
 	OutOptions struct {
 		//CacheIdleTimeout
 		CacheIdleTimeout time.Duration
-		//KStreamConverter
-		KStreamConverter KafkaStreamConverter
+		//KStreamFactory
+		KStreamFactory KafkaStreamFactory
 	}
 
 	ackMgrLoadMsg struct {
@@ -775,7 +775,6 @@ func NewOutputHost(
 		ackMgrIDGen:    common.NewHostAckIDGenerator(defaultAckMgrIDStartFrom),
 		hostMetrics:    load.NewHostMetrics(),
 		kafkaCfg:       kafkaCfg,
-		kConverter:     &kafkaStreamConverter{},
 	}
 
 	sarama.Logger = NewSaramaLoggerFromBark(bs.logger, `sarama`)
@@ -787,8 +786,8 @@ func NewOutputHost(
 		if opts.CacheIdleTimeout != 0 {
 			bs.cacheTimeout = opts.CacheIdleTimeout
 		}
-		if opts.KStreamConverter != nil {
-			bs.kConverter = opts.KStreamConverter
+		if opts.KStreamFactory != nil {
+			bs.kStreamFactory = opts.KStreamFactory
 		}
 	}
 
