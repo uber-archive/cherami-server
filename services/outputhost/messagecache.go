@@ -164,7 +164,7 @@ type AckID string
 const defaultLockTimeoutInSeconds int32 = 42
 const defaultMaxDeliveryCount int32 = 2
 const blockCheckingTimeout time.Duration = time.Minute
-const redeliveryInterval = 100 * time.Millisecond
+const redeliveryInterval = 50 * time.Millisecond
 
 // SmartRetryDisableString can be added to a destination or CG owner email to request smart retry to be disabled
 // Note that Google allows something like this: gbailey+smartRetryDisable@uber.com
