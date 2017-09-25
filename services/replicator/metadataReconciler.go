@@ -307,7 +307,7 @@ func (r *metadataReconciler) reconcileCg(localCgs []*shared.ConsumerGroupDescrip
 				remoteCg.GetStatus() == shared.ConsumerGroupStatus_DELETED {
 				// case #1: cg gets deleted in remote, but not deleted in local. Delete the cg locally
 				if !(localCg.GetStatus() == shared.ConsumerGroupStatus_DELETING ||
-					ocalCg.GetStatus() == shared.ConsumerGroupStatus_DELETED) {
+					localCg.GetStatus() == shared.ConsumerGroupStatus_DELETED) {
 					lclLg.Info(`Found deleted cg from remote but not deleted locally`)
 					deleteRequest := &shared.DeleteConsumerGroupRequest{
 						DestinationUUID:   common.StringPtr(remoteCg.GetDestinationUUID()),
