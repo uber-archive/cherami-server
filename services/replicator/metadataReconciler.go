@@ -303,9 +303,11 @@ func (r *metadataReconciler) reconcileCg(localCgs []*shared.ConsumerGroupDescrip
 		})
 		localCg, ok := localCgsSet[remoteCg.GetConsumerGroupUUID()]
 		if ok {
-			if remoteCg.GetStatus() == shared.ConsumerGroupStatus_DELETING {
+			if remoteCg.GetStatus() == shared.ConsumerGroupStatus_DELETING ||
+				remoteCg.GetStatus() == shared.ConsumerGroupStatus_DELETED {
 				// case #1: cg gets deleted in remote, but not deleted in local. Delete the cg locally
-				if !(localCg.GetStatus() == shared.ConsumerGroupStatus_DELETING) {
+				if !(localCg.GetStatus() == shared.ConsumerGroupStatus_DELETING ||
+					ocalCg.GetStatus() == shared.ConsumerGroupStatus_DELETED) {
 					lclLg.Info(`Found deleted cg from remote but not deleted locally`)
 					deleteRequest := &shared.DeleteConsumerGroupRequest{
 						DestinationUUID:   common.StringPtr(remoteCg.GetDestinationUUID()),
@@ -333,7 +335,8 @@ func (r *metadataReconciler) reconcileCg(localCgs []*shared.ConsumerGroupDescrip
 			replicatorReconcileCgFoundMissingCount = replicatorReconcileCgFoundMissingCount + 1
 
 			// If the missing ConsumerGroup is in deleted status, we don't need to create the ConsumerGroup locally
-			if remoteCg.GetStatus() == shared.ConsumerGroupStatus_DELETING {
+			if remoteCg.GetStatus() == shared.ConsumerGroupStatus_DELETING ||
+				remoteCg.GetStatus() == shared.ConsumerGroupStatus_DELETED {
 				lclLg.Info(`Found missing ConsumerGroup from remote but in deleted state`)
 				continue
 			}
