@@ -1634,7 +1634,8 @@ func (s *CassandraMetadataService) UpdateConsumerGroup(ctx thrift.Context, reque
 		return nil, err
 	}
 
-	if existingCG.GetStatus() == shared.ConsumerGroupStatus_DELETED {
+	if existingCG.GetStatus() == shared.ConsumerGroupStatus_DELETING ||
+		existingCG.GetStatus() == shared.ConsumerGroupStatus_DELETED {
 		return nil, &shared.BadRequestError{
 			Message: fmt.Sprintf("UpdateConsumerGroup - Attempt to update DELETED consumer group, dst=%v, cg=%v",
 				request.GetDestinationPath(), request.GetConsumerGroupName()),
@@ -1748,7 +1749,8 @@ func (s *CassandraMetadataService) DeleteConsumerGroup(ctx thrift.Context, reque
 		}
 	}
 
-	if existingCG.GetStatus() == shared.ConsumerGroupStatus_DELETED {
+	if existingCG.GetStatus() == shared.ConsumerGroupStatus_DELETING ||
+		existingCG.GetStatus() == shared.ConsumerGroupStatus_DELETED {
 		return nil
 	}
 
@@ -1790,14 +1792,14 @@ func (s *CassandraMetadataService) DeleteConsumerGroup(ctx thrift.Context, reque
 			dlqDstDesc.GetDestinationUUID())
 	}
 
-	batch.Query(sqlDeleteCGByUUIDWithTTL,
-		existingCG.GetConsumerGroupUUID(),
+	batch.Query(sqlUpdateCGByUUID,
+		// Value columns
 		existingCG.GetIsMultiZone(),
 		existingCG.GetConsumerGroupUUID(),
 		existingCG.GetDestinationUUID(),
 		existingCG.GetConsumerGroupName(),
 		existingCG.GetStartFrom(),
-		shared.ConsumerGroupStatus_DELETED,
+		shared.ConsumerGroupStatus_DELETING,
 		existingCG.GetLockTimeoutSeconds(),
 		existingCG.GetMaxDeliveryCount(),
 		existingCG.GetSkipOlderMessagesSeconds(),
@@ -1808,7 +1810,8 @@ func (s *CassandraMetadataService) DeleteConsumerGroup(ctx thrift.Context, reque
 		existingCG.GetActiveZone(),
 		marshalCgZoneConfigs(existingCG.GetZoneConfigs()),
 		existingCG.GetOptions(),
-		defaultDeleteTTLSeconds)
+		// Query columns
+		existingCG.GetConsumerGroupUUID())
 
 	batch.Query(sqlDeleteCGByName,
 		existingCG.GetDestinationUUID(),
@@ -1828,6 +1831,68 @@ func (s *CassandraMetadataService) DeleteConsumerGroup(ctx thrift.Context, reque
 	s.recordUserOperation(
 		existingCG.GetConsumerGroupName(),
 		existingCG.GetConsumerGroupUUID(),
+		entityTypeCG,
+		callerUserName,
+		"", //place holder for user's email
+		callerServiceName,
+		callerHostName,
+		opsDelete,
+		time.Now(),
+		marshalRequest(request))
+
+	return nil
+}
+
+// DeleteConsumerGroupUUID deletes the consumer-group corresponding to the given UUID
+// from the consumer_groups table
+func (s *CassandraMetadataService) DeleteConsumerGroupUUID(ctx thrift.Context, request *m.DeleteConsumerGroupUUIDRequest) error {
+
+	if !request.IsSetUUID() {
+		return &shared.BadRequestError{Message: "Missing UUID param"}
+	}
+
+	reqReadConsumerGroup := &shared.ReadConsumerGroupRequest{
+		ConsumerGroupUUID: common.StringPtr(request.GetUUID()),
+	}
+
+	existing, err := s.ReadConsumerGroupByUUID(nil, reqReadConsumerGroup)
+	if err != nil {
+		return err
+	}
+
+	query := s.session.Query(sqlDeleteCGByUUIDWithTTL,
+		existing.GetConsumerGroupUUID(),
+		existing.GetIsMultiZone(),
+		existing.GetConsumerGroupUUID(),
+		existing.GetDestinationUUID(),
+		existing.GetConsumerGroupName(),
+		existing.GetStartFrom(),
+		shared.ConsumerGroupStatus_DELETED,
+		existing.GetLockTimeoutSeconds(),
+		existing.GetMaxDeliveryCount(),
+		existing.GetSkipOlderMessagesSeconds(),
+		existing.GetDelaySeconds(),
+		existing.DeadLetterQueueDestinationUUID,
+		existing.GetOwnerEmail(),
+		existing.GetIsMultiZone(),
+		existing.GetActiveZone(),
+		marshalCgZoneConfigs(existing.GetZoneConfigs()),
+		existing.GetOptions(),
+		defaultDeleteTTLSeconds).Consistency(s.midConsLevel)
+
+	if err = query.Exec(); err != nil {
+		return &shared.InternalServiceError{
+			Message: fmt.Sprintf("DeleteConsumerGroupUUID(%v): %v", existing.GetConsumerGroupUUID(), err),
+		}
+	}
+
+	callerUserName := getThriftContextValue(ctx, common.CallerUserName)
+	callerHostName := getThriftContextValue(ctx, common.CallerHostName)
+	callerServiceName := getThriftContextValue(ctx, common.CallerServiceName)
+
+	s.recordUserOperation(
+		existing.GetConsumerGroupName(),
+		existing.GetConsumerGroupUUID(),
 		entityTypeCG,
 		callerUserName,
 		"", //place holder for user's email

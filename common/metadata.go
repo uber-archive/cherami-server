@@ -28,7 +28,6 @@ import (
 
 // IsDLQDestination checks whether a destination is dlq type
 func IsDLQDestination(dstDesc *shared.DestinationDescription) bool {
-	// Other destination types have paths that start with '/'; DLQ starts with 'D'
 	return dstDesc != nil && IsDLQDestinationPath(dstDesc.GetPath())
 }
 

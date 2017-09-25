@@ -544,7 +544,8 @@ func (cgCache *consumerGroupCache) refreshCgCache(ctx thrift.Context) error {
 		return errRD
 	}
 
-	if dstDesc.GetStatus() == shared.DestinationStatus_DELETING || dstDesc.GetStatus() == shared.DestinationStatus_DELETED {
+	if dstDesc.GetStatus() == shared.DestinationStatus_DELETING ||
+		dstDesc.GetStatus() == shared.DestinationStatus_DELETED {
 		cgCache.logger.Info("destination deleted; unloading all extents")
 		go cgCache.unloadConsumerGroupCache()
 		return ErrCgUnloaded
@@ -566,7 +567,8 @@ func (cgCache *consumerGroupCache) refreshCgCache(ctx thrift.Context) error {
 		return errRCG
 	}
 
-	if cgDesc.GetStatus() == shared.ConsumerGroupStatus_DELETED {
+	if cgDesc.GetStatus() == shared.ConsumerGroupStatus_DELETING ||
+		cgDesc.GetStatus() == shared.ConsumerGroupStatus_DELETED {
 		// If the consumer group is deleted, drain all connections
 		// and unload all the extent from cache. This is the only
 		// way, async clean happens in response to a DELETE

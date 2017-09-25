@@ -128,6 +128,20 @@ func (_m *TChanMetadataServiceServer) DeleteConsumerGroup(ctx thrift.Context, de
 	return r0
 }
 
+// DeleteConsumerGroupUUID provides a mock function with given fields: ctx, deleteRequest
+func (_m *TChanMetadataServiceServer) DeleteConsumerGroupUUID(ctx thrift.Context, deleteRequest *metadata.DeleteConsumerGroupUUIDRequest) error {
+	ret := _m.Called(ctx, deleteRequest)
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(thrift.Context, *metadata.DeleteConsumerGroupUUIDRequest) error); ok {
+		r0 = rf(ctx, deleteRequest)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
 // DeleteDestination provides a mock function with given fields: ctx, deleteRequest
 func (_m *TChanMetadataServiceServer) DeleteDestination(ctx thrift.Context, deleteRequest *shared.DeleteDestinationRequest) error {
 	ret := _m.Called(ctx, deleteRequest)

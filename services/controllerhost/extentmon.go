@@ -280,6 +280,8 @@ func (monitor *extentStateMonitor) runIterator() {
 			if monitor.isShutdown() {
 				break
 			}
+
+			// skip 'deleted' consumer-groups, but include those in 'deleting' state
 			if cgDesc.GetStatus() == shared.ConsumerGroupStatus_DELETED {
 				continue
 			}
@@ -430,7 +432,8 @@ func (monitor *extentStateMonitor) handleDestination(dstDesc *shared.Destination
 
 func (monitor *extentStateMonitor) deleteConsumerGroup(dstDesc *shared.DestinationDescription, cgDesc *shared.ConsumerGroupDescription) {
 
-	if cgDesc.GetStatus() == shared.ConsumerGroupStatus_DELETED {
+	if cgDesc.GetStatus() == shared.ConsumerGroupStatus_DELETING ||
+		cgDesc.GetStatus() == shared.ConsumerGroupStatus_DELETED {
 		return
 	}
 

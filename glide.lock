@@ -1,5 +1,5 @@
-hash: c07e04468cb56c800bfd46dc5e2539d5efd3f013f975fa6ffccb2d343a30c566
-updated: 2017-09-07T11:44:24.153193919-07:00
+hash: 79cc68755e2fff0a68ef84580fb09717f455ded83f2f6dd5a2cc55e808eaf241
+updated: 2017-09-21T11:34:49.462678076-07:00
 imports:
 - name: github.com/apache/thrift
   version: b2a4d4ae21c789b689dd162deb819665567f481c
@@ -40,7 +40,7 @@ imports:
 - name: github.com/bsm/sarama-cluster
   version: 5efe630369ab4ed5cc4cedeadd61b4d1b2523169
 - name: github.com/cactus/go-statsd-client
-  version: ce77ca9ecdee1c3ffd097e32f9bb832825ccb203
+  version: ad551ee7f9f3465fb1ce1695899c612f7808a06a
   subpackages:
   - statsd
 - name: github.com/cockroachdb/c-jemalloc
@@ -54,7 +54,7 @@ imports:
 - name: github.com/codegangsta/cli
   version: cf33a9befefdd6c6ea1a236ab6d546e797a62cbf
 - name: github.com/davecgh/go-spew
-  version: a476722483882dd40b8111f0eb64e1d7f43f56e4
+  version: adab96458c51a58dc1783b3335dcce5461522e75
   subpackages:
   - spew
 - name: github.com/dgryski/go-farm
@@ -112,7 +112,7 @@ imports:
 - name: github.com/stretchr/objx
   version: 1a9d0bb9f541897e62256577b352fdbc1fb4fd94
 - name: github.com/stretchr/testify
-  version: 890a5c3458b43e6104ff5da8dfa139d013d77544
+  version: 05e8a0eda380579888eb53c394909df027f06991
   subpackages:
   - assert
   - mock
@@ -121,7 +121,7 @@ imports:
 - name: github.com/tecbot/gorocksdb
   version: 17991d3138a879b166adebf86f7c84da3c1517a7
 - name: github.com/uber-common/bark
-  version: a2ce12437502dbd1511a6ab87745ed01ba138dbb
+  version: 11c68f25ea004a3f36e3c6ad90236835a4bd0971
 - name: github.com/uber-go/atomic
   version: e682c1008ac17bf26d2e4b5ad6cdd08520ed0b22
 - name: github.com/uber/cherami-client-go
@@ -134,7 +134,7 @@ imports:
   - common/websocket
   - stream
 - name: github.com/uber/cherami-thrift
-  version: 98e566b96cbe7142446508e5991a11bc394ab343
+  version: 45b0a9da65195b298b3967360a1a069907d5266a
   subpackages:
   - .generated/go/admin
   - .generated/go/cherami
@@ -172,7 +172,7 @@ imports:
   - trand
   - typed
 - name: golang.org/x/net
-  version: 66aacef3dd8a676686c7ae3716979581e8b03c47
+  version: ab5485076ff3407ad2d02db054635913f017b0ed
   subpackages:
   - bpf
   - context

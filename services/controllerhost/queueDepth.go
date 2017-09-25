@@ -165,13 +165,6 @@ func (qdc *queueDepthCalculator) handleConsumerGroupStart(dstDesc *shared.Destin
 		return // we don't compute backlog for dlq consumer groups
 	}
 
-	if cgDesc.GetStatus() == shared.ConsumerGroupStatus_DELETED ||
-		dstDesc.GetStatus() == shared.DestinationStatus_DELETING ||
-		dstDesc.GetStatus() == shared.DestinationStatus_DELETED {
-		qdc.reportBacklog(cgDesc, dstDesc, backlogProgessInfinity, 0)
-		return
-	}
-
 	iter.cg.now = common.Now()
 	iter.cg.coverMap = qdc.getExtentCoverMap()
 
@@ -188,27 +181,39 @@ func (qdc *queueDepthCalculator) handleConsumerGroupStart(dstDesc *shared.Destin
 
 func (qdc *queueDepthCalculator) handleConsumerGroupEnd(dstDesc *shared.DestinationDescription, cgDesc *shared.ConsumerGroupDescription) {
 	iter := &qdc.iter
-	// iterate over the dstExtents that are not assigned
-	// to the consumer group yet and account them towards
-	// total backlog
-	for extent := range iter.cg.coverMap {
-		dstExtent, _ := iter.dstExtents[extent] // if lookup fails, code is broken
-		storeUUIDs := dstExtent.GetStoreUUIDs()
-		if len(storeUUIDs) == 0 {
-			continue // should never happen
-		}
-		cge := &shared.ConsumerGroupExtent{
-			ConsumerGroupUUID:  common.StringPtr(cgDesc.GetConsumerGroupUUID()),
-			ExtentUUID:         common.StringPtr(string(extent)),
-			OutputHostUUID:     common.StringPtr(zeroUUID),
-			ConnectedStoreUUID: common.StringPtr(storeUUIDs[rand.Intn(len(storeUUIDs))]), // pick a random store for backlog computation
-		}
-		qdc.addExtentBacklog(dstDesc, cgDesc, dstExtent, cge, qdc.makeCGExtentLogger(dstDesc, cgDesc, cge))
-	}
 
-	// stallness check, can be performed only after processing all extents
-	progressScore := qdc.measureBacklogProgress(dstDesc, cgDesc, iter.cg.backlogAvailable)
-	qdc.reportBacklog(cgDesc, dstDesc, progressScore, iter.cg.now)
+	// for deleting/deleted dest/CG, report zero backlog
+	if cgDesc.GetStatus() == shared.ConsumerGroupStatus_DELETING ||
+		cgDesc.GetStatus() == shared.ConsumerGroupStatus_DELETED ||
+		dstDesc.GetStatus() == shared.DestinationStatus_DELETING ||
+		dstDesc.GetStatus() == shared.DestinationStatus_DELETED {
+
+		qdc.reportBacklog(cgDesc, dstDesc, backlogProgessInfinity, 0)
+
+	} else {
+
+		// iterate over the dstExtents that are not assigned
+		// to the consumer group yet and account them towards
+		// total backlog
+		for extent := range iter.cg.coverMap {
+			dstExtent, _ := iter.dstExtents[extent] // if lookup fails, code is broken
+			storeUUIDs := dstExtent.GetStoreUUIDs()
+			if len(storeUUIDs) == 0 {
+				continue // should never happen
+			}
+			cge := &shared.ConsumerGroupExtent{
+				ConsumerGroupUUID:  common.StringPtr(cgDesc.GetConsumerGroupUUID()),
+				ExtentUUID:         common.StringPtr(string(extent)),
+				OutputHostUUID:     common.StringPtr(zeroUUID),
+				ConnectedStoreUUID: common.StringPtr(storeUUIDs[rand.Intn(len(storeUUIDs))]), // pick a random store for backlog computation
+			}
+			qdc.addExtentBacklog(dstDesc, cgDesc, dstExtent, cge, qdc.makeCGExtentLogger(dstDesc, cgDesc, cge))
+		}
+
+		// stallness check, can be performed only after processing all extents
+		progressScore := qdc.measureBacklogProgress(dstDesc, cgDesc, iter.cg.backlogAvailable)
+		qdc.reportBacklog(cgDesc, dstDesc, progressScore, iter.cg.now)
+	}
 
 	if iter.cg.isTabulationRequested {
 		qdc.ll.WithFields(bark.Fields{
@@ -228,13 +233,25 @@ func (qdc *queueDepthCalculator) handleConsumerGroupEnd(dstDesc *shared.Destinat
 }
 
 func (qdc *queueDepthCalculator) handleDestinationExtent(dstDesc *shared.DestinationDescription, extent *metadata.DestinationExtent) {
-	if extent.GetStatus() > shared.ExtentStatus_SEALED {
+
+	if dstDesc.GetStatus() == shared.DestinationStatus_DELETING ||
+		dstDesc.GetStatus() == shared.DestinationStatus_DELETED ||
+		extent.GetStatus() > shared.ExtentStatus_SEALED {
 		return
 	}
 	qdc.iter.dstExtents[extentID(extent.GetExtentUUID())] = extent
 }
 
 func (qdc *queueDepthCalculator) handleConsumerGroupExtent(dstDesc *shared.DestinationDescription, cgDesc *shared.ConsumerGroupDescription, cgExtent *shared.ConsumerGroupExtent) {
+
+	// skip deleted/deleting dest/CG
+	if cgDesc.GetStatus() == shared.ConsumerGroupStatus_DELETING ||
+		cgDesc.GetStatus() == shared.ConsumerGroupStatus_DELETED ||
+		dstDesc.GetStatus() == shared.DestinationStatus_DELETING ||
+		dstDesc.GetStatus() == shared.DestinationStatus_DELETED {
+
+		return
+	}
 
 	iter := &qdc.iter
 	logger := qdc.makeCGExtentLogger(dstDesc, cgDesc, cgExtent)

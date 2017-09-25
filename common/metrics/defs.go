@@ -181,6 +181,8 @@ const (
 	MetadataCreateServiceConfigScope
 	// MetadataDeleteConsumerGroupScope defines scope for an operation on metadata
 	MetadataDeleteConsumerGroupScope
+	// MetadataDeleteConsumerGroupUUIDScope defines scope for an operation on metadata
+	MetadataDeleteConsumerGroupUUIDScope
 	// MetadataDeleteDestinationScope defines scope for an operation on metadata
 	MetadataDeleteDestinationScope
 	// MetadataDeleteDestinationUUIDScope defines scope for an operation on metadata
@@ -502,6 +504,7 @@ var scopeDefs = map[ServiceIdx]map[int]scopeDefinition{
 		MetadataCreateHostInfoScope:                    {operation: "MetadataCreateHostInfo"},
 		MetadataCreateServiceConfigScope:               {operation: "MetadataCreateServiceConfig"},
 		MetadataDeleteConsumerGroupScope:               {operation: "MetadataDeleteConsumerGroup"},
+		MetadataDeleteConsumerGroupUUIDScope:           {operation: "MetadataDeleteConsumerGroupUUID"},
 		MetadataDeleteDestinationScope:                 {operation: "MetadataDeleteDestination"},
 		MetadataDeleteDestinationUUIDScope:             {operation: "MetadataDeleteDestinationUUID"},
 		MetadataDeleteHostInfoScope:                    {operation: "MetadataDeleteHostInfo"},
