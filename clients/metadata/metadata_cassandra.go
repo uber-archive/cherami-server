@@ -46,7 +46,7 @@ const directoryUUID string = "CC3B477C-E6F2-4465-9A98-7FE71B68CD1F"
 var uuidRegex, _ = regexp.Compile(`^[[:xdigit:]]{8}-[[:xdigit:]]{4}-[[:xdigit:]]{4}-[[:xdigit:]]{4}-[[:xdigit:]]{12}$`)
 
 const (
-	defaultSessionTimeout         = 10 * time.Second
+	defaultSessionTimeout         = 30 * time.Second
 	defaultDLQConsumedRetention   = 7 * 24 * 3600 // One Week
 	defaultDLQUnconsumedRetention = 7 * 24 * 3600 // One Week
 )
