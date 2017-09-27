@@ -40,7 +40,7 @@ type (
 		MessageCacheSize []string `name:"messagecachesize" default:"/=10000"`
 
 		// RedeliveryIntervalInMs is used to configure the message redelivery interval.
-		RedeliveryIntervalInMs int32 `name:"redeliveryIntervalInMs" default:"100"`
+		RedeliveryIntervalInMs int `name:"redeliveryIntervalInMs" default:"100"`
 	}
 )
 

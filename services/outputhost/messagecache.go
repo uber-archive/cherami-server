@@ -266,7 +266,7 @@ type cgMsgCache struct {
 	maxOutstandingMsgs     int32               // max allowed outstanding messages
 	numAcks                int32               // num acks we received
 	cgCache                *consumerGroupCache // just a reference to the cgCache to grant credits to a local extent directly
-	redeliveryIntervalInMs int32               // redelivery ticker interval
+	redeliveryIntervalInMs int                 // redelivery ticker interval
 	shared.ConsumerGroupDescription
 }
 
