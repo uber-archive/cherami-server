@@ -990,15 +990,17 @@ func (msgCache *cgMsgCache) updateConn(connID int, event msgEvent) {
 
 func (msgCache *cgMsgCache) refreshCgConfig(oldOutstandingMessages int32) {
 	outstandingMsgs := oldOutstandingMessages
+	redeliveryIntervalInMs := msgCache.redeliveryIntervalInMs
+
 	cfg, err := msgCache.cgCache.getDynamicCgConfig()
 	if err == nil {
 		outstandingMsgs = msgCache.cgCache.getMessageCacheSize(cfg, oldOutstandingMessages)
+		redeliveryIntervalInMs = cfg.RedeliveryIntervalInMs
 	}
 
 	msgCache.maxOutstandingMsgs = outstandingMsgs
 
-	redeliveryIntervalInMs := msgCache.redeliveryIntervalInMs
-	if redeliveryIntervalInMs != cfg.RedeliveryIntervalInMs {
+	if redeliveryIntervalInMs != msgCache.redeliveryIntervalInMs {
 		msgCache.redeliveryTicker = time.NewTicker(time.Duration(redeliveryIntervalInMs) * time.Millisecond)
 		msgCache.redeliveryIntervalInMs = redeliveryIntervalInMs
 	}
