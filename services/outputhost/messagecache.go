@@ -330,8 +330,8 @@ func (msgCache *cgMsgCache) utilHandleDeliveredMsg(cMsg cacheMsg) {
 		msgCache.changeState(ackID, stateConsumed, msg, eventCache)
 	case stateEarlyNACK:
 		//lclLg.WithField("AckID", common.ShortenGUIDString(msg.GetAckId())).Debug("manageMessageDeliveryCache: Early NACKed message (delivering to DLQ)")
-		msgCache.changeState(ackID, stateDelivered, msg, eventCache)             // Mark one delivery as complete, eligible for redelivery depending on max deliveries
-		cm.fireTime = msgCache.addTimer(0, ackID) // Try to redeliver immediately, rather than wait for the lock timeout
+		msgCache.changeState(ackID, stateDelivered, msg, eventCache) // Mark one delivery as complete, eligible for redelivery depending on max deliveries
+		cm.fireTime = msgCache.addTimer(0, ackID)       // Try to redeliver immediately, rather than wait for the lock timeout
 	case stateDelivered:
 		break // this happens on redelivery
 	case stateConsumed:
@@ -454,7 +454,7 @@ func (msgCache *cgMsgCache) utilHandleRedeliveryTicker() {
 						// lclLg.WithField(common.TagAckID, common.FmtAckID(string(ackID))).
 						//	Info("manageMessageDeliveryCache: no listeners on the redelivery channel. We will redeliver this message next time")
 
-						cm.fireTime = msgCache.addTimer(msgCache.GetLockTimeoutSeconds(), ackID)
+						cm.fireTime = msgCache.addTimer(int(msgCache.GetLockTimeoutSeconds()), ackID)
 					}
 				}
 			case stateEarlyACK:
@@ -548,18 +548,18 @@ func (msgCache *cgMsgCache) utilRenewCredits() {
 	}
 }
 
-func (msgCache *cgMsgCache) addTimer(delaySeconds int32, id AckID) common.UnixNanoTime {
+func (msgCache *cgMsgCache) addTimer(delaySeconds int, id AckID) common.UnixNanoTime {
 	now := common.Now()
 	entry := &timerCacheEntry{
 		AckID:    id,
 		fireTime: now + common.UnixNanoTime(int64(time.Second)*int64(delaySeconds)),
 	}
 
-	if delaySeconds == msgCache.GetLockTimeoutSeconds()*2 {
+	if delaySeconds == int(msgCache.GetLockTimeoutSeconds()*2) {
 		msgCache.cleanupTimerCache = append(msgCache.cleanupTimerCache, entry)
 	} else if delaySeconds == 0 {
 		msgCache.zeroTimerCache = append(msgCache.zeroTimerCache, entry)
-	} else if delaySeconds == msgCache.GetLockTimeoutSeconds() {
+	} else if delaySeconds == int(msgCache.GetLockTimeoutSeconds()) {
 		msgCache.redeliveryTimerCache = append(msgCache.redeliveryTimerCache, entry)
 	} else {
 		msgCache.lclLg.Panic(`Don't have a timer queue to handle this delay`)
@@ -665,9 +665,9 @@ func (msgCache *cgMsgCache) changeState(id AckID, newState msgState, msg *cheram
 	case stateEarlyNACK:
 		fallthrough
 	case stateConsumed:
-		cm.fireTime = msgCache.addTimer(msgCache.GetLockTimeoutSeconds()*2, id)
+		cm.fireTime = msgCache.addTimer(int(msgCache.GetLockTimeoutSeconds()*2), id)
 	case stateDelivered:
-		cm.fireTime = msgCache.addTimer(msgCache.GetLockTimeoutSeconds(), id)
+		cm.fireTime = msgCache.addTimer(int(msgCache.GetLockTimeoutSeconds()), id)
 	case stateDLQDelivered:
 		cm.fireTime = 0 // Rely on the ACK from the DLQ to cleanup; No ACK = LEAK
 	default:
@@ -943,7 +943,7 @@ func (msgCache *cgMsgCache) handleNack(ackID timestampedAckID, lclLg bark.Logger
 		if cm.n+1 < msgCache.GetMaxDeliveryCount() { // If the next redelivery won't be the last before DLQ delivery, retry immediately
 			cm.fireTime = msgCache.addTimer(0, ackID.AckID)
 		} else { // if this will be the final delivery attempt, delay for the lock timeout so that we can detect a stall before delivering to DLQ
-			cm.fireTime = msgCache.addTimer(msgCache.GetLockTimeoutSeconds(), ackID.AckID)
+			cm.fireTime = msgCache.addTimer(int(msgCache.GetLockTimeoutSeconds()), ackID.AckID)
 		}
 	case stateNX:
 		msgCache.changeState(ackID.AckID, stateEarlyNACK, nil, eventNACK)
@@ -1000,6 +1000,7 @@ func (msgCache *cgMsgCache) refreshCgConfig(oldOutstandingMessages int32) {
 	redeliveryIntervalInMs := msgCache.redeliveryIntervalInMs
 	if redeliveryIntervalInMs != cfg.RedeliveryIntervalInMs {
 		msgCache.redeliveryTicker = time.NewTicker(time.Duration(redeliveryIntervalInMs) * time.Millisecond)
+		msgCache.redeliveryIntervalInMs = redeliveryIntervalInMs
 	}
 }
 
