@@ -21,7 +21,6 @@
 package controllerhost
 
 import (
-	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -626,10 +625,11 @@ func (event *RemoteExtentPrimaryStoreDownEvent) Handle(context *Context) error {
 
 	oldRemoteExtentPrimaryStore := extent.GetRemoteExtentPrimaryStore()
 	if len(oldRemoteExtentPrimaryStore) == 0 {
-		// For old extent that doesn't have the primary store field set,
-		// the assumption is first store after sorting is treated as primary
-		sort.Strings(extent.GetStoreUUIDs())
-		oldRemoteExtentPrimaryStore = extent.GetStoreUUIDs()[0]
+		context.log.WithFields(bark.Fields{
+			common.TagStor: event.storeID,
+			common.TagExt:  event.extentID,
+		}).Warn(`storeRemoteExtentReplicatorDownEvent: remote extent primary store is empty`)
+		return nil
 	}
 
 	if oldRemoteExtentPrimaryStore != event.storeID {
