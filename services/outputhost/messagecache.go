@@ -1031,7 +1031,7 @@ func newMessageDeliveryCache(
 		ackMsgCh:                 cgCache.ackMsgCh,
 		nackMsgCh:                cgCache.nackMsgCh,
 		closeChannel:             make(chan struct{}),
-		redeliveryTicker:         time.NewTicker(defaultRedeliveryIntervalInMs),
+		redeliveryTicker:         time.NewTicker(defaultRedeliveryIntervalInMs * time.Millisecond),
 		ConsumerGroupDescription: cgCache.cachedCGDesc,
 		consumerM3Client:         cgCache.consumerM3Client,
 		m3Client:                 cgCache.m3Client,
