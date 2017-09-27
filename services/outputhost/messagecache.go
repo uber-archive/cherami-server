@@ -261,12 +261,12 @@ type cgMsgCache struct {
 	notifier                 Notifier // this notifier is used to slow down cons connections based on NACKs
 	consumerHealth
 	messageCacheHealth
-	creditNotifyCh     chan<- int32        // this is the notify ch to notify credits to extents
-	creditRequestCh    <-chan string       // read-only channel used by the extents to request credits specifically for that extent.
-	maxOutstandingMsgs int32               // max allowed outstanding messages
-	numAcks            int32               // num acks we received
-	cgCache            *consumerGroupCache // just a reference to the cgCache to grant credits to a local extent directly
-	redeliveryIntervalInMs   int32         // redelivery ticker interval
+	creditNotifyCh         chan<- int32        // this is the notify ch to notify credits to extents
+	creditRequestCh        <-chan string       // read-only channel used by the extents to request credits specifically for that extent.
+	maxOutstandingMsgs     int32               // max allowed outstanding messages
+	numAcks                int32               // num acks we received
+	cgCache                *consumerGroupCache // just a reference to the cgCache to grant credits to a local extent directly
+	redeliveryIntervalInMs int32               // redelivery ticker interval
 	shared.ConsumerGroupDescription
 }
 
@@ -331,7 +331,7 @@ func (msgCache *cgMsgCache) utilHandleDeliveredMsg(cMsg cacheMsg) {
 	case stateEarlyNACK:
 		//lclLg.WithField("AckID", common.ShortenGUIDString(msg.GetAckId())).Debug("manageMessageDeliveryCache: Early NACKed message (delivering to DLQ)")
 		msgCache.changeState(ackID, stateDelivered, msg, eventCache) // Mark one delivery as complete, eligible for redelivery depending on max deliveries
-		cm.fireTime = msgCache.addTimer(0, ackID)       // Try to redeliver immediately, rather than wait for the lock timeout
+		cm.fireTime = msgCache.addTimer(0, ackID)                    // Try to redeliver immediately, rather than wait for the lock timeout
 	case stateDelivered:
 		break // this happens on redelivery
 	case stateConsumed:
