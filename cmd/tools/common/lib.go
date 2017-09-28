@@ -142,12 +142,12 @@ func SetCommonCommands(
 						cli.IntFlag{
 							Name:  "consumed_messages_retention, cr",
 							Value: toolscommon.DefaultConsumedMessagesRetention,
-							Usage: "Consumed messages retention period specified in seconds. Default is 1 hour.",
+							Usage: "Consumed messages retention period specified in seconds. Default is 1 day.",
 						},
 						cli.IntFlag{
 							Name:  "unconsumed_messages_retention, ur",
 							Value: toolscommon.DefaultUnconsumedMessagesRetention,
-							Usage: "Unconsumed messages retention period specified in seconds. Default is two hours.",
+							Usage: "Unconsumed messages retention period specified in seconds. Default is 3 days.",
 						},
 						cli.StringFlag{
 							Name:  "checksum_option, co",
@@ -313,11 +313,11 @@ func SetCommonCommands(
 						},
 						cli.IntFlag{
 							Name:  "consumed_messages_retention, cr",
-							Usage: "Consumed messages retention period specified in seconds. Default is one hour.",
+							Usage: "Consumed messages retention period specified in seconds. Default is 1 day.",
 						},
 						cli.IntFlag{
 							Name:  "unconsumed_messages_retention, ur",
-							Usage: "Unconsumed messages retention period specified in seconds. Default is two hours.",
+							Usage: "Unconsumed messages retention period specified in seconds. Default is 3 days.",
 						},
 						cli.StringFlag{
 							Name:  "checksum_option, co",
