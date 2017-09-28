@@ -50,8 +50,9 @@ type kafkaStream struct {
 
 // KafkakMessageConverterConfig is used to config customized converter
 type KafkaMessageConverterConfig struct {
-	Destination *cherami.DestinationDescription
-	ConsumerGroup *cherami.ConsumerGroupDescription
+	// Destination and ConsumerGroup are not needed currently, but may in the future
+	// Destination *cherami.DestinationDescription
+	// ConsumerGroup *cherami.ConsumerGroupDescription
 	KafkaTopics []string // optional: already contained in destination-description
 	KafkaCluster string  // optional: already contained in destination-description
 }
@@ -59,9 +60,9 @@ type KafkaMessageConverterConfig struct {
 // KafkaMessageConverter defines interface to convert a Kafka message to Cherami message
 type KafkaMessageConverter func(kMsg *s.ConsumerMessage) (cMsg *store.ReadMessageContent)
 
-// KafkaStreamFactory provides converter from Kafka message to Cherami message
+// KafkaMessageConverterFactory provides converter from Kafka message to Cherami message
 // In the future, it may provide implementations for BStoreOpenReadStreamOutCall
-type KafkaStreamFactory interface {
+type KafkaMessageConverterFactory interface {
 	GetConverter(cfg *KafkaMessageConverterConfig, log bark.Logger) KafkaMessageConverter
 }
 

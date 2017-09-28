@@ -92,7 +92,7 @@ type (
 		hostMetrics       *load.HostMetrics
 		cfgMgr            cassDconfig.ConfigManager
 		kafkaCfg          configure.CommonKafkaConfig
-		kStreamFactory    KafkaStreamFactory
+		kStreamFactory    KafkaMessageConverterFactory
 		common.SCommon
 	}
 
@@ -101,7 +101,7 @@ type (
 		//CacheIdleTimeout
 		CacheIdleTimeout time.Duration
 		//KStreamFactory
-		KStreamFactory KafkaStreamFactory
+		KStreamFactory KafkaMessageConverterFactory
 	}
 
 	ackMgrLoadMsg struct {

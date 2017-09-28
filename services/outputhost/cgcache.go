@@ -200,8 +200,8 @@ type (
 		// kafkaTopics is the list of kafka topics consumed by this consumer group, if applicable
 		kafkaTopics []string
 
-		// kafkaStreamFactory is a factory for kafka stream
-		kafkaStreamFactory KafkaStreamFactory
+		// kafkaMessageConverterFactory is a factory for kafka message converter
+		kafkaMessageConverterFactory KafkaMessageConverterFactory
 	}
 )
 
@@ -272,7 +272,7 @@ func newConsumerGroupCache(destPath string, cgDesc shared.ConsumerGroupDescripti
 		hostMetrics:              h.hostMetrics,
 		cgMetrics:                load.NewCGMetrics(),
 		cfgMgr:                   h.cfgMgr,
-		kafkaStreamFactory:       h.kStreamFactory,
+		kafkaMessageConverterFactory:h.kStreamFactory,
 	}
 
 	cgCache.consumerM3Client = metrics.NewClientWithTags(h.m3Client, metrics.Outputhost, cgCache.getConsumerGroupTags())
@@ -333,7 +333,7 @@ func (cgCache *consumerGroupCache) loadExtentCache(ctx thrift.Context, destType 
 			initialCredits:       defaultNumOutstandingMsgs,
 			loadMetrics:          load.NewExtentMetrics(),
 			consumerM3Client:     cgCache.consumerM3Client,
-			kafkaStreamFactory:   cgCache.kafkaStreamFactory,
+			kafkaMessageConverterFactory:cgCache.kafkaMessageConverterFactory,
 		}
 
 		cgCache.extentCache[extUUID] = extCache
