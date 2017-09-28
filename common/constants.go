@@ -64,6 +64,9 @@ const (
 	// InputHostForRemoteExtent is a special (and fake) input host ID for remote extent
 	InputHostForRemoteExtent = "88888888-8888-8888-8888-888888888888"
 
+	// ZeroUUID defines a UUID that is all zeroes
+	ZeroUUID = "00000000-0000-0000-0000-000000000000"
+
 	// KafkaPhantomExtentInputhost is placeholder/phantom inputhost uuid used for Kafka extents
 	KafkaPhantomExtentInputhost = "00000000-0000-0000-0000-000000000000"
 

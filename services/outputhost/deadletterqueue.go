@@ -101,7 +101,8 @@ func newDeadLetterQueue(ctx thrift.Context, lclLg bark.Logger, cgDesc shared.Con
 	go dlq.publish()
 
 	// If no DLQ is configured, note that and return success; It would normally not be configured for the consumer groups of a DLQ destination
-	if len(cgDesc.GetDeadLetterQueueDestinationUUID()) == 0 {
+	if len(cgDesc.GetDeadLetterQueueDestinationUUID()) == 0 ||
+		cgDesc.GetDeadLetterQueueDestinationUUID() == common.ZeroUUID {
 		lclLg.Info("No DLQ destination configured")
 		return
 	}
