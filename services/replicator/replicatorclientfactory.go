@@ -65,11 +65,12 @@ type (
 
 	// repCltFactoryImpl implements of ReplicatorClientFactory
 	repCltFactoryImpl struct {
-		AppConfig         configure.CommonAppConfig
-		logger            bark.Logger
-		ch                *tchannel.Channel
-		deploymentClients map[string][]replicator.TChanReplicator
-		lk                sync.RWMutex
+		AppConfig configure.CommonAppConfig
+		logger    bark.Logger
+		ch        *tchannel.Channel
+
+		deploymentClients   map[string][]replicator.TChanReplicator
+		deploymentClientsLk sync.RWMutex
 
 		hosts  map[string][]string
 		hostLk sync.RWMutex
@@ -94,13 +95,13 @@ func (f *repCltFactoryImpl) GetReplicatorClient(zone string) (replicator.TChanRe
 	var client replicator.TChanReplicator
 
 	// take a reader lock to see if we already have a valid client
-	f.lk.RLock()
+	f.deploymentClientsLk.RLock()
 	if clients, ok := f.deploymentClients[deployment]; ok && len(clients) > 0 {
 		// randomly select a client and return
 		// TODO health check and proper load routing
 		client = clients[rand.Intn(len(clients))]
 	}
-	f.lk.RUnlock()
+	f.deploymentClientsLk.RUnlock()
 	if client != nil {
 		return client, nil
 	}
@@ -118,8 +119,8 @@ func (f *repCltFactoryImpl) GetReplicatorClient(zone string) (replicator.TChanRe
 	}
 
 	// take a writer lock to create replicator clients and update cache
-	f.lk.Lock()
-	defer f.lk.Unlock()
+	f.deploymentClientsLk.Lock()
+	defer f.deploymentClientsLk.Unlock()
 
 	// Check again to see if clients were already created by someone else
 	if clients, ok := f.deploymentClients[deployment]; ok && len(clients) > 0 {
@@ -172,5 +173,11 @@ func (f *repCltFactoryImpl) UpdateHostsForDeployment(deployment string, hosts []
 	f.hostLk.Lock()
 	defer f.hostLk.Unlock()
 
+	f.deploymentClientsLk.Lock()
+	defer f.deploymentClientsLk.Unlock()
+
 	f.hosts[deployment] = hosts
+
+	// clear the client cache as we get a new host list for the deployment
+	delete(f.deploymentClients, deployment)
 }
