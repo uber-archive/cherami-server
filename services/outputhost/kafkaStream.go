@@ -35,7 +35,7 @@ import (
 
 var (
 	errKafkaNilControlFlow = errors.New(`nil or non-positive controlFlow passed to Write()`)
-	errKafkaClosed = errors.New(`closed`)
+	errKafkaClosed         = errors.New(`closed`)
 )
 
 // kafkaStream implements the same interface and similar-enough semantics to the Cherami store interface (BStoreOpenReadStreamOutCall)
@@ -53,8 +53,8 @@ type KafkaMessageConverterConfig struct {
 	// Destination and ConsumerGroup are not needed currently, but may in the future
 	// Destination *cherami.DestinationDescription
 	// ConsumerGroup *cherami.ConsumerGroupDescription
-	KafkaTopics []string // optional: already contained in destination-description
-	KafkaCluster string  // optional: already contained in destination-description
+	KafkaTopics  []string // optional: already contained in destination-description
+	KafkaCluster string   // optional: already contained in destination-description
 }
 
 // KafkaMessageConverter defines interface to convert a Kafka message to Cherami message
