@@ -183,7 +183,7 @@ func (s *KafkaStreamSuite) WithTestMessages(count int, fn func(chan *sarama.Cons
 }
 
 func (s *KafkaStreamSuite) WithKafkaStream(c chan *sarama.ConsumerMessage, fn func(stream.BStoreOpenReadStreamOutCall)) {
-	k := OpenKafkaStream(c, common.GetDefaultLogger())
+	k := OpenKafkaStream(c, nil, common.GetDefaultLogger())
 	s.NotNil(k)
 	fn(k)
 	s.NoError(k.Flush())

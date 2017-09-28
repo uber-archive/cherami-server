@@ -92,6 +92,7 @@ type (
 		hostMetrics       *load.HostMetrics
 		cfgMgr            cassDconfig.ConfigManager
 		kafkaCfg          configure.CommonKafkaConfig
+		kStreamFactory    KafkaMessageConverterFactory
 		common.SCommon
 	}
 
@@ -99,6 +100,8 @@ type (
 	OutOptions struct {
 		//CacheIdleTimeout
 		CacheIdleTimeout time.Duration
+		//KStreamFactory
+		KStreamFactory KafkaMessageConverterFactory
 	}
 
 	ackMgrLoadMsg struct {
@@ -780,7 +783,12 @@ func NewOutputHost(
 
 	bs.m3Client = metrics.NewClient(sVice.GetMetricsReporter(), metrics.Outputhost)
 	if opts != nil {
-		bs.cacheTimeout = opts.CacheIdleTimeout
+		if opts.CacheIdleTimeout != 0 {
+			bs.cacheTimeout = opts.CacheIdleTimeout
+		}
+		if opts.KStreamFactory != nil {
+			bs.kStreamFactory = opts.KStreamFactory
+		}
 	}
 
 	bs.metaClient = mm.NewMetadataMetricsMgr(metadataClient, bs.m3Client, bs.logger)
