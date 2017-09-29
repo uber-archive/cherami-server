@@ -266,7 +266,7 @@ type cgMsgCache struct {
 	maxOutstandingMsgs     int32               // max allowed outstanding messages
 	numAcks                int32               // num acks we received
 	cgCache                *consumerGroupCache // just a reference to the cgCache to grant credits to a local extent directly
-	redeliveryIntervalInMs int                 // redelivery ticker interval
+	redeliveryIntervalInMs int32               // redelivery ticker interval
 	shared.ConsumerGroupDescription
 }
 
@@ -995,12 +995,13 @@ func (msgCache *cgMsgCache) refreshCgConfig(oldOutstandingMessages int32) {
 	cfg, err := msgCache.cgCache.getDynamicCgConfig()
 	if err == nil {
 		outstandingMsgs = msgCache.cgCache.getMessageCacheSize(cfg, oldOutstandingMessages)
-		redeliveryIntervalInMs = cfg.RedeliveryIntervalInMs
+		redeliveryIntervalInMs = msgCache.cgCache.getRedeliveryInterval(cfg, msgCache.redeliveryIntervalInMs)
 	}
 
 	msgCache.maxOutstandingMsgs = outstandingMsgs
 
 	if redeliveryIntervalInMs != msgCache.redeliveryIntervalInMs {
+		msgCache.redeliveryTicker.Stop()
 		msgCache.redeliveryTicker = time.NewTicker(time.Duration(redeliveryIntervalInMs) * time.Millisecond)
 		msgCache.redeliveryIntervalInMs = redeliveryIntervalInMs
 	}
