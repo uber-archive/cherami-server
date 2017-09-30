@@ -227,7 +227,7 @@ func (t *metadataDepImpl) GetConsumerGroups(destID destinationID) (consumerGroup
 	req.Limit = common.Int64Ptr(defaultPageSize)
 	ctx, _ := thrift.NewContext(time.Second)
 
-	ctx, cancel := thrift.NewContext(5 * time.Second)
+	ctx, cancel := thrift.NewContext(30 * time.Second)
 	defer cancel()
 
 	log := t.logger.WithField(common.TagDst, string(destID))
@@ -324,7 +324,48 @@ func (t *metadataDepImpl) MarkExtentConsumed(destID destinationID, extID extentI
 	return
 }
 
-func (t *metadataDepImpl) DeleteConsumerGroupExtent(cgID consumerGroupID, extID extentID) error {
+func (t *metadataDepImpl) GetExtentsForConsumerGroup(destID destinationID, cgID consumerGroupID) (extIDs []extentID, err error) {
+
+	req := metadata.NewReadConsumerGroupExtentsLiteRequest()
+	req.ConsumerGroupUUID = common.StringPtr(string(cgID))
+	req.MaxResults = common.Int32Ptr(defaultPageSize)
+
+	ctx, cancel := thrift.NewContext(30 * time.Second)
+	defer cancel()
+
+	log := t.logger.WithFields(bark.Fields{
+		common.TagDst:  string(destID),
+		common.TagCnsm: string(cgID),
+	})
+
+	for {
+		log.Debug("GetExtentsForConsumerGroup: ReadConsumerGroupExtentsLite on metadata")
+
+		res, e := t.metadata.ReadConsumerGroupExtentsLite(ctx, req)
+		if e != nil {
+			err = e
+			log.WithField(common.TagErr, err).Error("GetExtentsForConsumerGroup: ReadConsumerGroupExtentsLite failed")
+			break
+		}
+
+		for _, cgx := range res.GetExtents() {
+			extIDs = append(extIDs, extentID(cgx.GetExtentUUID()))
+		}
+
+		if len(res.GetNextPageToken()) == 0 {
+			break
+		}
+
+		req.PageToken = res.GetNextPageToken()
+
+		log.Debug("GetExtentsForConsumerGroup: fetching next page of consumer-group extents")
+	}
+
+	log.WithField(`numExtents`, len(extIDs)).Debug("GetExtentsForConsumerGroup done")
+	return
+}
+
+func (t *metadataDepImpl) DeleteConsumerGroupExtent(destID destinationID, cgID consumerGroupID, extID extentID) error {
 
 	req := shared.NewUpdateConsumerGroupExtentStatusRequest()
 	req.ExtentUUID = common.StringPtr(string(extID))
@@ -335,6 +376,7 @@ func (t *metadataDepImpl) DeleteConsumerGroupExtent(cgID consumerGroupID, extID 
 	defer cancel()
 
 	log := t.logger.WithFields(bark.Fields{
+		common.TagDst:    string(destID),
 		common.TagCnsmID: string(cgID),
 		common.TagExt:    string(extID),
 	})
@@ -349,6 +391,32 @@ func (t *metadataDepImpl) DeleteConsumerGroupExtent(cgID consumerGroupID, extID 
 	}
 
 	log.Debug("DeleteConsumerGroupExtent done")
+	return nil
+}
+
+func (t *metadataDepImpl) DeleteConsumerGroup(destID destinationID, cgID consumerGroupID) error {
+
+	req := metadata.NewDeleteConsumerGroupUUIDRequest()
+	req.UUID = common.StringPtr(string(destID))
+
+	ctx, cancel := thrift.NewContext(2 * time.Second)
+	defer cancel()
+
+	log := t.logger.WithFields(bark.Fields{
+		common.TagDst:    string(destID),
+		common.TagCnsmID: string(cgID),
+	})
+
+	log.Debug("DeleteConsumerGroup: DeleteConsumerGroupUUID on metadata")
+
+	err := t.metadata.DeleteConsumerGroupUUID(ctx, req)
+
+	if err != nil {
+		log.WithField(common.TagErr, err).Error("DeleteConsumerGroup: DeleteConsumerGroupUUID failed")
+		return err
+	}
+
+	log.Debug("DeleteConsumerGroup done")
 	return nil
 }
 

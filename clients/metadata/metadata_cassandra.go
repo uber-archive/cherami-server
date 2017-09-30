@@ -3394,7 +3394,10 @@ func (s *CassandraMetadataService) UpdateStoreExtentReplicaStats(ctx thrift.Cont
 		)
 	}
 	if err := s.session.ExecuteBatch(batch); err != nil {
-		s.log.WithField(common.TagExt, request.GetExtentUUID()).Error("UpdateExtentReplicaStats failed")
+		s.log.WithFields(bark.Fields{
+			common.TagExt: request.GetExtentUUID(),
+			common.TagErr: err,
+		}).Error("UpdateExtentReplicaStats failed")
 		return &shared.InternalServiceError{
 			Message: "UpdateStoreExtentReplicaStats: %v" + err.Error(),
 		}

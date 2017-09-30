@@ -84,9 +84,11 @@ type (
 		GetExtents(destID destinationID) (extents []*extentInfo)
 		GetConsumerGroups(destID destinationID) (consumerGroups []*consumerGroupInfo)
 		DeleteExtent(destID destinationID, extID extentID) (err error)
+		GetExtentsForConsumerGroup(dstID destinationID, cgID consumerGroupID) (extIDs []extentID, err error)
 		MarkExtentConsumed(destID destinationID, extID extentID) (err error)
+		DeleteConsumerGroup(destID destinationID, cgID consumerGroupID) error
 		DeleteDestination(destID destinationID) (err error)
-		DeleteConsumerGroupExtent(cgID consumerGroupID, extID extentID) error
+		DeleteConsumerGroupExtent(destID destinationID, cgID consumerGroupID, extID extentID) error
 		GetAckLevel(destID destinationID, extID extentID, cgID consumerGroupID) (ackLevel int64, err error)
 		GetExtentInfo(destID destinationID, extID extentID) (extInfo *extentInfo, err error)
 	}
@@ -312,6 +314,84 @@ func (t *RetentionManager) runRetention(jobsC chan<- *retentionJob) bool {
 			continue
 		}
 
+		var numCGs int
+
+		// query consumer groups for the destination
+		cgs := t.metadata.GetConsumerGroups(dest.id)
+
+		// for each extent, compute retention cursor and convey to storage
+		for _, cg := range cgs {
+
+			if cg.status == shared.ConsumerGroupStatus_DELETED {
+				continue // ignore deleted CGs
+			}
+
+			numCGs++ // count 'active' CGs
+
+			if cg.status != shared.ConsumerGroupStatus_DELETING {
+				continue
+			}
+
+			// CG is in DELETING state; delete all cg-extents:
+
+			var numCGExtents int
+
+			extIDs, err := t.metadata.GetExtentsForConsumerGroup(dest.id, cg.id)
+
+			if err != nil {
+				continue
+			}
+
+			numCGExtents = len(extIDs)
+
+			t.logger.WithFields(bark.Fields{
+				common.TagDst:  dest.id,
+				common.TagCnsm: cg.id,
+				`numCGExtents`: numCGExtents,
+			}).Info("deleting all consumer-group extents for CG")
+
+			for _, extID := range extIDs {
+
+				e := t.metadata.DeleteConsumerGroupExtent(dest.id, cg.id, extID)
+
+				if e != nil {
+					// 'EntityNotExistsError' indicates the CG-extent was already deleted
+					if _, ok := e.(*shared.EntityNotExistsError); ok {
+						e = nil
+					}
+
+					t.logger.WithFields(bark.Fields{
+						common.TagDst:  dest.id,
+						common.TagCnsm: cg.id,
+						common.TagExt:  extID,
+						common.TagErr:  e,
+					}).Error("error deleting consumer-group extent")
+				}
+
+				if e == nil {
+					numCGExtents--
+				}
+			}
+
+			if numCGExtents == 0 {
+
+				t.logger.WithFields(bark.Fields{
+					common.TagDst:  dest.id,
+					common.TagCnsm: cg.id,
+				}).Info("deleting consumer-group (all cg-extents deleted)")
+
+				if e := t.metadata.DeleteConsumerGroup(dest.id, cg.id); e != nil {
+
+					t.logger.WithFields(bark.Fields{
+						common.TagDst:  dest.id,
+						common.TagCnsm: cg.id,
+						common.TagErr:  e,
+					}).Error("error deleting consumer-group")
+				}
+			}
+		}
+
+		// don't process extents for DLQ destinations every time
 		if common.IsDLQDestinationPath(dest.path) && skipDLQ {
 			continue
 		}
@@ -319,19 +399,16 @@ func (t *RetentionManager) runRetention(jobsC chan<- *retentionJob) bool {
 		// query extents for the destination
 		dest.extents = t.metadata.GetExtents(dest.id)
 
-		// TODO: shuffle list of extents?
+		var numExtents int
 
-		var allExtentsDeleted = true
-
-		// for each extent, compute retention cursor and convey to storage
+		// iterate through all extents and compute number of 'jobs' that would need to be created
 		for j := range dest.extents {
 
 			if dest.extents[j].status == shared.ExtentStatus_DELETED {
 				continue // skip deleted extent
 			}
 
-			// at least one extent was found that wasn't deleted
-			allExtentsDeleted = false
+			numExtents++ // count active extents
 
 			if dest.extents[j].status == shared.ExtentStatus_CONSUMED &&
 				time.Since(dest.extents[j].statusUpdatedTime) < t.ExtentDeleteDeferPeriod {
@@ -342,10 +419,10 @@ func (t *RetentionManager) runRetention(jobsC chan<- *retentionJob) bool {
 			totalJobs++
 		}
 
-		if allExtentsDeleted && dest.status == shared.DestinationStatus_DELETING {
+		if dest.status == shared.DestinationStatus_DELETING && numCGs == 0 && numExtents == 0 {
 
 			t.logger.WithField(common.TagDst, dest.id).
-				Info("deleting destination (all extents deleted)")
+				Info("deleting destination (all CGs and extents deleted)")
 
 			// All extents have been deleted for this destination. Since the
 			// deletion of an extent requires all consumer groups to have
@@ -856,7 +933,7 @@ workerLoop:
 
 					log.WithField(common.TagCnsm, cgInfo.id).Info("retentionWorker: mark consumer-group extent deleted")
 
-					e = t.metadata.DeleteConsumerGroupExtent(cgInfo.id, ext.id)
+					e = t.metadata.DeleteConsumerGroupExtent(dest.id, cgInfo.id, ext.id)
 
 					if e != nil {
 
