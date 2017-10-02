@@ -272,7 +272,7 @@ func newConsumerGroupCache(destPath string, cgDesc shared.ConsumerGroupDescripti
 		hostMetrics:              h.hostMetrics,
 		cgMetrics:                load.NewCGMetrics(),
 		cfgMgr:                   h.cfgMgr,
-		kafkaMessageConverterFactory: h.kStreamFactory,
+		kafkaMessageConverterFactory: h.kafkaStreamFactory,
 	}
 
 	cgCache.consumerM3Client = metrics.NewClientWithTags(h.m3Client, metrics.Outputhost, cgCache.getConsumerGroupTags())

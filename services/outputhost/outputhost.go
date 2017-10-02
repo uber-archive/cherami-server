@@ -68,31 +68,31 @@ var thisOutputHost *OutputHost
 type (
 	// OutputHost is the main server class for OutputHosts
 	OutputHost struct {
-		logger            bark.Logger
-		loadShutdownRef   int32
-		cgMutex           sync.RWMutex
-		cgCache           map[string]*consumerGroupCache
-		shutdownWG        sync.WaitGroup
-		cacheTimeout      time.Duration
-		metaClient        metadata.TChanMetadataService
-		frontendClient    ccherami.TChanBFrontend
-		hostIDHeartbeater common.HostIDHeartbeater
-		loadReporter      common.LoadReporterDaemon
-		shutdownCh        chan struct{}
-		unloadCacheCh     chan string
-		m3Client          metrics.Client
-		dClient           dconfig.Client
-		numConsConn       int32                  // number of active pubConnection
-		ackMgrMap         map[uint32]*ackManager // map of all the ack managers on this output
-		ackMgrMutex       sync.RWMutex           // mutex protecting the above map
-		sessionID         uint16
-		ackMgrIDGen       common.HostAckIDGenerator // this is the interface used to generate ackIDs for this host
-		ackMgrLoadCh      chan ackMgrLoadMsg
-		ackMgrUnloadCh    chan uint32
-		hostMetrics       *load.HostMetrics
-		cfgMgr            cassDconfig.ConfigManager
-		kafkaCfg          configure.CommonKafkaConfig
-		kStreamFactory    KafkaMessageConverterFactory
+		logger             bark.Logger
+		loadShutdownRef    int32
+		cgMutex            sync.RWMutex
+		cgCache            map[string]*consumerGroupCache
+		shutdownWG         sync.WaitGroup
+		cacheTimeout       time.Duration
+		metaClient         metadata.TChanMetadataService
+		frontendClient     ccherami.TChanBFrontend
+		hostIDHeartbeater  common.HostIDHeartbeater
+		loadReporter       common.LoadReporterDaemon
+		shutdownCh         chan struct{}
+		unloadCacheCh      chan string
+		m3Client           metrics.Client
+		dClient            dconfig.Client
+		numConsConn        int32                  // number of active pubConnection
+		ackMgrMap          map[uint32]*ackManager // map of all the ack managers on this output
+		ackMgrMutex        sync.RWMutex           // mutex protecting the above map
+		sessionID          uint16
+		ackMgrIDGen        common.HostAckIDGenerator // this is the interface used to generate ackIDs for this host
+		ackMgrLoadCh       chan ackMgrLoadMsg
+		ackMgrUnloadCh     chan uint32
+		hostMetrics        *load.HostMetrics
+		cfgMgr             cassDconfig.ConfigManager
+		kafkaCfg           configure.CommonKafkaConfig
+		kafkaStreamFactory KafkaMessageConverterFactory
 		common.SCommon
 	}
 
@@ -787,7 +787,7 @@ func NewOutputHost(
 			bs.cacheTimeout = opts.CacheIdleTimeout
 		}
 		if opts.KStreamFactory != nil {
-			bs.kStreamFactory = opts.KStreamFactory
+			bs.kafkaStreamFactory = opts.KStreamFactory
 		}
 	}
 
