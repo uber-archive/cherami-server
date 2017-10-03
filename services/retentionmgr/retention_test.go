@@ -327,12 +327,12 @@ func (s *RetentionMgrSuite) TestRetentionManager() {
 	}
 
 	for _, cg := range consumerGroups {
-		s.metadata.On("DeleteConsumerGroupExtent", consumerGroupID(cg.id), extentID("EXT5")).Return(nil).Once()
-		s.metadata.On("DeleteConsumerGroupExtent", consumerGroupID(cg.id), extentID("EXT61")).Return(nil).Once()
-		s.metadata.On("DeleteConsumerGroupExtent", consumerGroupID(cg.id), extentID("EXT9")).Return(shared.NewEntityNotExistsError()).Once()
-		s.metadata.On("DeleteConsumerGroupExtent", consumerGroupID(cg.id), extentID("EXTA")).Return(shared.NewEntityNotExistsError()).Once()
-		s.metadata.On("DeleteConsumerGroupExtent", consumerGroupID(cg.id), extentID("EXTB")).Return(shared.NewBadRequestError()).Once()
-		s.metadata.On("DeleteConsumerGroupExtent", consumerGroupID(cg.id), extentID("EXTD")).Return(nil).Once()
+		s.metadata.On("DeleteConsumerGroupExtent", destinationID("DEST1"), consumerGroupID(cg.id), extentID("EXT5")).Return(nil).Once()
+		s.metadata.On("DeleteConsumerGroupExtent", destinationID("DEST1"), consumerGroupID(cg.id), extentID("EXT61")).Return(nil).Once()
+		s.metadata.On("DeleteConsumerGroupExtent", destinationID("DEST1"), consumerGroupID(cg.id), extentID("EXT9")).Return(shared.NewEntityNotExistsError()).Once()
+		s.metadata.On("DeleteConsumerGroupExtent", destinationID("DEST1"), consumerGroupID(cg.id), extentID("EXTA")).Return(shared.NewEntityNotExistsError()).Once()
+		s.metadata.On("DeleteConsumerGroupExtent", destinationID("DEST1"), consumerGroupID(cg.id), extentID("EXTB")).Return(shared.NewBadRequestError()).Once()
+		s.metadata.On("DeleteConsumerGroupExtent", destinationID("DEST1"), consumerGroupID(cg.id), extentID("EXTD")).Return(nil).Once()
 	}
 
 	// // DeleteConsumerGroupExtent on EXTA got an EntityNotExistsError, but it should still be deleted; while EXTB shouldn't
@@ -434,16 +434,16 @@ func (s *RetentionMgrSuite) TestRetentionManagerOnDeletedDestinations() {
 	}
 
 	for _, cg := range consumerGroupsDEST1 {
-		s.metadata.On("DeleteConsumerGroupExtent", consumerGroupID(cg.id), extentID("EXT1")).Return(nil).Once()
-		s.metadata.On("DeleteConsumerGroupExtent", consumerGroupID(cg.id), extentID("EXT2")).Return(nil).Once()
-		s.metadata.On("DeleteConsumerGroupExtent", consumerGroupID(cg.id), extentID("EXT3")).Return(nil).Once()
-		s.metadata.On("DeleteConsumerGroupExtent", consumerGroupID(cg.id), extentID("EXT4")).Return(nil).Once()
+		s.metadata.On("DeleteConsumerGroupExtent", destinationID("DEST1"), consumerGroupID(cg.id), extentID("EXT1")).Return(nil).Once()
+		s.metadata.On("DeleteConsumerGroupExtent", destinationID("DEST1"), consumerGroupID(cg.id), extentID("EXT2")).Return(nil).Once()
+		s.metadata.On("DeleteConsumerGroupExtent", destinationID("DEST1"), consumerGroupID(cg.id), extentID("EXT3")).Return(nil).Once()
+		s.metadata.On("DeleteConsumerGroupExtent", destinationID("DEST1"), consumerGroupID(cg.id), extentID("EXT4")).Return(nil).Once()
 	}
 
 	for _, cg := range consumerGroupsDEST2 {
-		s.metadata.On("DeleteConsumerGroupExtent", consumerGroupID(cg.id), extentID("EXT5")).Return(nil).Once()
-		s.metadata.On("DeleteConsumerGroupExtent", consumerGroupID(cg.id), extentID("EXT6")).Return(nil).Once()
-		s.metadata.On("DeleteConsumerGroupExtent", consumerGroupID(cg.id), extentID("EXT7")).Return(nil).Once()
+		s.metadata.On("DeleteConsumerGroupExtent", destinationID("DEST2"), consumerGroupID(cg.id), extentID("EXT5")).Return(nil).Once()
+		s.metadata.On("DeleteConsumerGroupExtent", destinationID("DEST2"), consumerGroupID(cg.id), extentID("EXT6")).Return(nil).Once()
+		s.metadata.On("DeleteConsumerGroupExtent", destinationID("DEST2"), consumerGroupID(cg.id), extentID("EXT7")).Return(nil).Once()
 	}
 
 	// s.metadata.On("DeleteExtent", destinationID("DEST1"), extentID("EXT1")).Return(nil).Once()

@@ -56,6 +56,26 @@ func (_m *mockMetadataDep) GetExtents(destID destinationID) []*extentInfo {
 
 	return r0
 }
+
+func (_m *mockMetadataDep) GetExtentsForConsumerGroup(destID destinationID, cgID consumerGroupID) (extIDs []extentID, err error) {
+	ret := _m.Called(destID, cgID)
+
+	var r0 []extentID
+	if rf, ok := ret.Get(0).(func(destinationID, consumerGroupID) []extentID); ok {
+		r0 = rf(destID, cgID)
+	} else {
+		r0 = ret.Get(0).([]extentID)
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(destinationID, consumerGroupID) error); ok {
+		r1 = rf(destID, cgID)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
 func (_m *mockMetadataDep) GetConsumerGroups(destID destinationID) []*consumerGroupInfo {
 	ret := _m.Called(destID)
 
@@ -94,6 +114,20 @@ func (_m *mockMetadataDep) MarkExtentConsumed(destID destinationID, extID extent
 
 	return r0
 }
+
+func (_m *mockMetadataDep) DeleteConsumerGroup(destID destinationID, cgID consumerGroupID) error {
+	ret := _m.Called(destID, cgID)
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(destinationID, consumerGroupID) error); ok {
+		r0 = rf(destID, cgID)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
 func (_m *mockMetadataDep) DeleteDestination(destID destinationID) error {
 	ret := _m.Called(destID)
 
@@ -107,12 +141,12 @@ func (_m *mockMetadataDep) DeleteDestination(destID destinationID) error {
 	return r0
 }
 
-func (_m *mockMetadataDep) DeleteConsumerGroupExtent(cgID consumerGroupID, extID extentID) error {
-	ret := _m.Called(cgID, extID)
+func (_m *mockMetadataDep) DeleteConsumerGroupExtent(destID destinationID, cgID consumerGroupID, extID extentID) error {
+	ret := _m.Called(destID, cgID, extID)
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(consumerGroupID, extentID) error); ok {
-		r0 = rf(cgID, extID)
+	if rf, ok := ret.Get(0).(func(destinationID, consumerGroupID, extentID) error); ok {
+		r0 = rf(destID, cgID, extID)
 	} else {
 		r0 = ret.Error(0)
 	}
