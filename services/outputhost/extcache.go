@@ -152,6 +152,9 @@ type extentCache struct {
 
 	// exporter is the metrics bridge between the kafka consumer metrics and the Cherami metrics reporting library
 	exporter *goMetricsExporter.GoMetricsExporter
+
+	// kafkaMessageConverterFactory is a factory for kafka message converter
+	kafkaMessageConverterFactory KafkaMessageConverterFactory
 }
 
 var kafkaLogSetup sync.Once
@@ -418,7 +421,14 @@ func (extCache *extentCache) loadKafkaStream(
 	go kafkaNotificationsLogger(extCache.kafkaClient.Notifications(), extCache.logger)
 
 	// Create the kafkaStream
-	call := OpenKafkaStream(extCache.kafkaClient.Messages(), extCache.logger)
+	var kafkaMessageConverter KafkaMessageConverter
+	if extCache.kafkaMessageConverterFactory != nil {
+		kafkaMessageConverter = extCache.kafkaMessageConverterFactory.GetConverter(&KafkaMessageConverterConfig{
+			KafkaTopics:  kafkaTopics,
+			KafkaCluster: kafkaCluster,
+		}, extCache.logger)
+	}
+	call := OpenKafkaStream(extCache.kafkaClient.Messages(), kafkaMessageConverter, extCache.logger)
 
 	// Setup the replicaConnection
 	replicaConnectionName := fmt.Sprintf(`replicaConnection{Extent: %s, kafkaCluster: %s}`, extCache.extUUID, kafkaCluster)

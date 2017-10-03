@@ -199,6 +199,9 @@ type (
 
 		// kafkaTopics is the list of kafka topics consumed by this consumer group, if applicable
 		kafkaTopics []string
+
+		// kafkaMessageConverterFactory is a factory for kafka message converter
+		kafkaMessageConverterFactory KafkaMessageConverterFactory
 	}
 )
 
@@ -269,6 +272,7 @@ func newConsumerGroupCache(destPath string, cgDesc shared.ConsumerGroupDescripti
 		hostMetrics:              h.hostMetrics,
 		cgMetrics:                load.NewCGMetrics(),
 		cfgMgr:                   h.cfgMgr,
+		kafkaMessageConverterFactory: h.kafkaStreamFactory,
 	}
 
 	cgCache.consumerM3Client = metrics.NewClientWithTags(h.m3Client, metrics.Outputhost, cgCache.getConsumerGroupTags())
@@ -307,28 +311,29 @@ func (cgCache *consumerGroupCache) loadExtentCache(ctx thrift.Context, destType 
 	extUUID := cge.GetExtentUUID()
 	if extCache, exists := cgCache.extentCache[extUUID]; !exists {
 		extCache = &extentCache{
-			cgUUID:               cgCache.cachedCGDesc.GetConsumerGroupUUID(),
-			extUUID:              extUUID,
-			destUUID:             cgCache.cachedCGDesc.GetDestinationUUID(),
-			destType:             destType,
-			storeUUIDs:           cge.StoreUUIDs,
-			startFrom:            time.Unix(0, cgCache.cachedCGDesc.GetStartFrom()),
-			skipOlder:            time.Duration(int64(cgCache.cachedCGDesc.GetSkipOlderMessagesSeconds()) * int64(time.Second)),
-			delay:                time.Duration(int64(cgCache.cachedCGDesc.GetDelaySeconds()) * int64(time.Second)),
-			notifyReplicaCloseCh: make(chan error, 5),
-			closeChannel:         make(chan struct{}),
-			waitConsumedCh:       make(chan bool, 1),
-			msgsCh:               cgCache.msgsCh,
-			connectionsClosedCh:  cgCache.notifyReplicaCloseCh,
-			shutdownWG:           &cgCache.connsWG,
-			tClients:             cgCache.tClients,
-			wsConnector:          cgCache.wsConnector,
-			logger:               cgCache.logger.WithFields(bark.Fields{common.TagExt: extUUID, common.TagModule: `extCache`}),
-			creditNotifyCh:       cgCache.creditNotifyCh,
-			creditRequestCh:      cgCache.creditRequestCh,
-			initialCredits:       defaultNumOutstandingMsgs,
-			loadMetrics:          load.NewExtentMetrics(),
-			consumerM3Client:     cgCache.consumerM3Client,
+			cgUUID:                       cgCache.cachedCGDesc.GetConsumerGroupUUID(),
+			extUUID:                      extUUID,
+			destUUID:                     cgCache.cachedCGDesc.GetDestinationUUID(),
+			destType:                     destType,
+			storeUUIDs:                   cge.StoreUUIDs,
+			startFrom:                    time.Unix(0, cgCache.cachedCGDesc.GetStartFrom()),
+			skipOlder:                    time.Duration(int64(cgCache.cachedCGDesc.GetSkipOlderMessagesSeconds()) * int64(time.Second)),
+			delay:                        time.Duration(int64(cgCache.cachedCGDesc.GetDelaySeconds()) * int64(time.Second)),
+			notifyReplicaCloseCh:         make(chan error, 5),
+			closeChannel:                 make(chan struct{}),
+			waitConsumedCh:               make(chan bool, 1),
+			msgsCh:                       cgCache.msgsCh,
+			connectionsClosedCh:          cgCache.notifyReplicaCloseCh,
+			shutdownWG:                   &cgCache.connsWG,
+			tClients:                     cgCache.tClients,
+			wsConnector:                  cgCache.wsConnector,
+			logger:                       cgCache.logger.WithFields(bark.Fields{common.TagExt: extUUID, common.TagModule: `extCache`}),
+			creditNotifyCh:               cgCache.creditNotifyCh,
+			creditRequestCh:              cgCache.creditRequestCh,
+			initialCredits:               defaultNumOutstandingMsgs,
+			loadMetrics:                  load.NewExtentMetrics(),
+			consumerM3Client:             cgCache.consumerM3Client,
+			kafkaMessageConverterFactory: cgCache.kafkaMessageConverterFactory,
 		}
 
 		cgCache.extentCache[extUUID] = extCache
@@ -662,6 +667,17 @@ func (cgCache *consumerGroupCache) getMessageCacheSize(cfg OutputCgConfig, oldSi
 	cacheSize = int32(common.OverrideValueByPrefix(logFn, ruleKey, cfg.MessageCacheSize, int64(oldSize), `messagecachesize`))
 
 	return cacheSize
+}
+
+//
+func (cgCache *consumerGroupCache) getRedeliveryInterval(cfg OutputCgConfig, oldInterval int32) (interval int32) {
+	logFn := func() bark.Logger {
+		return cgCache.logger
+	}
+	ruleKey := cgCache.destPath + `/` + cgCache.cachedCGDesc.GetConsumerGroupName()
+	interval = int32(common.OverrideValueByPrefix(logFn, ruleKey, cfg.RedeliveryIntervalInMs, int64(oldInterval), `redeliveryIntervalInMs`))
+
+	return interval
 }
 
 // loadConsumerGroupCache loads everything on this cache including the extents and within the cache
