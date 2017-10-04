@@ -314,13 +314,24 @@ func (t *RetentionManager) runRetention(jobsC chan<- *retentionJob) bool {
 			continue
 		}
 
+		log := t.logger.WithField(common.TagDst, dest.id)
+
 		var numCGs int
 
 		// query consumer groups for the destination
 		cgs := t.metadata.GetConsumerGroups(dest.id)
 
+		t.logger.WithFields(bark.Fields{
+			`numCGs`: len(cgs),
+		}).Info("GetConsumerGroups")
+
 		// for each extent, compute retention cursor and convey to storage
 		for _, cg := range cgs {
+
+			log.WithFields(bark.Fields{
+				common.TagCnsm: cg.id,
+				`status`:       cg.status,
+			}).Info("GetConsumerGroups")
 
 			if cg.status == shared.ConsumerGroupStatus_DELETED {
 				continue // ignore deleted CGs
@@ -332,6 +343,11 @@ func (t *RetentionManager) runRetention(jobsC chan<- *retentionJob) bool {
 				continue
 			}
 
+			log.WithFields(bark.Fields{
+				common.TagCnsm: cg.id,
+				`status`:       cg.status,
+			}).Info("cg in deleting state")
+
 			// CG is in DELETING state; delete all cg-extents:
 
 			var numCGExtents int
@@ -339,13 +355,16 @@ func (t *RetentionManager) runRetention(jobsC chan<- *retentionJob) bool {
 			extIDs, err := t.metadata.GetExtentsForConsumerGroup(dest.id, cg.id)
 
 			if err != nil {
+				log.WithFields(bark.Fields{
+					common.TagCnsm: cg.id,
+					common.TagErr:  err,
+				}).Error("GetExtentsForConsumerGroup failed")
 				continue
 			}
 
 			numCGExtents = len(extIDs)
 
-			t.logger.WithFields(bark.Fields{
-				common.TagDst:  dest.id,
+			log.WithFields(bark.Fields{
 				common.TagCnsm: cg.id,
 				`numCGExtents`: numCGExtents,
 			}).Info("deleting all consumer-group extents for CG")
@@ -360,8 +379,7 @@ func (t *RetentionManager) runRetention(jobsC chan<- *retentionJob) bool {
 						e = nil
 					}
 
-					t.logger.WithFields(bark.Fields{
-						common.TagDst:  dest.id,
+					log.WithFields(bark.Fields{
 						common.TagCnsm: cg.id,
 						common.TagExt:  extID,
 						common.TagErr:  e,
@@ -375,15 +393,13 @@ func (t *RetentionManager) runRetention(jobsC chan<- *retentionJob) bool {
 
 			if numCGExtents == 0 {
 
-				t.logger.WithFields(bark.Fields{
-					common.TagDst:  dest.id,
+				log.WithFields(bark.Fields{
 					common.TagCnsm: cg.id,
 				}).Info("deleting consumer-group (all cg-extents deleted)")
 
 				if e := t.metadata.DeleteConsumerGroup(dest.id, cg.id); e != nil {
 
-					t.logger.WithFields(bark.Fields{
-						common.TagDst:  dest.id,
+					log.WithFields(bark.Fields{
 						common.TagCnsm: cg.id,
 						common.TagErr:  e,
 					}).Error("error deleting consumer-group")
@@ -421,8 +437,7 @@ func (t *RetentionManager) runRetention(jobsC chan<- *retentionJob) bool {
 
 		if dest.status == shared.DestinationStatus_DELETING && numCGs == 0 && numExtents == 0 {
 
-			t.logger.WithField(common.TagDst, dest.id).
-				Info("deleting destination (all CGs and extents deleted)")
+			log.Info("deleting destination: all CGs and extents deleted")
 
 			// All extents have been deleted for this destination. Since the
 			// deletion of an extent requires all consumer groups to have
