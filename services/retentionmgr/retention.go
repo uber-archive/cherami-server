@@ -291,7 +291,7 @@ func (t *RetentionManager) wait() {
 // schedules a job, one per extent, to compute and enforce retention on storage.
 func (t *RetentionManager) runRetention(jobsC chan<- *retentionJob) bool {
 
-	t.logger.Debug("runRetention: start")
+	t.logger.Info("runRetention: start")
 
 	destList := t.metadata.GetDestinations()
 
@@ -456,7 +456,7 @@ func (t *RetentionManager) runRetention(jobsC chan<- *retentionJob) bool {
 	// so that they are distributed more or less evenly during the retention-interval
 
 	if totalJobs == 0 {
-		t.logger.Debug("runRetention: done (nothing to do)")
+		t.logger.Info("runRetention: done (nothing to do)")
 		return true
 	}
 
@@ -480,11 +480,11 @@ func (t *RetentionManager) runRetention(jobsC chan<- *retentionJob) bool {
 
 		// skip deleted destinations
 		if dest.status == shared.DestinationStatus_DELETED {
-			t.logger.WithField(`destID`, dest.id).Debug(`skipping deleted destination`)
+			t.logger.WithField(`destID`, dest.id).Info(`skipping deleted destination`)
 			continue
 		}
 
-		t.logger.WithField(common.TagDst, dest.id).Debug("scheduling retention jobs for dest")
+		t.logger.WithField(common.TagDst, dest.id).Info("scheduling retention jobs for dest")
 
 		// for each extent, compute retention cursor and convey to storage
 		for j := range dest.extents {
@@ -494,7 +494,7 @@ func (t *RetentionManager) runRetention(jobsC chan<- *retentionJob) bool {
 				t.logger.WithFields(bark.Fields{
 					common.TagDst: dest.id,
 					common.TagExt: dest.extents[j],
-				}).Debug("skipping retention on deleted extent")
+				}).Info("skipping retention on deleted extent")
 				continue
 			}
 
@@ -504,7 +504,7 @@ func (t *RetentionManager) runRetention(jobsC chan<- *retentionJob) bool {
 				t.logger.WithFields(bark.Fields{
 					common.TagDst: dest.id,
 					common.TagExt: dest.extents[j],
-				}).Debug("skipping retention on consumed extent within 'delete-defer-period'")
+				}).Info("skipping retention on consumed extent within 'delete-defer-period'")
 				continue
 			}
 
@@ -512,7 +512,7 @@ func (t *RetentionManager) runRetention(jobsC chan<- *retentionJob) bool {
 				common.TagDst: dest.id,
 				common.TagExt: dest.extents[j],
 				`runAt`:       scheduleAt,
-			}).Debug("scheduling retention job")
+			}).Info("scheduling retention job")
 
 			// create and post a job to process this extent on the destination
 			jobsC <- &retentionJob{
@@ -527,7 +527,7 @@ func (t *RetentionManager) runRetention(jobsC chan<- *retentionJob) bool {
 		}
 	}
 
-	t.logger.WithField(`totalJobs`, totalJobs).Debug("runRetention: done")
+	t.logger.WithField(`totalJobs`, totalJobs).Info("runRetention: done")
 
 	return true
 }
@@ -585,7 +585,7 @@ func (t *RetentionManager) computeRetention(job *retentionJob, log bark.Logger) 
 		log.WithFields(bark.Fields{
 			`hardRetentionTime`: hardRetentionTime,
 			`softRetentionTime`: softRetentionTime,
-		}).Debug(`computeRetention: overriding retention times for DLQ merged extent`)
+		}).Info(`computeRetention: overriding retention times for DLQ merged extent`)
 	}
 
 	// -- step 2: compute hard-retention address, by querying storehosts -- //
@@ -606,7 +606,7 @@ func (t *RetentionManager) computeRetention(job *retentionJob, log bark.Logger) 
 	log.WithFields(bark.Fields{
 		`hardRetentionTime_unixnano`: hardRetentionTime,
 		`hardRetentionTime`:          time.Unix(0, hardRetentionTime),
-	}).Debug("computing hardRetentionAddr")
+	}).Info("computing hardRetentionAddr")
 
 	var hardRetentionAddr = int64(store.ADDR_BEGIN)
 	var hardRetentionConsumed bool
@@ -643,7 +643,7 @@ func (t *RetentionManager) computeRetention(job *retentionJob, log bark.Logger) 
 		`hardRetentionAddr`:      hardRetentionAddr,
 		`hardRetentionAddr_time`: time.Unix(0, hardRetentionAddr),
 		`hardRetentionConsumed`:  hardRetentionConsumed,
-	}).Debug("computed hardRetentionAddr")
+	}).Info("computed hardRetentionAddr")
 
 	// -- step 3: compute soft-retention address -- //
 
@@ -653,7 +653,7 @@ func (t *RetentionManager) computeRetention(job *retentionJob, log bark.Logger) 
 	log.WithFields(bark.Fields{
 		`softRetentionTime_unixnano`: softRetentionTime,
 		`softRetentionTime`:          time.Unix(0, softRetentionTime),
-	}).Debug("computing softRetentionAddr")
+	}).Info("computing softRetentionAddr")
 
 	var softRetentionAddr = int64(store.ADDR_BEGIN)
 	var softRetentionConsumed bool
@@ -701,11 +701,11 @@ func (t *RetentionManager) computeRetention(job *retentionJob, log bark.Logger) 
 		`softRetentionAddr`:      softRetentionAddr,
 		`softRetentionAddr_time`: time.Unix(0, softRetentionAddr),
 		`softRetentionConsumed`:  softRetentionConsumed,
-	}).Debug("computed softRetentionAddr")
+	}).Info("computed softRetentionAddr")
 
 	// -- step 4: compute minimum ack cursor by querying metadata -- //
 
-	log.Debug("computing minAckAddr")
+	log.Info("computing minAckAddr")
 
 	var minAckAddr = int64(store.ADDR_END)
 	var allHaveConsumed = true // start by assuming this is all-consumed
@@ -727,7 +727,7 @@ func (t *RetentionManager) computeRetention(job *retentionJob, log bark.Logger) 
 					continue
 				}
 
-				log.Debug("calculating minAckAddr for DLQ merged extent")
+				log.Info("calculating minAckAddr for DLQ merged extent")
 			}
 
 			ackAddr, err := t.metadata.GetAckLevel(dest.id, ext.id, cgInfo.id)
@@ -765,7 +765,7 @@ func (t *RetentionManager) computeRetention(job *retentionJob, log bark.Logger) 
 	// retention could still be enforced.
 	if minAckAddr == store.ADDR_END {
 
-		log.Debug("could not compute ackLevel, using 'ADDR_BEGIN'")
+		log.Info("could not compute ackLevel, using 'ADDR_BEGIN'")
 		minAckAddr = store.ADDR_BEGIN
 		allHaveConsumed = false
 	}
@@ -775,7 +775,7 @@ func (t *RetentionManager) computeRetention(job *retentionJob, log bark.Logger) 
 	log.WithFields(bark.Fields{
 		`minAckAddr`:      minAckAddr,
 		`minAckAddr_time`: time.Unix(0, minAckAddr),
-	}).Debug("computed minAckAddr")
+	}).Info("computed minAckAddr")
 
 	// -- step 5: compute retention address -- //
 
@@ -796,7 +796,7 @@ func (t *RetentionManager) computeRetention(job *retentionJob, log bark.Logger) 
 		`softRetentionAddr`: softRetentionAddr,
 		`minAckAddr`:        minAckAddr,
 		`retentionAddr`:     job.retentionAddr,
-	}).Debug("computed retentionAddr")
+	}).Info("computed retentionAddr")
 
 	// -- step 6: check to see if the extent status can be updated to 'consumed' -- //
 
@@ -843,7 +843,7 @@ func (t *RetentionManager) retentionWorker(id int, jobsC <-chan *retentionJob) {
 
 	defer t.wg.Done()
 
-	t.logger.WithField(`worker`, id).Debug("retentionWorker: started")
+	t.logger.WithField(`worker`, id).Info("retentionWorker: started")
 
 workerLoop:
 	for job := range jobsC {
@@ -857,7 +857,7 @@ workerLoop:
 			`worker`:      id,
 		})
 
-		log.WithField(`runAt`, job.runAt).Debug("retentionWorker: picked up job; waiting until runAt")
+		log.WithField(`runAt`, job.runAt).Info("retentionWorker: picked up job; waiting until runAt")
 
 		// run a timer to wake us up when this job is ready to be scheduled
 		// NB: if the timer duration is negative, the timer fires immediately
@@ -868,7 +868,7 @@ workerLoop:
 			// the job is ready to be run; continue ..
 
 		case <-t.stopC: // we have been asked to stop
-			log.Debug("retentionWorker: retention worker stop signal")
+			log.Info("retentionWorker: retention worker stop signal")
 			break workerLoop
 		}
 
@@ -877,7 +877,7 @@ workerLoop:
 		log.WithFields(bark.Fields{
 			`softRetention`: dest.softRetention,
 			`hardRetention`: dest.hardRetention,
-		}).Debug("retentionWorker: starting job")
+		}).Info("retentionWorker: starting job")
 
 		t.m3Client.IncCounter(metrics.RetentionMgrScope, metrics.ControllerRetentionJobStartCounter)
 		jobStartTime := time.Now()
@@ -901,7 +901,7 @@ workerLoop:
 			log.WithFields(bark.Fields{
 				`retentionAddr`: job.retentionAddr,
 				`deleteExtent`:  job.deleteExtent,
-			}).Debug(`retentionWorker: computeRetention`)
+			}).Info(`retentionWorker: computeRetention`)
 
 			// -- step 7: persist computed address into metadata --
 			// TODO: do this so storehosts can asynchronously query retention address and purge //
@@ -923,7 +923,7 @@ workerLoop:
 					`purgeAddr`:    job.retentionAddr,
 					`doneAddr`:     addr,
 					common.TagErr:  e,
-				}).Debug(`retentionWorker: PurgeMessages output`)
+				}).Info(`retentionWorker: PurgeMessages output`)
 
 				if e != nil && job.deleteExtent {
 					// FIXME: if the failure was because the extent was already deleted,
@@ -1004,7 +1004,7 @@ workerLoop:
 
 		} else {
 
-			log.Debug("retentionWorker: retentionAddr == ADDR_BEGIN; nothing to do")
+			log.Info("retentionWorker: retentionAddr == ADDR_BEGIN; nothing to do")
 		}
 
 		if job.err != nil {
@@ -1012,7 +1012,7 @@ workerLoop:
 			t.m3Client.IncCounter(metrics.RetentionMgrScope, metrics.ControllerRetentionJobFailedCounter)
 			// FIXME: retry failed jobs?
 		} else {
-			log.Debug("retentionWorker: retention job completed")
+			log.Info("retentionWorker: retention job completed")
 			t.m3Client.IncCounter(metrics.RetentionMgrScope, metrics.ControllerRetentionJobCompletedCounter)
 		}
 
@@ -1028,12 +1028,12 @@ workerLoop:
 			`worker`:      id,
 			common.TagDst: string(job.dest.id),
 			common.TagExt: string(job.ext.id),
-		}).Debug("retention job cancelled")
+		}).Info("retention job cancelled")
 
 		countCancelled++
 	}
 
 	t.m3Client.AddCounter(metrics.RetentionMgrScope, metrics.ControllerRetentionJobCancelledCounter, countCancelled)
 
-	t.logger.WithField(`wworker`, id).Debug("retentionWorker: done")
+	t.logger.WithField(`wworker`, id).Info("retentionWorker: done")
 }
