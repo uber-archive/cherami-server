@@ -321,7 +321,7 @@ func (t *RetentionManager) runRetention(jobsC chan<- *retentionJob) bool {
 		// query consumer groups for the destination
 		cgs := t.metadata.GetConsumerGroups(dest.id)
 
-		t.logger.WithFields(bark.Fields{
+		log.WithFields(bark.Fields{
 			`numCGs`: len(cgs),
 		}).Info("GetConsumerGroups")
 
@@ -331,7 +331,7 @@ func (t *RetentionManager) runRetention(jobsC chan<- *retentionJob) bool {
 			log.WithFields(bark.Fields{
 				common.TagCnsm: cg.id,
 				`status`:       cg.status,
-			}).Info("GetConsumerGroups")
+			}).Info("processing cg")
 
 			if cg.status == shared.ConsumerGroupStatus_DELETED {
 				continue // ignore deleted CGs
