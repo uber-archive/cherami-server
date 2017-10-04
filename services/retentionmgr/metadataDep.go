@@ -60,7 +60,7 @@ func (t *metadataDepImpl) GetDestinations() (destinations []*destinationInfo) {
 	i := 0
 	for {
 
-		log.Debug("GetDestinations: ListDestinationsByUUID on metadata")
+		log.Info("GetDestinations: ListDestinationsByUUID on metadata")
 
 		resp, err := t.metadata.ListDestinationsByUUID(ctx, req)
 		if err != nil {
@@ -88,7 +88,7 @@ func (t *metadataDepImpl) GetDestinations() (destinations []*destinationInfo) {
 				`status`:        dest.status,
 				`hardRetention`: dest.hardRetention,
 				`softRetention`: dest.softRetention,
-			}).Debug("GetDestinations: ListDestinationsByUUID output")
+			}).Info("GetDestinations: ListDestinationsByUUID output")
 		}
 
 		if len(resp.GetNextPageToken()) == 0 {
@@ -97,10 +97,10 @@ func (t *metadataDepImpl) GetDestinations() (destinations []*destinationInfo) {
 
 		req.PageToken = resp.GetNextPageToken()
 
-		log.Debug("GetDestinations: fetching next page of ListDestinationsByUUID")
+		log.Info("GetDestinations: fetching next page of ListDestinationsByUUID")
 	}
 
-	log.WithField(`numDestinations`, len(destinations)).Debug("GetDestinations done")
+	log.WithField(`numDestinations`, len(destinations)).Info("GetDestinations done")
 	return
 }
 
@@ -119,7 +119,7 @@ func (t *metadataDepImpl) GetExtents(destID destinationID) (extents []*extentInf
 	i := 0
 
 	for {
-		log.Debug("GetExtents: ListExtentStats on metadata")
+		log.Info("GetExtents: ListExtentStats on metadata")
 
 		resp, err := t.metadata.ListExtentsStats(ctx, req)
 		if err != nil {
@@ -155,7 +155,7 @@ func (t *metadataDepImpl) GetExtents(destID destinationID) (extents []*extentInf
 				common.TagExt: string(extInfo.id),
 				`status`:      extInfo.status,
 				`replicas`:    extInfo.storehosts,
-			}).Debug(`GetExtents: ListExtentStats output`)
+			}).Info(`GetExtents: ListExtentStats output`)
 		}
 
 		if len(resp.GetNextPageToken()) == 0 {
@@ -164,10 +164,10 @@ func (t *metadataDepImpl) GetExtents(destID destinationID) (extents []*extentInf
 
 		req.PageToken = resp.GetNextPageToken()
 
-		log.Debug("GetExtents: fetching next page of ListExtentStats")
+		log.Info("GetExtents: fetching next page of ListExtentStats")
 	}
 
-	log.WithField(`numExtents`, len(extents)).Debug("GetExtents done")
+	log.WithField(`numExtents`, len(extents)).Info("GetExtents done")
 	return
 }
 
@@ -185,7 +185,7 @@ func (t *metadataDepImpl) GetExtentInfo(destID destinationID, extID extentID) (e
 		common.TagExt: string(extID),
 	})
 
-	log.Debug("GetExtentInfo: ReadExtentStats on metadata")
+	log.Info("GetExtentInfo: ReadExtentStats on metadata")
 
 	resp, err := t.metadata.ReadExtentStats(ctx, req)
 	if err != nil {
@@ -215,7 +215,7 @@ func (t *metadataDepImpl) GetExtentInfo(destID destinationID, extID extentID) (e
 		`extInfo.status`:            extInfo.status,
 		`extInfo.statusUpdatedTime`: extInfo.statusUpdatedTime,
 		`extInfo.storehosts`:        extInfo.storehosts,
-	}).Debug(`GetExtentInfo done`)
+	}).Info(`GetExtentInfo done`)
 
 	return
 }
@@ -233,7 +233,7 @@ func (t *metadataDepImpl) GetConsumerGroups(destID destinationID) (consumerGroup
 	log := t.logger.WithField(common.TagDst, string(destID))
 
 	for {
-		log.Debug("GetConsumerGroups: ListConsumerGroups on metadata")
+		log.Info("GetConsumerGroups: ListConsumerGroups on metadata")
 
 		res, err := t.metadata.ListConsumerGroups(ctx, req)
 		if err != nil {
@@ -254,7 +254,7 @@ func (t *metadataDepImpl) GetConsumerGroups(destID destinationID) (consumerGroup
 			log.WithFields(bark.Fields{
 				common.TagCnsm: string(cg.id),
 				`status`:       cg.status,
-			}).Debug(`GetConsumerGroups: ListConsumerGroups output`)
+			}).Info(`GetConsumerGroups: ListConsumerGroups output`)
 		}
 
 		if len(res.GetNextPageToken()) == 0 {
@@ -263,10 +263,10 @@ func (t *metadataDepImpl) GetConsumerGroups(destID destinationID) (consumerGroup
 
 		req.PageToken = res.GetNextPageToken()
 
-		log.Debug("GetConsumerGroups: fetching next page of ListConsumerGroups")
+		log.Info("GetConsumerGroups: fetching next page of ListConsumerGroups")
 	}
 
-	log.WithField(`numConsumerGroups`, len(consumerGroups)).Debug("GetConsumerGroups done")
+	log.WithField(`numConsumerGroups`, len(consumerGroups)).Info("GetConsumerGroups done")
 	return
 }
 
@@ -285,7 +285,7 @@ func (t *metadataDepImpl) DeleteExtent(destID destinationID, extID extentID) (er
 		common.TagExt: string(extID),
 	})
 
-	log.Debug("DeleteExtent: UpdateExtentStats on metadata")
+	log.Info("DeleteExtent: UpdateExtentStats on metadata")
 
 	resp, err := t.metadata.UpdateExtentStats(ctx, req)
 	if err != nil {
@@ -293,7 +293,7 @@ func (t *metadataDepImpl) DeleteExtent(destID destinationID, extID extentID) (er
 		return
 	}
 
-	log.WithField(`resp.status`, resp.GetExtentStats().GetStatus()).Debug(`DeleteExtent done`)
+	log.WithField(`resp.status`, resp.GetExtentStats().GetStatus()).Info(`DeleteExtent done`)
 	return
 }
 
@@ -312,7 +312,7 @@ func (t *metadataDepImpl) MarkExtentConsumed(destID destinationID, extID extentI
 		common.TagExt: string(extID),
 	})
 
-	log.Debug("MarkExtentConsumed: UpdateExtentStats on metadata")
+	log.Info("MarkExtentConsumed: UpdateExtentStats on metadata")
 
 	resp, err := t.metadata.UpdateExtentStats(ctx, req)
 	if err != nil {
@@ -320,7 +320,7 @@ func (t *metadataDepImpl) MarkExtentConsumed(destID destinationID, extID extentI
 		return
 	}
 
-	log.WithField(`resp.status`, resp.GetExtentStats().GetStatus()).Debug(`MarkExtentConsumed done`)
+	log.WithField(`resp.status`, resp.GetExtentStats().GetStatus()).Info(`MarkExtentConsumed done`)
 	return
 }
 
@@ -339,7 +339,7 @@ func (t *metadataDepImpl) GetExtentsForConsumerGroup(destID destinationID, cgID 
 	})
 
 	for {
-		log.Debug("GetExtentsForConsumerGroup: ReadConsumerGroupExtentsLite on metadata")
+		log.Info("GetExtentsForConsumerGroup: ReadConsumerGroupExtentsLite on metadata")
 
 		res, e := t.metadata.ReadConsumerGroupExtentsLite(ctx, req)
 		if e != nil {
@@ -358,10 +358,10 @@ func (t *metadataDepImpl) GetExtentsForConsumerGroup(destID destinationID, cgID 
 
 		req.PageToken = res.GetNextPageToken()
 
-		log.Debug("GetExtentsForConsumerGroup: fetching next page of consumer-group extents")
+		log.Info("GetExtentsForConsumerGroup: fetching next page of consumer-group extents")
 	}
 
-	log.WithField(`numExtents`, len(extIDs)).Debug("GetExtentsForConsumerGroup done")
+	log.WithField(`numExtents`, len(extIDs)).Info("GetExtentsForConsumerGroup done")
 	return
 }
 
@@ -381,7 +381,7 @@ func (t *metadataDepImpl) DeleteConsumerGroupExtent(destID destinationID, cgID c
 		common.TagExt:    string(extID),
 	})
 
-	log.Debug("DeleteConsumerGroupExtent: UpdateConsumerGroupExtentStatus on metadata")
+	log.Info("DeleteConsumerGroupExtent: UpdateConsumerGroupExtentStatus on metadata")
 
 	err := t.metadata.UpdateConsumerGroupExtentStatus(ctx, req)
 
@@ -390,7 +390,7 @@ func (t *metadataDepImpl) DeleteConsumerGroupExtent(destID destinationID, cgID c
 		return err
 	}
 
-	log.Debug("DeleteConsumerGroupExtent done")
+	log.Info("DeleteConsumerGroupExtent done")
 	return nil
 }
 
@@ -407,7 +407,7 @@ func (t *metadataDepImpl) DeleteConsumerGroup(destID destinationID, cgID consume
 		common.TagCnsmID: string(cgID),
 	})
 
-	log.Debug("DeleteConsumerGroup: DeleteConsumerGroupUUID on metadata")
+	log.Info("DeleteConsumerGroup: DeleteConsumerGroupUUID on metadata")
 
 	err := t.metadata.DeleteConsumerGroupUUID(ctx, req)
 
@@ -416,7 +416,7 @@ func (t *metadataDepImpl) DeleteConsumerGroup(destID destinationID, cgID consume
 		return err
 	}
 
-	log.Debug("DeleteConsumerGroup done")
+	log.Info("DeleteConsumerGroup done")
 	return nil
 }
 
@@ -430,7 +430,7 @@ func (t *metadataDepImpl) DeleteDestination(destID destinationID) error {
 
 	log := t.logger.WithField(common.TagDst, string(destID))
 
-	log.Debug("DeleteDestination: DeleteDestinationUUID on metadata")
+	log.Info("DeleteDestination: DeleteDestinationUUID on metadata")
 
 	err := t.metadata.DeleteDestinationUUID(ctx, req)
 
@@ -439,7 +439,7 @@ func (t *metadataDepImpl) DeleteDestination(destID destinationID) error {
 		return err
 	}
 
-	log.Debug("DeleteDestination done")
+	log.Info("DeleteDestination done")
 	return nil
 }
 
@@ -459,7 +459,7 @@ func (t *metadataDepImpl) GetAckLevel(destID destinationID, extID extentID, cgID
 		common.TagCnsmID: string(cgID),
 	})
 
-	log.Debug("GetAckLevel: ReadConsumerGroupExtent on metadata")
+	log.Info("GetAckLevel: ReadConsumerGroupExtent on metadata")
 
 	resp, err := t.metadata.ReadConsumerGroupExtent(ctx, req)
 	if err != nil {
@@ -490,6 +490,6 @@ func (t *metadataDepImpl) GetAckLevel(destID destinationID, extID extentID, cgID
 			Error("GetAckLevel: Unknown ConsumerGroupExtentStatus")
 	}
 
-	log.WithField(`ackLevel`, ackLevel).Debug("GetAckLevel done")
+	log.WithField(`ackLevel`, ackLevel).Info("GetAckLevel done")
 	return ackLevel, nil
 }
