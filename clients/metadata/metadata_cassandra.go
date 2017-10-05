@@ -1763,7 +1763,7 @@ func (s *CassandraMetadataService) DeleteConsumerGroup(ctx thrift.Context, reque
 	// to the batch operation, if there is one.
 	dlqDstID := existingCG.GetDeadLetterQueueDestinationUUID()
 	// Not all CGs have a DLQ, only do this if there is a DLQ
-	if len(dlqDstID) > 0 {
+	if len(dlqDstID) > 0 && dlqDstID != common.ZeroUUID {
 		var dlqDstDesc *shared.DestinationDescription
 		// this is the same as DeleteDestination()
 		readReq := &shared.ReadDestinationRequest{
