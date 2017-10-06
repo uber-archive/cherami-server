@@ -32,7 +32,7 @@ import:
   version: 09d6d520b61160d194c06768ed85415cd8abee57
 - package: github.com/uber-common/bark
 - package: github.com/uber/cherami-client-go
-  version: =2.4.0
+  version: =2.5.0
   subpackages:
   - client/cherami
   - common
