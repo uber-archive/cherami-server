@@ -1,5 +1,5 @@
-hash: 79cc68755e2fff0a68ef84580fb09717f455ded83f2f6dd5a2cc55e808eaf241
-updated: 2017-09-21T11:34:49.462678076-07:00
+hash: b4ac6cca4953caf65596799ec1216e88cc1f27efe83097737844d2da31d9429a
+updated: 2017-10-06T14:22:19.357459794-07:00
 imports:
 - name: github.com/apache/thrift
   version: b2a4d4ae21c789b689dd162deb819665567f481c
@@ -40,7 +40,7 @@ imports:
 - name: github.com/bsm/sarama-cluster
   version: 5efe630369ab4ed5cc4cedeadd61b4d1b2523169
 - name: github.com/cactus/go-statsd-client
-  version: ad551ee7f9f3465fb1ce1695899c612f7808a06a
+  version: ce77ca9ecdee1c3ffd097e32f9bb832825ccb203
   subpackages:
   - statsd
 - name: github.com/cockroachdb/c-jemalloc
@@ -54,7 +54,7 @@ imports:
 - name: github.com/codegangsta/cli
   version: cf33a9befefdd6c6ea1a236ab6d546e797a62cbf
 - name: github.com/davecgh/go-spew
-  version: adab96458c51a58dc1783b3335dcce5461522e75
+  version: ecdeabc65495df2dec95d7c4a4c3e021903035e5
   subpackages:
   - spew
 - name: github.com/dgryski/go-farm
@@ -105,14 +105,14 @@ imports:
 - name: github.com/rcrowley/go-metrics
   version: 1f30fe9094a513ce4c700b9a54458bbb0c96996c
 - name: github.com/Shopify/sarama
-  version: c01858abb625b73a3af51d0798e4ad42c8147093
+  version: bbdbe644099b7fdc8327d5cc69c030945188b2e9
   repo: http://github.com/Shopify/sarama
 - name: github.com/sirupsen/logrus
-  version: 85b1699d505667d13f8ac4478c1debbf85d6c5de
+  version: f006c2ac4710855cf0f916dd6b77acf6b048dc6e
 - name: github.com/stretchr/objx
   version: 1a9d0bb9f541897e62256577b352fdbc1fb4fd94
 - name: github.com/stretchr/testify
-  version: 05e8a0eda380579888eb53c394909df027f06991
+  version: 890a5c3458b43e6104ff5da8dfa139d013d77544
   subpackages:
   - assert
   - mock
@@ -121,11 +121,11 @@ imports:
 - name: github.com/tecbot/gorocksdb
   version: 17991d3138a879b166adebf86f7c84da3c1517a7
 - name: github.com/uber-common/bark
-  version: 11c68f25ea004a3f36e3c6ad90236835a4bd0971
+  version: 02d883c81a4e7b76904d97efb176efdf4be791bd
 - name: github.com/uber-go/atomic
-  version: e682c1008ac17bf26d2e4b5ad6cdd08520ed0b22
+  version: 4e336646b2ef9fc6e47be8e21594178f98e5ebcf
 - name: github.com/uber/cherami-client-go
-  version: 68b11fc98437d63fc3b4f1db2c95a62d881bcee7
+  version: 05b8db6966cc3413c1105a809977febef05ca5a1
   subpackages:
   - client/cherami
   - common
@@ -171,8 +171,12 @@ imports:
   - tos
   - trand
   - typed
+- name: golang.org/x/crypto
+  version: 850760c427c516be930bc91280636328f1a62286
+  subpackages:
+  - ssh/terminal
 - name: golang.org/x/net
-  version: ab5485076ff3407ad2d02db054635913f017b0ed
+  version: a04bdaca5b32abe1c069418fb7088ae607de5bd0
   subpackages:
   - bpf
   - context
