@@ -867,27 +867,31 @@ func (t *Rock) Purge(purgeAddr s.Address) (nextAddr s.Address, nextKey s.Key, er
 				session := uuid.New()
 
 				t.store.logger.WithFields(bark.Fields{
-					`purgeAddr`:   purgeAddr,
-					common.TagExt: t.id,
-					`duration`:    duration,
-					`session`:     session,
+					`purgeAddr`:    purgeAddr,
+					`curPurgeAddr`: curPurgeAddr,
+					common.TagExt:  t.id.String(),
+					`duration`:     duration,
+					`session`:      session,
+					`num-files`:    len(dbg),
 				}).Info(`Purge took too long!`)
 
 				for _, di := range dbg {
 
 					if di.deleted {
 						t.store.logger.WithFields(bark.Fields{
-							`filename`: di.filename,
-							`maxAddr`:  di.maxAddr,
-							`deleted`:  di.deleted,
-							`duration`: di.duration,
-							`session`:  session,
+							common.TagExt: t.id.String(),
+							`filename`:    di.filename,
+							`maxAddr`:     di.maxAddr,
+							`deleted`:     di.deleted,
+							`duration`:    di.duration,
+							`session`:     session,
 						}).Info(`RocksDB.DeleteFile`)
 					} else {
 						t.store.logger.WithFields(bark.Fields{
-							`filename`: di.filename,
-							`deleted`:  di.deleted,
-							`session`:  session,
+							common.TagExt: t.id.String(),
+							`filename`:    di.filename,
+							`deleted`:     di.deleted,
+							`session`:     session,
 						}).Info(`RocksDB.DeleteFile`)
 					}
 				}
