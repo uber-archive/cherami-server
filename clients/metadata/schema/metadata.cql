@@ -226,9 +226,12 @@ CREATE TYPE consumer_group (
 
 CREATE TABLE consumer_groups (
   uuid uuid PRIMARY KEY,
+  destination_uuid uuid,
   is_multi_zone boolean,
   consumer_group frozen<consumer_group>,
 );
+
+CREATE INDEX ON consumer_groups (destination_uuid);
 CREATE INDEX ON consumer_groups (is_multi_zone);
 
 CREATE TABLE consumer_groups_by_name (
