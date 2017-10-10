@@ -50,22 +50,22 @@ const (
 )
 
 // topicPartition
-type topicPartition struct {
+type TopicPartition struct {
 	Topic     string
 	Partition int32
 }
 
-type kafkaTopicPartitionAddresser struct {
+type KafkaTopicPartitionAddresser struct {
 	sync.RWMutex
-	tp2i   map[topicPartition]int64
-	i2tp   map[int64]*topicPartition
+	tp2i   map[TopicPartition]int64
+	i2tp   map[int64]*TopicPartition
 	nextTP int64
 }
 
-var kafkaAddresser = kafkaTopicPartitionAddresser{}
+var kafkaAddresser = KafkaTopicPartitionAddresser{}
 
 // GetStoreAddress converts a given topic, partition, and offset into a store address
-func (k *kafkaTopicPartitionAddresser) GetStoreAddress(tp *topicPartition, offset int64, logFn func() bark.Logger) (address storeHostAddress) {
+func (k *KafkaTopicPartitionAddresser) GetStoreAddress(tp *TopicPartition, offset int64, logFn func() bark.Logger) (address storeHostAddress) {
 	calc := func(tpInt int64, offset int64) storeHostAddress {
 		return storeHostAddress((tpInt * kafkaAddresserDivisor) + offset)
 	}
@@ -101,8 +101,8 @@ func (k *kafkaTopicPartitionAddresser) GetStoreAddress(tp *topicPartition, offse
 
 	// Check initialization
 	if k.nextTP == 0 {
-		k.tp2i = make(map[topicPartition]int64)
-		k.i2tp = make(map[int64]*topicPartition)
+		k.tp2i = make(map[TopicPartition]int64)
+		k.i2tp = make(map[int64]*TopicPartition)
 	}
 
 	// Assignment
@@ -126,8 +126,8 @@ func (k *kafkaTopicPartitionAddresser) GetStoreAddress(tp *topicPartition, offse
 }
 
 // GetTopicPartitionOffset recovers the original topic, partition, and offset from a store address
-func (k *kafkaTopicPartitionAddresser) GetTopicPartitionOffset(address storeHostAddress, logFn func() bark.Logger) (tp *topicPartition, offset int64) {
-	returnOffset := func(tp *topicPartition, address storeHostAddress) (tpOut *topicPartition, offset int64) {
+func (k *KafkaTopicPartitionAddresser) GetTopicPartitionOffset(address storeHostAddress, logFn func() bark.Logger) (tp *TopicPartition, offset int64) {
+	returnOffset := func(tp *TopicPartition, address storeHostAddress) (tpOut *TopicPartition, offset int64) {
 		return tp, int64(address) % kafkaAddresserDivisor
 	}
 
@@ -143,7 +143,7 @@ func (k *kafkaTopicPartitionAddresser) GetTopicPartitionOffset(address storeHost
 	k.RUnlock()
 
 	tpInt := recoverTP(address)
-	_, offset = returnOffset(&topicPartition{}, address)
+	_, offset = returnOffset(&TopicPartition{}, address)
 
 	logFn().WithFields(bark.Fields{
 		`module`:            `kafkaAddresser`,
