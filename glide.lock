@@ -134,7 +134,7 @@ imports:
   - common/websocket
   - stream
 - name: github.com/uber/cherami-thrift
-  version: f3388f3727e988b990a63bc5d90fa41488e15092
+  version:  f3388f3727e988b990a63bc5d90fa41488e15092
   subpackages:
   - .generated/go/admin
   - .generated/go/cherami
