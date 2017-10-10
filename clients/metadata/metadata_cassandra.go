@@ -1189,6 +1189,22 @@ const (
 		columnZoneConfigs + `: ?, ` +
 		columnOptions + `: ? }`
 
+	cqlConsumerGroupType = columnConsumerGroup + `.` + columnUUID + "," +
+		columnConsumerGroup + `.` + columnDestinationUUID + "," +
+		columnConsumerGroup + `.` + columnName + "," +
+		columnConsumerGroup + `.` + columnStartFrom + "," +
+		columnConsumerGroup + `.` + columnStatus + "," +
+		columnConsumerGroup + `.` + columnLockTimeoutSeconds + "," +
+		columnConsumerGroup + `.` + columnMaxDeliveryCount + "," +
+		columnConsumerGroup + `.` + columnSkipOlderMessagesSeconds + "," +
+		columnConsumerGroup + `.` + columnDelaySeconds + "," +
+		columnConsumerGroup + `.` + columnDeadLetterQueueDestinationUUID + "," +
+		columnConsumerGroup + `.` + columnOwnerEmail + "," +
+		columnConsumerGroup + `.` + columnIsMultiZone + "," +
+		columnConsumerGroup + `.` + columnActiveZone + "," +
+		columnConsumerGroup + `.` + columnZoneConfigs + "," +
+		columnConsumerGroup + `.` + columnOptions
+
 	sqlInsertCGByUUID = `INSERT INTO ` + tableConsumerGroups +
 		`(` +
 		columnUUID + `, ` +
@@ -1205,61 +1221,24 @@ const (
 		`) VALUES (?, ?, ?, ` + sqlCGValue + `) IF NOT EXISTS`
 
 	sqlGetCGByName = `SELECT  ` +
-		columnConsumerGroup + `.` + columnUUID + "," +
-		columnDestinationUUID + "," +
-		columnName + "," +
-		columnConsumerGroup + `.` + columnStartFrom + "," +
-		columnConsumerGroup + `.` + columnStatus + "," +
-		columnConsumerGroup + `.` + columnLockTimeoutSeconds + "," +
-		columnConsumerGroup + `.` + columnMaxDeliveryCount + "," +
-		columnConsumerGroup + `.` + columnSkipOlderMessagesSeconds + "," +
-		columnConsumerGroup + `.` + columnDelaySeconds + "," +
-		columnConsumerGroup + `.` + columnDeadLetterQueueDestinationUUID + "," +
-		columnConsumerGroup + `.` + columnOwnerEmail + "," +
-		columnConsumerGroup + `.` + columnIsMultiZone + "," +
-		columnConsumerGroup + `.` + columnActiveZone + "," +
-		columnConsumerGroup + `.` + columnZoneConfigs + "," +
-		columnConsumerGroup + `.` + columnOptions +
+		cqlConsumerGroupType +
 		` FROM ` + tableConsumerGroupsByName +
 		` WHERE ` + columnDestinationUUID + `=? and ` + columnName + `=?`
 
 	sqlGetCG = `SELECT  ` +
-		columnConsumerGroup + `.` + columnUUID + "," +
-		columnConsumerGroup + `.` + columnDestinationUUID + "," +
-		columnConsumerGroup + `.` + columnName + "," +
-		columnConsumerGroup + `.` + columnStartFrom + "," +
-		columnConsumerGroup + `.` + columnStatus + "," +
-		columnConsumerGroup + `.` + columnLockTimeoutSeconds + "," +
-		columnConsumerGroup + `.` + columnMaxDeliveryCount + "," +
-		columnConsumerGroup + `.` + columnSkipOlderMessagesSeconds + "," +
-		columnConsumerGroup + `.` + columnDelaySeconds + "," +
-		columnConsumerGroup + `.` + columnDeadLetterQueueDestinationUUID + "," +
-		columnConsumerGroup + `.` + columnOwnerEmail + "," +
-		columnConsumerGroup + `.` + columnIsMultiZone + "," +
-		columnConsumerGroup + `.` + columnActiveZone + "," +
-		columnConsumerGroup + `.` + columnZoneConfigs + "," +
-		columnConsumerGroup + `.` + columnOptions +
+		cqlConsumerGroupType +
 		` FROM ` + tableConsumerGroups
 
 	sqlGetCGByUUID = sqlGetCG + ` WHERE ` + columnUUID + `=?`
 
 	sqlListCGsByDestUUID = `SELECT  ` +
-		columnConsumerGroup + `.` + columnUUID + "," +
-		columnDestinationUUID + "," +
-		columnName + "," +
-		columnConsumerGroup + `.` + columnStartFrom + "," +
-		columnConsumerGroup + `.` + columnStatus + "," +
-		columnConsumerGroup + `.` + columnLockTimeoutSeconds + "," +
-		columnConsumerGroup + `.` + columnMaxDeliveryCount + "," +
-		columnConsumerGroup + `.` + columnSkipOlderMessagesSeconds + "," +
-		columnConsumerGroup + `.` + columnDelaySeconds + "," +
-		columnConsumerGroup + `.` + columnDeadLetterQueueDestinationUUID + "," +
-		columnConsumerGroup + `.` + columnOwnerEmail + "," +
-		columnConsumerGroup + `.` + columnIsMultiZone + "," +
-		columnConsumerGroup + `.` + columnActiveZone + "," +
-		columnConsumerGroup + `.` + columnZoneConfigs + "," +
-		columnConsumerGroup + `.` + columnOptions +
+		cqlConsumerGroupType +
 		` FROM ` + tableConsumerGroupsByName +
+		` WHERE ` + columnDestinationUUID + `=?`
+
+	sqlListCGsUUID = `SELECT  ` +
+		cqlConsumerGroupType +
+		` FROM ` + tableConsumerGroups +
 		` WHERE ` + columnDestinationUUID + `=?`
 
 	sqlUpdateCGByUUID = `UPDATE ` + tableConsumerGroups +
@@ -1980,6 +1959,73 @@ func (s *CassandraMetadataService) ListConsumerGroups(ctx thrift.Context, reques
 		&cg.Options) {
 
 		// Get a new item within limit
+		if cg.GetStatus() == shared.ConsumerGroupStatus_DELETED {
+			zoneConfigsData = nil
+			continue
+		}
+
+		cg.ZoneConfigs = unmarshalCgZoneConfigs(zoneConfigsData)
+		result.ConsumerGroups = append(result.ConsumerGroups, cg)
+		cg = getUtilConsumerGroupDescription()
+		zoneConfigsData = nil
+	}
+
+	nextPageToken := iter.PageState()
+	result.NextPageToken = make([]byte, len(nextPageToken))
+	copy(result.NextPageToken, nextPageToken)
+	if err := iter.Close(); err != nil {
+		return nil, &shared.InternalServiceError{
+			Message: err.Error(),
+		}
+	}
+
+	return result, nil
+}
+
+// ListConsumerGroupsUUID returns all ConsumerGroups matching the given destination-uuid.
+func (s *CassandraMetadataService) ListConsumerGroupsUUID(ctx thrift.Context, request *shared.ListConsumerGroupsUUIDRequest) (*shared.ListConsumerGroupsUUIDResult_, error) {
+
+	if !request.IsSetDestinationUUID() {
+		return nil, &shared.BadRequestError{
+			Message: fmt.Sprintf("DestinationUUID not specified"),
+		}
+	}
+
+	dstUUID := request.GetDestinationUUID()
+
+	var iter *gocql.Iter
+	iter = s.session.Query(sqlListCGsUUID, dstUUID).Consistency(s.lowConsLevel).PageSize(int(request.GetLimit())).PageState(request.PageToken).Iter()
+
+	if iter == nil {
+		return nil, &shared.InternalServiceError{
+			Message: "Query returned nil iterator",
+		}
+	}
+
+	result := &shared.ListConsumerGroupsUUIDResult_{
+		ConsumerGroups: []*shared.ConsumerGroupDescription{},
+		NextPageToken:  request.PageToken,
+	}
+	cg := getUtilConsumerGroupDescription()
+	var zoneConfigsData []map[string]interface{}
+	for iter.Scan(
+		cg.ConsumerGroupUUID,
+		cg.DestinationUUID,
+		cg.ConsumerGroupName,
+		cg.StartFrom,
+		cg.Status,
+		cg.LockTimeoutSeconds,
+		cg.MaxDeliveryCount,
+		cg.SkipOlderMessagesSeconds,
+		cg.DelaySeconds,
+		&cg.DeadLetterQueueDestinationUUID,
+		cg.OwnerEmail,
+		cg.IsMultiZone,
+		cg.ActiveZone,
+		&zoneConfigsData,
+		&cg.Options) {
+
+		// skip over deleted rows
 		if cg.GetStatus() == shared.ConsumerGroupStatus_DELETED {
 			zoneConfigsData = nil
 			continue

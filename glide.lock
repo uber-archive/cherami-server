@@ -1,5 +1,5 @@
-hash: b4ac6cca4953caf65596799ec1216e88cc1f27efe83097737844d2da31d9429a
-updated: 2017-10-06T14:22:19.357459794-07:00
+hash: 07840224a45c283fa0896bf4a06c4da77803b9c89f11bdbedb1468c00ebd96dc
+updated: 2017-10-10T11:37:41.115964499-07:00
 imports:
 - name: github.com/apache/thrift
   version: b2a4d4ae21c789b689dd162deb819665567f481c
@@ -54,7 +54,7 @@ imports:
 - name: github.com/codegangsta/cli
   version: cf33a9befefdd6c6ea1a236ab6d546e797a62cbf
 - name: github.com/davecgh/go-spew
-  version: ecdeabc65495df2dec95d7c4a4c3e021903035e5
+  version: a476722483882dd40b8111f0eb64e1d7f43f56e4
   subpackages:
   - spew
 - name: github.com/dgryski/go-farm
@@ -134,7 +134,7 @@ imports:
   - common/websocket
   - stream
 - name: github.com/uber/cherami-thrift
-  version: 45b0a9da65195b298b3967360a1a069907d5266a
+  version: f3388f3727e988b990a63bc5d90fa41488e15092
   subpackages:
   - .generated/go/admin
   - .generated/go/cherami
@@ -176,7 +176,7 @@ imports:
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
-  version: a04bdaca5b32abe1c069418fb7088ae607de5bd0
+  version: 0a9397675ba34b2845f758fe3cd68828369c6517
   subpackages:
   - bpf
   - context
