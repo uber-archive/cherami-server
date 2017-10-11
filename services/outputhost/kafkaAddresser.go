@@ -49,12 +49,13 @@ const (
 	kafkaAddresserMaxAddress = kafkaAddresserMaxTP*kafkaAddresserDivisor + kafkaAddresserMaxOffset
 )
 
-// topicPartition
+// TopicPartition represents a Kafka topic/partition pair
 type TopicPartition struct {
 	Topic     string
 	Partition int32
 }
 
+// KafkaTopicPartitionAddresser translates topic/partition/offset to/from store address
 type KafkaTopicPartitionAddresser struct {
 	sync.RWMutex
 	tp2i   map[TopicPartition]int64
