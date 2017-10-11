@@ -128,7 +128,7 @@ func (k *kafkaStream) getDefaultKafkaMessageConverter() KafkaMessageConverter {
 		c.Message = &store.ReadMessage{
 			Address: common.Int64Ptr(
 				int64(kafkaAddresser.GetStoreAddress(
-					&topicPartition{
+					&TopicPartition{
 						Topic:     m.Topic,
 						Partition: m.Partition,
 					},
