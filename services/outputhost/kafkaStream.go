@@ -119,6 +119,7 @@ func OpenKafkaStream(c <-chan *s.ConsumerMessage, kafkaMessageConverter KafkaMes
 	return k
 }
 
+// GetDefaultKafkaMessageConverter returns the default kafka message converter
 func GetDefaultKafkaMessageConverter(seqNo *int64, logger bark.Logger) KafkaMessageConverter {
 	return func(m *s.ConsumerMessage) (c *store.ReadMessageContent) {
 		c = &store.ReadMessageContent{
