@@ -1208,6 +1208,7 @@ const (
 	sqlInsertCGByUUID = `INSERT INTO ` + tableConsumerGroups +
 		`(` +
 		columnUUID + `, ` +
+		columnDestinationUUID + `, ` +
 		columnIsMultiZone + `, ` +
 		columnConsumerGroup +
 		`) VALUES (?, ?,` + sqlCGValue + `)`
@@ -1242,7 +1243,7 @@ const (
 		` WHERE ` + columnDestinationUUID + `=?`
 
 	sqlUpdateCGByUUID = `UPDATE ` + tableConsumerGroups +
-		` SET ` + columnIsMultiZone + ` = ?, ` + columnConsumerGroup + `= ` + sqlCGValue +
+		` SET ` + columnDestinationUUID + ` = ?, ` + columnIsMultiZone + ` = ?, ` + columnConsumerGroup + `= ` + sqlCGValue +
 		` WHERE ` + columnUUID + `=?`
 
 	sqlUpdateCGByName = `UPDATE ` + tableConsumerGroupsByName +
@@ -1313,6 +1314,7 @@ func (s *CassandraMetadataService) CreateConsumerGroupUUID(ctx thrift.Context, r
 
 	err = s.session.Query(sqlInsertCGByUUID,
 		cgUUID,
+		dstUUID,
 		createRequest.GetIsMultiZone(),
 		cgUUID,
 		dstUUID,
@@ -1630,6 +1632,7 @@ func (s *CassandraMetadataService) UpdateConsumerGroup(ctx thrift.Context, reque
 
 	batch.Query(sqlUpdateCGByUUID,
 		// Value columns
+		newCG.GetDestinationUUID(),
 		newCG.GetIsMultiZone(),
 		newCG.GetConsumerGroupUUID(),
 		newCG.GetDestinationUUID(),
@@ -1773,6 +1776,7 @@ func (s *CassandraMetadataService) DeleteConsumerGroup(ctx thrift.Context, reque
 
 	batch.Query(sqlUpdateCGByUUID,
 		// Value columns
+		existingCG.GetDestinationUUID(),
 		existingCG.GetIsMultiZone(),
 		existingCG.GetConsumerGroupUUID(),
 		existingCG.GetDestinationUUID(),
@@ -1841,6 +1845,7 @@ func (s *CassandraMetadataService) DeleteConsumerGroupUUID(ctx thrift.Context, r
 
 	query := s.session.Query(sqlDeleteCGByUUIDWithTTL,
 		existing.GetConsumerGroupUUID(),
+		existing.GetDestinationUUID(),
 		existing.GetIsMultiZone(),
 		existing.GetConsumerGroupUUID(),
 		existing.GetDestinationUUID(),
