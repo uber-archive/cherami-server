@@ -114,12 +114,13 @@ func OpenKafkaStream(c <-chan *s.ConsumerMessage, kafkaMessageConverter KafkaMes
 		kafkaConverter: kafkaMessageConverter,
 	}
 	if k.kafkaConverter == nil {
-		k.kafkaConverter = k.getDefaultKafkaMessageConverter()
+		k.kafkaConverter = GetDefaultKafkaMessageConverter(&k.seqNo, k.logger)
 	}
 	return k
 }
 
-func (k *kafkaStream) getDefaultKafkaMessageConverter() KafkaMessageConverter {
+// GetDefaultKafkaMessageConverter returns the default kafka message converter
+func GetDefaultKafkaMessageConverter(seqNo *int64, logger bark.Logger) KafkaMessageConverter {
 	return func(m *s.ConsumerMessage) (c *store.ReadMessageContent) {
 		c = &store.ReadMessageContent{
 			Type: store.ReadMessageContentTypePtr(store.ReadMessageContentType_MESSAGE),
@@ -134,7 +135,7 @@ func (k *kafkaStream) getDefaultKafkaMessageConverter() KafkaMessageConverter {
 					},
 					m.Offset,
 					func() bark.Logger {
-						return k.logger.WithFields(bark.Fields{
+						return logger.WithFields(bark.Fields{
 							`module`:    `kafkaStream`,
 							`topic`:     m.Topic,
 							`partition`: m.Partition,
@@ -144,7 +145,7 @@ func (k *kafkaStream) getDefaultKafkaMessageConverter() KafkaMessageConverter {
 		}
 
 		c.Message.Message = &store.AppendMessage{
-			SequenceNumber: common.Int64Ptr(atomic.AddInt64(&k.seqNo, 1)),
+			SequenceNumber: common.Int64Ptr(atomic.AddInt64(seqNo, 1)),
 		}
 
 		if !m.Timestamp.IsZero() {
