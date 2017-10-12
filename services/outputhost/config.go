@@ -38,10 +38,6 @@ type (
 		// with different size config as follows:
 		// "/test/destination//test/cg_1=50,/test/destination//test/cg_2=100"
 		MessageCacheSize []string `name:"messagecachesize" default:"/=10000"`
-
-		// RedeliveryIntervalInMs is used to configure the per CG message redelivery interval.
-		// Just like MessageCacheSize above
-		RedeliveryIntervalInMs []string `name:"redeliveryIntervalInMs" default:"/=100"`
 	}
 )
 
