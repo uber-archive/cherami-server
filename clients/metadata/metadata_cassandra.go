@@ -1211,7 +1211,7 @@ const (
 		columnDestinationUUID + `, ` +
 		columnIsMultiZone + `, ` +
 		columnConsumerGroup +
-		`) VALUES (?, ?,` + sqlCGValue + `)`
+		`) VALUES (?, ?, ?, ` + sqlCGValue + `)`
 
 	sqlInsertCGByName = `INSERT INTO ` + tableConsumerGroupsByName +
 		`(` +
