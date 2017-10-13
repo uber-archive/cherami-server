@@ -164,7 +164,7 @@ type AckID string
 const defaultLockTimeoutInSeconds int32 = 42
 const defaultMaxDeliveryCount int32 = 2
 const blockCheckingTimeout time.Duration = time.Minute
-const defaultRedeliveryIntervalInMs = 100
+const redeliveryInterval = time.Second / 2
 
 // SmartRetryDisableString can be added to a destination or CG owner email to request smart retry to be disabled
 // Note that Google allows something like this: gbailey+smartRetryDisable@uber.com
@@ -261,12 +261,11 @@ type cgMsgCache struct {
 	notifier                 Notifier // this notifier is used to slow down cons connections based on NACKs
 	consumerHealth
 	messageCacheHealth
-	creditNotifyCh         chan<- int32        // this is the notify ch to notify credits to extents
-	creditRequestCh        <-chan string       // read-only channel used by the extents to request credits specifically for that extent.
-	maxOutstandingMsgs     int32               // max allowed outstanding messages
-	numAcks                int32               // num acks we received
-	cgCache                *consumerGroupCache // just a reference to the cgCache to grant credits to a local extent directly
-	redeliveryIntervalInMs int32               // redelivery ticker interval
+	creditNotifyCh     chan<- int32        // this is the notify ch to notify credits to extents
+	creditRequestCh    <-chan string       // read-only channel used by the extents to request credits specifically for that extent.
+	maxOutstandingMsgs int32               // max allowed outstanding messages
+	numAcks            int32               // num acks we received
+	cgCache            *consumerGroupCache // just a reference to the cgCache to grant credits to a local extent directly
 	shared.ConsumerGroupDescription
 }
 
@@ -384,7 +383,6 @@ func (msgCache *cgMsgCache) utilHandleRedeliveryTicker() {
 	msgCache.startTimer(eventTimer)
 
 	var redeliveries int64
-	var timeouts int64
 
 	now := common.Now()
 
@@ -403,7 +401,7 @@ func (msgCache *cgMsgCache) utilHandleRedeliveryTicker() {
 		msgCache.reinjectlastAckMsg() // injects the last acked message if it is not already injected
 	}
 
-	for i, cache := range timerCaches {
+	for _, cache := range timerCaches {
 
 		nExpired := 0
 
@@ -441,10 +439,6 @@ func (msgCache *cgMsgCache) utilHandleRedeliveryTicker() {
 						redeliveries++
 						msgCache.consumerHealth.lastRedeliveryTime = now // don't use variable 'now', since processing may be very slow in degenerate cases; consider moving to utilHandleRedeliveredMsg
 
-						if i == 0 { // means the message is from the redeliveryTimerCache, where the timeout messages are
-							timeouts++
-						}
-
 						if !stalled && cm.dlqInhibit > 0 {
 							cm.dlqInhibit-- // Use up one of the 'extra lives', but only if the consumer group seems healthy
 						}
@@ -475,11 +469,6 @@ func (msgCache *cgMsgCache) utilHandleRedeliveryTicker() {
 		}
 
 	} // for timercaches
-
-	// Report timeout metrics
-	if timeouts > 0 {
-		msgCache.consumerM3Client.AddCounter(metrics.ConsConnectionScope, metrics.OutputhostCGMessageTimeout, timeouts)
-	}
 
 	// Report redelivery metrics; consider moving to utilHandleRedeliveredMsg
 	if redeliveries > 0 {
@@ -990,21 +979,12 @@ func (msgCache *cgMsgCache) updateConn(connID int, event msgEvent) {
 
 func (msgCache *cgMsgCache) refreshCgConfig(oldOutstandingMessages int32) {
 	outstandingMsgs := oldOutstandingMessages
-	redeliveryIntervalInMs := msgCache.redeliveryIntervalInMs
-
 	cfg, err := msgCache.cgCache.getDynamicCgConfig()
 	if err == nil {
 		outstandingMsgs = msgCache.cgCache.getMessageCacheSize(cfg, oldOutstandingMessages)
-		redeliveryIntervalInMs = msgCache.cgCache.getRedeliveryInterval(cfg, msgCache.redeliveryIntervalInMs)
 	}
 
 	msgCache.maxOutstandingMsgs = outstandingMsgs
-
-	if redeliveryIntervalInMs != msgCache.redeliveryIntervalInMs {
-		msgCache.redeliveryTicker.Stop()
-		msgCache.redeliveryTicker = time.NewTicker(time.Duration(redeliveryIntervalInMs) * time.Millisecond)
-		msgCache.redeliveryIntervalInMs = redeliveryIntervalInMs
-	}
 }
 
 // TODO: Make the delivery cache shared among all consumer groups
@@ -1032,7 +1012,7 @@ func newMessageDeliveryCache(
 		ackMsgCh:                 cgCache.ackMsgCh,
 		nackMsgCh:                cgCache.nackMsgCh,
 		closeChannel:             make(chan struct{}),
-		redeliveryTicker:         time.NewTicker(defaultRedeliveryIntervalInMs * time.Millisecond),
+		redeliveryTicker:         time.NewTicker(redeliveryInterval),
 		ConsumerGroupDescription: cgCache.cachedCGDesc,
 		consumerM3Client:         cgCache.consumerM3Client,
 		m3Client:                 cgCache.m3Client,
@@ -1040,7 +1020,6 @@ func newMessageDeliveryCache(
 		creditNotifyCh:           cgCache.creditNotifyCh,
 		creditRequestCh:          cgCache.creditRequestCh,
 		cgCache:                  cgCache, // just a reference to the cgCache
-		redeliveryIntervalInMs:   defaultRedeliveryIntervalInMs,
 		consumerHealth: consumerHealth{
 			badConns:        make(map[int]int),
 			lastAckTime:     common.Now(), // Need to start in the non-stalled state
