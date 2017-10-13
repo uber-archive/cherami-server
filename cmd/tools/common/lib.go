@@ -733,7 +733,6 @@ func SetAdminCommands(commands *[]cli.Command) {
 "cherami-storehost",      "adminStatus",                    if set to anything other than "enabled", will prevent placement of new extent on this store
 "cherami-storehost",      "minFreeDiskSpaceBytes",          integer, minimum required free disk space in bytes to place a new extent
 "cherami-outputhost",     "messagecachesize",               comma-separated list of "destination/CG_name=value" for message cache size
-"cherami-outputhost",     "redeliveryIntervalInMs",         the message redelivery interval in milliseconds
 			`,
 			Subcommands: []cli.Command{
 				{
