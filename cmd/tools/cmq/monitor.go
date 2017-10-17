@@ -347,9 +347,9 @@ func (t *cgMonitor) refreshMetadata() error {
 
 			if ackSeqUpdatedµs > x.ackSeqUpdatedµs {
 
-				x.ackSeqDelta = ackSeq - x.ackSeq
-
 				if x.ackSeqUpdatedµs > 0 {
+
+					x.ackSeqDelta = ackSeq - x.ackSeq
 					x.ackSeqRate = float32(x.ackSeqDelta) * 1e6 / float32(ackSeqUpdatedµs-x.ackSeqUpdatedµs)
 				}
 
@@ -358,7 +358,7 @@ func (t *cgMonitor) refreshMetadata() error {
 
 			if readSeqUpdatedµs > x.readSeqUpdatedµs {
 
-				if x.readSeqUpdatedµs != 0 {
+				if x.readSeqUpdatedµs > 0 {
 					x.readSeqDelta = readSeq - x.readSeq
 				}
 
@@ -459,15 +459,18 @@ func (t *cgMonitor) refreshMetadata() error {
 
 			if beginSeqUpdatedµs > x.beginSeqUpdatedµs {
 
-				x.beginSeqDelta = beginSeq - x.beginSeq
+				if x.beginSeqUpdatedµs > 0 {
+					x.beginSeqDelta = beginSeq - x.beginSeq
+				}
+
 				x.beginSeq, x.beginSeqUpdatedµs = beginSeq, beginSeqUpdatedµs
 			}
 
 			if lastSeqUpdatedµs > x.lastSeqUpdatedµs {
 
-				x.lastSeqDelta = lastSeq - x.lastSeq
-
 				if x.lastSeqUpdatedµs > 0 {
+
+					x.lastSeqDelta = lastSeq - x.lastSeq
 					x.lastSeqRate = float32(x.lastSeqDelta) * 1e6 / float32(lastSeqUpdatedµs-x.lastSeqUpdatedµs)
 				}
 
