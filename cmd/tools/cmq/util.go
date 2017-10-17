@@ -123,20 +123,32 @@ func appendWhere(cql string, where []string) string {
 func getDestStatus(status string) int {
 
 	switch status {
+	case "0":
+		fallthrough
 	case "open":
 		fallthrough
 	case "active":
 		fallthrough
 	case "enabled":
 		return int(shared.DestinationStatus_ENABLED)
+	case "1":
+		fallthrough
 	case "disabled":
 		return int(shared.DestinationStatus_DISABLED)
+	case "2":
+		fallthrough
 	case "sendonly":
 		return int(shared.DestinationStatus_SENDONLY)
+	case "3":
+		fallthrough
 	case "receiveonly":
 		return int(shared.DestinationStatus_RECEIVEONLY)
+	case "4":
+		fallthrough
 	case "deleting":
 		return int(shared.DestinationStatus_DELETING)
+	case "5":
+		fallthrough
 	case "deleted":
 		return int(shared.DestinationStatus_DELETED)
 	default:
@@ -147,16 +159,22 @@ func getDestStatus(status string) int {
 func getCGStatus(status string) int {
 
 	switch status {
+	case "0":
+		fallthrough
 	case "open":
 		fallthrough
 	case "active":
 		fallthrough
 	case "enabled":
 		return int(shared.ConsumerGroupStatus_ENABLED)
+	case "1":
+		fallthrough
 	case "disabled":
 		return int(shared.ConsumerGroupStatus_DISABLED)
+	case "2":
+		fallthrough
 	case "deleted":
-		return int(shared.DestinationStatus_DELETED)
+		return int(shared.ConsumerGroupStatus_DELETED)
 	default:
 		return -1
 	}
@@ -165,18 +183,28 @@ func getCGStatus(status string) int {
 func getExtStatus(status string) int {
 
 	switch status {
+	case "0":
+		fallthrough
 	case "open":
 		fallthrough
 	case "active":
 		fallthrough
 	case "enabled":
 		return int(shared.ExtentStatus_OPEN)
+	case "1":
+		fallthrough
 	case "sealed":
 		return int(shared.ExtentStatus_SEALED)
+	case "2":
+		fallthrough
 	case "consumed":
 		return int(shared.ExtentStatus_CONSUMED)
+	case "3":
+		fallthrough
 	case "archived":
 		return int(shared.ExtentStatus_ARCHIVED)
+	case "4":
+		fallthrough
 	case "deleted":
 		return int(shared.ExtentStatus_DELETED)
 	default:
@@ -187,14 +215,20 @@ func getExtStatus(status string) int {
 func getCgxStatus(status string) int {
 
 	switch status {
+	case "0":
+		fallthrough
 	case "open":
 		fallthrough
 	case "active":
 		fallthrough
 	case "enabled":
 		return int(shared.ConsumerGroupExtentStatus_OPEN)
+	case "1":
+		fallthrough
 	case "consumed":
 		return int(shared.ConsumerGroupExtentStatus_CONSUMED)
+	case "2":
+		fallthrough
 	case "deleted":
 		return int(shared.ConsumerGroupExtentStatus_DELETED)
 	default:
@@ -205,20 +239,32 @@ func getCgxStatus(status string) int {
 func getSxStatus(status string) int {
 
 	switch status {
+	case "0":
+		fallthrough
 	case "created":
 		return int(shared.ExtentReplicaStatus_CREATED)
 	case "open":
 		fallthrough
 	case "active":
 		fallthrough
+	case "1":
+		fallthrough
 	case "enabled":
 		return int(shared.ExtentReplicaStatus_OPEN)
+	case "2":
+		fallthrough
 	case "sealed":
 		return int(shared.ExtentReplicaStatus_SEALED)
+	case "3":
+		fallthrough
 	case "deleted":
 		return int(shared.ExtentReplicaStatus_DELETED)
+	case "4":
+		fallthrough
 	case "corrupted":
 		return int(shared.ExtentReplicaStatus_CORRUPTED)
+	case "5":
+		fallthrough
 	case "missing":
 		return int(shared.ExtentReplicaStatus_MISSING)
 	default:
@@ -229,12 +275,20 @@ func getSxStatus(status string) int {
 func getDestType(destType string) int {
 
 	switch destType {
+	case "0":
+		fallthrough
 	case "plain":
 		return int(shared.DestinationType_PLAIN)
+	case "1":
+		fallthrough
 	case "timer":
 		return int(shared.DestinationType_TIMER)
+	case "2":
+		fallthrough
 	case "log":
 		return int(shared.DestinationType_LOG)
+	case "3":
+		fallthrough
 	case "kafka":
 		return int(shared.DestinationType_KAFKA)
 	default:
