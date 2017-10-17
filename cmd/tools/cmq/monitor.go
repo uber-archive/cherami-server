@@ -19,6 +19,43 @@ import (
 // - show total consume/publish rates
 // - show special status if possibly 'stuck'
 
+func monitor(c *cli.Context, mc *MetadataClient) error {
+
+	if c.NArg() < 2 {
+		fmt.Printf("dest-uuid and cg-uuid not specified\n")
+		return nil
+	}
+
+	destUUID := c.Args()[0]
+	cgUUID := c.Args()[1]
+
+	ticker := time.NewTicker(time.Second) // don't query more than once every second // TODO: make configurable
+
+	// print("\033[H\033[2J") // clear screen
+
+	cgMon := newCGMonitor(mc, destUUID, cgUUID)
+
+	output, _, _ := cgMon.refresh()
+
+	print("\033[H\033[2J") // clear screen and move cursor to (0,0)
+	print(output)
+
+	for range ticker.C {
+
+		output, _, _ := cgMon.refresh()
+
+		// print("\033[H\033[2J") // clear screen and move cursor to (0,0)
+		print("\033[H") // move cursor to (0,0)
+		print(output)
+		fmt.Printf(" publish: %.1f msgs/sec [%d msgs]    \n", cgMon.ratePublish, cgMon.deltaPublish)
+		fmt.Printf(" replicate: %.1f msgs/sec [%d msgs]   \n", cgMon.rateReplicate, cgMon.deltaPublish)
+		fmt.Printf(" consume: %.1f msgs/sec [%d msgs]    \n", cgMon.rateConsume, cgMon.deltaConsume)
+		fmt.Printf(" backlog: %d    \n", cgMon.totalBacklog)
+	}
+
+	return nil
+}
+
 type extStatus int
 
 const (
@@ -77,232 +114,150 @@ func (t cgxStatus) String() string {
 
 type extentInfo struct {
 	uuid            string
-	createdMs       int64
+	remote          bool
+	createdµs       int64
 	extStatus       extStatus
-	statusUpdatedMs int64
+	statusUpdatedµs int64
 	cgxStatus       cgxStatus
 	dlq             bool
 
 	ackSeq          int64
-	ackSeqUpdatedMs int64
+	ackSeqUpdatedµs int64
+	ackSeqDelta     int64
 	ackSeqRate      float32
 
 	readSeq          int64
-	readSeqUpdatedMs int64
-	readSeqRate      float32
+	readSeqUpdatedµs int64
+	readSeqDelta     int64
 
 	beginSeq          int64
-	beginSeqUpdatedMs int64
-	beginSeqRate      float32
+	beginSeqUpdatedµs int64
+	beginSeqDelta     int64
 
 	lastSeq          int64
-	lastSeqUpdatedMs int64
+	lastSeqUpdatedµs int64
+	lastSeqDelta     int64
 	lastSeqRate      float32
 
-	backlog     int64
-	backlogRate float32
+	backlog int64
 
 	outputUUID string
 	storeUUID  string
 }
 
+// units in micro-seconds
 const (
-	Second int64 = 10e6
-	Minute int64 = 60 * Second
-	Hour   int64 = 60 * Minute
-	Day    int64 = 24 * Hour
+	Secondµs int64 = 10e6
+	Minuteµs int64 = 60 * Secondµs
+	Hourµs   int64 = 60 * Minuteµs
+	Dayµs    int64 = 24 * Hourµs
 )
-
-func timeSinceMsUTC(tMillis int64) string {
-
-	return timeSince(tMillis * 1000)
-}
 
 func timeSince(tMicros int64) string {
 
 	d := time.Now().UnixNano()/1000 - tMicros
 
 	switch {
-	case d > Day:
-		return fmt.Sprintf("%02dd", d/Day)
+	case d > Dayµs:
+		return fmt.Sprintf("%02dd", d/Dayµs)
 
-	case d > Hour:
-		return fmt.Sprintf("%02dh", d/Hour)
+	case d > Hourµs:
+		return fmt.Sprintf("%02dh", d/Hourµs)
 
-	case d > Minute:
-		return fmt.Sprintf("%02dm", d/Minute)
+	case d > Minuteµs:
+		return fmt.Sprintf("%02dm", d/Minuteµs)
 
-	// case d > Second:
+	// case d > Secondµs:
 	// 	fallthrough
 
 	default:
-		return fmt.Sprintf("%02ds", d/Second)
+		return fmt.Sprintf("%02ds", d/Secondµs)
 	}
-}
-
-func monitor(c *cli.Context, mc *MetadataClient) error {
-
-	if c.NArg() < 2 {
-		fmt.Printf("dest-uuid and cg-uuid not specified\n")
-		return nil
-	}
-
-	destUUID := c.Args()[0]
-	cgUUID := c.Args()[1]
-
-	iter := func(cql string) (iter *gocql.Iter, close func() error) {
-
-		iter = mc.session.Query(cql).RetryPolicy(&gocql.SimpleRetryPolicy{NumRetries: mc.retries}).Iter()
-
-		close = func() (err error) {
-			if err = iter.Close(); err != nil {
-				// FIXME: handle error!
-				fmt.Printf("ERROR from query '%v': %v\n", cql, err)
-			}
-			return
-		}
-
-		return
-	}
-
-	scan := func(cql string, vals ...interface{}) error {
-		return mc.session.Query(cql).RetryPolicy(&gocql.SimpleRetryPolicy{NumRetries: mc.retries}).Scan(vals...)
-	}
-
-	ticker := time.NewTicker(time.Second) // don't query more than once every second // TODO: make configurable
-
-	print("\033[H\033[2J") // clear screen
-
-	var extentMap = make(map[string]*extentInfo)
-
-	for range ticker.C {
-
-		var deletedExtents int
-		var extents extentsByCreatedTime
-
-		for _, x := range extentMap {
-			extents = append(extents, x)
-		}
-
-		sort.Sort(extents) // FIXME: sort by extent-created time
-
-		var out = new(bytes.Buffer)
-
-		var ratePublish, rateConsume float32
-		var totalBacklog int64
-
-		fmt.Fprintf(out, "-------------------------------------------------------------------------------------------------------------------------------------------\n")
-		fmt.Fprintf(out, " %42s | %14s | %14s | %14s | %8s | %8s | %8s | %8s\n", "extent-uuid", "status", "msgs", "ack", "backlog", "read", "output", "store")
-		// TODO: show extent-created time; last-ack updated time; local/remote extent; output/store hostname
-
-		// fmt.Fprintf(out, "--------------------------------------|----------|----------|----------|----------|----------|--------------------------------------|-------------------------------------\n")
-		fmt.Fprintf(out, "--consuming---------------------------------+----------------+----------------+----------------+----------+----------+----------+----------\n")
-
-		for _, x := range extents {
-
-			ratePublish += x.lastSeqRate
-			rateConsume += x.ackSeqRate
-
-			if x.cgxStatus != cgxConsuming {
-				continue
-			}
-
-			fmt.Fprintf(out, " %36s [%3s] | %8s [%3s] | %8d [%3s] | %8d [%3s] | %8d | %8d | %8s | %8s\n", x.uuid, timeSinceMsUTC(x.createdMs), x.extStatus, timeSinceMsUTC(x.statusUpdatedMs),
-				x.lastSeq, timeSince(x.lastSeqUpdatedMs), x.ackSeq, timeSince(x.ackSeqUpdatedMs), x.backlog, x.readSeq, shortenUUID(x.outputUUID), shortenUUID(x.storeUUID))
-
-			totalBacklog += x.backlog
-		}
-
-		fmt.Fprintf(out, "--unconsumed--------------------------------+----------------+----------------+----------------+----------+----------+----------+----------\n")
-
-		for _, x := range extents {
-
-			if x.cgxStatus != cgxUnconsumed {
-				continue
-			}
-
-			fmt.Fprintf(out, " %36s [%3s] | %8s [%3s] | %8d [%3s] |               | %8d |     | %8s | %8s\n", x.uuid, timeSinceMsUTC(x.createdMs), x.extStatus, timeSinceMsUTC(x.statusUpdatedMs),
-				x.lastSeq, timeSince(x.lastSeqUpdatedMs), x.lastSeq, shortenUUID(x.outputUUID), shortenUUID(x.storeUUID))
-
-			totalBacklog += x.backlog
-		}
-
-		fmt.Fprintf(out, "--consumed----------------------------------|----------------|----------------|----------------|----------|----------|----------|----------\n")
-
-		var num int
-		for _, x := range extents {
-
-			if x.cgxStatus != cgxConsumed {
-				continue
-			}
-
-			if num++; num < 20 { // TODO: make configurable
-
-				// fmt.Fprintf(out, " %36s | %8s | %8d | %8d | %8d | %8d | %36s | %36s\n", x.uuid, x.extStatus,
-				// 	x.lastSeq, x.ackSeq, x.lastSeq-x.ackSeq, x.readSeq, x.outputUUID, x.storeUUID)
-				fmt.Fprintf(out, " %36s [%3s] | %8s [%3s] | %8d [%3s] | %8d [%3s] |          | %8d | %8s | %8s\n", x.uuid, timeSinceMsUTC(x.createdMs), x.extStatus, timeSinceMsUTC(x.statusUpdatedMs),
-					x.lastSeq, timeSince(x.lastSeqUpdatedMs), x.ackSeq, timeSince(x.ackSeqUpdatedMs), x.readSeq, shortenUUID(x.outputUUID), shortenUUID(x.storeUUID))
-			}
-		}
-
-		if num >= 20 {
-			fmt.Fprintf(out, " %42s | %14s | %14s | %14s | %8s | %8s | %8s | %8s\n", fmt.Sprintf("... %d others .. ", num-20), "", "", "", "", "", "", "")
-		}
-
-		fmt.Fprintf(out, "-------------------------------------------------------------------------------------------------------------------------------------------\n")
-
-		fmt.Fprintf(out, "publish-rate: %f msgs/sec\n", ratePublish)
-		fmt.Fprintf(out, "consume-rate: %f msgs/sec\n", rateConsume)
-		fmt.Fprintf(out, "total-backog: %d\n", totalBacklog)
-
-		print("\033[H\033[2J") // clear screen and move cursor to (0,0)
-		// print("\033[H") // move cursor to (0,0)
-		print(out.String()) // write new values
-	}
-
-	return nil
 }
 
 type cgMonitor struct {
-	cgUUID    string
-	cgName    string
-	destUUID  string
-	destPath  string
-	extentMap map[string]*extentInfo
+	mc *MetadataClient
+
+	cgUUID   string
+	cgName   string
+	destUUID string
+	destPath string
+
+	extentMap      map[string]*extentInfo
+	deletedExtents int
+
+	deltaPublish, deltaReplicate, deltaConsume int64
+	ratePublish, rateReplicate, rateConsume    float32
+	totalBacklog                               int64
 }
 
-func (t *cgMonitor) refreshMetadata() {
+func newCGMonitor(mc *MetadataClient, dest, cg string) *cgMonitor {
+
+	return &cgMonitor{
+		mc:        mc,
+		destUUID:  dest, // TODO: check if dest/cg are UUIDs or paths
+		cgUUID:    cg,
+		extentMap: make(map[string]*extentInfo),
+	}
+}
+
+func (t *cgMonitor) iter(cql string) (iter *gocql.Iter, close func() error) {
+
+	iter = t.mc.session.Query(cql).RetryPolicy(&gocql.SimpleRetryPolicy{NumRetries: t.mc.retries}).Iter()
+
+	close = func() (err error) {
+		if err = iter.Close(); err != nil {
+			// FIXME: handle error!
+			fmt.Printf("ERROR from query '%v': %v\n", cql, err)
+		}
+		return
+	}
+
+	return
+}
+
+func (t *cgMonitor) scan(cql string, vals ...interface{}) error {
+	return t.mc.session.Query(cql).RetryPolicy(&gocql.SimpleRetryPolicy{NumRetries: t.mc.retries}).Scan(vals...)
+}
+
+const remoteExtentInputHostUUID = "88888888-8888-8888-8888-888888888888"
+
+func (t *cgMonitor) refreshMetadata() error {
 
 	{
-		cql := "SELECT extent_uuid, consumer_group_visibility, created_time, status, status_updated_time " +
-			"FROM destination_extents WHERE destination_uuid=" + destUUID
+		cql := "SELECT extent_uuid, consumer_group_visibility, created_time, status, status_updated_time, extent.input_host_uuid " +
+			"FROM destination_extents WHERE destination_uuid=" + t.destUUID
 
-		iter, close := iter(cql)
+		iter, close := t.iter(cql)
 
 		var extentUUID string
 		var createdMs int64
 		var extStatus shared.ExtentStatus
 		var statusUpdatedMs int64
 		var cgVisibility string
+		var inputUUID string
 
-		for iter.Scan(&extentUUID, &cgVisibility, &createdMs, &extStatus, &statusUpdatedMs) {
+		t.deletedExtents = 0
 
-			if cgVisibility == "" || cgVisibility == cgUUID {
+		for iter.Scan(&extentUUID, &cgVisibility, &createdMs, &extStatus, &statusUpdatedMs, &inputUUID) {
 
-				x, ok := extentMap[extentUUID]
+			if cgVisibility == "" || cgVisibility == t.cgUUID {
+
+				x, ok := t.extentMap[extentUUID]
 
 				if !ok {
 
 					if extStatus == shared.ExtentStatus_DELETED {
-						deletedExtents++
+						t.deletedExtents++
 						continue
 					}
 
 					x = &extentInfo{
 						uuid:            extentUUID,
-						createdMs:       createdMs,
-						statusUpdatedMs: statusUpdatedMs,
+						createdµs:       createdMs * 1000,
+						statusUpdatedµs: statusUpdatedMs * 1000,
 						cgxStatus:       cgxUnconsumed,
+						remote:          inputUUID == remoteExtentInputHostUUID,
 					}
 				}
 
@@ -317,7 +272,7 @@ func (t *cgMonitor) refreshMetadata() {
 					x.extStatus = extConsumed
 				}
 
-				extentMap[extentUUID] = x
+				t.extentMap[extentUUID] = x
 
 				// if x.extStatus == extOpen {
 				// 	fmt.Printf("%v [%d]: %v [%d]\n", extentUUID, createdMs, extStatus, statusUpdatedMs)
@@ -331,18 +286,18 @@ func (t *cgMonitor) refreshMetadata() {
 	{
 		cql := "SELECT extent_uuid, status, ack_level_sequence, WRITETIME(ack_level_sequence), received_level_sequence, " +
 			"WRITETIME(received_level_sequence), connected_store, output_host_uuid " +
-			"FROM consumer_group_extents WHERE consumer_group_uuid=" + cgUUID
+			"FROM consumer_group_extents WHERE consumer_group_uuid=" + t.cgUUID
 
-		iter, close := iter(cql)
+		iter, close := t.iter(cql)
 
 		var extentUUID, storeUUID, outputUUID string
 		var status shared.ConsumerGroupExtentStatus
 		var ackSeq, readSeq int64
-		var ackSeqUpdatedMs, readSeqUpdatedMs int64
+		var ackSeqUpdatedµs, readSeqUpdatedµs int64
 
-		for iter.Scan(&extentUUID, &status, &ackSeq, &ackSeqUpdatedMs, &readSeq, &readSeqUpdatedMs, &storeUUID, &outputUUID) {
+		for iter.Scan(&extentUUID, &status, &ackSeq, &ackSeqUpdatedµs, &readSeq, &readSeqUpdatedµs, &storeUUID, &outputUUID) {
 
-			x, ok := extentMap[extentUUID]
+			x, ok := t.extentMap[extentUUID]
 
 			if ok {
 
@@ -387,32 +342,34 @@ func (t *cgMonitor) refreshMetadata() {
 					continue // ignore, if deleted from extent and cg-extent
 				}
 
-				extentMap[extentUUID] = x
+				t.extentMap[extentUUID] = x
 			}
 
-			if ackSeqUpdatedMs > x.ackSeqUpdatedMs {
+			if ackSeqUpdatedµs > x.ackSeqUpdatedµs {
 
-				if x.ackSeqUpdatedMs != 0 {
-					x.ackSeqRate = float32(ackSeq-x.ackSeq) * 1000.0 / float32(ackSeqUpdatedMs-x.ackSeqUpdatedMs)
+				x.ackSeqDelta = ackSeq - x.ackSeq
+
+				if x.ackSeqUpdatedµs > 0 {
+					x.ackSeqRate = float32(x.ackSeqDelta) * 1e6 / float32(ackSeqUpdatedµs-x.ackSeqUpdatedµs)
 				}
 
-				x.ackSeq, x.ackSeqUpdatedMs = ackSeq, ackSeqUpdatedMs
+				x.ackSeq, x.ackSeqUpdatedµs = ackSeq, ackSeqUpdatedµs
 			}
 
-			if readSeqUpdatedMs > x.readSeqUpdatedMs {
+			if readSeqUpdatedµs > x.readSeqUpdatedµs {
 
-				if x.readSeqUpdatedMs != 0 {
-					x.readSeqRate = float32(readSeq-x.readSeq) * 1000.0 / float32(readSeqUpdatedMs-x.readSeqUpdatedMs)
+				if x.readSeqUpdatedµs != 0 {
+					x.readSeqDelta = readSeq - x.readSeq
 				}
 
-				x.readSeq, x.readSeqUpdatedMs = readSeq, readSeqUpdatedMs
+				x.readSeq, x.readSeqUpdatedµs = readSeq, readSeqUpdatedµs
 			}
 
 			x.outputUUID, x.storeUUID = outputUUID, storeUUID
-			// fmt.Printf("%v: ack[%v]\n", x.uuid, x.ackSeqUpdatedMs)
+			// fmt.Printf("%v: ack[%v]\n", x.uuid, x.ackSeqUpdatedµs)
 
 			// backlog < 0 typically happens if the last-seq was updated before the ack-seq
-			if x.backlog = x.lastSeq - x.ackSeq; x.backlog < 0 && x.lastSeqUpdatedMs < x.ackSeqUpdatedMs {
+			if x.backlog = x.lastSeq - x.ackSeq; x.backlog < 0 && x.lastSeqUpdatedµs < x.ackSeqUpdatedµs {
 				x.backlog = 0
 			}
 		}
@@ -421,11 +378,11 @@ func (t *cgMonitor) refreshMetadata() {
 	}
 
 	{
-		for _, x := range extentMap {
+		for _, x := range t.extentMap {
 
 			var cql string
 			var beginSeq, lastSeq int64
-			var beginSeqUpdatedMs, lastSeqUpdatedMs int64
+			var beginSeqUpdatedµs, lastSeqUpdatedµs int64
 
 			beginSeq, lastSeq = -1, -1
 
@@ -434,12 +391,12 @@ func (t *cgMonitor) refreshMetadata() {
 				// if the CG is consuming the extent from a particular replica, then query metadata for that
 
 				// if extent is sealed, then don't query store_extents unless necessary
-				if x.extStatus == extOpen || x.lastSeqUpdatedMs < x.statusUpdatedMs {
+				if x.extStatus == extOpen || x.lastSeqUpdatedµs < x.statusUpdatedµs {
 
 					cql = "SELECT replica_stats.begin_sequence, replica_stats.last_sequence, WRITETIME(replica_stats) " +
 						"FROM store_extents WHERE store_uuid=" + x.storeUUID + " AND extent_uuid=" + x.uuid
 
-					err := scan(cql, &beginSeq, &lastSeq, &beginSeqUpdatedMs)
+					err := t.scan(cql, &beginSeq, &lastSeq, &beginSeqUpdatedµs)
 
 					if err != nil {
 						// FIXME: handle error
@@ -455,7 +412,7 @@ func (t *cgMonitor) refreshMetadata() {
 						lastSeq = 0
 					}
 
-					lastSeqUpdatedMs = beginSeqUpdatedMs
+					lastSeqUpdatedµs = beginSeqUpdatedµs
 				}
 
 			} else {
@@ -463,17 +420,17 @@ func (t *cgMonitor) refreshMetadata() {
 				// no specific replica -> use the data from all three replicas
 
 				// if extent is sealed, then don't query store_extents unless necessary
-				if x.extStatus == extOpen || x.lastSeqUpdatedMs < x.statusUpdatedMs {
+				if x.extStatus == extOpen || x.lastSeqUpdatedµs < x.statusUpdatedµs {
 
 					cql = "SELECT replica_stats.begin_sequence, replica_stats.last_sequence, WRITETIME(replica_stats) " +
 						"FROM store_extents WHERE extent_uuid=" + x.uuid + " ALLOW FILTERING"
 
-					iter, close := iter(cql)
+					iter, close := t.iter(cql)
 
 					var tBeginSeq, tLastSeq int64
-					var tSeqUpdatedMs int64
+					var tSeqUpdatedµs int64
 
-					for iter.Scan(&tBeginSeq, &tLastSeq, &tSeqUpdatedMs) {
+					for iter.Scan(&tBeginSeq, &tLastSeq, &tSeqUpdatedµs) {
 
 						if tBeginSeq == math.MaxInt64 {
 							tBeginSeq = 0
@@ -485,12 +442,12 @@ func (t *cgMonitor) refreshMetadata() {
 
 						if beginSeq == -1 || beginSeq < tBeginSeq {
 							beginSeq = tBeginSeq
-							beginSeqUpdatedMs = tSeqUpdatedMs
+							beginSeqUpdatedµs = tSeqUpdatedµs
 						}
 
 						if lastSeq == -1 || lastSeq < tLastSeq {
 							lastSeq = tLastSeq
-							lastSeqUpdatedMs = tSeqUpdatedMs
+							lastSeqUpdatedµs = tSeqUpdatedµs
 						}
 					}
 
@@ -500,28 +457,203 @@ func (t *cgMonitor) refreshMetadata() {
 				}
 			}
 
-			if beginSeqUpdatedMs > x.beginSeqUpdatedMs {
+			if beginSeqUpdatedµs > x.beginSeqUpdatedµs {
 
-				if x.beginSeqUpdatedMs != 0 {
-					x.beginSeqRate = float32(beginSeq-x.beginSeq) * 1000.0 / float32(beginSeqUpdatedMs-x.beginSeqUpdatedMs)
-				}
-
-				x.beginSeq, x.beginSeqUpdatedMs = beginSeq, beginSeqUpdatedMs
+				x.beginSeqDelta = beginSeq - x.beginSeq
+				x.beginSeq, x.beginSeqUpdatedµs = beginSeq, beginSeqUpdatedµs
 			}
 
-			if lastSeqUpdatedMs > x.lastSeqUpdatedMs {
+			if lastSeqUpdatedµs > x.lastSeqUpdatedµs {
 
-				if x.lastSeqUpdatedMs != 0 {
-					x.lastSeqRate = float32(lastSeq-x.lastSeq) * 1000.0 / float32(lastSeqUpdatedMs-x.lastSeqUpdatedMs)
+				x.lastSeqDelta = lastSeq - x.lastSeq
+
+				if x.lastSeqUpdatedµs > 0 {
+					x.lastSeqRate = float32(x.lastSeqDelta) * 1e6 / float32(lastSeqUpdatedµs-x.lastSeqUpdatedµs)
 				}
 
-				x.lastSeq, x.lastSeqUpdatedMs = lastSeq, lastSeqUpdatedMs
+				x.lastSeq, x.lastSeqUpdatedµs = lastSeq, lastSeqUpdatedµs
+
+			} else {
+
+				if x.lastSeqUpdatedµs > 0 {
+
+					now := time.Now().UTC().UnixNano() / 1000
+					x.lastSeqRate = float32(x.lastSeqDelta) * 1e6 / float32(now-x.lastSeqUpdatedµs)
+				}
 			}
 		}
 	}
+
+	return nil
 }
 
-func shortenUUID(uuid string) string {
+func (t *cgMonitor) refresh() (output string, maxRows int, maxCols int) {
+
+	t.refreshMetadata() // FIXME: check errors
+
+	var consuming sortedExtents
+	var consumed sortedExtents
+	var unconsumed sortedExtents
+	var others sortedExtents
+
+	t.ratePublish, t.rateReplicate, t.rateConsume = 0.0, 0.0, 0.0
+	t.totalBacklog = 0
+
+	t.deltaPublish, t.deltaConsume = 0, 0
+
+	for _, x := range t.extentMap {
+
+		if x.extStatus == extOpen || x.lastSeqUpdatedµs < x.statusUpdatedµs {
+
+			if !x.remote {
+				t.ratePublish += x.lastSeqRate
+				t.deltaPublish += x.lastSeqDelta
+			} else {
+				t.rateReplicate += x.lastSeqRate
+				t.deltaReplicate += x.lastSeqDelta
+			}
+		}
+
+		switch x.cgxStatus {
+		case cgxConsuming:
+			consuming = append(consuming, x)
+			t.deltaConsume += x.ackSeqDelta
+			t.rateConsume += x.ackSeqRate
+			t.totalBacklog += x.backlog
+
+		case cgxUnconsumed:
+			unconsumed = append(unconsumed, x)
+			t.totalBacklog += x.backlog
+
+		case cgxConsumed:
+			consumed = append(consumed, x)
+
+		default:
+			others = append(others, x)
+		}
+	}
+
+	// sort extents
+	sort.Sort(consuming)
+	sort.Sort(unconsumed)
+	sort.Sort(consumed)
+	sort.Sort(others)
+
+	var out = new(bytes.Buffer)
+
+	fmt.Fprintf(out, "=============================================================================================================================================\n")
+	fmt.Fprintf(out, " %44s | %14s | %14s | %14s | %8s | %8s | %8s | %8s\n", "extent", "status", "msgs", "ack", "backlog", "read", "output", "store")
+	// TODO: show extent-created time; last-ack updated time; local/remote extent; output/store hostname
+
+	// fmt.Fprintf(out, "----------------------------------------|----------|----------|----------|----------|----------|--------------------------------------|-------------------------------------\n")
+	fmt.Fprintf(out, "--consuming-----------------------------------+----------------+----------------+----------------+----------+----------+----------+----------\n")
+
+	for _, x := range consuming {
+
+		if x.cgxStatus != cgxConsuming {
+			continue
+		}
+
+		var remote rune
+		if x.remote {
+			remote = 'R'
+		} else {
+			remote = ' '
+		}
+
+		fmt.Fprintf(out, " %36s [%3s] %c | %8s [%3s] | %8d [%3s] | %8d [%3s] | %8d | %8d | %8s | %8s\n", x.uuid, timeSince(x.createdµs), remote, x.extStatus, timeSince(x.statusUpdatedµs),
+			x.lastSeq, timeSince(x.lastSeqUpdatedµs), x.ackSeq, timeSince(x.ackSeqUpdatedµs), x.backlog, x.readSeq, trunc(x.outputUUID), trunc(x.storeUUID))
+	}
+
+	fmt.Fprintf(out, "--unconsumed----------------------------------+----------------+----------------+----------------+----------+----------+----------+----------\n")
+
+	for _, x := range unconsumed {
+
+		if x.cgxStatus != cgxUnconsumed {
+			continue
+		}
+
+		var remote rune
+		if x.remote {
+			remote = 'R'
+		} else {
+			remote = ' '
+		}
+
+		fmt.Fprintf(out, " %36s [%3s] %c | %8s [%3s] | %8d [%3s] |               | %8d |     | %8s | %8s\n", x.uuid, timeSince(x.createdµs), remote, x.extStatus, timeSince(x.statusUpdatedµs),
+			x.lastSeq, timeSince(x.lastSeqUpdatedµs), x.lastSeq, trunc(x.outputUUID), trunc(x.storeUUID))
+
+		t.totalBacklog += x.backlog
+	}
+
+	fmt.Fprintf(out, "--consumed------------------------------------|----------------|----------------|----------------|----------|----------|----------|----------\n")
+
+	var num int
+	for _, x := range consumed {
+
+		if x.cgxStatus != cgxConsumed {
+			continue
+		}
+
+		if num++; num < 20 { // TODO: make configurable
+
+			var remote rune
+			if x.remote {
+				remote = 'R'
+			} else {
+				remote = ' '
+			}
+
+			// fmt.Fprintf(out, " %36s | %8s | %8d | %8d | %8d | %8d | %36s | %36s\n", x.uuid, x.extStatus,
+			// 	x.lastSeq, x.ackSeq, x.lastSeq-x.ackSeq, x.readSeq, x.outputUUID, x.storeUUID)
+			fmt.Fprintf(out, " %36s [%3s] %c | %8s [%3s] | %8d [%3s] | %8d [%3s] |          | %8d | %8s | %8s\n", x.uuid, timeSince(x.createdµs), remote,
+				x.extStatus, timeSince(x.statusUpdatedµs), x.lastSeq, timeSince(x.lastSeqUpdatedµs), x.ackSeq, timeSince(x.ackSeqUpdatedµs), x.readSeq,
+				trunc(x.outputUUID), trunc(x.storeUUID))
+		}
+	}
+
+	if num >= 20 {
+		fmt.Fprintf(out, " %44s | %14s | %14s | %14s | %8s | %8s | %8s | %8s\n", fmt.Sprintf("... %d others .. ", num-20), "", "", "", "", "", "", "")
+	}
+
+	if len(others) > 0 {
+		fmt.Fprintf(out, "--others--------------------------------------|----------------|----------------|----------------|----------|----------|----------|----------\n")
+
+		var num int
+		for _, x := range consumed {
+
+			if x.cgxStatus != cgxConsumed {
+				continue
+			}
+
+			if num++; num < 20 { // TODO: make configurable
+
+				var remote rune
+				if x.remote {
+					remote = 'R'
+				} else {
+					remote = ' '
+				}
+
+				// fmt.Fprintf(out, " %36s | %8s | %8d | %8d | %8d | %8d | %36s | %36s\n", x.uuid, x.extStatus,
+				// 	x.lastSeq, x.ackSeq, x.lastSeq-x.ackSeq, x.readSeq, x.outputUUID, x.storeUUID)
+				fmt.Fprintf(out, " %36s [%3s] %c | %8s [%3s] | %8d [%3s] | %8d [%3s] |          | %8d | %8s | %8s\n", x.uuid, timeSince(x.createdµs), remote,
+					x.extStatus, timeSince(x.statusUpdatedµs), x.lastSeq, timeSince(x.lastSeqUpdatedµs), x.ackSeq, timeSince(x.ackSeqUpdatedµs),
+					x.readSeq, trunc(x.outputUUID), trunc(x.storeUUID))
+			}
+		}
+
+		if num >= 20 {
+			fmt.Fprintf(out, " %44s | %14s | %14s | %14s | %8s | %8s | %8s | %8s\n", fmt.Sprintf("... %d others .. ", num-20), "", "", "", "", "", "", "")
+		}
+	}
+
+	fmt.Fprintf(out, "=============================================================================================================================================\n")
+
+	return out.String(), 0, 0
+}
+
+func trunc(uuid string) string {
 
 	if len(uuid) >= 8 {
 		return uuid[:8]
@@ -530,9 +662,9 @@ func shortenUUID(uuid string) string {
 	return uuid
 }
 
-type extentsByCreatedTime []*extentInfo
+type sortedExtents []*extentInfo
 
-func (t extentsByCreatedTime) Less(i, j int) bool {
+func (t sortedExtents) Less(i, j int) bool {
 
 	// sort by:
 	// 1. status
@@ -548,19 +680,19 @@ func (t extentsByCreatedTime) Less(i, j int) bool {
 		return false
 	}
 
-	if t[i].statusUpdatedMs > t[j].statusUpdatedMs {
+	if t[i].statusUpdatedµs > t[j].statusUpdatedµs {
 		return true
 	}
 
-	if t[i].statusUpdatedMs < t[j].statusUpdatedMs {
+	if t[i].statusUpdatedµs < t[j].statusUpdatedµs {
 		return false
 	}
 
-	if t[i].createdMs > t[j].createdMs {
+	if t[i].createdµs > t[j].createdµs {
 		return true
 	}
 
-	if t[i].createdMs < t[j].createdMs {
+	if t[i].createdµs < t[j].createdµs {
 		return false
 	}
 
@@ -568,10 +700,10 @@ func (t extentsByCreatedTime) Less(i, j int) bool {
 	return t[i].uuid < t[j].uuid
 }
 
-func (t extentsByCreatedTime) Len() int {
+func (t sortedExtents) Len() int {
 	return len(t)
 }
 
-func (t extentsByCreatedTime) Swap(i, j int) {
+func (t sortedExtents) Swap(i, j int) {
 	t[i], t[j] = t[j], t[i]
 }
