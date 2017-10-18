@@ -20,7 +20,7 @@ import (
 // - show total consume/publish rates
 // - show special status if possibly 'stuck'
 
-func monitor(c *cli.Context, mc *MetadataClient) error {
+func watch(c *cli.Context, mc *MetadataClient) error {
 
 	if c.NArg() < 2 {
 		fmt.Printf("dest-uuid and cg-uuid not specified\n")
@@ -34,7 +34,7 @@ func monitor(c *cli.Context, mc *MetadataClient) error {
 
 	// print("\033[H\033[2J") // clear screen
 
-	cgMon := newCGMonitor(mc, destUUID, cgUUID)
+	cgMon := newCGWatch(mc, destUUID, cgUUID)
 
 	output, _, _ := cgMon.refresh()
 
@@ -176,7 +176,7 @@ func timeSince(tMicros int64) string {
 	}
 }
 
-type cgMonitor struct {
+type cgWatch struct {
 	mc *MetadataClient
 
 	cgUUID   string
@@ -192,9 +192,9 @@ type cgMonitor struct {
 	totalBacklog                               int64
 }
 
-func newCGMonitor(mc *MetadataClient, dest, cg string) *cgMonitor {
+func newCGWatch(mc *MetadataClient, dest, cg string) *cgWatch {
 
-	return &cgMonitor{
+	return &cgWatch{
 		mc:        mc,
 		destUUID:  dest, // TODO: check if dest/cg are UUIDs or paths
 		cgUUID:    cg,
@@ -202,7 +202,7 @@ func newCGMonitor(mc *MetadataClient, dest, cg string) *cgMonitor {
 	}
 }
 
-func (t *cgMonitor) iter(cql string) (iter *gocql.Iter, close func() error) {
+func (t *cgWatch) iter(cql string) (iter *gocql.Iter, close func() error) {
 
 	iter = t.mc.session.Query(cql).RetryPolicy(&gocql.SimpleRetryPolicy{NumRetries: t.mc.retries}).Iter()
 
@@ -217,13 +217,13 @@ func (t *cgMonitor) iter(cql string) (iter *gocql.Iter, close func() error) {
 	return
 }
 
-func (t *cgMonitor) scan(cql string, vals ...interface{}) error {
+func (t *cgWatch) scan(cql string, vals ...interface{}) error {
 	return t.mc.session.Query(cql).RetryPolicy(&gocql.SimpleRetryPolicy{NumRetries: t.mc.retries}).Scan(vals...)
 }
 
 const remoteExtentInputHostUUID = "88888888-8888-8888-8888-888888888888"
 
-func (t *cgMonitor) refreshMetadata() error {
+func (t *cgWatch) refreshMetadata() error {
 
 	{
 		cql := "SELECT extent_uuid, consumer_group_visibility, created_time, status, status_updated_time, extent.input_host_uuid " +
@@ -492,7 +492,7 @@ func (t *cgMonitor) refreshMetadata() error {
 	return nil
 }
 
-func (t *cgMonitor) refresh() (output string, maxRows int, maxCols int) {
+func (t *cgWatch) refresh() (output string, maxRows int, maxCols int) {
 
 	t.refreshMetadata() // FIXME: check errors
 
