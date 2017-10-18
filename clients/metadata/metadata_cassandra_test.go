@@ -37,6 +37,7 @@ import (
 	"github.com/stretchr/testify/suite"
 
 	"github.com/uber/cherami-server/common"
+	"github.com/uber/cherami-server/common/set"
 	m "github.com/uber/cherami-thrift/.generated/go/metadata"
 	"github.com/uber/cherami-thrift/.generated/go/shared"
 
@@ -2011,24 +2012,72 @@ func (s *CassandraSuite) TestListConsumerGroups() {
 
 	dstUUID := dstInfo.GetDestinationUUID()
 
-	listReq := &shared.ListConsumerGroupRequest{
-		DestinationPath: common.StringPtr(dstPath),
-		Limit:           common.Int64Ptr(testPageSize),
+	listCGs := func(req *shared.ListConsumerGroupRequest) (ret set.Set) {
+
+		ret = set.New(0)
+
+		for {
+			listRes, err := s.client.ListConsumerGroups(nil, req)
+			assert.Nil(err, "ListConsumerGroups failed to return results, input=%v", req)
+
+			for _, gotCG := range listRes.GetConsumerGroups() {
+				ret.Insert(gotCG.GetConsumerGroupName())
+				fmt.Printf("ListConsumerGroups: cg=%v status=%v\n", gotCG.GetConsumerGroupName(), gotCG.GetStatus())
+			}
+
+			if len(listRes.GetNextPageToken()) == 0 {
+				break
+			}
+
+			req.PageToken = listRes.GetNextPageToken()
+		}
+		fmt.Printf("ListConsumerGroups: --\n")
+
+		return
 	}
 
-	listRes, err := s.client.ListConsumerGroups(nil, listReq)
-	assert.Nil(err, "ListConsumerGroups failed")
-	assert.Equal(0, len(listRes.GetConsumerGroups()), "Result should be empty when there are no matching groups")
+	listCGsUUID := func(req *shared.ListConsumerGroupsUUIDRequest) (ret set.Set) {
 
-	listRes, err = s.client.ListConsumerGroups(nil, &shared.ListConsumerGroupRequest{
+		ret = set.New(0)
+
+		for {
+			listRes, err := s.client.ListConsumerGroupsUUID(nil, req)
+			assert.Nil(err, "ListConsumerGroupsUUID failed to return results, input=%v", req)
+
+			for _, gotCG := range listRes.GetConsumerGroups() {
+				ret.Insert(gotCG.GetConsumerGroupName())
+				fmt.Printf("ListConsumerGroupsUUID: cg=%v status=%v\n", gotCG.GetConsumerGroupName(), gotCG.GetStatus())
+			}
+
+			if len(listRes.GetNextPageToken()) == 0 {
+				break
+			}
+
+			req.PageToken = listRes.GetNextPageToken()
+		}
+		fmt.Printf("ListConsumerGroupsUUID: --\n")
+
+		return
+	}
+
+	assert.True(listCGs(&shared.ListConsumerGroupRequest{
+		DestinationPath: common.StringPtr(dstPath),
+		Limit:           common.Int64Ptr(testPageSize),
+	}).Empty(), "Result should be empty when there are no matching groups")
+
+	assert.True(listCGs(&shared.ListConsumerGroupRequest{
 		DestinationUUID: common.StringPtr(dstUUID),
 		Limit:           common.Int64Ptr(testPageSize),
-	})
-	assert.Nil(err, "ListConsumerGroups failed")
-	assert.Equal(0, len(listRes.GetConsumerGroups()), "Result should be empty when there are no matching groups")
+	}).Empty(), "Result should be empty when there are no matching groups")
+
+	assert.True(listCGsUUID(&shared.ListConsumerGroupsUUIDRequest{
+		DestinationUUID: common.StringPtr(dstUUID),
+		Limit:           common.Int64Ptr(testPageSize),
+	}).Empty(), "Result should be empty when there are no matching groups")
 
 	testName := ""
-	groupNames := make(map[string]bool)
+	cgSet := set.New(0)
+	cgMap := make(map[string]string) // path to uuid
 
 	for i := 0; i < 10; i++ {
 		name := s.generateName(fmt.Sprintf("foobar-consumer-%v", i))
@@ -2045,9 +2094,10 @@ func (s *CassandraSuite) TestListConsumerGroups() {
 			OwnerEmail:               common.StringPtr("consumer_test@uber.com"),
 		}
 
-		_, err = s.client.CreateConsumerGroup(nil, createReq)
+		cgDesc, err := s.client.CreateConsumerGroup(nil, createReq)
 		assert.Nil(err, "Failed to create consumer group")
-		groupNames[name] = true
+		cgSet.Insert(name)
+		cgMap[name] = cgDesc.GetConsumerGroupUUID()
 
 		if i == 5 {
 			s.Nil(s.Alter(), "ALTER table failed")
@@ -2056,48 +2106,80 @@ func (s *CassandraSuite) TestListConsumerGroups() {
 		testName = name
 	}
 
-	listReq.ConsumerGroupName = common.StringPtr(testName)
-	listRes, err = s.client.ListConsumerGroups(nil, listReq)
-	assert.Nil(err, "ListConsumerGroups failed to return results")
-	assert.Equal(1, len(listRes.GetConsumerGroups()), "ListConsumerGroups failed to return correct number of result")
-	assert.Equal(testName, listRes.GetConsumerGroups()[0].GetConsumerGroupName(), "Wrong consumer group returned")
+	testCGs := listCGs(&shared.ListConsumerGroupRequest{
+		DestinationPath:   common.StringPtr(dstPath),
+		ConsumerGroupName: common.StringPtr(testName),
+		Limit:             common.Int64Ptr(testPageSize),
+	})
 
-	inputs := make([]*shared.ListConsumerGroupRequest, 0, 2)
-	inputs = append(inputs, &shared.ListConsumerGroupRequest{
+	assert.Equal(1, testCGs.Count(), "ListConsumerGroups failed to return correct number of result")
+	assert.True(testCGs.Contains(testName), "Wrong consumer group returned")
+
+	assert.True(listCGs(&shared.ListConsumerGroupRequest{
 		DestinationPath: common.StringPtr(dstPath),
 		Limit:           common.Int64Ptr(testPageSize),
-	})
-	inputs = append(inputs, &shared.ListConsumerGroupRequest{
+	}).Equals(cgSet), "ListConsumerGroups did not return all CGs")
+
+	assert.True(listCGs(&shared.ListConsumerGroupRequest{
+		DestinationPath: common.StringPtr(dstPath),
+		Limit:           common.Int64Ptr(testPageSize),
+	}).Equals(cgSet), "ListConsumerGroups did not return all CGs")
+
+	assert.True(listCGs(&shared.ListConsumerGroupRequest{
 		DestinationUUID: common.StringPtr(dstUUID),
 		Limit:           common.Int64Ptr(testPageSize),
-	})
+	}).Equals(cgSet), "ListConsumerGroups did not return all CGs")
 
-	for _, input := range inputs {
+	assert.True(listCGsUUID(&shared.ListConsumerGroupsUUIDRequest{
+		DestinationUUID: common.StringPtr(dstUUID),
+		Limit:           common.Int64Ptr(testPageSize),
+	}).Equals(cgSet), "ListConsumerGroupsUUID did not return all CGs")
 
-		groupMap := make(map[string]bool)
-		for k := range groupNames {
-			groupMap[k] = true
-		}
+	var activeCGs = set.New(0)
+	var notYetDeletedCGs = set.New(0)
 
-		for {
-			listRes, err = s.client.ListConsumerGroups(nil, input)
-			assert.Nil(err, "ListConsumerGroups failed to return results, input=%v", input)
+	for i, cg := range cgSet.Keys() {
 
-			for _, gotCG := range listRes.GetConsumerGroups() {
-				delete(groupMap, gotCG.GetConsumerGroupName())
-			}
+		switch {
+		case i < 3: // delete it completely
+			err = s.client.DeleteConsumerGroup(nil, &shared.DeleteConsumerGroupRequest{
+				DestinationPath:   common.StringPtr(dstPath),
+				ConsumerGroupName: common.StringPtr(cg),
+			})
+			assert.Nil(err, "Failed to delete consumer group")
+			fmt.Printf("DeleteConsumerGroup: %v [%v]\n", cg, cgMap[cg])
 
-			if len(listRes.GetNextPageToken()) == 0 {
-				break
-			} else {
-				input.PageToken = listRes.GetNextPageToken()
-			}
-		}
+			err = s.client.DeleteConsumerGroupUUID(nil, &m.DeleteConsumerGroupUUIDRequest{
+				UUID: common.StringPtr(cgMap[cg]),
+			})
+			assert.Nil(err, "Failed to delete consumer group")
+			fmt.Printf("DeleteConsumerGroupUUID: %v [%v]\n", cg, cgMap[cg])
 
-		if len(groupMap) > 0 {
-			assert.Fail("ListConsumerGroups failed to return all groups")
+		case i < 7: // move CG to 'deleting' state
+			err = s.client.DeleteConsumerGroup(nil, &shared.DeleteConsumerGroupRequest{
+				DestinationPath:   common.StringPtr(dstPath),
+				ConsumerGroupName: common.StringPtr(cg),
+			})
+			assert.Nil(err, "Failed to delete consumer group")
+			notYetDeletedCGs.Insert(cg)
+			fmt.Printf("DeleteConsumerGroup: %v [%v]\n", cg, cgMap[cg])
+
+		default:
+			activeCGs.Insert(cg)
+			notYetDeletedCGs.Insert(cg)
+			fmt.Printf("Active CG: %v [%v]\n", cg, cgMap[cg])
 		}
 	}
+
+	assert.True(listCGs(&shared.ListConsumerGroupRequest{
+		DestinationUUID: common.StringPtr(dstUUID),
+		Limit:           common.Int64Ptr(testPageSize),
+	}).Equals(activeCGs), "ListConsumerGroups did not return all CGs")
+
+	assert.True(listCGsUUID(&shared.ListConsumerGroupsUUIDRequest{
+		DestinationUUID: common.StringPtr(dstUUID),
+		Limit:           common.Int64Ptr(testPageSize),
+	}).Equals(notYetDeletedCGs), "ListConsumerGroupsUUID did not return all CGs")
 }
 
 func (s *CassandraSuite) TestListAllConsumerGroups() {
