@@ -838,8 +838,6 @@ const (
 	OutputhostCGMessageSentAck
 	// OutputhostCGMessageSentNAck records the count of nack messages
 	OutputhostCGMessageSentNAck
-	// OutputhostCGMessageTimeout records the count of timeout messages
-	OutputhostCGMessageTimeout
 	// OutputhostCGMessagesThrottled records the count of messages throttled
 	OutputhostCGMessagesThrottled
 	// OutputhostCGAckMgrSeqNotFound is the gauge to track acks whose seq number is not found
@@ -1358,7 +1356,6 @@ var dynamicMetricDefs = map[ServiceIdx]map[int]metricDefinition{
 		OutputhostCGMessageRedelivered:    {Counter, "outputhost.message.redelivered.cg"},
 		OutputhostCGMessageSentAck:        {Counter, "outputhost.message.sent-ack.cg"},
 		OutputhostCGMessageSentNAck:       {Counter, "outputhost.message.sent-nack.cg"},
-		OutputhostCGMessageTimeout:        {Counter, "outputhost.message.timeout.cg"},
 		OutputhostCGMessagesThrottled:     {Counter, "outputhost.message.throttled"},
 		OutputhostCGAckMgrSeqNotFound:     {Counter, "outputhost.ackmgr.seq-not-found.cg"},
 		OutputhostCGReplicaReconnect:      {Counter, "outputhost.replica-reconnect.cg"},

@@ -669,17 +669,6 @@ func (cgCache *consumerGroupCache) getMessageCacheSize(cfg OutputCgConfig, oldSi
 	return cacheSize
 }
 
-//
-func (cgCache *consumerGroupCache) getRedeliveryInterval(cfg OutputCgConfig, oldInterval int32) (interval int32) {
-	logFn := func() bark.Logger {
-		return cgCache.logger
-	}
-	ruleKey := cgCache.destPath + `/` + cgCache.cachedCGDesc.GetConsumerGroupName()
-	interval = int32(common.OverrideValueByPrefix(logFn, ruleKey, cfg.RedeliveryIntervalInMs, int64(oldInterval), `redeliveryIntervalInMs`))
-
-	return interval
-}
-
 // loadConsumerGroupCache loads everything on this cache including the extents and within the cache
 func (cgCache *consumerGroupCache) loadConsumerGroupCache(ctx thrift.Context, exists bool) error {
 	cgCache.extMutex.Lock()
