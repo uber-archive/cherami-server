@@ -13,6 +13,7 @@ import (
 )
 
 // TODO:
+// - look at DLQ extents, as well
 // - sort extents appropriately for "consuming", "unconsumed" and "consuming" extents -- by 'created-time', 'status', name, etc.
 // - refresh rate throttle
 // - look at extents for DLQ destination for CG
@@ -258,6 +259,7 @@ func (t *cgMonitor) refreshMetadata() error {
 						statusUpdatedµs: statusUpdatedMs * 1000,
 						cgxStatus:       cgxUnconsumed,
 						remote:          inputUUID == remoteExtentInputHostUUID,
+						dlq:             cgVisibility == t.cgUUID,
 					}
 				}
 
@@ -557,14 +559,15 @@ func (t *cgMonitor) refresh() (output string, maxRows int, maxCols int) {
 			continue
 		}
 
-		var remote rune
-		if x.remote {
-			remote = 'R'
-		} else {
-			remote = ' '
+		var extra rune = ' '
+		switch {
+		case x.remote:
+			extra = 'R'
+		case x.dlq:
+			extra = 'D'
 		}
 
-		fmt.Fprintf(out, " %36s [%3s] %c | %8s [%3s] | %8d [%3s] | %8d [%3s] | %8d | %8d | %8s | %8s\n", x.uuid, timeSince(x.createdµs), remote, x.extStatus, timeSince(x.statusUpdatedµs),
+		fmt.Fprintf(out, " %36s [%3s] %c | %8s [%3s] | %8d [%3s] | %8d [%3s] | %8d | %8d | %8s | %8s\n", x.uuid, timeSince(x.createdµs), extra, x.extStatus, timeSince(x.statusUpdatedµs),
 			x.lastSeq, timeSince(x.lastSeqUpdatedµs), x.ackSeq, timeSince(x.ackSeqUpdatedµs), x.backlog, x.readSeq, trunc(x.outputUUID), trunc(x.storeUUID))
 	}
 
@@ -576,14 +579,15 @@ func (t *cgMonitor) refresh() (output string, maxRows int, maxCols int) {
 			continue
 		}
 
-		var remote rune
-		if x.remote {
-			remote = 'R'
-		} else {
-			remote = ' '
+		var extra rune = ' '
+		switch {
+		case x.remote:
+			extra = 'R'
+		case x.dlq:
+			extra = 'D'
 		}
 
-		fmt.Fprintf(out, " %36s [%3s] %c | %8s [%3s] | %8d [%3s] |               | %8d |     | %8s | %8s\n", x.uuid, timeSince(x.createdµs), remote, x.extStatus, timeSince(x.statusUpdatedµs),
+		fmt.Fprintf(out, " %36s [%3s] %c | %8s [%3s] | %8d [%3s] |               | %8d |     | %8s | %8s\n", x.uuid, timeSince(x.createdµs), extra, x.extStatus, timeSince(x.statusUpdatedµs),
 			x.lastSeq, timeSince(x.lastSeqUpdatedµs), x.lastSeq, trunc(x.outputUUID), trunc(x.storeUUID))
 
 		t.totalBacklog += x.backlog
@@ -600,23 +604,24 @@ func (t *cgMonitor) refresh() (output string, maxRows int, maxCols int) {
 
 		if num++; num < 20 { // TODO: make configurable
 
-			var remote rune
-			if x.remote {
-				remote = 'R'
-			} else {
-				remote = ' '
+			var extra rune = ' '
+			switch {
+			case x.remote:
+				extra = 'R'
+			case x.dlq:
+				extra = 'D'
 			}
 
 			// fmt.Fprintf(out, " %36s | %8s | %8d | %8d | %8d | %8d | %36s | %36s\n", x.uuid, x.extStatus,
 			// 	x.lastSeq, x.ackSeq, x.lastSeq-x.ackSeq, x.readSeq, x.outputUUID, x.storeUUID)
-			fmt.Fprintf(out, " %36s [%3s] %c | %8s [%3s] | %8d [%3s] | %8d [%3s] |          | %8d | %8s | %8s\n", x.uuid, timeSince(x.createdµs), remote,
+			fmt.Fprintf(out, " %36s [%3s] %c | %8s [%3s] | %8d [%3s] | %8d [%3s] |          | %8d | %8s | %8s\n", x.uuid, timeSince(x.createdµs), extra,
 				x.extStatus, timeSince(x.statusUpdatedµs), x.lastSeq, timeSince(x.lastSeqUpdatedµs), x.ackSeq, timeSince(x.ackSeqUpdatedµs), x.readSeq,
 				trunc(x.outputUUID), trunc(x.storeUUID))
 		}
 	}
 
 	if num >= 20 {
-		fmt.Fprintf(out, " %44s | %14s | %14s | %14s | %8s | %8s | %8s | %8s\n", fmt.Sprintf("... %d others .. ", num-20), "", "", "", "", "", "", "")
+		fmt.Fprintf(out, " %44s | %14s | %14s | %14s | %8s | %8s | %8s | %8s\n", fmt.Sprintf("... %d more ... ", num-20), "", "", "", "", "", "", "")
 	}
 
 	if len(others) > 0 {
@@ -631,23 +636,24 @@ func (t *cgMonitor) refresh() (output string, maxRows int, maxCols int) {
 
 			if num++; num < 20 { // TODO: make configurable
 
-				var remote rune
-				if x.remote {
-					remote = 'R'
-				} else {
-					remote = ' '
+				var extra rune = ' '
+				switch {
+				case x.remote:
+					extra = 'R'
+				case x.dlq:
+					extra = 'D'
 				}
 
 				// fmt.Fprintf(out, " %36s | %8s | %8d | %8d | %8d | %8d | %36s | %36s\n", x.uuid, x.extStatus,
 				// 	x.lastSeq, x.ackSeq, x.lastSeq-x.ackSeq, x.readSeq, x.outputUUID, x.storeUUID)
-				fmt.Fprintf(out, " %36s [%3s] %c | %8s [%3s] | %8d [%3s] | %8d [%3s] |          | %8d | %8s | %8s\n", x.uuid, timeSince(x.createdµs), remote,
+				fmt.Fprintf(out, " %36s [%3s] %c | %8s [%3s] | %8d [%3s] | %8d [%3s] |          | %8d | %8s | %8s\n", x.uuid, timeSince(x.createdµs), extra,
 					x.extStatus, timeSince(x.statusUpdatedµs), x.lastSeq, timeSince(x.lastSeqUpdatedµs), x.ackSeq, timeSince(x.ackSeqUpdatedµs),
 					x.readSeq, trunc(x.outputUUID), trunc(x.storeUUID))
 			}
 		}
 
 		if num >= 20 {
-			fmt.Fprintf(out, " %44s | %14s | %14s | %14s | %8s | %8s | %8s | %8s\n", fmt.Sprintf("... %d others .. ", num-20), "", "", "", "", "", "", "")
+			fmt.Fprintf(out, " %44s | %14s | %14s | %14s | %8s | %8s | %8s | %8s\n", fmt.Sprintf("... %d more ... ", num-20), "", "", "", "", "", "", "")
 		}
 	}
 
