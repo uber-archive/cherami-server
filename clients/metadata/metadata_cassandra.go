@@ -1189,7 +1189,7 @@ const (
 		columnZoneConfigs + `: ?, ` +
 		columnOptions + `: ? }`
 
-	cqlConsumerGroupType = columnConsumerGroup + `.` + columnUUID + "," +
+	sqlConsumerGroupType = columnConsumerGroup + `.` + columnUUID + "," +
 		columnConsumerGroup + `.` + columnDestinationUUID + "," +
 		columnConsumerGroup + `.` + columnName + "," +
 		columnConsumerGroup + `.` + columnStartFrom + "," +
@@ -1222,23 +1222,23 @@ const (
 		`) VALUES (?, ?, ?, ` + sqlCGValue + `) IF NOT EXISTS`
 
 	sqlGetCGByName = `SELECT  ` +
-		cqlConsumerGroupType +
+		sqlConsumerGroupType +
 		` FROM ` + tableConsumerGroupsByName +
 		` WHERE ` + columnDestinationUUID + `=? and ` + columnName + `=?`
 
 	sqlGetCG = `SELECT  ` +
-		cqlConsumerGroupType +
+		sqlConsumerGroupType +
 		` FROM ` + tableConsumerGroups
 
 	sqlGetCGByUUID = sqlGetCG + ` WHERE ` + columnUUID + `=?`
 
 	sqlListCGsByDestUUID = `SELECT  ` +
-		cqlConsumerGroupType +
+		sqlConsumerGroupType +
 		` FROM ` + tableConsumerGroupsByName +
 		` WHERE ` + columnDestinationUUID + `=?`
 
 	sqlListCGsUUID = `SELECT  ` +
-		cqlConsumerGroupType +
+		sqlConsumerGroupType +
 		` FROM ` + tableConsumerGroups +
 		` WHERE ` + columnDestinationUUID + `=?`
 

@@ -60,7 +60,7 @@ func (t *metadataDepImpl) GetDestinations() (destinations []*destinationInfo) {
 	i := 0
 	for {
 
-		log.Info("GetDestinations: ListDestinationsByUUID on metadata")
+		log.Debug("GetDestinations: ListDestinationsByUUID on metadata")
 
 		resp, err := t.metadata.ListDestinationsByUUID(ctx, req)
 		if err != nil {
@@ -97,7 +97,7 @@ func (t *metadataDepImpl) GetDestinations() (destinations []*destinationInfo) {
 
 		req.PageToken = resp.GetNextPageToken()
 
-		log.Info("GetDestinations: fetching next page of ListDestinationsByUUID")
+		log.Debug("GetDestinations: fetching next page of ListDestinationsByUUID")
 	}
 
 	log.WithField(`numDestinations`, len(destinations)).Info("GetDestinations done")
@@ -220,7 +220,7 @@ func (t *metadataDepImpl) GetExtentInfo(destID destinationID, extID extentID) (e
 	return
 }
 
-func (t *metadataDepImpl) GetConsumerGroups(destID destinationID) (consumerGroups []*consumerGroupInfo) {
+func (t *metadataDepImpl) GetConsumerGroups(destID destinationID) (consumerGroups []*consumerGroupInfo, err error) {
 
 	req := shared.NewListConsumerGroupsUUIDRequest()
 	req.DestinationUUID = common.StringPtr(string(destID))
@@ -266,7 +266,10 @@ func (t *metadataDepImpl) GetConsumerGroups(destID destinationID) (consumerGroup
 		log.Info("GetConsumerGroups: fetching next page of ListConsumerGroupsUUID")
 	}
 
-	log.WithField(`numConsumerGroups`, len(consumerGroups)).Info("GetConsumerGroups done")
+	log.WithFields(bark.Fields{
+		`numConsumerGroups`: len(consumerGroups),
+		common.TagErr:       err,
+	}).Info("GetConsumerGroups done")
 	return
 }
 
@@ -361,7 +364,10 @@ func (t *metadataDepImpl) GetExtentsForConsumerGroup(destID destinationID, cgID 
 		log.Info("GetExtentsForConsumerGroup: fetching next page of consumer-group extents")
 	}
 
-	log.WithField(`numExtents`, len(extIDs)).Info("GetExtentsForConsumerGroup done")
+	log.WithFields(bark.Fields{
+		`numExtents`:  len(extIDs),
+		common.TagErr: err,
+	}).Info("GetExtentsForConsumerGroup done")
 	return
 }
 
@@ -397,7 +403,7 @@ func (t *metadataDepImpl) DeleteConsumerGroupExtent(destID destinationID, cgID c
 func (t *metadataDepImpl) DeleteConsumerGroup(destID destinationID, cgID consumerGroupID) error {
 
 	req := metadata.NewDeleteConsumerGroupUUIDRequest()
-	req.UUID = common.StringPtr(string(destID))
+	req.UUID = common.StringPtr(string(cgID))
 
 	ctx, cancel := thrift.NewContext(2 * time.Second)
 	defer cancel()
