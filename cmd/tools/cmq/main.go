@@ -607,10 +607,10 @@ func main() {
 			},
 		},
 		cli.Command{
-			Name:    "monitor",
+			Name:    "watch",
 			Aliases: []string{"m"},
 			Action: func(c *cli.Context) error {
-				return monitor(c, mc)
+				return watch(c, mc)
 			},
 		},
 		cli.Command{
