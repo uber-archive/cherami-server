@@ -104,7 +104,7 @@ func (t *metadataDepImpl) GetDestinations() (destinations []*destinationInfo) {
 	return
 }
 
-func (t *metadataDepImpl) GetExtents(destID destinationID) (extents []*extentInfo) {
+func (t *metadataDepImpl) GetExtents(destID destinationID) (extents []*extentInfo, err error) {
 
 	req := shared.NewListExtentsStatsRequest()
 	req.DestinationUUID = common.StringPtr(string(destID))
@@ -119,12 +119,13 @@ func (t *metadataDepImpl) GetExtents(destID destinationID) (extents []*extentInf
 	i := 0
 
 	for {
-		log.Info("GetExtents: ListExtentStats on metadata")
+		log.Debug("GetExtents: ListExtentStats on metadata")
 
-		resp, err := t.metadata.ListExtentsStats(ctx, req)
-		if err != nil {
-			log.WithField(common.TagErr, err).Error(`GetExtents: ListExtentsStats failed`)
-			return
+		resp, err0 := t.metadata.ListExtentsStats(ctx, req)
+		if err0 != nil {
+			log.WithField(common.TagErr, err0).Error(`GetExtents: ListExtentsStats failed`)
+			err = err0
+			break
 		}
 
 		for _, extStats := range resp.GetExtentStatsList() {
@@ -164,10 +165,13 @@ func (t *metadataDepImpl) GetExtents(destID destinationID) (extents []*extentInf
 
 		req.PageToken = resp.GetNextPageToken()
 
-		log.Info("GetExtents: fetching next page of ListExtentStats")
+		log.Debug("GetExtents: fetching next page of ListExtentStats")
 	}
 
-	log.WithField(`numExtents`, len(extents)).Info("GetExtents done")
+	log.WithFields(bark.Fields{
+		`numExtents`:  len(extents),
+		common.TagErr: err,
+	}).Info("GetExtents done")
 	return
 }
 
@@ -233,11 +237,12 @@ func (t *metadataDepImpl) GetConsumerGroups(destID destinationID) (consumerGroup
 	log := t.logger.WithField(common.TagDst, string(destID))
 
 	for {
-		log.Info("GetConsumerGroups: ListConsumerGroupsUUID on metadata")
+		log.Debug("GetConsumerGroups: ListConsumerGroupsUUID on metadata")
 
-		res, err := t.metadata.ListConsumerGroupsUUID(ctx, req)
-		if err != nil {
-			log.WithField(common.TagErr, err).Error("GetConsumerGroups: ListConsumerGroupsUUID failed")
+		res, err0 := t.metadata.ListConsumerGroupsUUID(ctx, req)
+		if err0 != nil {
+			log.WithField(common.TagErr, err0).Error("GetConsumerGroups: ListConsumerGroupsUUID failed")
+			err = err0
 			break
 		}
 
@@ -263,7 +268,7 @@ func (t *metadataDepImpl) GetConsumerGroups(destID destinationID) (consumerGroup
 
 		req.PageToken = res.GetNextPageToken()
 
-		log.Info("GetConsumerGroups: fetching next page of ListConsumerGroupsUUID")
+		log.Debug("GetConsumerGroups: fetching next page of ListConsumerGroupsUUID")
 	}
 
 	log.WithFields(bark.Fields{
