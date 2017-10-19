@@ -167,6 +167,10 @@ const (
 
 func timeSince(tMicros int64) string {
 
+	if tMicros == 0 {
+		return fmt.Sprintf(" ∞ ", d/Dayµs)
+	}
+
 	d := time.Now().UnixNano()/1000 - tMicros
 
 	switch {
@@ -570,7 +574,7 @@ func (t *cgWatch) refresh() (output string, maxRows int, maxCols int) {
 	fmt.Fprintf(out, " %44s | %14s | %14s | %14s | %8s | %8s | %8s | %8s\n", "extent", "status", "msgs", "ack", "backlog", "read", "output", "store")
 	// TODO: show extent-created time; last-ack updated time; local/remote extent; output/store hostname
 
-	// fmt.Fprintf(out, "----------------------------------------|----------|----------|----------|----------|----------|--------------------------------------|-------------------------------------\n")
+	// fmt.Fprintf(out, "----------------------------------------+----------+----------+----------+----------+----------+--------------------------------------+-------------------------------------\n")
 	fmt.Fprintf(out, "--consuming-----------------------------------+----------------+----------------+----------------+----------+----------+----------+----------\n")
 
 	for _, x := range consuming {
@@ -614,7 +618,7 @@ func (t *cgWatch) refresh() (output string, maxRows int, maxCols int) {
 		t.totalBacklog += x.backlog
 	}
 
-	fmt.Fprintf(out, "--consumed------------------------------------|----------------|----------------|----------------|----------|----------|----------|----------\n")
+	fmt.Fprintf(out, "--consumed------------------------------------+----------------+----------------+----------------+----------+----------+----------+----------\n")
 
 	var num int
 	for _, x := range consumed {
@@ -646,7 +650,7 @@ func (t *cgWatch) refresh() (output string, maxRows int, maxCols int) {
 	}
 
 	if len(others) > 0 {
-		fmt.Fprintf(out, "--others--------------------------------------|----------------|----------------|----------------|----------|----------|----------|----------\n")
+		fmt.Fprintf(out, "--others--------------------------------------+----------------+----------------+----------------+----------+----------+----------+----------\n")
 
 		var num int
 		for _, x := range consumed {
