@@ -13,7 +13,7 @@ import (
 )
 
 // TODO:
-// - look at DLQ extents, as well
+// - look at (unmerged) DLQ extents, as well
 // - sort extents appropriately for "consuming", "unconsumed" and "consuming" extents -- by 'created-time', 'status', name, etc.
 // - refresh rate throttle
 // - look at extents for DLQ destination for CG
