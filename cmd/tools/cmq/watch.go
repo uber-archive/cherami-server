@@ -168,7 +168,7 @@ const (
 func timeSince(tMicros int64) string {
 
 	if tMicros == 0 {
-		return fmt.Sprintf(" ∞ ", d/Dayµs)
+		return " ∞ "
 	}
 
 	d := time.Now().UnixNano()/1000 - tMicros
@@ -177,7 +177,7 @@ func timeSince(tMicros int64) string {
 	case d > Dayµs:
 
 		if d > 99*Dayµs {
-			return fmt.Sprintf(" ∞ ", d/Dayµs)
+			return " ∞ "
 		}
 
 		return fmt.Sprintf("%02dd", d/Dayµs)
