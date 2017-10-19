@@ -288,6 +288,7 @@ func (t *cgWatch) refreshMetadata() error {
 
 				case shared.ExtentStatus_CONSUMED:
 					x.extStatus = extConsumed
+					x.cgxStatus = cgxConsumed // assume this CG has consumed it
 				}
 
 				t.extentMap[extentUUID] = x
