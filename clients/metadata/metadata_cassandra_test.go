@@ -2121,11 +2121,6 @@ func (s *CassandraSuite) TestListConsumerGroups() {
 	}).Equals(cgSet), "ListConsumerGroups did not return all CGs")
 
 	assert.True(listCGs(&shared.ListConsumerGroupRequest{
-		DestinationPath: common.StringPtr(dstPath),
-		Limit:           common.Int64Ptr(testPageSize),
-	}).Equals(cgSet), "ListConsumerGroups did not return all CGs")
-
-	assert.True(listCGs(&shared.ListConsumerGroupRequest{
 		DestinationUUID: common.StringPtr(dstUUID),
 		Limit:           common.Int64Ptr(testPageSize),
 	}).Equals(cgSet), "ListConsumerGroups did not return all CGs")
@@ -2141,7 +2136,7 @@ func (s *CassandraSuite) TestListConsumerGroups() {
 	for i, cg := range cgSet.Keys() {
 
 		switch {
-		case i < 3: // delete it completely
+		case i < 3: // mark these CGs 'deleting'
 			err = s.client.DeleteConsumerGroup(nil, &shared.DeleteConsumerGroupRequest{
 				DestinationPath:   common.StringPtr(dstPath),
 				ConsumerGroupName: common.StringPtr(cg),
@@ -2155,7 +2150,7 @@ func (s *CassandraSuite) TestListConsumerGroups() {
 			assert.Nil(err, "Failed to delete consumer group")
 			fmt.Printf("DeleteConsumerGroupUUID: %v [%v]\n", cg, cgMap[cg])
 
-		case i < 7: // move CG to 'deleting' state
+		case i < 7: // mark these CGs 'deleted'
 			err = s.client.DeleteConsumerGroup(nil, &shared.DeleteConsumerGroupRequest{
 				DestinationPath:   common.StringPtr(dstPath),
 				ConsumerGroupName: common.StringPtr(cg),
