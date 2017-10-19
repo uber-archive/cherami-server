@@ -30,31 +30,40 @@ func watch(c *cli.Context, mc *MetadataClient) error {
 	destUUID := c.Args()[0]
 	cgUUID := c.Args()[1]
 
-	ticker := time.NewTicker(time.Second) // don't query more than once every second // TODO: make configurable
+	ticker := time.NewTicker(2 * time.Second) // don't query more than once every second // TODO: make configurable
 
 	// print("\033[H\033[2J") // clear screen
 
 	cgMon := newCGWatch(mc, destUUID, cgUUID)
 
-	output, _, _ := cgMon.refresh()
-
-	print("\033[H\033[2J") // clear screen and move cursor to (0,0)
-	print(output)
-
-	for range ticker.C {
+	for i := 0; ; i++ {
 
 		output, _, _ := cgMon.refresh()
 
-		// print("\033[H\033[2J") // clear screen and move cursor to (0,0)
-		print("\033[H") // move cursor to (0,0)
+		moveCursorHome()
+
+		if i%8 == 0 {
+			clearScreen()
+		}
+
 		print(output)
 		fmt.Printf(" publish: %.1f msgs/sec [%d msgs]    \n", cgMon.ratePublish, cgMon.deltaPublish)
 		fmt.Printf(" replicate: %.1f msgs/sec [%d msgs]   \n", cgMon.rateReplicate, cgMon.deltaPublish)
 		fmt.Printf(" consume: %.1f msgs/sec [%d msgs]    \n", cgMon.rateConsume, cgMon.deltaConsume)
 		fmt.Printf(" backlog: %d    \n", cgMon.totalBacklog)
+
+		<-ticker.C // don't query more than once every two-seconds
 	}
 
 	return nil
+}
+
+func clearScreen() {
+	print("\033[H\033[2J") // clear screen and move cursor to (0,0)
+}
+
+func moveCursorHome() {
+	print("\033[H")
 }
 
 type extStatus int
@@ -114,13 +123,14 @@ func (t cgxStatus) String() string {
 }
 
 type extentInfo struct {
-	uuid            string
-	remote          bool
-	createdµs       int64
-	extStatus       extStatus
-	statusUpdatedµs int64
-	cgxStatus       cgxStatus
-	dlq             bool
+	uuid               string
+	remote             bool
+	createdµs          int64
+	extStatus          extStatus
+	statusUpdatedµs    int64
+	cgxStatus          cgxStatus
+	cgxStatusUpdatedµs int64
+	dlq                bool
 
 	ackSeq          int64
 	ackSeqUpdatedµs int64
@@ -160,6 +170,11 @@ func timeSince(tMicros int64) string {
 
 	switch {
 	case d > Dayµs:
+
+		if d > 99*Dayµs {
+			return fmt.Sprintf(" ∞ ", d/Dayµs)
+		}
+
 		return fmt.Sprintf("%02dd", d/Dayµs)
 
 	case d > Hourµs:
@@ -286,7 +301,7 @@ func (t *cgWatch) refreshMetadata() error {
 	}
 
 	{
-		cql := "SELECT extent_uuid, status, ack_level_sequence, WRITETIME(ack_level_sequence), received_level_sequence, " +
+		cql := "SELECT extent_uuid, status, WRITETIME(status), ack_level_sequence, WRITETIME(ack_level_sequence), received_level_sequence, " +
 			"WRITETIME(received_level_sequence), connected_store, output_host_uuid " +
 			"FROM consumer_group_extents WHERE consumer_group_uuid=" + t.cgUUID
 
@@ -294,10 +309,11 @@ func (t *cgWatch) refreshMetadata() error {
 
 		var extentUUID, storeUUID, outputUUID string
 		var status shared.ConsumerGroupExtentStatus
+		var cgxStatusUpdatedµs int64
 		var ackSeq, readSeq int64
 		var ackSeqUpdatedµs, readSeqUpdatedµs int64
 
-		for iter.Scan(&extentUUID, &status, &ackSeq, &ackSeqUpdatedµs, &readSeq, &readSeqUpdatedµs, &storeUUID, &outputUUID) {
+		for iter.Scan(&extentUUID, &status, &cgxStatusUpdatedµs, &ackSeq, &ackSeqUpdatedµs, &readSeq, &readSeqUpdatedµs, &storeUUID, &outputUUID) {
 
 			x, ok := t.extentMap[extentUUID]
 
@@ -346,6 +362,8 @@ func (t *cgWatch) refreshMetadata() error {
 
 				t.extentMap[extentUUID] = x
 			}
+
+			x.cgxStatusUpdatedµs = cgxStatusUpdatedµs
 
 			if ackSeqUpdatedµs > x.ackSeqUpdatedµs {
 
@@ -567,8 +585,9 @@ func (t *cgWatch) refresh() (output string, maxRows int, maxCols int) {
 			extra = 'D'
 		}
 
-		fmt.Fprintf(out, " %36s [%3s] %c | %8s [%3s] | %8d [%3s] | %8d [%3s] | %8d | %8d | %8s | %8s\n", x.uuid, timeSince(x.createdµs), extra, x.extStatus, timeSince(x.statusUpdatedµs),
-			x.lastSeq, timeSince(x.lastSeqUpdatedµs), x.ackSeq, timeSince(x.ackSeqUpdatedµs), x.backlog, x.readSeq, trunc(x.outputUUID), trunc(x.storeUUID))
+		fmt.Fprintf(out, " %36s [%3s] %c | %8s [%3s] | %8d [%3s] | %8d [%3s] | %8d | %8d | %8s | %8s\n", x.uuid, timeSince(x.createdµs), extra, x.extStatus,
+			timeSince(x.cgxStatusUpdatedµs), x.lastSeq, timeSince(x.lastSeqUpdatedµs), x.ackSeq, timeSince(x.ackSeqUpdatedµs), x.backlog, x.readSeq,
+			trunc(x.outputUUID), trunc(x.storeUUID))
 	}
 
 	fmt.Fprintf(out, "--unconsumed----------------------------------+----------------+----------------+----------------+----------+----------+----------+----------\n")
@@ -587,7 +606,7 @@ func (t *cgWatch) refresh() (output string, maxRows int, maxCols int) {
 			extra = 'D'
 		}
 
-		fmt.Fprintf(out, " %36s [%3s] %c | %8s [%3s] | %8d [%3s] |               | %8d |     | %8s | %8s\n", x.uuid, timeSince(x.createdµs), extra, x.extStatus, timeSince(x.statusUpdatedµs),
+		fmt.Fprintf(out, " %36s [%3s] %c | %8s [%3s] | %8d [%3s] |               | %8d |         | %8s | %8s\n", x.uuid, timeSince(x.createdµs), extra, x.extStatus, timeSince(x.statusUpdatedµs),
 			x.lastSeq, timeSince(x.lastSeqUpdatedµs), x.lastSeq, trunc(x.outputUUID), trunc(x.storeUUID))
 
 		t.totalBacklog += x.backlog
@@ -615,7 +634,7 @@ func (t *cgWatch) refresh() (output string, maxRows int, maxCols int) {
 			// fmt.Fprintf(out, " %36s | %8s | %8d | %8d | %8d | %8d | %36s | %36s\n", x.uuid, x.extStatus,
 			// 	x.lastSeq, x.ackSeq, x.lastSeq-x.ackSeq, x.readSeq, x.outputUUID, x.storeUUID)
 			fmt.Fprintf(out, " %36s [%3s] %c | %8s [%3s] | %8d [%3s] | %8d [%3s] |          | %8d | %8s | %8s\n", x.uuid, timeSince(x.createdµs), extra,
-				x.extStatus, timeSince(x.statusUpdatedµs), x.lastSeq, timeSince(x.lastSeqUpdatedµs), x.ackSeq, timeSince(x.ackSeqUpdatedµs), x.readSeq,
+				x.extStatus, timeSince(x.cgxStatusUpdatedµs), x.lastSeq, timeSince(x.lastSeqUpdatedµs), x.ackSeq, timeSince(x.ackSeqUpdatedµs), x.readSeq,
 				trunc(x.outputUUID), trunc(x.storeUUID))
 		}
 	}
@@ -677,6 +696,7 @@ func (t sortedExtents) Less(i, j int) bool {
 
 	// sort by:
 	// 1. status
+	// 1.5 cgx-status-updated time
 	// 2. status-updated time
 	// 3. extent created-time
 	// 4. extent-uuid
@@ -686,6 +706,14 @@ func (t sortedExtents) Less(i, j int) bool {
 	}
 
 	if t[i].extStatus > t[j].extStatus {
+		return false
+	}
+
+	if t[j].cgxStatusUpdatedµs > 0 && t[i].cgxStatusUpdatedµs > t[j].cgxStatusUpdatedµs {
+		return true
+	}
+
+	if t[i].cgxStatusUpdatedµs > 0 && t[i].cgxStatusUpdatedµs < t[j].cgxStatusUpdatedµs {
 		return false
 	}
 
