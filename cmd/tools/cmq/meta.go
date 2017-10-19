@@ -44,7 +44,7 @@ func NewMetadataClient(opts *Opts) (*MetadataClient, error) {
 		}
 	}
 
-	cluster.Consistency = gocql.ParseConsistency(opts.Consistency)
+	cluster.Consistency, _ = gocql.ParseConsistency(opts.Consistency)
 
 	cluster.NumConns = numConns
 	cluster.ProtoVersion = protocolVersion
