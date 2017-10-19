@@ -115,7 +115,7 @@ func (_m *mockMetadataDep) MarkExtentConsumed(destID destinationID, extID extent
 	return r0
 }
 
-func (_m *mockMetadataDep) DeleteConsumerGroup(destID destinationID, cgID consumerGroupID) error {
+func (_m *mockMetadataDep) DeleteConsumerGroupUUID(destID destinationID, cgID consumerGroupID) error {
 	ret := _m.Called(destID, cgID)
 
 	var r0 error

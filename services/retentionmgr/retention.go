@@ -86,7 +86,7 @@ type (
 		DeleteExtent(destID destinationID, extID extentID) (err error)
 		GetExtentsForConsumerGroup(dstID destinationID, cgID consumerGroupID) (extIDs []extentID, err error)
 		MarkExtentConsumed(destID destinationID, extID extentID) (err error)
-		DeleteConsumerGroup(destID destinationID, cgID consumerGroupID) error
+		DeleteConsumerGroupUUID(destID destinationID, cgID consumerGroupID) error
 		DeleteDestination(destID destinationID) (err error)
 		DeleteConsumerGroupExtent(destID destinationID, cgID consumerGroupID, extID extentID) error
 		GetAckLevel(destID destinationID, extID extentID, cgID consumerGroupID) (ackLevel int64, err error)
@@ -397,7 +397,7 @@ func (t *RetentionManager) runRetention(jobsC chan<- *retentionJob) bool {
 					common.TagCnsm: cg.id,
 				}).Info("deleting consumer-group (all cg-extents deleted)")
 
-				if e := t.metadata.DeleteConsumerGroup(dest.id, cg.id); e != nil {
+				if e := t.metadata.DeleteConsumerGroupUUID(dest.id, cg.id); e != nil {
 
 					log.WithFields(bark.Fields{
 						common.TagCnsm: cg.id,

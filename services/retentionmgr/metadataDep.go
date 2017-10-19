@@ -32,7 +32,11 @@ import (
 	"github.com/uber/tchannel-go/thrift"
 )
 
-const defaultPageSize = 1000
+const (
+	defaultPageSize           = 1000
+	timeoutMetadataPointQuery = 5 * time.Second
+	timeoutMetadataListQuery  = 20 * time.Second
+)
 
 type metadataDepImpl struct {
 	metadata metadata.TChanMetadataService
@@ -52,7 +56,7 @@ func (t *metadataDepImpl) GetDestinations() (destinations []*destinationInfo) {
 	req := shared.NewListDestinationsByUUIDRequest()
 	req.Limit = common.Int64Ptr(defaultPageSize)
 
-	ctx, cancel := thrift.NewContext(5 * time.Second)
+	ctx, cancel := thrift.NewContext(timeoutMetadataListQuery)
 	defer cancel()
 
 	log := t.logger
@@ -110,7 +114,7 @@ func (t *metadataDepImpl) GetExtents(destID destinationID) (extents []*extentInf
 	req.DestinationUUID = common.StringPtr(string(destID))
 	req.Limit = common.Int64Ptr(defaultPageSize)
 
-	ctx, cancel := thrift.NewContext(5 * time.Second)
+	ctx, cancel := thrift.NewContext(timeoutMetadataListQuery)
 	defer cancel()
 
 	log := t.logger.WithField(common.TagDst, string(destID))
@@ -181,7 +185,7 @@ func (t *metadataDepImpl) GetExtentInfo(destID destinationID, extID extentID) (e
 	req.DestinationUUID = common.StringPtr(string(destID))
 	req.ExtentUUID = common.StringPtr(string(extID))
 
-	ctx, cancel := thrift.NewContext(5 * time.Second)
+	ctx, cancel := thrift.NewContext(timeoutMetadataPointQuery)
 	defer cancel()
 
 	log := t.logger.WithFields(bark.Fields{
@@ -229,9 +233,8 @@ func (t *metadataDepImpl) GetConsumerGroups(destID destinationID) (consumerGroup
 	req := shared.NewListConsumerGroupsUUIDRequest()
 	req.DestinationUUID = common.StringPtr(string(destID))
 	req.Limit = common.Int64Ptr(defaultPageSize)
-	ctx, _ := thrift.NewContext(time.Second)
 
-	ctx, cancel := thrift.NewContext(30 * time.Second)
+	ctx, cancel := thrift.NewContext(timeoutMetadataListQuery)
 	defer cancel()
 
 	log := t.logger.WithField(common.TagDst, string(destID))
@@ -285,7 +288,7 @@ func (t *metadataDepImpl) DeleteExtent(destID destinationID, extID extentID) (er
 	req.ExtentUUID = common.StringPtr(string(extID))
 	req.Status = shared.ExtentStatusPtr(shared.ExtentStatus_DELETED)
 
-	ctx, cancel := thrift.NewContext(2 * time.Second)
+	ctx, cancel := thrift.NewContext(timeoutMetadataPointQuery)
 	defer cancel()
 
 	log := t.logger.WithFields(bark.Fields{
@@ -312,7 +315,7 @@ func (t *metadataDepImpl) MarkExtentConsumed(destID destinationID, extID extentI
 	req.ExtentUUID = common.StringPtr(string(extID))
 	req.Status = shared.ExtentStatusPtr(shared.ExtentStatus_CONSUMED)
 
-	ctx, cancel := thrift.NewContext(2 * time.Second)
+	ctx, cancel := thrift.NewContext(timeoutMetadataPointQuery)
 	defer cancel()
 
 	log := t.logger.WithFields(bark.Fields{
@@ -338,7 +341,7 @@ func (t *metadataDepImpl) GetExtentsForConsumerGroup(destID destinationID, cgID 
 	req.ConsumerGroupUUID = common.StringPtr(string(cgID))
 	req.MaxResults = common.Int32Ptr(defaultPageSize)
 
-	ctx, cancel := thrift.NewContext(30 * time.Second)
+	ctx, cancel := thrift.NewContext(timeoutMetadataListQuery)
 	defer cancel()
 
 	log := t.logger.WithFields(bark.Fields{
@@ -383,7 +386,7 @@ func (t *metadataDepImpl) DeleteConsumerGroupExtent(destID destinationID, cgID c
 	req.ConsumerGroupUUID = common.StringPtr(string(cgID))
 	req.Status = common.MetadataConsumerGroupExtentStatusPtr(shared.ConsumerGroupExtentStatus_DELETED)
 
-	ctx, cancel := thrift.NewContext(2 * time.Second)
+	ctx, cancel := thrift.NewContext(timeoutMetadataPointQuery)
 	defer cancel()
 
 	log := t.logger.WithFields(bark.Fields{
@@ -405,12 +408,12 @@ func (t *metadataDepImpl) DeleteConsumerGroupExtent(destID destinationID, cgID c
 	return nil
 }
 
-func (t *metadataDepImpl) DeleteConsumerGroup(destID destinationID, cgID consumerGroupID) error {
+func (t *metadataDepImpl) DeleteConsumerGroupUUID(destID destinationID, cgID consumerGroupID) error {
 
 	req := metadata.NewDeleteConsumerGroupUUIDRequest()
 	req.UUID = common.StringPtr(string(cgID))
 
-	ctx, cancel := thrift.NewContext(2 * time.Second)
+	ctx, cancel := thrift.NewContext(timeoutMetadataPointQuery)
 	defer cancel()
 
 	log := t.logger.WithFields(bark.Fields{
@@ -423,7 +426,7 @@ func (t *metadataDepImpl) DeleteConsumerGroup(destID destinationID, cgID consume
 	err := t.metadata.DeleteConsumerGroupUUID(ctx, req)
 
 	if err != nil {
-		log.WithField(common.TagErr, err).Error("DeleteConsumerGroup: DeleteConsumerGroupUUID failed")
+		log.WithField(common.TagErr, err).Error("DeleteConsumerGroupUUID: DeleteConsumerGroupUUID failed")
 		return err
 	}
 
@@ -436,7 +439,7 @@ func (t *metadataDepImpl) DeleteDestination(destID destinationID) error {
 	req := metadata.NewDeleteDestinationUUIDRequest()
 	req.UUID = common.StringPtr(string(destID))
 
-	ctx, cancel := thrift.NewContext(2 * time.Second)
+	ctx, cancel := thrift.NewContext(timeoutMetadataPointQuery)
 	defer cancel()
 
 	log := t.logger.WithField(common.TagDst, string(destID))
@@ -461,7 +464,7 @@ func (t *metadataDepImpl) GetAckLevel(destID destinationID, extID extentID, cgID
 	req.ExtentUUID = common.StringPtr(string(extID))
 	req.ConsumerGroupUUID = common.StringPtr(string(cgID))
 
-	ctx, cancel := thrift.NewContext(2 * time.Second)
+	ctx, cancel := thrift.NewContext(timeoutMetadataPointQuery)
 	defer cancel()
 
 	log := t.logger.WithFields(bark.Fields{
