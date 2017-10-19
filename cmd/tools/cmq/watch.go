@@ -158,10 +158,11 @@ type extentInfo struct {
 
 // units in micro-seconds
 const (
-	Secondµs int64 = 10e6
-	Minuteµs int64 = 60 * Secondµs
-	Hourµs   int64 = 60 * Minuteµs
-	Dayµs    int64 = 24 * Hourµs
+	MilliSecondµs int64 = 10e3
+	Secondµs      int64 = 10e6
+	Minuteµs      int64 = 60 * Secondµs
+	Hourµs        int64 = 60 * Minuteµs
+	Dayµs         int64 = 24 * Hourµs
 )
 
 func timeSince(tMicros int64) string {
@@ -183,11 +184,11 @@ func timeSince(tMicros int64) string {
 	case d > Minuteµs:
 		return fmt.Sprintf("%02dm", d/Minuteµs)
 
-	// case d > Secondµs:
-	// 	fallthrough
+	case d > Secondµs:
+		return fmt.Sprintf("%02ds", d/Secondµs)
 
 	default:
-		return fmt.Sprintf("%02ds", d/Secondµs)
+		return fmt.Sprintf("%03d", d/MilliSecondµs)
 	}
 }
 
@@ -606,7 +607,7 @@ func (t *cgWatch) refresh() (output string, maxRows int, maxCols int) {
 			extra = 'D'
 		}
 
-		fmt.Fprintf(out, " %36s [%3s] %c | %8s [%3s] | %8d [%3s] |               | %8d |         | %8s | %8s\n", x.uuid, timeSince(x.createdµs), extra, x.extStatus, timeSince(x.statusUpdatedµs),
+		fmt.Fprintf(out, " %36s [%3s] %c | %8s [%3s] | %8d [%3s] |                | %8d |          | %8s | %8s\n", x.uuid, timeSince(x.createdµs), extra, x.extStatus, timeSince(x.statusUpdatedµs),
 			x.lastSeq, timeSince(x.lastSeqUpdatedµs), x.lastSeq, trunc(x.outputUUID), trunc(x.storeUUID))
 
 		t.totalBacklog += x.backlog
