@@ -80,15 +80,15 @@ type (
 	// metadataDep interface that encapsulates the dependencies on metadata
 	metadataDep interface {
 		// calls to metadata
-		GetDestinations() (destinations []*destinationInfo)
-		GetExtents(destID destinationID) (extents []*extentInfo)
-		GetConsumerGroups(destID destinationID) (consumerGroups []*consumerGroupInfo)
+		GetDestinations() (destinations []*destinationInfo, err error)
+		GetExtents(destID destinationID) (extents []*extentInfo, err error)
+		GetConsumerGroups(destID destinationID) (consumerGroups []*consumerGroupInfo, err error)
 		DeleteExtent(destID destinationID, extID extentID) (err error)
 		GetExtentsForConsumerGroup(dstID destinationID, cgID consumerGroupID) (extIDs []extentID, err error)
 		MarkExtentConsumed(destID destinationID, extID extentID) (err error)
-		DeleteConsumerGroupUUID(destID destinationID, cgID consumerGroupID) error
+		DeleteConsumerGroupUUID(destID destinationID, cgID consumerGroupID) (err error)
 		DeleteDestination(destID destinationID) (err error)
-		DeleteConsumerGroupExtent(destID destinationID, cgID consumerGroupID, extID extentID) error
+		DeleteConsumerGroupExtent(destID destinationID, cgID consumerGroupID, extID extentID) (err error)
 		GetAckLevel(destID destinationID, extID extentID, cgID consumerGroupID) (ackLevel int64, err error)
 		GetExtentInfo(destID destinationID, extID extentID) (extInfo *extentInfo, err error)
 	}
@@ -293,7 +293,13 @@ func (t *RetentionManager) runRetention(jobsC chan<- *retentionJob) bool {
 
 	t.logger.Info("runRetention: start")
 
-	destList := t.metadata.GetDestinations()
+	destList, err := t.metadata.GetDestinations()
+
+	if err != nil {
+
+		t.logger.WithField(common.TagErr, err).Error("GetDestinations failed")
+		return true
+	}
 
 	// shuffle list of destinations (ie, randomize order each time)
 	for i := len(destList); i > 0; i-- {
@@ -319,90 +325,94 @@ func (t *RetentionManager) runRetention(jobsC chan<- *retentionJob) bool {
 		var numCGs int
 
 		// query consumer groups for the destination
-		cgs := t.metadata.GetConsumerGroups(dest.id)
+		cgs, err := t.metadata.GetConsumerGroups(dest.id)
 
-		log.WithFields(bark.Fields{
-			`numCGs`: len(cgs),
-		}).Info("GetConsumerGroups")
+		if err != nil {
 
-		// for each extent, compute retention cursor and convey to storage
-		for _, cg := range cgs {
+			log.WithField(common.TagErr, err).Error("GetConsumerGroups failed")
+			numCGs = -1 // some non-zero value
 
-			log.WithFields(bark.Fields{
-				common.TagCnsm: cg.id,
-				`status`:       cg.status,
-			}).Info("processing cg")
+		} else {
 
-			if cg.status == shared.ConsumerGroupStatus_DELETED {
-				continue // ignore deleted CGs
-			}
+			// for each extent, compute retention cursor and convey to storage
+			for _, cg := range cgs {
 
-			numCGs++ // count 'active' CGs
-
-			if cg.status != shared.ConsumerGroupStatus_DELETING {
-				continue
-			}
-
-			log.WithFields(bark.Fields{
-				common.TagCnsm: cg.id,
-				`status`:       cg.status,
-			}).Info("cg in deleting state")
-
-			// CG is in DELETING state; delete all cg-extents:
-
-			var numCGExtents int
-
-			extIDs, err := t.metadata.GetExtentsForConsumerGroup(dest.id, cg.id)
-
-			if err != nil {
 				log.WithFields(bark.Fields{
 					common.TagCnsm: cg.id,
-					common.TagErr:  err,
-				}).Error("GetExtentsForConsumerGroup failed")
-				continue
-			}
+					`status`:       cg.status,
+				}).Info("processing cg")
 
-			numCGExtents = len(extIDs)
+				if cg.status == shared.ConsumerGroupStatus_DELETED {
+					continue // ignore deleted CGs
+				}
 
-			log.WithFields(bark.Fields{
-				common.TagCnsm: cg.id,
-				`numCGExtents`: numCGExtents,
-			}).Info("deleting all consumer-group extents for CG")
+				numCGs++ // count 'active' CGs
 
-			for _, extID := range extIDs {
+				if cg.status != shared.ConsumerGroupStatus_DELETING {
+					continue
+				}
 
-				e := t.metadata.DeleteConsumerGroupExtent(dest.id, cg.id, extID)
+				log.WithFields(bark.Fields{
+					common.TagCnsm: cg.id,
+					`status`:       cg.status,
+				}).Info("cg in deleting state")
 
-				if e != nil {
-					// 'EntityNotExistsError' indicates the CG-extent was already deleted
-					if _, ok := e.(*shared.EntityNotExistsError); ok {
-						e = nil
+				// CG is in DELETING state; delete all cg-extents:
+
+				var numCGExtents int
+
+				extIDs, err := t.metadata.GetExtentsForConsumerGroup(dest.id, cg.id)
+
+				if err != nil {
+					log.WithFields(bark.Fields{
+						common.TagCnsm: cg.id,
+						common.TagErr:  err,
+					}).Error("GetExtentsForConsumerGroup failed")
+					continue
+				}
+
+				numCGExtents = len(extIDs)
+
+				log.WithFields(bark.Fields{
+					common.TagCnsm: cg.id,
+					`numCGExtents`: numCGExtents,
+				}).Info("deleting all consumer-group extents for CG")
+
+				for _, extID := range extIDs {
+
+					e := t.metadata.DeleteConsumerGroupExtent(dest.id, cg.id, extID)
+
+					if e != nil {
+						// 'EntityNotExistsError' indicates the CG-extent was already deleted
+						if _, ok := e.(*shared.EntityNotExistsError); ok {
+							e = nil
+						}
+
+						log.WithFields(bark.Fields{
+							common.TagCnsm: cg.id,
+							common.TagExt:  extID,
+							common.TagErr:  e,
+						}).Error("error deleting consumer-group extent")
 					}
 
-					log.WithFields(bark.Fields{
-						common.TagCnsm: cg.id,
-						common.TagExt:  extID,
-						common.TagErr:  e,
-					}).Error("error deleting consumer-group extent")
+					if e == nil {
+						numCGExtents--
+					}
 				}
 
-				if e == nil {
-					numCGExtents--
-				}
-			}
-
-			if numCGExtents == 0 {
-
-				log.WithFields(bark.Fields{
-					common.TagCnsm: cg.id,
-				}).Info("deleting consumer-group (all cg-extents deleted)")
-
-				if e := t.metadata.DeleteConsumerGroupUUID(dest.id, cg.id); e != nil {
+				if numCGExtents == 0 {
 
 					log.WithFields(bark.Fields{
 						common.TagCnsm: cg.id,
-						common.TagErr:  e,
-					}).Error("error deleting consumer-group")
+					}).Info("deleting consumer-group (all cg-extents deleted)")
+
+					if e := t.metadata.DeleteConsumerGroupUUID(dest.id, cg.id); e != nil {
+
+						log.WithFields(bark.Fields{
+							common.TagCnsm: cg.id,
+							common.TagErr:  e,
+						}).Error("error deleting consumer-group")
+					}
 				}
 			}
 		}
@@ -413,26 +423,34 @@ func (t *RetentionManager) runRetention(jobsC chan<- *retentionJob) bool {
 		}
 
 		// query extents for the destination
-		dest.extents = t.metadata.GetExtents(dest.id)
+		dest.extents, err = t.metadata.GetExtents(dest.id)
 
 		var numExtents int
 
-		// iterate through all extents and compute number of 'jobs' that would need to be created
-		for j := range dest.extents {
+		if err != nil {
 
-			if dest.extents[j].status == shared.ExtentStatus_DELETED {
-				continue // skip deleted extent
+			log.WithField(common.TagErr, err).Error("GetExtents failed")
+			numExtents = -1 // some non-zero value
+
+		} else {
+
+			// iterate through all extents and compute number of 'jobs' that would need to be created
+			for j := range dest.extents {
+
+				if dest.extents[j].status == shared.ExtentStatus_DELETED {
+					continue // skip deleted extent
+				}
+
+				numExtents++ // count active extents
+
+				if dest.extents[j].status == shared.ExtentStatus_CONSUMED &&
+					time.Since(dest.extents[j].statusUpdatedTime) < t.ExtentDeleteDeferPeriod {
+
+					continue // skip consumed extent within 'delete-defer-period'
+				}
+
+				totalJobs++
 			}
-
-			numExtents++ // count active extents
-
-			if dest.extents[j].status == shared.ExtentStatus_CONSUMED &&
-				time.Since(dest.extents[j].statusUpdatedTime) < t.ExtentDeleteDeferPeriod {
-
-				continue // skip consumed extent within 'delete-defer-period'
-			}
-
-			totalJobs++
 		}
 
 		if dest.status == shared.DestinationStatus_DELETING && numCGs == 0 && numExtents == 0 {
@@ -553,23 +571,12 @@ func (t *RetentionManager) computeRetention(job *retentionJob, log bark.Logger) 
 	if dest.status == shared.DestinationStatus_DELETING &&
 		ext.status == shared.ExtentStatus_SEALED {
 
-		// When the destination is being deleted and all the consumer groups have
-		// gone away for a SEALED extent, then we can short-circuit and decide to
-		// delete the whole extent immediately. This is because, we know for sure
-		// there will be no new consumer groups that can be created.
-		var pendingCGDelete = false
+		// when the destination is being deleted and the extent is SEALED, then we
+		// can short-circuit and decide to delete the whole extent immediately.
 
-		for _, cgInfo := range job.consumers {
-			if cgInfo.status != shared.ConsumerGroupStatus_DELETED {
-				pendingCGDelete = true
-			}
-		}
-
-		if !pendingCGDelete {
-			job.retentionAddr = store.ADDR_SEAL
-			job.deleteExtent = true
-			return
-		}
+		job.retentionAddr = store.ADDR_SEAL
+		job.deleteExtent = true
+		return
 	}
 
 	// -- step 1: take a snapshot of the current time and compute retention timestamps -- //
@@ -894,7 +901,7 @@ workerLoop:
 		}
 
 		// get consumer groups for the destination
-		job.consumers = t.metadata.GetConsumerGroups(dest.id)
+		job.consumers, _ = t.metadata.GetConsumerGroups(dest.id)
 
 		if t.computeRetention(job, log); job.retentionAddr != store.ADDR_BEGIN {
 

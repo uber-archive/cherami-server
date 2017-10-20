@@ -160,8 +160,8 @@ func (s *RetentionMgrSuite) TestRetentionManager() {
 		s.metadata.On("GetExtentInfo", destinationID("DEST1"), ext).Return(&extInfo, nil).Once()
 	}
 
-	s.metadata.On("GetDestinations").Return(destinations).Once()
-	s.metadata.On("GetExtents", destinationID("DEST1")).Return(extents).Once()
+	s.metadata.On("GetDestinations").Return(destinations, nil).Once()
+	s.metadata.On("GetExtents", destinationID("DEST1")).Return(extents, nil).Once()
 
 	consumerGroups := []*consumerGroupInfo{
 		{id: "CG1", status: shared.ConsumerGroupStatus_ENABLED},
@@ -170,7 +170,7 @@ func (s *RetentionMgrSuite) TestRetentionManager() {
 		{id: "CGm", status: shared.ConsumerGroupStatus_ENABLED}, // Single CG Visible consumer group
 	}
 
-	s.metadata.On("GetConsumerGroups", destinationID("DEST1")).Return(consumerGroups)
+	s.metadata.On("GetConsumerGroups", destinationID("DEST1")).Return(consumerGroups, nil)
 
 	type gaftRet struct {
 		addr   int64
@@ -409,12 +409,12 @@ func (s *RetentionMgrSuite) TestRetentionManagerOnDeletedDestinations() {
 		}
 	}
 
-	s.metadata.On("GetDestinations").Return(destinations).Once()
-	s.metadata.On("GetExtents", destinationID("DEST1")).Return(extentsDEST1).Once()
-	s.metadata.On("GetConsumerGroups", destinationID("DEST1")).Return(consumerGroupsDEST1)
+	s.metadata.On("GetDestinations").Return(destinations, nil).Once()
+	s.metadata.On("GetExtents", destinationID("DEST1")).Return(extentsDEST1, nil).Once()
+	s.metadata.On("GetConsumerGroups", destinationID("DEST1")).Return(consumerGroupsDEST1, nil)
 
-	s.metadata.On("GetExtents", destinationID("DEST2")).Return(extentsDEST2).Once()
-	s.metadata.On("GetConsumerGroups", destinationID("DEST2")).Return(consumerGroupsDEST2)
+	s.metadata.On("GetExtents", destinationID("DEST2")).Return(extentsDEST2, nil).Once()
+	s.metadata.On("GetConsumerGroups", destinationID("DEST2")).Return(consumerGroupsDEST2, nil)
 
 	s.storehost.On("GetAddressFromTimestamp", storehostID(common.KafkaPhantomExtentStorehost), mock.AnythingOfType("extentID"), mock.AnythingOfType("int64")).Return(int64(store.ADDR_BEGIN), false, nil)
 	s.storehost.On("PurgeMessages", storehostID(common.KafkaPhantomExtentStorehost), mock.AnythingOfType("extentID"), mock.AnythingOfType("int64")).Return(int64(store.ADDR_BEGIN), nil)

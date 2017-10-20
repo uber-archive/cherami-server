@@ -51,7 +51,7 @@ func newMetadataDep(metadata metadata.TChanMetadataService, log bark.Logger) *me
 }
 
 // -- the following are various helper routines, that talk to metadata, storehosts, etc -- //
-func (t *metadataDepImpl) GetDestinations() (destinations []*destinationInfo) {
+func (t *metadataDepImpl) GetDestinations() (destinations []*destinationInfo, err error) {
 
 	req := shared.NewListDestinationsByUUIDRequest()
 	req.Limit = common.Int64Ptr(defaultPageSize)
@@ -66,10 +66,10 @@ func (t *metadataDepImpl) GetDestinations() (destinations []*destinationInfo) {
 
 		log.Debug("GetDestinations: ListDestinationsByUUID on metadata")
 
-		resp, err := t.metadata.ListDestinationsByUUID(ctx, req)
-		if err != nil {
-			log.WithField(common.TagErr, err).Error(`GetDestinations: ListDestinationsByUUID failed`)
-			return
+		resp, err0 := t.metadata.ListDestinationsByUUID(ctx, req)
+		if err0 != nil {
+			log.WithField(common.TagErr, err0).Error(`GetDestinations: ListDestinationsByUUID failed`)
+			break
 		}
 
 		for _, destDesc := range resp.GetDestinations() {
@@ -104,7 +104,10 @@ func (t *metadataDepImpl) GetDestinations() (destinations []*destinationInfo) {
 		log.Debug("GetDestinations: fetching next page of ListDestinationsByUUID")
 	}
 
-	log.WithField(`numDestinations`, len(destinations)).Info("GetDestinations done")
+	log.WithFields(bark.Fields{
+		`numDestinations`: len(destinations),
+		common.TagErr:     err,
+	}).Info("GetDestinations done")
 	return
 }
 
@@ -352,9 +355,9 @@ func (t *metadataDepImpl) GetExtentsForConsumerGroup(destID destinationID, cgID 
 	for {
 		log.Info("GetExtentsForConsumerGroup: ReadConsumerGroupExtentsLite on metadata")
 
-		res, e := t.metadata.ReadConsumerGroupExtentsLite(ctx, req)
-		if e != nil {
-			err = e
+		res, err0 := t.metadata.ReadConsumerGroupExtentsLite(ctx, req)
+		if err0 != nil {
+			err = err0
 			log.WithField(common.TagErr, err).Error("GetExtentsForConsumerGroup: ReadConsumerGroupExtentsLite failed")
 			break
 		}

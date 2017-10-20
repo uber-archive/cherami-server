@@ -28,7 +28,7 @@ type mockMetadataDep struct {
 	mock.Mock
 }
 
-func (_m *mockMetadataDep) GetDestinations() []*destinationInfo {
+func (_m *mockMetadataDep) GetDestinations() ([]*destinationInfo, error) {
 	ret := _m.Called()
 
 	var r0 []*destinationInfo
@@ -40,9 +40,16 @@ func (_m *mockMetadataDep) GetDestinations() []*destinationInfo {
 		}
 	}
 
-	return r0
+	var r1 error
+	if rf, ok := ret.Get(1).(func() error); ok {
+		r1 = rf()
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
 }
-func (_m *mockMetadataDep) GetExtents(destID destinationID) []*extentInfo {
+func (_m *mockMetadataDep) GetExtents(destID destinationID) ([]*extentInfo, error) {
 	ret := _m.Called(destID)
 
 	var r0 []*extentInfo
@@ -54,10 +61,17 @@ func (_m *mockMetadataDep) GetExtents(destID destinationID) []*extentInfo {
 		}
 	}
 
-	return r0
+	var r1 error
+	if rf, ok := ret.Get(1).(func(destinationID) error); ok {
+		r1 = rf(destID)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
 }
 
-func (_m *mockMetadataDep) GetExtentsForConsumerGroup(destID destinationID, cgID consumerGroupID) (extIDs []extentID, err error) {
+func (_m *mockMetadataDep) GetExtentsForConsumerGroup(destID destinationID, cgID consumerGroupID) ([]extentID, error) {
 	ret := _m.Called(destID, cgID)
 
 	var r0 []extentID
@@ -76,7 +90,7 @@ func (_m *mockMetadataDep) GetExtentsForConsumerGroup(destID destinationID, cgID
 
 	return r0, r1
 }
-func (_m *mockMetadataDep) GetConsumerGroups(destID destinationID) []*consumerGroupInfo {
+func (_m *mockMetadataDep) GetConsumerGroups(destID destinationID) ([]*consumerGroupInfo, error) {
 	ret := _m.Called(destID)
 
 	var r0 []*consumerGroupInfo
@@ -88,7 +102,14 @@ func (_m *mockMetadataDep) GetConsumerGroups(destID destinationID) []*consumerGr
 		}
 	}
 
-	return r0
+	var r1 error
+	if rf, ok := ret.Get(1).(func(destinationID) error); ok {
+		r1 = rf(destID)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
 }
 func (_m *mockMetadataDep) DeleteExtent(destID destinationID, extID extentID) error {
 	ret := _m.Called(destID, extID)
