@@ -1,12 +1,12 @@
-hash: b4ac6cca4953caf65596799ec1216e88cc1f27efe83097737844d2da31d9429a
-updated: 2017-10-06T14:22:19.357459794-07:00
+hash: df533b509cb758b1ac9fb478f628e40f1476a6569fb8073d87f830fee26a0dfc
+updated: 2017-10-20T10:20:43.667131555-07:00
 imports:
 - name: github.com/apache/thrift
   version: b2a4d4ae21c789b689dd162deb819665567f481c
   subpackages:
   - lib/go/thrift
 - name: github.com/aws/aws-sdk-go
-  version: 8a972b4459c2f2582b06f3e2d74448987cc6e19f
+  version: 011ff14652ceaed8ce090cef3f1d94ec9668bd83
   subpackages:
   - aws
   - aws/awserr
@@ -38,7 +38,7 @@ imports:
 - name: github.com/benbjohnson/clock
   version: 7dc76406b6d3c05b5f71a86293cbcf3c4ea03b19
 - name: github.com/bsm/sarama-cluster
-  version: 5efe630369ab4ed5cc4cedeadd61b4d1b2523169
+  version: c4d3d28d22e7bdea71656725bf5cd1d988454b41
 - name: github.com/cactus/go-statsd-client
   version: ce77ca9ecdee1c3ffd097e32f9bb832825ccb203
   subpackages:
@@ -52,7 +52,7 @@ imports:
 - name: github.com/cockroachdb/c-snappy
   version: c0cd3c9ce92f195001595e1fbbe66f045daad34f
 - name: github.com/codegangsta/cli
-  version: cf33a9befefdd6c6ea1a236ab6d546e797a62cbf
+  version: 0bdeddeeb0f650497d603c4ad7b20cfe685682f6
 - name: github.com/davecgh/go-spew
   version: ecdeabc65495df2dec95d7c4a4c3e021903035e5
   subpackages:
@@ -68,9 +68,9 @@ imports:
 - name: github.com/eapache/queue
   version: 44cc805cf13205b55f69e14bcb69867d1ae92f98
 - name: github.com/go-ini/ini
-  version: d3de07a94d22b4a0972deb4b96d790c2c0ce8333
+  version: 5b3e00af70a9484542169a976dcab8d03e601a17
 - name: github.com/gocql/gocql
-  version: 3e8b36f5e9e52cdeb265f385808c504a53db55fc
+  version: 843f6b1d2288839f5d00f92be11cbbebd600ba51
   subpackages:
   - internal/lru
   - internal/murmur
@@ -91,11 +91,11 @@ imports:
   - ext
   - log
 - name: github.com/pborman/uuid
-  version: e790cca94e6cc75c7064b1332e63811d4aae1a53
+  version: a97ce2ca70fa5a848076093f05e639a89ca34d06
 - name: github.com/pierrec/lz4
-  version: 5a3d2245f97fc249850e7802e3c01fad02a1c316
+  version: 08c27939df1bd95e881e2c2367a749964ad1fceb
 - name: github.com/pierrec/xxHash
-  version: 5a004441f897722c627870a981d02b29924215fa
+  version: a0006b13c722f7f12368c00a3d3c2ae8a999a0c6
   subpackages:
   - xxHash32
 - name: github.com/pmezard/go-difflib
@@ -108,11 +108,11 @@ imports:
   version: bbdbe644099b7fdc8327d5cc69c030945188b2e9
   repo: http://github.com/Shopify/sarama
 - name: github.com/sirupsen/logrus
-  version: f006c2ac4710855cf0f916dd6b77acf6b048dc6e
+  version: ba1b36c82c5e05c4f912a88eab0dcd91a171688f
 - name: github.com/stretchr/objx
   version: 1a9d0bb9f541897e62256577b352fdbc1fb4fd94
 - name: github.com/stretchr/testify
-  version: 890a5c3458b43e6104ff5da8dfa139d013d77544
+  version: 2aa2c176b9dab406a6970f6a55f513e8a8c8b18f
   subpackages:
   - assert
   - mock
@@ -123,7 +123,7 @@ imports:
 - name: github.com/uber-common/bark
   version: 02d883c81a4e7b76904d97efb176efdf4be791bd
 - name: github.com/uber-go/atomic
-  version: 4e336646b2ef9fc6e47be8e21594178f98e5ebcf
+  version: 54f72d32435d760d5604f17a82e2435b28dc4ba5
 - name: github.com/uber/cherami-client-go
   version: 05b8db6966cc3413c1105a809977febef05ca5a1
   subpackages:
@@ -134,7 +134,7 @@ imports:
   - common/websocket
   - stream
 - name: github.com/uber/cherami-thrift
-  version: 45b0a9da65195b298b3967360a1a069907d5266a
+  version: ae427f7974d32a42a96f29f0f627e4d343fad8b2
   subpackages:
   - .generated/go/admin
   - .generated/go/cherami
@@ -171,12 +171,8 @@ imports:
   - tos
   - trand
   - typed
-- name: golang.org/x/crypto
-  version: 850760c427c516be930bc91280636328f1a62286
-  subpackages:
-  - ssh/terminal
 - name: golang.org/x/net
-  version: a04bdaca5b32abe1c069418fb7088ae607de5bd0
+  version: aabf50738bcdd9b207582cbe796b59ed65d56680
   subpackages:
   - bpf
   - context
@@ -185,13 +181,13 @@ imports:
   - ipv4
   - ipv6
 - name: golang.org/x/sys
-  version: 0b25a408a50076fbbcae6b7ac0ea5fbb0b085e79
+  version: 8dbc5d05d6edcc104950cc299a1ce6641235bc86
   subpackages:
   - unix
 - name: gopkg.in/inf.v0
   version: 3887ee99ecf07df5b447e9b00d9c0b2adaa9f3e4
 - name: gopkg.in/validator.v2
-  version: 07ffaad256c8e957050ad83d6472eb97d785013d
+  version: 460c83432a98c35224a6fe352acf8b23e067ad06
 - name: gopkg.in/yaml.v2
   version: eb3733d160e74a9c7e442f435eb3bea458e1d19f
 testImports: []

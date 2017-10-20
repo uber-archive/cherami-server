@@ -160,8 +160,8 @@ func (s *RetentionMgrSuite) TestRetentionManager() {
 		s.metadata.On("GetExtentInfo", destinationID("DEST1"), ext).Return(&extInfo, nil).Once()
 	}
 
-	s.metadata.On("GetDestinations").Return(destinations).Once()
-	s.metadata.On("GetExtents", destinationID("DEST1")).Return(extents).Once()
+	s.metadata.On("GetDestinations").Return(destinations, nil).Once()
+	s.metadata.On("GetExtents", destinationID("DEST1")).Return(extents, nil).Once()
 
 	consumerGroups := []*consumerGroupInfo{
 		{id: "CG1", status: shared.ConsumerGroupStatus_ENABLED},
@@ -170,7 +170,7 @@ func (s *RetentionMgrSuite) TestRetentionManager() {
 		{id: "CGm", status: shared.ConsumerGroupStatus_ENABLED}, // Single CG Visible consumer group
 	}
 
-	s.metadata.On("GetConsumerGroups", destinationID("DEST1")).Return(consumerGroups)
+	s.metadata.On("GetConsumerGroups", destinationID("DEST1")).Return(consumerGroups, nil)
 
 	type gaftRet struct {
 		addr   int64
@@ -327,12 +327,12 @@ func (s *RetentionMgrSuite) TestRetentionManager() {
 	}
 
 	for _, cg := range consumerGroups {
-		s.metadata.On("DeleteConsumerGroupExtent", consumerGroupID(cg.id), extentID("EXT5")).Return(nil).Once()
-		s.metadata.On("DeleteConsumerGroupExtent", consumerGroupID(cg.id), extentID("EXT61")).Return(nil).Once()
-		s.metadata.On("DeleteConsumerGroupExtent", consumerGroupID(cg.id), extentID("EXT9")).Return(shared.NewEntityNotExistsError()).Once()
-		s.metadata.On("DeleteConsumerGroupExtent", consumerGroupID(cg.id), extentID("EXTA")).Return(shared.NewEntityNotExistsError()).Once()
-		s.metadata.On("DeleteConsumerGroupExtent", consumerGroupID(cg.id), extentID("EXTB")).Return(shared.NewBadRequestError()).Once()
-		s.metadata.On("DeleteConsumerGroupExtent", consumerGroupID(cg.id), extentID("EXTD")).Return(nil).Once()
+		s.metadata.On("DeleteConsumerGroupExtent", destinationID("DEST1"), consumerGroupID(cg.id), extentID("EXT5")).Return(nil).Once()
+		s.metadata.On("DeleteConsumerGroupExtent", destinationID("DEST1"), consumerGroupID(cg.id), extentID("EXT61")).Return(nil).Once()
+		s.metadata.On("DeleteConsumerGroupExtent", destinationID("DEST1"), consumerGroupID(cg.id), extentID("EXT9")).Return(shared.NewEntityNotExistsError()).Once()
+		s.metadata.On("DeleteConsumerGroupExtent", destinationID("DEST1"), consumerGroupID(cg.id), extentID("EXTA")).Return(shared.NewEntityNotExistsError()).Once()
+		s.metadata.On("DeleteConsumerGroupExtent", destinationID("DEST1"), consumerGroupID(cg.id), extentID("EXTB")).Return(shared.NewBadRequestError()).Once()
+		s.metadata.On("DeleteConsumerGroupExtent", destinationID("DEST1"), consumerGroupID(cg.id), extentID("EXTD")).Return(nil).Once()
 	}
 
 	// // DeleteConsumerGroupExtent on EXTA got an EntityNotExistsError, but it should still be deleted; while EXTB shouldn't
@@ -409,12 +409,12 @@ func (s *RetentionMgrSuite) TestRetentionManagerOnDeletedDestinations() {
 		}
 	}
 
-	s.metadata.On("GetDestinations").Return(destinations).Once()
-	s.metadata.On("GetExtents", destinationID("DEST1")).Return(extentsDEST1).Once()
-	s.metadata.On("GetConsumerGroups", destinationID("DEST1")).Return(consumerGroupsDEST1)
+	s.metadata.On("GetDestinations").Return(destinations, nil).Once()
+	s.metadata.On("GetExtents", destinationID("DEST1")).Return(extentsDEST1, nil).Once()
+	s.metadata.On("GetConsumerGroups", destinationID("DEST1")).Return(consumerGroupsDEST1, nil)
 
-	s.metadata.On("GetExtents", destinationID("DEST2")).Return(extentsDEST2).Once()
-	s.metadata.On("GetConsumerGroups", destinationID("DEST2")).Return(consumerGroupsDEST2)
+	s.metadata.On("GetExtents", destinationID("DEST2")).Return(extentsDEST2, nil).Once()
+	s.metadata.On("GetConsumerGroups", destinationID("DEST2")).Return(consumerGroupsDEST2, nil)
 
 	s.storehost.On("GetAddressFromTimestamp", storehostID(common.KafkaPhantomExtentStorehost), mock.AnythingOfType("extentID"), mock.AnythingOfType("int64")).Return(int64(store.ADDR_BEGIN), false, nil)
 	s.storehost.On("PurgeMessages", storehostID(common.KafkaPhantomExtentStorehost), mock.AnythingOfType("extentID"), mock.AnythingOfType("int64")).Return(int64(store.ADDR_BEGIN), nil)
@@ -434,16 +434,16 @@ func (s *RetentionMgrSuite) TestRetentionManagerOnDeletedDestinations() {
 	}
 
 	for _, cg := range consumerGroupsDEST1 {
-		s.metadata.On("DeleteConsumerGroupExtent", consumerGroupID(cg.id), extentID("EXT1")).Return(nil).Once()
-		s.metadata.On("DeleteConsumerGroupExtent", consumerGroupID(cg.id), extentID("EXT2")).Return(nil).Once()
-		s.metadata.On("DeleteConsumerGroupExtent", consumerGroupID(cg.id), extentID("EXT3")).Return(nil).Once()
-		s.metadata.On("DeleteConsumerGroupExtent", consumerGroupID(cg.id), extentID("EXT4")).Return(nil).Once()
+		s.metadata.On("DeleteConsumerGroupExtent", destinationID("DEST1"), consumerGroupID(cg.id), extentID("EXT1")).Return(nil).Once()
+		s.metadata.On("DeleteConsumerGroupExtent", destinationID("DEST1"), consumerGroupID(cg.id), extentID("EXT2")).Return(nil).Once()
+		s.metadata.On("DeleteConsumerGroupExtent", destinationID("DEST1"), consumerGroupID(cg.id), extentID("EXT3")).Return(nil).Once()
+		s.metadata.On("DeleteConsumerGroupExtent", destinationID("DEST1"), consumerGroupID(cg.id), extentID("EXT4")).Return(nil).Once()
 	}
 
 	for _, cg := range consumerGroupsDEST2 {
-		s.metadata.On("DeleteConsumerGroupExtent", consumerGroupID(cg.id), extentID("EXT5")).Return(nil).Once()
-		s.metadata.On("DeleteConsumerGroupExtent", consumerGroupID(cg.id), extentID("EXT6")).Return(nil).Once()
-		s.metadata.On("DeleteConsumerGroupExtent", consumerGroupID(cg.id), extentID("EXT7")).Return(nil).Once()
+		s.metadata.On("DeleteConsumerGroupExtent", destinationID("DEST2"), consumerGroupID(cg.id), extentID("EXT5")).Return(nil).Once()
+		s.metadata.On("DeleteConsumerGroupExtent", destinationID("DEST2"), consumerGroupID(cg.id), extentID("EXT6")).Return(nil).Once()
+		s.metadata.On("DeleteConsumerGroupExtent", destinationID("DEST2"), consumerGroupID(cg.id), extentID("EXT7")).Return(nil).Once()
 	}
 
 	// s.metadata.On("DeleteExtent", destinationID("DEST1"), extentID("EXT1")).Return(nil).Once()

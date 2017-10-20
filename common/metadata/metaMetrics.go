@@ -106,6 +106,21 @@ func (m *metadataMetricsMgr) ListConsumerGroups(ctx thrift.Context, request *sha
 	return result, err
 }
 
+func (m *metadataMetricsMgr) ListConsumerGroupsUUID(ctx thrift.Context, request *shared.ListConsumerGroupsUUIDRequest) (result *shared.ListConsumerGroupsUUIDResult_, err error) {
+
+	m.m3.IncCounter(metrics.MetadataListConsumerGroupsUUIDScope, metrics.MetadataRequests)
+	sw := m.m3.StartTimer(metrics.MetadataListConsumerGroupsUUIDScope, metrics.MetadataLatency)
+	defer sw.Stop()
+
+	result, err = m.meta.ListConsumerGroupsUUID(ctx, request)
+
+	if err != nil {
+		m.m3.IncCounter(metrics.MetadataListConsumerGroupsUUIDScope, metrics.MetadataFailures)
+	}
+
+	return result, err
+}
+
 func (m *metadataMetricsMgr) ListDestinations(ctx thrift.Context, request *shared.ListDestinationsRequest) (result *shared.ListDestinationsResult_, err error) {
 
 	m.m3.IncCounter(metrics.MetadataListDestinationsScope, metrics.MetadataRequests)

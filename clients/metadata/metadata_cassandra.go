@@ -198,18 +198,18 @@ func parseConsistency(cfgCons string) (lowCons gocql.Consistency, midCons gocql.
 
 	switch cons := strings.Split(cfgCons, ","); len(cons) {
 	case 3:
-		lowCons = gocql.ParseConsistency(strings.TrimSpace(cons[2]))
+		lowCons, _ = gocql.ParseConsistency(strings.TrimSpace(cons[2]))
 		fallthrough
 
 	case 2:
-		midCons = gocql.ParseConsistency(strings.TrimSpace(cons[1]))
+		midCons, _ = gocql.ParseConsistency(strings.TrimSpace(cons[1]))
 		if len(cons) == 2 {
 			lowCons = midCons
 		}
 		fallthrough
 
 	case 1:
-		highCons = gocql.ParseConsistency(strings.TrimSpace(cons[0]))
+		highCons, _ = gocql.ParseConsistency(strings.TrimSpace(cons[0]))
 	}
 
 	return
@@ -1189,42 +1189,7 @@ const (
 		columnZoneConfigs + `: ?, ` +
 		columnOptions + `: ? }`
 
-	sqlInsertCGByUUID = `INSERT INTO ` + tableConsumerGroups +
-		`(` +
-		columnUUID + `, ` +
-		columnIsMultiZone + `, ` +
-		columnConsumerGroup +
-		`) VALUES (?, ?,` + sqlCGValue + `)`
-
-	sqlInsertCGByName = `INSERT INTO ` + tableConsumerGroupsByName +
-		`(` +
-		columnDestinationUUID + `, ` +
-		columnName + `, ` +
-		columnIsMultiZone + `, ` +
-		columnConsumerGroup +
-		`) VALUES (?, ?, ?, ` + sqlCGValue + `) IF NOT EXISTS`
-
-	sqlGetCGByName = `SELECT  ` +
-		columnConsumerGroup + `.` + columnUUID + "," +
-		columnDestinationUUID + "," +
-		columnName + "," +
-		columnConsumerGroup + `.` + columnStartFrom + "," +
-		columnConsumerGroup + `.` + columnStatus + "," +
-		columnConsumerGroup + `.` + columnLockTimeoutSeconds + "," +
-		columnConsumerGroup + `.` + columnMaxDeliveryCount + "," +
-		columnConsumerGroup + `.` + columnSkipOlderMessagesSeconds + "," +
-		columnConsumerGroup + `.` + columnDelaySeconds + "," +
-		columnConsumerGroup + `.` + columnDeadLetterQueueDestinationUUID + "," +
-		columnConsumerGroup + `.` + columnOwnerEmail + "," +
-		columnConsumerGroup + `.` + columnIsMultiZone + "," +
-		columnConsumerGroup + `.` + columnActiveZone + "," +
-		columnConsumerGroup + `.` + columnZoneConfigs + "," +
-		columnConsumerGroup + `.` + columnOptions +
-		` FROM ` + tableConsumerGroupsByName +
-		` WHERE ` + columnDestinationUUID + `=? and ` + columnName + `=?`
-
-	sqlGetCG = `SELECT  ` +
-		columnConsumerGroup + `.` + columnUUID + "," +
+	sqlConsumerGroupType = columnConsumerGroup + `.` + columnUUID + "," +
 		columnConsumerGroup + `.` + columnDestinationUUID + "," +
 		columnConsumerGroup + `.` + columnName + "," +
 		columnConsumerGroup + `.` + columnStartFrom + "," +
@@ -1238,32 +1203,47 @@ const (
 		columnConsumerGroup + `.` + columnIsMultiZone + "," +
 		columnConsumerGroup + `.` + columnActiveZone + "," +
 		columnConsumerGroup + `.` + columnZoneConfigs + "," +
-		columnConsumerGroup + `.` + columnOptions +
+		columnConsumerGroup + `.` + columnOptions
+
+	sqlInsertCGByUUID = `INSERT INTO ` + tableConsumerGroups +
+		`(` +
+		columnUUID + `, ` +
+		columnDestinationUUID + `, ` +
+		columnIsMultiZone + `, ` +
+		columnConsumerGroup +
+		`) VALUES (?, ?, ?, ` + sqlCGValue + `)`
+
+	sqlInsertCGByName = `INSERT INTO ` + tableConsumerGroupsByName +
+		`(` +
+		columnDestinationUUID + `, ` +
+		columnName + `, ` +
+		columnIsMultiZone + `, ` +
+		columnConsumerGroup +
+		`) VALUES (?, ?, ?, ` + sqlCGValue + `) IF NOT EXISTS`
+
+	sqlGetCGByName = `SELECT  ` +
+		sqlConsumerGroupType +
+		` FROM ` + tableConsumerGroupsByName +
+		` WHERE ` + columnDestinationUUID + `=? and ` + columnName + `=?`
+
+	sqlGetCG = `SELECT  ` +
+		sqlConsumerGroupType +
 		` FROM ` + tableConsumerGroups
 
 	sqlGetCGByUUID = sqlGetCG + ` WHERE ` + columnUUID + `=?`
 
 	sqlListCGsByDestUUID = `SELECT  ` +
-		columnConsumerGroup + `.` + columnUUID + "," +
-		columnDestinationUUID + "," +
-		columnName + "," +
-		columnConsumerGroup + `.` + columnStartFrom + "," +
-		columnConsumerGroup + `.` + columnStatus + "," +
-		columnConsumerGroup + `.` + columnLockTimeoutSeconds + "," +
-		columnConsumerGroup + `.` + columnMaxDeliveryCount + "," +
-		columnConsumerGroup + `.` + columnSkipOlderMessagesSeconds + "," +
-		columnConsumerGroup + `.` + columnDelaySeconds + "," +
-		columnConsumerGroup + `.` + columnDeadLetterQueueDestinationUUID + "," +
-		columnConsumerGroup + `.` + columnOwnerEmail + "," +
-		columnConsumerGroup + `.` + columnIsMultiZone + "," +
-		columnConsumerGroup + `.` + columnActiveZone + "," +
-		columnConsumerGroup + `.` + columnZoneConfigs + "," +
-		columnConsumerGroup + `.` + columnOptions +
+		sqlConsumerGroupType +
 		` FROM ` + tableConsumerGroupsByName +
 		` WHERE ` + columnDestinationUUID + `=?`
 
+	sqlListCGsUUID = `SELECT  ` +
+		sqlConsumerGroupType +
+		` FROM ` + tableConsumerGroups +
+		` WHERE ` + columnDestinationUUID + `=?`
+
 	sqlUpdateCGByUUID = `UPDATE ` + tableConsumerGroups +
-		` SET ` + columnIsMultiZone + ` = ?, ` + columnConsumerGroup + `= ` + sqlCGValue +
+		` SET ` + columnDestinationUUID + ` = ?, ` + columnIsMultiZone + ` = ?, ` + columnConsumerGroup + `= ` + sqlCGValue +
 		` WHERE ` + columnUUID + `=?`
 
 	sqlUpdateCGByName = `UPDATE ` + tableConsumerGroupsByName +
@@ -1334,6 +1314,7 @@ func (s *CassandraMetadataService) CreateConsumerGroupUUID(ctx thrift.Context, r
 
 	err = s.session.Query(sqlInsertCGByUUID,
 		cgUUID,
+		dstUUID,
 		createRequest.GetIsMultiZone(),
 		cgUUID,
 		dstUUID,
@@ -1651,6 +1632,7 @@ func (s *CassandraMetadataService) UpdateConsumerGroup(ctx thrift.Context, reque
 
 	batch.Query(sqlUpdateCGByUUID,
 		// Value columns
+		newCG.GetDestinationUUID(),
 		newCG.GetIsMultiZone(),
 		newCG.GetConsumerGroupUUID(),
 		newCG.GetDestinationUUID(),
@@ -1794,6 +1776,7 @@ func (s *CassandraMetadataService) DeleteConsumerGroup(ctx thrift.Context, reque
 
 	batch.Query(sqlUpdateCGByUUID,
 		// Value columns
+		existingCG.GetDestinationUUID(),
 		existingCG.GetIsMultiZone(),
 		existingCG.GetConsumerGroupUUID(),
 		existingCG.GetDestinationUUID(),
@@ -1862,6 +1845,7 @@ func (s *CassandraMetadataService) DeleteConsumerGroupUUID(ctx thrift.Context, r
 
 	query := s.session.Query(sqlDeleteCGByUUIDWithTTL,
 		existing.GetConsumerGroupUUID(),
+		existing.GetDestinationUUID(),
 		existing.GetIsMultiZone(),
 		existing.GetConsumerGroupUUID(),
 		existing.GetDestinationUUID(),
@@ -1980,6 +1964,73 @@ func (s *CassandraMetadataService) ListConsumerGroups(ctx thrift.Context, reques
 		&cg.Options) {
 
 		// Get a new item within limit
+		if cg.GetStatus() == shared.ConsumerGroupStatus_DELETED {
+			zoneConfigsData = nil
+			continue
+		}
+
+		cg.ZoneConfigs = unmarshalCgZoneConfigs(zoneConfigsData)
+		result.ConsumerGroups = append(result.ConsumerGroups, cg)
+		cg = getUtilConsumerGroupDescription()
+		zoneConfigsData = nil
+	}
+
+	nextPageToken := iter.PageState()
+	result.NextPageToken = make([]byte, len(nextPageToken))
+	copy(result.NextPageToken, nextPageToken)
+	if err := iter.Close(); err != nil {
+		return nil, &shared.InternalServiceError{
+			Message: err.Error(),
+		}
+	}
+
+	return result, nil
+}
+
+// ListConsumerGroupsUUID returns all ConsumerGroups matching the given destination-uuid.
+func (s *CassandraMetadataService) ListConsumerGroupsUUID(ctx thrift.Context, request *shared.ListConsumerGroupsUUIDRequest) (*shared.ListConsumerGroupsUUIDResult_, error) {
+
+	if !request.IsSetDestinationUUID() {
+		return nil, &shared.BadRequestError{
+			Message: fmt.Sprintf("DestinationUUID not specified"),
+		}
+	}
+
+	dstUUID := request.GetDestinationUUID()
+
+	var iter *gocql.Iter
+	iter = s.session.Query(sqlListCGsUUID, dstUUID).Consistency(s.lowConsLevel).PageSize(int(request.GetLimit())).PageState(request.PageToken).Iter()
+
+	if iter == nil {
+		return nil, &shared.InternalServiceError{
+			Message: "Query returned nil iterator",
+		}
+	}
+
+	result := &shared.ListConsumerGroupsUUIDResult_{
+		ConsumerGroups: []*shared.ConsumerGroupDescription{},
+		NextPageToken:  request.PageToken,
+	}
+	cg := getUtilConsumerGroupDescription()
+	var zoneConfigsData []map[string]interface{}
+	for iter.Scan(
+		cg.ConsumerGroupUUID,
+		cg.DestinationUUID,
+		cg.ConsumerGroupName,
+		cg.StartFrom,
+		cg.Status,
+		cg.LockTimeoutSeconds,
+		cg.MaxDeliveryCount,
+		cg.SkipOlderMessagesSeconds,
+		cg.DelaySeconds,
+		&cg.DeadLetterQueueDestinationUUID,
+		cg.OwnerEmail,
+		cg.IsMultiZone,
+		cg.ActiveZone,
+		&zoneConfigsData,
+		&cg.Options) {
+
+		// skip over deleted rows
 		if cg.GetStatus() == shared.ConsumerGroupStatus_DELETED {
 			zoneConfigsData = nil
 			continue
@@ -3394,7 +3445,10 @@ func (s *CassandraMetadataService) UpdateStoreExtentReplicaStats(ctx thrift.Cont
 		)
 	}
 	if err := s.session.ExecuteBatch(batch); err != nil {
-		s.log.WithField(common.TagExt, request.GetExtentUUID()).Error("UpdateExtentReplicaStats failed")
+		s.log.WithFields(bark.Fields{
+			common.TagExt: request.GetExtentUUID(),
+			common.TagErr: err,
+		}).Error("UpdateExtentReplicaStats failed")
 		return &shared.InternalServiceError{
 			Message: "UpdateStoreExtentReplicaStats: %v" + err.Error(),
 		}

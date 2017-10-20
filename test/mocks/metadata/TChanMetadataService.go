@@ -672,6 +672,29 @@ func (_m *TChanMetadataService) ListConsumerGroups(ctx thrift.Context, listReque
 	return r0, r1
 }
 
+// ListConsumerGroupsUUID returns all ConsumerGroups matching the given destination-uuid.
+func (_m *TChanMetadataService) ListConsumerGroupsUUID(ctx thrift.Context, listRequest *shared.ListConsumerGroupsUUIDRequest) (*shared.ListConsumerGroupsUUIDResult_, error) {
+	ret := _m.Called(ctx, listRequest)
+
+	var r0 *shared.ListConsumerGroupsUUIDResult_
+	if rf, ok := ret.Get(0).(func(thrift.Context, *shared.ListConsumerGroupsUUIDRequest) *shared.ListConsumerGroupsUUIDResult_); ok {
+		r0 = rf(ctx, listRequest)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*shared.ListConsumerGroupsUUIDResult_)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(thrift.Context, *shared.ListConsumerGroupsUUIDRequest) error); ok {
+		r1 = rf(ctx, listRequest)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
 // ListDestinations provides a mock function with given fields: ctx, listRequest
 func (_m *TChanMetadataService) ListDestinations(ctx thrift.Context, listRequest *shared.ListDestinationsRequest) (*shared.ListDestinationsResult_, error) {
 	ret := _m.Called(ctx, listRequest)

@@ -1,0 +1,8 @@
+{
+	"CurrVersion": 17,
+	"MinCompatibleVersion": 8,
+	"Description": "Add destination_uuid to consumer_groups",
+	"SchemaUpdateCqlFiles": [
+		"201708090000_destination_uuid_for_consumer_groups.cql"
+	]
+}

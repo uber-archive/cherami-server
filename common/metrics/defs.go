@@ -129,6 +129,8 @@ const (
 	MetadataListAllConsumerGroupsScope
 	// MetadataListConsumerGroupsScope defines scope for an operation on metadata
 	MetadataListConsumerGroupsScope
+	// MetadataListConsumerGroupsUUIDScope defines scope for an operation on metadata
+	MetadataListConsumerGroupsUUIDScope
 	// MetadataListDestinationsScope defines scope for an operation on metadata
 	MetadataListDestinationsScope
 	// MetadataListDestinationsByUUIDScope defines scope for an operation on metadata
@@ -478,6 +480,7 @@ var scopeDefs = map[ServiceIdx]map[int]scopeDefinition{
 		MetadataHostAddrToUUIDScope:                    {operation: "MetadataHostAddrToUUID"},
 		MetadataListAllConsumerGroupsScope:             {operation: "MetadataListAllConsumerGroups"},
 		MetadataListConsumerGroupsScope:                {operation: "MetadataListConsumerGroups"},
+		MetadataListConsumerGroupsUUIDScope:            {operation: "MetadataListConsumerGroupsUUID"},
 		MetadataListDestinationsScope:                  {operation: "MetadataListDestinations"},
 		MetadataListDestinationsByUUIDScope:            {operation: "MetadataListDestinationsByUUID"},
 		MetadataListDestinationExtentsScope:            {operation: "MetadataListDestinationExtents"},
