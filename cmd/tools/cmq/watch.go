@@ -103,6 +103,8 @@ const (
 	cgxUnconsumed cgxStatus = iota
 	cgxConsuming
 	cgxConsumed
+	cgxDeleting
+	cgxDeleted
 	cgxError
 )
 
@@ -115,6 +117,10 @@ func (t cgxStatus) String() string {
 		return "consuming"
 	case cgxConsumed:
 		return "consumed"
+	case cgxDeleting:
+		return "deleting"
+	case cgxDeleted:
+		return "deleted"
 	case cgxError:
 		return "ERROR"
 	}
@@ -293,6 +299,10 @@ func (t *cgWatch) refreshMetadata() error {
 				case shared.ExtentStatus_CONSUMED:
 					x.extStatus = extConsumed
 					x.cgxStatus = cgxConsumed // assume this CG has consumed it
+
+				case shared.ExtentStatus_DELETED:
+					x.extStatus = extDeleted
+					x.cgxStatus = cgxConsumed // assume this CG has consumed it
 				}
 
 				t.extentMap[extentUUID] = x
@@ -334,6 +344,9 @@ func (t *cgWatch) refreshMetadata() error {
 					} else {
 						x.cgxStatus = cgxConsuming
 					}
+
+				case shared.ConsumerGroupExtentStatus_DELETING:
+					fallthrough
 
 				case shared.ConsumerGroupExtentStatus_DELETED:
 					fallthrough
@@ -655,7 +668,7 @@ func (t *cgWatch) refresh() (output string, maxRows int, maxCols int) {
 		var num int
 		for _, x := range consumed {
 
-			if x.cgxStatus != cgxConsumed {
+			if x.cgxStatus == cgxConsuming || x.cgxStatus == cgxUnconsumed || x.cgxStatus == cgxConsumed {
 				continue
 			}
 
