@@ -413,20 +413,20 @@ func (t *cmqWriterJson) ConsumerGroup(row map[string]interface{}, annot string) 
 
 	if row == nil { // indicates start/end of a list
 		if t.cgRow == 0 {
-			fmt.Printf("[")
+			fmt.Printf("{\n")
 			t.cgRow++
 		} else {
-			fmt.Printf("]")
+			fmt.Printf("\n}")
 		}
 		return
 	}
 
 	if t.cgRow > 1 {
-		fmt.Printf(",")
+		fmt.Printf(",\n")
 	}
 
 	out, _ := json.MarshalIndent(row, "", "        ")
-	fmt.Printf("%v", string(out))
+	fmt.Printf("\"%v\": %v", row["uuid"].(gocql.UUID).String(), string(out))
 
 	t.cgRow++
 }
