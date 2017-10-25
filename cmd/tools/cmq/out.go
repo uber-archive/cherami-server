@@ -16,16 +16,16 @@ const (
 	outputCqlDelete
 	outputCqlDeleteUndo
 	outputJson
-	outputText
+	outputShort
 )
 
 type cmqWriter interface {
-	destination(row map[string]interface{})           // destPath, destUUID string
-	consumer_group(row map[string]interface{})        // destPath, destUUID, cgPath, cgUUID string
-	extent(row map[string]interface{})                // destPath, destUUID, extUUID string
-	consumer_group_extent(row map[string]interface{}) // destUUID, cgUUID, extUUID string
-	input_extent(row map[string]interface{})          // destUUID, extUUID, inputUUID string
-	store_extent(row map[string]interface{})          // destUUID, extUUID, storeUUID string
+	Destination(row map[string]interface{}, annot string)         // destPath, destUUID string
+	ConsumerGroup(row map[string]interface{}, annot string)       // destPath, destUUID, cgPath, cgUUID string
+	Extent(row map[string]interface{}, annot string)              // destPath, destUUID, extUUID string
+	ConsumerGroupExtent(row map[string]interface{}, annot string) // destUUID, cgUUID, extUUID string
+	InputExtent(row map[string]interface{}, annot string)         // destUUID, extUUID, inputUUID string
+	StoreExtent(row map[string]interface{}, annot string)         // destUUID, extUUID, storeUUID string
 	close()
 }
 
@@ -37,7 +37,47 @@ type outContext struct {
 	extDest map[string]string // ext-uuid to dest-uuid
 }
 
-func getCmqWriter(ctx *outContext, outTypes ...outputType) (writer cmqWriter) {
+func cmqOutputWriter(outTypes []string) (writer cmqWriter) {
+
+	var writers []cmqWriter
+
+	for _, ot := range outTypes {
+
+		switch ot {
+		case "delete":
+			fallthrough
+		case "deletecql":
+			writers = append(writers, newCmqWriterCqlDelete())
+
+		case "undo":
+			fallthrough
+		case "undocql":
+			writers = append(writers, newCmqWriterCqlDeleteUndo())
+
+		case "json":
+			writers = append(writers, newCmqWriterJson())
+
+		case "short":
+			writers = append(writers, newCmqWriterShort())
+
+		case "none":
+			fallthrough
+		case "null":
+			writers = append(writers, newCmqWriterNull())
+
+		default:
+			fmt.Printf("unknown output-type: %d\n", ot)
+		}
+	}
+
+	if len(writers) == 1 {
+		return writers[0]
+	}
+
+	return newCmqWriterMulti(writers)
+}
+
+func getCmqWriter(outTypes ...outputType) (writer cmqWriter) {
 
 	var writers []cmqWriter
 
@@ -45,19 +85,19 @@ func getCmqWriter(ctx *outContext, outTypes ...outputType) (writer cmqWriter) {
 
 		switch ot {
 		case outputNull:
-			writers = append(writers, newCmqWriterNull(ctx))
+			writers = append(writers, newCmqWriterNull())
 
-		case outputText:
-			writers = append(writers, newCmqWriterText(ctx))
+		case outputShort:
+			writers = append(writers, newCmqWriterShort())
 
 		case outputJson:
-			writers = append(writers, newCmqWriterJson(ctx))
+			writers = append(writers, newCmqWriterJson())
 
 		case outputCqlDelete:
-			writers = append(writers, newCmqWriterCqlDelete(ctx))
+			writers = append(writers, newCmqWriterCqlDelete())
 
 		case outputCqlDeleteUndo:
-			writers = append(writers, newCmqWriterCqlDeleteUndo(ctx))
+			writers = append(writers, newCmqWriterCqlDeleteUndo())
 		}
 	}
 
@@ -76,39 +116,39 @@ func newCmqWriterMulti(writers []cmqWriter) cmqWriter {
 	return &cmqWriterMulti{writers: writers}
 }
 
-func (t *cmqWriterMulti) destination(row map[string]interface{}) {
+func (t *cmqWriterMulti) Destination(row map[string]interface{}, annot string) {
 	for _, w := range t.writers {
-		w.destination(row)
+		w.Destination(row, annot)
 	}
 }
 
-func (t *cmqWriterMulti) consumer_group(row map[string]interface{}) {
+func (t *cmqWriterMulti) ConsumerGroup(row map[string]interface{}, annot string) {
 	for _, w := range t.writers {
-		w.consumer_group(row)
+		w.ConsumerGroup(row, annot)
 	}
 }
 
-func (t *cmqWriterMulti) extent(row map[string]interface{}) {
+func (t *cmqWriterMulti) Extent(row map[string]interface{}, annot string) {
 	for _, w := range t.writers {
-		w.extent(row)
+		w.Extent(row, annot)
 	}
 }
 
-func (t *cmqWriterMulti) consumer_group_extent(row map[string]interface{}) {
+func (t *cmqWriterMulti) ConsumerGroupExtent(row map[string]interface{}, annot string) {
 	for _, w := range t.writers {
-		w.consumer_group_extent(row)
+		w.ConsumerGroupExtent(row, annot)
 	}
 }
 
-func (t *cmqWriterMulti) input_extent(row map[string]interface{}) {
+func (t *cmqWriterMulti) InputExtent(row map[string]interface{}, annot string) {
 	for _, w := range t.writers {
-		w.input_extent(row)
+		w.InputExtent(row, annot)
 	}
 }
 
-func (t *cmqWriterMulti) store_extent(row map[string]interface{}) {
+func (t *cmqWriterMulti) StoreExtent(row map[string]interface{}, annot string) {
 	for _, w := range t.writers {
-		w.store_extent(row)
+		w.StoreExtent(row, annot)
 	}
 }
 
@@ -118,58 +158,56 @@ func (t *cmqWriterMulti) close() {
 	}
 }
 
-type cmqWriterText struct {
-	ctx *outContext
+type cmqWriterShort struct {
 }
 
-func newCmqWriterText(ctx *outContext) *cmqWriterText {
-	return &cmqWriterText{ctx: ctx}
+func newCmqWriterShort() *cmqWriterShort {
+	return &cmqWriterShort{}
 }
 
-func (t *cmqWriterText) destination(row map[string]interface{}) {
+func (t *cmqWriterShort) Destination(row map[string]interface{}, annot string) {
 	destUUID := row["uuid"]
 	destPath := row["destination"].(map[string]interface{})["path"]
 	fmt.Printf("destination: %v [%v]\n", destPath, destUUID)
 }
 
-func (t *cmqWriterText) consumer_group(row map[string]interface{}) {
+func (t *cmqWriterShort) ConsumerGroup(row map[string]interface{}, annot string) {
 	cgUUID := row["uuid"]
-	cgPath := row["name"]
+	cgPath := row["consumer_group"].(map[string]interface{})["name"]
 	destUUID := row["destination_uuid"]
 	fmt.Printf("consumer_group: dest=%v, cg='%v' [%v]\n", destUUID, cgPath, cgUUID)
 }
 
-func (t *cmqWriterText) extent(row map[string]interface{}) {
+func (t *cmqWriterShort) Extent(row map[string]interface{}, annot string) {
 	destUUID := row["destination_uuid"]
 	extUUID := row["extent_uuid"]
 	fmt.Printf("extent: dest=%v, ext=%v\n", destUUID, extUUID)
 }
 
-func (t *cmqWriterText) consumer_group_extent(row map[string]interface{}) {
+func (t *cmqWriterShort) ConsumerGroupExtent(row map[string]interface{}, annot string) {
 	cgUUID := row["consumer_group_uuid"]
 	extUUID := row["extent_uuid"]
 	fmt.Printf("consumer_group_extent: cg=%v ext=%v\n", cgUUID, extUUID)
 }
 
-func (t *cmqWriterText) input_extent(row map[string]interface{}) {
+func (t *cmqWriterShort) InputExtent(row map[string]interface{}, annot string) {
 }
 
-func (t *cmqWriterText) store_extent(row map[string]interface{}) {
+func (t *cmqWriterShort) StoreExtent(row map[string]interface{}, annot string) {
 }
 
-func (t *cmqWriterText) close() {
+func (t *cmqWriterShort) close() {
 }
 
 type cmqWriterCqlDelete struct {
 	fD, fCG, fDE, fCGX, fIX, fSX *os.File
-	ctx                          *outContext
 }
 
-func newCmqWriterCqlDelete(ctx *outContext) cmqWriter {
+func newCmqWriterCqlDelete() cmqWriter {
 
 	prefix := time.Now().Format("20060102T150405_")
 
-	t := &cmqWriterCqlDelete{ctx: ctx}
+	t := &cmqWriterCqlDelete{}
 
 	var err error
 
@@ -200,40 +238,40 @@ func newCmqWriterCqlDelete(ctx *outContext) cmqWriter {
 	return t
 }
 
-func (t *cmqWriterCqlDelete) destination(row map[string]interface{}) {
+func (t *cmqWriterCqlDelete) Destination(row map[string]interface{}, annot string) {
 	destUUID := row["uuid"].(gocql.UUID).String()
-	fmt.Fprintf(t.fD, "DELETE FROM destinations WHERE uuid=%v; -- %s\n", destUUID, t.ctx.destPaths[destUUID])
+	fmt.Fprintf(t.fD, "DELETE FROM destinations WHERE uuid=%v; -- %s\n", destUUID, annot)
 }
 
-func (t *cmqWriterCqlDelete) consumer_group(row map[string]interface{}) {
+func (t *cmqWriterCqlDelete) ConsumerGroup(row map[string]interface{}, annot string) {
 	cgUUID := row["uuid"].(gocql.UUID).String()
-	fmt.Fprintf(t.fCG, "DELETE FROM consumer_groups WHERE uuid=%v; -- %s\n", cgUUID, t.ctx.cgPaths[cgUUID])
+	fmt.Fprintf(t.fCG, "DELETE FROM consumer_groups WHERE uuid=%v; -- %s\n", cgUUID, annot)
 }
 
-func (t *cmqWriterCqlDelete) extent(row map[string]interface{}) {
+func (t *cmqWriterCqlDelete) Extent(row map[string]interface{}, annot string) {
 	extUUID := row["extent_uuid"].(gocql.UUID).String()
 	destUUID := row["destination_uuid"].(gocql.UUID).String()
-	fmt.Fprintf(t.fDE, "DELETE FROM destination_extents WHERE destination_uuid=%v AND extent_uuid=%v; -- %s\n", destUUID, extUUID, t.ctx.destPaths[destUUID])
+	fmt.Fprintf(t.fDE, "DELETE FROM destination_extents WHERE destination_uuid=%v AND extent_uuid=%v; -- %s\n", destUUID, extUUID, annot)
 }
 
-func (t *cmqWriterCqlDelete) consumer_group_extent(row map[string]interface{}) {
+func (t *cmqWriterCqlDelete) ConsumerGroupExtent(row map[string]interface{}, annot string) {
 	cgUUID := row["consumer_group_uuid"].(gocql.UUID).String()
 	extUUID := row["extent_uuid"].(gocql.UUID).String()
-	fmt.Fprintf(t.fCGX, "DELETE FROM consumer_group_extents WHERE consumer_group_uuid=%v AND extent_uuid=%v; -- %s\n", cgUUID, extUUID, t.ctx.cgPaths[cgUUID])
+	fmt.Fprintf(t.fCGX, "DELETE FROM consumer_group_extents WHERE consumer_group_uuid=%v AND extent_uuid=%v; -- %s\n", cgUUID, extUUID, annot)
 }
 
-func (t *cmqWriterCqlDelete) input_extent(row map[string]interface{}) {
+func (t *cmqWriterCqlDelete) InputExtent(row map[string]interface{}, annot string) {
 	destUUID := row["destination_uuid"].(gocql.UUID).String()
 	extUUID := row["extent_uuid"].(gocql.UUID).String()
 	inputUUID := row["input_host_uuid"].(gocql.UUID).String()
 	fmt.Fprintf(t.fIX, "DELETE FROM input_host_extents WHERE destination_uuid=%v AND extent_uuid=%v AND input_host_uuid=%v; -- %s\n",
-		destUUID, extUUID, inputUUID, t.ctx.destPaths[destUUID])
+		destUUID, extUUID, inputUUID, annot)
 }
 
-func (t *cmqWriterCqlDelete) store_extent(row map[string]interface{}) {
+func (t *cmqWriterCqlDelete) StoreExtent(row map[string]interface{}, annot string) {
 	extUUID := row["extent_uuid"].(gocql.UUID).String()
 	storeUUID := row["store_uuid"].(gocql.UUID).String()
-	fmt.Fprintf(t.fSX, "DELETE FROM store_extents WHERE extent_uuid=%v AND store_uuid=%v; -- %s\n", extUUID, storeUUID, t.ctx.destPaths[t.ctx.extDest[extUUID]])
+	fmt.Fprintf(t.fSX, "DELETE FROM store_extents WHERE extent_uuid=%v AND store_uuid=%v; -- %s\n", extUUID, storeUUID, annot)
 }
 
 func (t *cmqWriterCqlDelete) close() {
@@ -247,14 +285,13 @@ func (t *cmqWriterCqlDelete) close() {
 
 type cmqWriterCqlDeleteUndo struct {
 	fD, fCG, fDE, fCGX, fIX, fSX *os.File
-	ctx                          *outContext
 }
 
-func newCmqWriterCqlDeleteUndo(ctx *outContext) cmqWriter {
+func newCmqWriterCqlDeleteUndo() cmqWriter {
 
 	prefix := time.Now().Format("20060102T150405_")
 
-	t := &cmqWriterCqlDeleteUndo{ctx: ctx}
+	t := &cmqWriterCqlDeleteUndo{}
 
 	var err error
 
@@ -285,56 +322,51 @@ func newCmqWriterCqlDeleteUndo(ctx *outContext) cmqWriter {
 	return t
 }
 
-func (t *cmqWriterCqlDeleteUndo) destination(row map[string]interface{}) {
+func (t *cmqWriterCqlDeleteUndo) Destination(row map[string]interface{}, annot string) {
 	if j, err := json.Marshal(row); err == nil {
-		fmt.Fprintf(t.fD, "INSERT INTO destinations JSON '%s'; -- %s\n", string(j), t.ctx.destPaths[row["uuid"].(gocql.UUID).String()])
+		fmt.Fprintf(t.fD, "INSERT INTO destinations JSON '%s'; -- %s\n", string(j), annot)
 	} else {
-		fmt.Printf("cmqWriterCqlDeleteUndo.destination: json.Marshal error: %v\n", err)
+		fmt.Printf("cmqWriterCqlDeleteUndo.Destination: json.Marshal error: %v\n", err)
 	}
 }
 
-func (t *cmqWriterCqlDeleteUndo) consumer_group(row map[string]interface{}) {
+func (t *cmqWriterCqlDeleteUndo) ConsumerGroup(row map[string]interface{}, annot string) {
 	if j, err := json.Marshal(row); err == nil {
-		fmt.Fprintf(t.fCG, "INSERT INTO consumer_groups JSON '%s'; -- %s\n", string(j),
-			t.ctx.cgPaths[row["uuid"].(gocql.UUID).String()])
+		fmt.Fprintf(t.fCG, "INSERT INTO consumer_groups JSON '%s'; -- %s\n", string(j), annot)
 	} else {
-		fmt.Printf("cmqWriterCqlDeleteUndo.consumer_group: json.Marshal error: %v\n", err)
+		fmt.Printf("cmqWriterCqlDeleteUndo.ConsumerGroup: json.Marshal error: %v\n", err)
 	}
 }
 
-func (t *cmqWriterCqlDeleteUndo) extent(row map[string]interface{}) {
+func (t *cmqWriterCqlDeleteUndo) Extent(row map[string]interface{}, annot string) {
 	if j, err := json.Marshal(row); err == nil {
-		fmt.Fprintf(t.fDE, "INSERT INTO destination_extents JSON '%s'; -- %s\n", string(j),
-			t.ctx.extDest[row["extent_uuid"].(gocql.UUID).String()])
+		fmt.Fprintf(t.fDE, "INSERT INTO destination_extents JSON '%s'; -- %s\n", string(j), annot)
 	} else {
-		fmt.Printf("cmqWriterCqlDeleteUndo.extent: json.Marshal error: %v\n", err)
+		fmt.Printf("cmqWriterCqlDeleteUndo.Extent: json.Marshal error: %v\n", err)
 	}
 }
 
-func (t *cmqWriterCqlDeleteUndo) consumer_group_extent(row map[string]interface{}) {
+func (t *cmqWriterCqlDeleteUndo) ConsumerGroupExtent(row map[string]interface{}, annot string) {
 	if j, err := json.Marshal(row); err == nil {
-		fmt.Fprintf(t.fCGX, "INSERT INTO consumer_group_extents JSON '%s'; -- %s\n", string(j),
-			t.ctx.cgPaths[row["consumer_group_uuid"].(gocql.UUID).String()])
+		fmt.Fprintf(t.fCGX, "INSERT INTO consumer_group_extents JSON '%s'; -- %s\n", string(j), annot)
 	} else {
-		fmt.Printf("cmqWriterCqlDeleteUndo.consumer_group_extent: json.Marshal error: %v\n", err)
+		fmt.Printf("cmqWriterCqlDeleteUndo.ConsumerGroupExtent: json.Marshal error: %v\n", err)
 	}
 }
 
-func (t *cmqWriterCqlDeleteUndo) input_extent(row map[string]interface{}) {
+func (t *cmqWriterCqlDeleteUndo) InputExtent(row map[string]interface{}, annot string) {
 	if j, err := json.Marshal(row); err == nil {
-		fmt.Fprintf(t.fIX, "INSERT INTO input_host_extents JSON '%s'; -- %s\n", string(j),
-			t.ctx.destPaths[t.ctx.extDest[row["extent_uuid"].(gocql.UUID).String()]])
+		fmt.Fprintf(t.fIX, "INSERT INTO input_host_extents JSON '%s'; -- %s\n", string(j), annot)
 	} else {
-		fmt.Printf("cmqWriterCqlDeleteUndo.input_extent: json.Marshal error: %v\n", err)
+		fmt.Printf("cmqWriterCqlDeleteUndo.InputExtent: json.Marshal error: %v\n", err)
 	}
 }
 
-func (t *cmqWriterCqlDeleteUndo) store_extent(row map[string]interface{}) {
+func (t *cmqWriterCqlDeleteUndo) StoreExtent(row map[string]interface{}, annot string) {
 	if j, err := json.Marshal(row); err == nil {
-		fmt.Fprintf(t.fSX, "INSERT INTO store_extents JSON '%s';\n", string(j),
-			t.ctx.destPaths[t.ctx.extDest[row["extent_uuid"].(gocql.UUID).String()]])
+		fmt.Fprintf(t.fSX, "INSERT INTO store_extents JSON '%s';\n", string(j), annot)
 	} else {
-		fmt.Printf("cmqWriterCqlDeleteUndo.store_extent: json.Marshal error: %v\n", err)
+		fmt.Printf("cmqWriterCqlDeleteUndo.StoreExtent: json.Marshal error: %v\n", err)
 	}
 }
 
@@ -348,30 +380,143 @@ func (t *cmqWriterCqlDeleteUndo) close() {
 }
 
 type cmqWriterJson struct {
-	ctx *outContext
+	dRow, cgRow, xRow, cgxRow, ixRow, sxRow int
 }
 
-func newCmqWriterJson(ctx *outContext) *cmqWriterJson {
-	fmt.Printf("cmqWriterJson: NOT IMPLEMENTED\n")
-	return nil
+func newCmqWriterJson() *cmqWriterJson {
+	return &cmqWriterJson{}
 }
 
-func (t *cmqWriterJson) destination(row map[string]interface{}) {
+func (t *cmqWriterJson) Destination(row map[string]interface{}, annot string) {
+
+	if row == nil { // indicates start/end of a list
+		if t.dRow == 0 {
+			fmt.Printf("[")
+			t.dRow++
+		} else {
+			fmt.Printf("]")
+		}
+		return
+	}
+
+	if t.dRow > 1 {
+		fmt.Printf(",")
+	}
+
+	out, _ := json.MarshalIndent(row, "", "        ")
+	fmt.Printf("%v", string(out))
+
+	t.dRow++
 }
 
-func (t *cmqWriterJson) consumer_group(row map[string]interface{}) {
+func (t *cmqWriterJson) ConsumerGroup(row map[string]interface{}, annot string) {
+
+	if row == nil { // indicates start/end of a list
+		if t.cgRow == 0 {
+			fmt.Printf("[")
+			t.cgRow++
+		} else {
+			fmt.Printf("]")
+		}
+		return
+	}
+
+	if t.cgRow > 1 {
+		fmt.Printf(",")
+	}
+
+	out, _ := json.MarshalIndent(row, "", "        ")
+	fmt.Printf("%v", string(out))
+
+	t.cgRow++
 }
 
-func (t *cmqWriterJson) extent(row map[string]interface{}) {
+func (t *cmqWriterJson) Extent(row map[string]interface{}, annot string) {
+
+	if row == nil { // indicates start/end of a list
+		if t.xRow == 0 {
+			fmt.Printf("[")
+			t.xRow++
+		} else {
+			fmt.Printf("]")
+		}
+		return
+	}
+
+	if t.xRow > 1 {
+		fmt.Printf(",")
+	}
+
+	out, _ := json.MarshalIndent(row, "", "        ")
+	fmt.Printf("%v", string(out))
+
+	t.xRow++
 }
 
-func (t *cmqWriterJson) consumer_group_extent(row map[string]interface{}) {
+func (t *cmqWriterJson) ConsumerGroupExtent(row map[string]interface{}, annot string) {
+
+	if row == nil { // indicates start/end of a list
+		if t.cgxRow == 0 {
+			fmt.Printf("[")
+			t.cgxRow++
+		} else {
+			fmt.Printf("]")
+		}
+		return
+	}
+
+	if t.cgxRow > 1 {
+		fmt.Printf(",")
+	}
+
+	out, _ := json.MarshalIndent(row, "", "        ")
+	fmt.Printf("%v", string(out))
+
+	t.cgxRow++
 }
 
-func (t *cmqWriterJson) input_extent(row map[string]interface{}) {
+func (t *cmqWriterJson) InputExtent(row map[string]interface{}, annot string) {
+
+	if row == nil { // indicates start/end of a list
+		if t.ixRow == 0 {
+			fmt.Printf("[")
+			t.ixRow++
+		} else {
+			fmt.Printf("]")
+		}
+		return
+	}
+
+	if t.ixRow > 1 {
+		fmt.Printf(",")
+	}
+
+	out, _ := json.MarshalIndent(row, "", "        ")
+	fmt.Printf("%v", string(out))
+
+	t.ixRow++
 }
 
-func (t *cmqWriterJson) store_extent(row map[string]interface{}) {
+func (t *cmqWriterJson) StoreExtent(row map[string]interface{}, annot string) {
+
+	if row == nil { // indicates start/end of a list
+		if t.sxRow == 0 {
+			fmt.Printf("[")
+			t.sxRow++
+		} else {
+			fmt.Printf("]\n")
+		}
+		return
+	}
+
+	if t.sxRow > 1 {
+		fmt.Printf(",")
+	}
+
+	out, _ := json.MarshalIndent(row, "", "        ")
+	fmt.Printf("%v", string(out))
+
+	t.sxRow++
 }
 
 func (t *cmqWriterJson) close() {
@@ -379,26 +524,26 @@ func (t *cmqWriterJson) close() {
 
 type cmqWriterNull struct{}
 
-func newCmqWriterNull(ctx *outContext) *cmqWriterNull {
+func newCmqWriterNull() *cmqWriterNull {
 	return &cmqWriterNull{}
 }
 
-func (t *cmqWriterNull) destination(row map[string]interface{}) {
+func (t *cmqWriterNull) Destination(row map[string]interface{}, annot string) {
 }
 
-func (t *cmqWriterNull) consumer_group(row map[string]interface{}) {
+func (t *cmqWriterNull) ConsumerGroup(row map[string]interface{}, annot string) {
 }
 
-func (t *cmqWriterNull) extent(row map[string]interface{}) {
+func (t *cmqWriterNull) Extent(row map[string]interface{}, annot string) {
 }
 
-func (t *cmqWriterNull) consumer_group_extent(row map[string]interface{}) {
+func (t *cmqWriterNull) ConsumerGroupExtent(row map[string]interface{}, annot string) {
 }
 
-func (t *cmqWriterNull) input_extent(row map[string]interface{}) {
+func (t *cmqWriterNull) InputExtent(row map[string]interface{}, annot string) {
 }
 
-func (t *cmqWriterNull) store_extent(row map[string]interface{}) {
+func (t *cmqWriterNull) StoreExtent(row map[string]interface{}, annot string) {
 }
 
 func (t *cmqWriterNull) close() {

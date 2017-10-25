@@ -6,7 +6,7 @@ import (
 	"github.com/urfave/cli"
 )
 
-func count(c *cli.Context, mc *MetadataClient) error {
+func count(c *cli.Context) error {
 
 	fmt.Printf("count: NOT IMPLEMENTED\n")
 	return nil

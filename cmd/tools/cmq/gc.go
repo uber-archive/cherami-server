@@ -8,7 +8,7 @@ import (
 	"github.com/urfave/cli"
 )
 
-func gc(c *cli.Context, mc *MetadataClient) error {
+func gc(c *cli.Context) error {
 
 	var gcDestinations, gcConsumerGroups, gcDestExtents,
 		gcStoreExtents, gcInputExtents, gcCGExtents bool
@@ -52,6 +52,15 @@ func gc(c *cli.Context, mc *MetadataClient) error {
 		fmt.Printf("must specify at least one table to GC\n")
 		return nil
 	}
+
+	mc, err := NewMetadataClient(getOpts(cliContext))
+
+	if err != nil {
+		fmt.Errorf("NewMetadataClient error: %v\n", err)
+		return nil
+	}
+
+	defer mc.Close()
 
 	// lookup tables
 	var (
@@ -426,8 +435,7 @@ func gc(c *cli.Context, mc *MetadataClient) error {
 
 	fmt.Printf("--\n")
 
-	out := getCmqWriter(&outContext{destPaths: destPaths, cgPaths: cgPaths, cgDest: cgDest, extDest: extDest},
-		outputCqlDelete, outputCqlDeleteUndo /*, outputNull, outputText */)
+	out := cmqOutputWriter([]string{"deletecql", "undocql"})
 	defer out.close()
 
 	// -- find leaks -- //
@@ -452,7 +460,7 @@ func gc(c *cli.Context, mc *MetadataClient) error {
 				if _, ok = destUUIDs[d]; !ok {
 					// destInvalid = append(destInvalid, d)
 					nInvalidRows++
-					out.destination(row)
+					out.Destination(row, fmt.Sprintf("%s, %s", d, destPaths[d]))
 				}
 			}
 
@@ -482,7 +490,7 @@ func gc(c *cli.Context, mc *MetadataClient) error {
 				if _, ok = cgUUIDs[cg]; !ok {
 					// cgInvalid = append(cgInvalid, cg)
 					nInvalidRows++
-					out.consumer_group(row)
+					out.ConsumerGroup(row, cgPaths[cg])
 				}
 			}
 
@@ -512,7 +520,8 @@ func gc(c *cli.Context, mc *MetadataClient) error {
 				if _, ok = extUUIDs[x]; !ok {
 					// extInvalid = append(extInvalid, x)
 					nInvalidRows++
-					out.extent(row)
+					destUUID := row["destination_uuid"].(gocql.UUID).String()
+					out.Extent(row, destPaths[destUUID])
 				}
 			}
 
@@ -562,14 +571,14 @@ func gc(c *cli.Context, mc *MetadataClient) error {
 
 			if _, ok := extUUIDs[extUUID]; !ok { // valid extent?
 				nInvalidRows++
-				out.consumer_group_extent(row)
+				out.ConsumerGroupExtent(row, fmt.Sprintf("%s, %s", destPaths[extDest[extUUID]], cgPaths[cgUUID]))
 				row = make(map[string]interface{})
 				continue
 			}
 
 			if _, ok := cgUUIDs[cgUUID]; !ok { // valid CG?
 				nInvalidRows++
-				out.consumer_group_extent(row)
+				out.ConsumerGroupExtent(row, fmt.Sprintf("%s, %s", destPaths[extDest[extUUID]], cgPaths[cgUUID]))
 				row = make(map[string]interface{})
 				continue
 			}
@@ -615,7 +624,7 @@ func gc(c *cli.Context, mc *MetadataClient) error {
 
 				if _, ok = extUUIDs[x]; !ok {
 					nInvalidRows++
-					out.input_extent(row)
+					out.InputExtent(row, destPaths[x])
 				}
 			}
 
@@ -645,7 +654,7 @@ func gc(c *cli.Context, mc *MetadataClient) error {
 
 				if _, ok := extUUIDs[x]; !ok {
 					nInvalidRows++
-					out.store_extent(row)
+					out.StoreExtent(row, destPaths[x])
 				}
 			}
 

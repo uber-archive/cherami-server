@@ -8,7 +8,19 @@ import (
 	"github.com/urfave/cli"
 )
 
-func list_destinations(c *cli.Context, mc *MetadataClient) error {
+func list_destinations(c *cli.Context) error {
+
+	mc, err := NewMetadataClient(getOpts(cliContext))
+
+	if err != nil {
+		fmt.Errorf("NewMetadataClient error: %v\n", err)
+		return nil
+	}
+
+	defer mc.Close()
+
+	out := cmqOutputWriter(cliContext.StringSlice("output"))
+	defer out.close()
 
 	cql := "SELECT * FROM destinations"
 
@@ -47,6 +59,8 @@ func list_destinations(c *cli.Context, mc *MetadataClient) error {
 
 	iter := mc.session.Query(cql).Iter()
 
+	out.Destination(nil, "")
+
 	for {
 		var row = make(map[string]interface{})
 
@@ -54,7 +68,7 @@ func list_destinations(c *cli.Context, mc *MetadataClient) error {
 			break
 		}
 
-		destUUID := row["uuid"]
+		// destUUID := row["uuid"]
 
 		if len(typeFilters) > 0 &&
 			!matchIntFilters(row["destination"].(map[string]interface{})["type"].(int), typeFilters) {
@@ -71,10 +85,13 @@ func list_destinations(c *cli.Context, mc *MetadataClient) error {
 			continue
 		}
 
-		fmt.Printf("%v\n", destUUID)
-		printRow("\t", row)
-		fmt.Printf("\n")
+		// fmt.Printf("%v\n", destUUID)
+		// printRow("\t", row)
+		// fmt.Printf("\n")
+		out.Destination(row, "")
 	}
+
+	out.Destination(nil, "")
 
 	if err := iter.Close(); err != nil {
 		fmt.Printf("list_destinations: iterator error: %v\n", err)
@@ -83,12 +100,24 @@ func list_destinations(c *cli.Context, mc *MetadataClient) error {
 	return nil
 }
 
-func list_destinations_by_path(c *cli.Context, mc *MetadataClient) error {
+func list_destinations_by_path(c *cli.Context) error {
 
 	return fmt.Errorf("list_destinations_by_path: not implemented")
 }
 
-func list_consumer_groups(c *cli.Context, mc *MetadataClient) error {
+func list_consumer_groups(c *cli.Context) error {
+
+	mc, err := NewMetadataClient(getOpts(cliContext))
+
+	if err != nil {
+		fmt.Errorf("NewMetadataClient error: %v\n", err)
+		return nil
+	}
+
+	defer mc.Close()
+
+	out := cmqOutputWriter(cliContext.StringSlice("output"))
+	defer out.close()
 
 	cql := "SELECT * FROM consumer_groups"
 
@@ -124,6 +153,8 @@ func list_consumer_groups(c *cli.Context, mc *MetadataClient) error {
 
 	iter := mc.session.Query(cql).Iter()
 
+	out.ConsumerGroup(nil, "")
+
 	for {
 		var row = make(map[string]interface{})
 
@@ -131,11 +162,15 @@ func list_consumer_groups(c *cli.Context, mc *MetadataClient) error {
 			break
 		}
 
-		cgUUID := row["uuid"]
+		// cgUUID := row["uuid"]
 
-		if len(destFilters) > 0 &&
-			!matchUUIDFilters(row["consumer_group"].(map[string]interface{})["destination_uuid"].(gocql.UUID), destFilters) {
-			continue
+		if len(destFilters) > 0 {
+
+			destUUID := row["destination_uuid"]
+
+			if destUUID != nil && !matchUUIDFilters(destUUID.(gocql.UUID), destFilters) {
+				continue
+			}
 		}
 
 		if len(statusFilters) > 0 &&
@@ -148,10 +183,13 @@ func list_consumer_groups(c *cli.Context, mc *MetadataClient) error {
 			continue
 		}
 
-		fmt.Printf("%v\n", cgUUID)
-		printRow("\t", row)
-		fmt.Printf("\n")
+		// fmt.Printf("%v\n", cgUUID)
+		// printRow("\t", row)
+		// fmt.Printf("\n")
+		out.ConsumerGroup(row, "")
 	}
+
+	out.ConsumerGroup(nil, "")
 
 	if err := iter.Close(); err != nil {
 		fmt.Printf("list_consumer_groups: iterator error: %v\n", err)
@@ -160,7 +198,19 @@ func list_consumer_groups(c *cli.Context, mc *MetadataClient) error {
 	return nil
 }
 
-func list_destination_extents(c *cli.Context, mc *MetadataClient) error {
+func list_destination_extents(c *cli.Context) error {
+
+	mc, err := NewMetadataClient(getOpts(cliContext))
+
+	if err != nil {
+		fmt.Errorf("NewMetadataClient error: %v\n", err)
+		return nil
+	}
+
+	defer mc.Close()
+
+	out := cmqOutputWriter(cliContext.StringSlice("output"))
+	defer out.close()
 
 	cql := "SELECT * FROM destination_extents"
 
@@ -191,6 +241,8 @@ func list_destination_extents(c *cli.Context, mc *MetadataClient) error {
 
 	iter := mc.session.Query(cql).Iter()
 
+	out.Extent(nil, "")
+
 	for {
 		var row = make(map[string]interface{})
 
@@ -198,16 +250,19 @@ func list_destination_extents(c *cli.Context, mc *MetadataClient) error {
 			break
 		}
 
-		extUUID := row["extent_uuid"]
+		// extUUID := row["extent_uuid"]
 
 		if len(statusFilters) > 0 && !matchIntFilters(row["status"].(int), statusFilters) {
 			continue
 		}
 
-		fmt.Printf("%v\n", extUUID)
-		printRow("\t", row)
-		fmt.Printf("\n")
+		// fmt.Printf("%v\n", extUUID)
+		// printRow("\t", row)
+		// fmt.Printf("\n")
+		out.Extent(row, "")
 	}
+
+	out.Extent(nil, "")
 
 	if err := iter.Close(); err != nil {
 		fmt.Printf("list_consumer_groups: iterator error: %v\n", err)
@@ -216,7 +271,19 @@ func list_destination_extents(c *cli.Context, mc *MetadataClient) error {
 	return nil
 }
 
-func list_consumer_group_extents(c *cli.Context, mc *MetadataClient) error {
+func list_consumer_group_extents(c *cli.Context) error {
+
+	mc, err := NewMetadataClient(getOpts(cliContext))
+
+	if err != nil {
+		fmt.Errorf("NewMetadataClient error: %v\n", err)
+		return nil
+	}
+
+	defer mc.Close()
+
+	out := cmqOutputWriter(cliContext.StringSlice("output"))
+	defer out.close()
 
 	cql := "SELECT * FROM consumer_group_extents"
 
@@ -247,6 +314,8 @@ func list_consumer_group_extents(c *cli.Context, mc *MetadataClient) error {
 
 	iter := mc.session.Query(cql).Iter()
 
+	out.ConsumerGroupExtent(nil, "")
+
 	for {
 		var row = make(map[string]interface{})
 
@@ -254,17 +323,20 @@ func list_consumer_group_extents(c *cli.Context, mc *MetadataClient) error {
 			break
 		}
 
-		cgUUID := row["consumer_group_uuid"]
-		extUUID := row["extent_uuid"]
+		// cgUUID := row["consumer_group_uuid"]
+		// extUUID := row["extent_uuid"]
 
 		if len(statusFilters) > 0 && !matchIntFilters(row["status"].(int), statusFilters) {
 			continue
 		}
 
-		fmt.Printf("cg=%v ext=%v\n", cgUUID, extUUID)
-		printRow("\t", row)
-		fmt.Printf("\n")
+		// fmt.Printf("cg=%v ext=%v\n", cgUUID, extUUID)
+		// printRow("\t", row)
+		// fmt.Printf("\n")
+		out.ConsumerGroupExtent(row, "")
 	}
+
+	out.ConsumerGroupExtent(nil, "")
 
 	if err := iter.Close(); err != nil {
 		fmt.Printf("list_consumer_groups: iterator error: %v\n", err)
@@ -273,7 +345,19 @@ func list_consumer_group_extents(c *cli.Context, mc *MetadataClient) error {
 	return nil
 }
 
-func list_store_extents(c *cli.Context, mc *MetadataClient) error {
+func list_store_extents(c *cli.Context) error {
+
+	mc, err := NewMetadataClient(getOpts(cliContext))
+
+	if err != nil {
+		fmt.Errorf("NewMetadataClient error: %v\n", err)
+		return nil
+	}
+
+	defer mc.Close()
+
+	out := cmqOutputWriter(cliContext.StringSlice("output"))
+	defer out.close()
 
 	cql := "SELECT * FROM store_extents"
 
@@ -300,6 +384,8 @@ func list_store_extents(c *cli.Context, mc *MetadataClient) error {
 
 	iter := mc.session.Query(cql).Iter()
 
+	out.StoreExtent(nil, "")
+
 	for {
 		var row = make(map[string]interface{})
 
@@ -307,17 +393,20 @@ func list_store_extents(c *cli.Context, mc *MetadataClient) error {
 			break
 		}
 
-		storeUUID := row["store_uuid"]
-		extUUID := row["extent_uuid"]
+		// storeUUID := row["store_uuid"]
+		// extUUID := row["extent_uuid"]
 
 		if len(statusFilters) > 0 && !matchIntFilters(row["status"].(int), statusFilters) {
 			continue
 		}
 
-		fmt.Printf("store=%v ext=%v\n", storeUUID, extUUID)
-		printRow("\t", row)
-		fmt.Printf("\n")
+		// fmt.Printf("store=%v ext=%v\n", storeUUID, extUUID)
+		// printRow("\t", row)
+		// fmt.Printf("\n")
+		out.StoreExtent(row, "")
 	}
+
+	out.StoreExtent(nil, "")
 
 	if err := iter.Close(); err != nil {
 		fmt.Printf("list_store_extents: iterator error: %v\n", err)
@@ -326,11 +415,23 @@ func list_store_extents(c *cli.Context, mc *MetadataClient) error {
 	return nil
 }
 
-func list_operations(c *cli.Context, mc *MetadataClient) error {
+func list_operations(c *cli.Context) error {
 
 	if c.NArg() == 0 {
 		return fmt.Errorf("specify UUIDs to search for")
 	}
+
+	mc, err := NewMetadataClient(getOpts(cliContext))
+
+	if err != nil {
+		fmt.Errorf("NewMetadataClient error: %v\n", err)
+		return nil
+	}
+
+	defer mc.Close()
+
+	out := cmqOutputWriter(cliContext.StringSlice("output"))
+	defer out.close()
 
 	cql := "SELECT * FROM user_operations_by_entity_uuid"
 

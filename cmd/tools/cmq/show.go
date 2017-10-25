@@ -31,11 +31,21 @@ func printRow(prefix string, row map[string]interface{}) {
 	}
 }
 
-func show_destination_by_path(c *cli.Context, mc *MetadataClient) error {
+func show_destination_by_path(c *cli.Context) error {
 
 	if c.NArg() == 0 {
 		return fmt.Errorf("destination path not specified")
 	}
+
+	mc, err := NewMetadataClient(getOpts(cliContext))
+
+	if err != nil {
+		fmt.Errorf("NewMetadataClient error: %v\n", err)
+		return nil
+	}
+
+	out := cmqOutputWriter(cliContext.StringSlice("output"))
+	defer out.close()
 
 	path := c.Args()[0]
 	cql := fmt.Sprintf("SELECT * FROM destinations_by_path WHERE path='%v' ALLOW FILTERING", path)
@@ -53,11 +63,21 @@ func show_destination_by_path(c *cli.Context, mc *MetadataClient) error {
 	return nil
 }
 
-func show_destination(c *cli.Context, mc *MetadataClient) error {
+func show_destination(c *cli.Context) error {
 
 	if c.NArg() == 0 {
 		return fmt.Errorf("destination uuid not specified")
 	}
+
+	mc, err := NewMetadataClient(getOpts(cliContext))
+
+	if err != nil {
+		fmt.Errorf("NewMetadataClient error: %v\n", err)
+		return nil
+	}
+
+	out := cmqOutputWriter(cliContext.StringSlice("output"))
+	defer out.close()
 
 	uuid := c.Args()[0]
 	cql := fmt.Sprintf("SELECT * FROM destinations WHERE uuid=%v", uuid)
@@ -69,17 +89,28 @@ func show_destination(c *cli.Context, mc *MetadataClient) error {
 		return nil
 	}
 
-	fmt.Printf("destinations[%v]:\n", uuid)
-	printRow("\t", row)
+	// fmt.Printf("destinations[%v]:\n", uuid)
+	// printRow("\t", row)
+	out.Destination(row, "")
 
 	return nil
 }
 
-func show_consumergroup(c *cli.Context, mc *MetadataClient) error {
+func show_consumergroup(c *cli.Context) error {
 
 	if c.NArg() == 0 {
 		return fmt.Errorf("consumer-group uuid not specified")
 	}
+
+	mc, err := NewMetadataClient(getOpts(cliContext))
+
+	if err != nil {
+		fmt.Errorf("NewMetadataClient error: %v\n", err)
+		return nil
+	}
+
+	out := cmqOutputWriter(cliContext.StringSlice("output"))
+	defer out.close()
 
 	uuid := c.Args()[0]
 	cql := fmt.Sprintf("SELECT * FROM consumer_groups WHERE uuid=%v", uuid)
@@ -91,17 +122,28 @@ func show_consumergroup(c *cli.Context, mc *MetadataClient) error {
 		return nil
 	}
 
-	fmt.Printf("consumergroups[%v]:\n", uuid)
-	printRow("\t", row)
+	// fmt.Printf("consumergroups[%v]:\n", uuid)
+	// printRow("\t", row)
+	out.ConsumerGroup(row, "")
 
 	return nil
 }
 
-func show_extent(c *cli.Context, mc *MetadataClient) error {
+func show_extent(c *cli.Context) error {
 
 	if c.NArg() == 0 {
 		return fmt.Errorf("extent uuid not specified")
 	}
+
+	mc, err := NewMetadataClient(getOpts(cliContext))
+
+	if err != nil {
+		fmt.Errorf("NewMetadataClient error: %v\n", err)
+		return nil
+	}
+
+	out := cmqOutputWriter(cliContext.StringSlice("output"))
+	defer out.close()
 
 	uuid := c.Args()[0]
 	cql := fmt.Sprintf("SELECT * FROM destination_extents WHERE extent_uuid=%v ALLOW FILTERING", uuid)
@@ -113,17 +155,27 @@ func show_extent(c *cli.Context, mc *MetadataClient) error {
 		return nil
 	}
 
-	fmt.Printf("destination_extents[%v]:\n", uuid)
-	printRow("\t", row)
+	// fmt.Printf("destination_extents[%v]:\n", uuid)
+	// printRow("\t", row)
+	out.Extent(row, "")
 
 	return nil
 }
 
-func show_cgextent(c *cli.Context, mc *MetadataClient) error {
+func show_cgextent(c *cli.Context) error {
 
 	if c.NArg() < 2 {
 		return fmt.Errorf("cg/extent uuid not specified")
 	}
+	mc, err := NewMetadataClient(getOpts(cliContext))
+
+	if err != nil {
+		fmt.Errorf("NewMetadataClient error: %v\n", err)
+		return nil
+	}
+
+	out := cmqOutputWriter(cliContext.StringSlice("output"))
+	defer out.close()
 
 	cgUUID := c.Args()[0]
 	extUUID := c.Args()[1]
@@ -136,8 +188,9 @@ func show_cgextent(c *cli.Context, mc *MetadataClient) error {
 		return nil
 	}
 
-	fmt.Printf("consumer_group_extent[cg=%v, ext=%v]:\n", cgUUID, extUUID)
-	printRow("\t", row)
+	// fmt.Printf("consumer_group_extent[cg=%v, ext=%v]:\n", cgUUID, extUUID)
+	// printRow("\t", row)
+	out.ConsumerGroupExtent(row, "")
 
 	return nil
 }

@@ -20,12 +20,21 @@ import (
 // - show total consume/publish rates
 // - show special status if possibly 'stuck'
 
-func watch(c *cli.Context, mc *MetadataClient) error {
+func watch(c *cli.Context) error {
 
 	if c.NArg() < 2 {
 		fmt.Printf("dest-uuid and cg-uuid not specified\n")
 		return nil
 	}
+
+	mc, err := NewMetadataClient(getOpts(cliContext))
+
+	if err != nil {
+		fmt.Errorf("NewMetadataClient error: %v\n", err)
+		return nil
+	}
+
+	defer mc.Close()
 
 	destUUID := c.Args()[0]
 	cgUUID := c.Args()[1]
@@ -310,6 +319,8 @@ func (t *cgWatch) refreshMetadata() error {
 				// if x.extStatus == extOpen {
 				// 	fmt.Printf("%v [%d]: %v [%d]\n", extentUUID, createdMs, extStatus, statusUpdatedMs)
 				// }
+
+				x.backlog = x.lastSeq - x.ackSeq // all of it would be backlog if we haven't updated 'ackSeq' yet
 			}
 		}
 
