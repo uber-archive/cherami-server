@@ -1,5 +1,5 @@
-hash: df533b509cb758b1ac9fb478f628e40f1476a6569fb8073d87f830fee26a0dfc
-updated: 2017-10-20T10:20:43.667131555-07:00
+hash: b4ac6cca4953caf65596799ec1216e88cc1f27efe83097737844d2da31d9429a
+updated: 2017-10-24T15:20:10.812837238-07:00
 imports:
 - name: github.com/apache/thrift
   version: b2a4d4ae21c789b689dd162deb819665567f481c
@@ -171,6 +171,8 @@ imports:
   - tos
   - trand
   - typed
+- name: github.com/urfave/cli
+  version: 7bc6a0acffa589f415f88aca16cc1de5ffd66f9c
 - name: golang.org/x/net
   version: aabf50738bcdd9b207582cbe796b59ed65d56680
   subpackages:

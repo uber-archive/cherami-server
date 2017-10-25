@@ -345,9 +345,6 @@ func (t *cgWatch) refreshMetadata() error {
 						x.cgxStatus = cgxConsuming
 					}
 
-				case shared.ConsumerGroupExtentStatus_DELETING:
-					fallthrough
-
 				case shared.ConsumerGroupExtentStatus_DELETED:
 					fallthrough
 
