@@ -54,7 +54,7 @@ func main() {
 		cli.StringFlag{
 			Name:   "zone, z",
 			Usage:  "Cherami Zone",
-			EnvVar: "CHERAMI_ZONE",
+			EnvVar: "CMQ_ZONE",
 		},
 		cli.StringFlag{
 			Name:   "host, h",
