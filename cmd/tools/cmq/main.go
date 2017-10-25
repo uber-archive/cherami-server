@@ -2,10 +2,12 @@ package main
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os"
 	"time"
 
 	"github.com/urfave/cli"
+	"gopkg.in/yaml.v2"
 )
 
 func main() {
@@ -22,17 +24,7 @@ func main() {
 
 	app.Before = func(c *cli.Context) error {
 
-		var opts = &Opts{
-			Host:        c.String("host"),
-			Port:        c.Int("port"),
-			Keyspace:    c.String("keyspace"),
-			Consistency: c.String("consistency"),
-			Username:    c.String("username"),
-			Password:    c.String("password"),
-			Timeout:     c.Duration("timeout"),
-			Retries:     c.Int("retries"),
-			PageSize:    c.Int("pagesize"),
-		}
+		var opts = getOpts(c)
 
 		mc, err = NewMetadataClient(opts)
 
@@ -55,36 +47,41 @@ func main() {
 
 	app.Flags = []cli.Flag{
 		cli.StringFlag{
+			Name:  "config, cfg",
+			Usage: "cmq config yaml",
+			Value: "/etc/cmq.yaml",
+		},
+		cli.StringFlag{
+			Name:   "zone, z",
+			Usage:  "Cherami Zone",
+			EnvVar: "CHERAMI_ZONE",
+		},
+		cli.StringFlag{
 			Name:   "host, h",
 			Usage:  "Cassandra host",
 			EnvVar: "CASSANDRA_HOST",
 		},
 		cli.IntFlag{
 			Name:   "port",
-			Value:  9042,
 			Usage:  "Cassandra port",
 			EnvVar: "CASSANDRA_PORT",
 		},
 		cli.StringFlag{
 			Name:   "username, u",
-			Value:  "",
 			Usage:  "Cassandra username",
 			EnvVar: "CASSANDRA_USERNAME",
 		},
 		cli.StringFlag{
 			Name:   "password, pw",
-			Value:  "",
 			Usage:  "Cassandra password",
 			EnvVar: "CASSANDRA_PASSWORD",
 		},
 		cli.StringFlag{
 			Name:  "consistency, cons",
-			Value: "One",
 			Usage: "Consistency to use in queries: One, Two, Quorum, etc ",
 		},
 		cli.StringFlag{
 			Name:   "keyspace, env, k",
-			Value:  "cherami",
 			Usage:  "Cassandra keyspace suffix (ex: 'cherami_staging_dca1a')",
 			EnvVar: "CHERAMI_KEYSPACE",
 		},
@@ -625,4 +622,87 @@ func main() {
 	app.Run(os.Args)
 
 	return
+}
+
+type ZoneConfig struct {
+	Hosts    string `yaml:"hosts"` // TODO: add support for multiple hosts
+	Port     int    `yaml:"port"`
+	Keyspace string `yaml:"keyspace"`
+	Username string `yaml:"username"`
+	Password string `yaml:"password"`
+}
+
+func getOpts(c *cli.Context) *Opts {
+
+	var opts = &Opts{
+		Port:        9042,
+		Consistency: "One",
+		Keyspace:    "cherami",
+	}
+
+	if c.IsSet("zone") {
+
+		if configYaml, err := ioutil.ReadFile(c.String("config")); err == nil {
+
+			config := make(map[string]ZoneConfig)
+
+			if err = yaml.Unmarshal(configYaml, &config); err != nil {
+
+				fmt.Printf("error parsing yaml (%s): %v\n", c.String("config"), err)
+
+			} else {
+
+				if cfg, ok := config[c.String("zone")]; !ok {
+
+					fmt.Printf("config not found for zone '%v'\n", c.String("zone"))
+
+				} else {
+
+					opts.Hosts = cfg.Hosts
+					opts.Port = cfg.Port
+					opts.Keyspace = cfg.Keyspace
+					opts.Username = cfg.Username
+					opts.Password = cfg.Password
+				}
+			}
+		}
+	}
+
+	if c.IsSet("hosts") {
+		opts.Hosts = c.String("hosts")
+	}
+
+	if c.IsSet("port") {
+		opts.Port = c.Int("port")
+	}
+
+	if c.IsSet("keyspace") {
+		opts.Keyspace = c.String("keyspace")
+	}
+
+	if c.IsSet("consistency") {
+		opts.Consistency = c.String("consistency")
+	}
+
+	if c.IsSet("username") {
+		opts.Username = c.String("username")
+	}
+
+	if c.IsSet("password") {
+		opts.Password = c.String("password")
+	}
+
+	if c.IsSet("timeout") {
+		opts.Timeout = c.Duration("timeout")
+	}
+
+	if c.IsSet("retries") {
+		opts.Retries = c.Int("retries")
+	}
+
+	if c.IsSet("pagesize") {
+		opts.PageSize = c.Int("pagesize")
+	}
+
+	return opts
 }

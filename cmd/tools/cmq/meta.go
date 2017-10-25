@@ -7,7 +7,7 @@ import (
 )
 
 type Opts struct {
-	Host        string
+	Hosts       string
 	Port        int
 	Keyspace    string
 	Consistency string
@@ -32,7 +32,7 @@ const (
 
 func NewMetadataClient(opts *Opts) (*MetadataClient, error) {
 
-	cluster := gocql.NewCluster(opts.Host)
+	cluster := gocql.NewCluster(opts.Hosts) // TODO: add support for multiple hosts
 
 	cluster.Port = opts.Port
 	cluster.Keyspace = opts.Keyspace
