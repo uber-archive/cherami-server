@@ -15,7 +15,7 @@ const (
 	outputNull outputType = iota
 	outputCqlDelete
 	outputCqlDeleteUndo
-	outputJson
+	outputJSON
 	outputShort
 )
 
@@ -55,7 +55,7 @@ func cmqOutputWriter(outTypes []string) (writer cmqWriter) {
 			writers = append(writers, newCmqWriterCqlDeleteUndo())
 
 		case "json":
-			writers = append(writers, newCmqWriterJson())
+			writers = append(writers, newCmqWriterJSON())
 
 		case "short":
 			writers = append(writers, newCmqWriterShort())
@@ -90,8 +90,8 @@ func getCmqWriter(outTypes ...outputType) (writer cmqWriter) {
 		case outputShort:
 			writers = append(writers, newCmqWriterShort())
 
-		case outputJson:
-			writers = append(writers, newCmqWriterJson())
+		case outputJSON:
+			writers = append(writers, newCmqWriterJSON())
 
 		case outputCqlDelete:
 			writers = append(writers, newCmqWriterCqlDelete())
@@ -379,15 +379,15 @@ func (t *cmqWriterCqlDeleteUndo) close() {
 	t.fD.Close()
 }
 
-type cmqWriterJson struct {
+type cmqWriterJSON struct {
 	dRow, cgRow, xRow, cgxRow, ixRow, sxRow int
 }
 
-func newCmqWriterJson() *cmqWriterJson {
-	return &cmqWriterJson{}
+func newCmqWriterJSON() *cmqWriterJSON {
+	return &cmqWriterJSON{}
 }
 
-func (t *cmqWriterJson) Destination(row map[string]interface{}, annot string) {
+func (t *cmqWriterJSON) Destination(row map[string]interface{}, annot string) {
 
 	if row == nil { // indicates start/end of a list
 		if t.dRow == 0 {
@@ -409,7 +409,7 @@ func (t *cmqWriterJson) Destination(row map[string]interface{}, annot string) {
 	t.dRow++
 }
 
-func (t *cmqWriterJson) ConsumerGroup(row map[string]interface{}, annot string) {
+func (t *cmqWriterJSON) ConsumerGroup(row map[string]interface{}, annot string) {
 
 	if row == nil { // indicates start/end of a list
 		if t.cgRow == 0 {
@@ -431,7 +431,7 @@ func (t *cmqWriterJson) ConsumerGroup(row map[string]interface{}, annot string) 
 	t.cgRow++
 }
 
-func (t *cmqWriterJson) Extent(row map[string]interface{}, annot string) {
+func (t *cmqWriterJSON) Extent(row map[string]interface{}, annot string) {
 
 	if row == nil { // indicates start/end of a list
 		if t.xRow == 0 {
@@ -453,7 +453,7 @@ func (t *cmqWriterJson) Extent(row map[string]interface{}, annot string) {
 	t.xRow++
 }
 
-func (t *cmqWriterJson) ConsumerGroupExtent(row map[string]interface{}, annot string) {
+func (t *cmqWriterJSON) ConsumerGroupExtent(row map[string]interface{}, annot string) {
 
 	if row == nil { // indicates start/end of a list
 		if t.cgxRow == 0 {
@@ -475,7 +475,7 @@ func (t *cmqWriterJson) ConsumerGroupExtent(row map[string]interface{}, annot st
 	t.cgxRow++
 }
 
-func (t *cmqWriterJson) InputExtent(row map[string]interface{}, annot string) {
+func (t *cmqWriterJSON) InputExtent(row map[string]interface{}, annot string) {
 
 	if row == nil { // indicates start/end of a list
 		if t.ixRow == 0 {
@@ -497,7 +497,7 @@ func (t *cmqWriterJson) InputExtent(row map[string]interface{}, annot string) {
 	t.ixRow++
 }
 
-func (t *cmqWriterJson) StoreExtent(row map[string]interface{}, annot string) {
+func (t *cmqWriterJSON) StoreExtent(row map[string]interface{}, annot string) {
 
 	if row == nil { // indicates start/end of a list
 		if t.sxRow == 0 {
@@ -519,7 +519,7 @@ func (t *cmqWriterJson) StoreExtent(row map[string]interface{}, annot string) {
 	t.sxRow++
 }
 
-func (t *cmqWriterJson) close() {
+func (t *cmqWriterJSON) close() {
 }
 
 type cmqWriterNull struct{}

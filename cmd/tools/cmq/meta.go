@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-type Opts struct {
+type opts struct {
 	Hosts       string
 	Port        int
 	Keyspace    string
@@ -18,7 +18,7 @@ type Opts struct {
 	PageSize    int
 }
 
-type MetadataClient struct {
+type metadataClient struct {
 	session     *gocql.Session
 	consistency gocql.Consistency
 	retries     int
@@ -30,7 +30,7 @@ const (
 	numConns        = 1
 )
 
-func NewMetadataClient(opts *Opts) (*MetadataClient, error) {
+func newMetadataClient(opts *opts) (*metadataClient, error) {
 
 	cluster := gocql.NewCluster(opts.Hosts) // TODO: add support for multiple hosts
 
@@ -56,7 +56,7 @@ func NewMetadataClient(opts *Opts) (*MetadataClient, error) {
 		return nil, fmt.Errorf("CreateSession: %v", err)
 	}
 
-	return &MetadataClient{
+	return &metadataClient{
 		session:     session,
 		consistency: cluster.Consistency,
 		retries:     opts.Retries,
@@ -64,23 +64,23 @@ func NewMetadataClient(opts *Opts) (*MetadataClient, error) {
 	}, nil
 }
 
-func (m *MetadataClient) QueryRow(cql string) (row map[string]interface{}, err error) {
+func (m *metadataClient) QueryRow(cql string) (row map[string]interface{}, err error) {
 
 	row = make(map[string]interface{})
 	err = m.session.Query(cql).MapScan(row)
 	return
 }
 
-func (m *MetadataClient) Close() {
+func (m *metadataClient) Close() {
 	m.session.Close()
 }
 
-type PagedScanIter struct {
+type pagedScanIter struct {
 	query *gocql.Query
 	iter  *gocql.Iter
 }
 
-func (m *MetadataClient) PagedQueryIter(cql string) *PagedScanIter {
+func (m *metadataClient) pagedQueryIter(cql string) *PagedScanIter {
 
 	query := m.session.Query(cql).Consistency(m.consistency).PageSize(m.pageSize).RetryPolicy(&gocql.SimpleRetryPolicy{NumRetries: m.retries})
 	iter := query.Iter()
@@ -92,7 +92,7 @@ func (m *MetadataClient) PagedQueryIter(cql string) *PagedScanIter {
 	return &PagedScanIter{query: query, iter: iter}
 }
 
-func (it *PagedScanIter) Scan(dest ...interface{}) bool {
+func (it *PagedScanIter) scan(dest ...interface{}) bool {
 
 	if !it.iter.Scan(dest...) {
 
@@ -110,7 +110,7 @@ func (it *PagedScanIter) Scan(dest ...interface{}) bool {
 	return true
 }
 
-func (it *PagedScanIter) Close() error {
+func (it *PagedScanIter) close() error {
 
 	err := it.iter.Close()
 
@@ -128,7 +128,7 @@ type filter struct {
 	where map[string]string
 }
 
-func (m *MetadataClient) Query(table string, f filter) (row map[string]interface{}, err error) {
+func (m *metadataClient) Query(table string, f filter) (row map[string]interface{}, err error) {
 
 	/*
 		Query(

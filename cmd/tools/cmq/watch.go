@@ -604,7 +604,7 @@ func (t *cgWatch) refresh() (output string, maxRows int, maxCols int) {
 			continue
 		}
 
-		var extra rune = ' '
+		var extra = ' '
 		switch {
 		case x.remote:
 			extra = 'R'
@@ -625,7 +625,7 @@ func (t *cgWatch) refresh() (output string, maxRows int, maxCols int) {
 			continue
 		}
 
-		var extra rune = ' '
+		var extra = ' '
 		switch {
 		case x.remote:
 			extra = 'R'
@@ -650,7 +650,7 @@ func (t *cgWatch) refresh() (output string, maxRows int, maxCols int) {
 
 		if num++; num < 20 { // TODO: make configurable
 
-			var extra rune = ' '
+			var extra = ' '
 			switch {
 			case x.remote:
 				extra = 'R'
@@ -682,7 +682,7 @@ func (t *cgWatch) refresh() (output string, maxRows int, maxCols int) {
 
 			if num++; num < 20 { // TODO: make configurable
 
-				var extra rune = ' '
+				var extra = ' '
 				switch {
 				case x.remote:
 					extra = 'R'

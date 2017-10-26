@@ -36,6 +36,7 @@ func main() {
 	app.Run(os.Args)
 }
 
+// ZoneConfig has config for cassandra for each zone
 type ZoneConfig struct {
 	Hosts    string `yaml:"hosts"` // TODO: add support for multiple hosts
 	Port     int    `yaml:"port"`
@@ -44,9 +45,9 @@ type ZoneConfig struct {
 	Password string `yaml:"password"`
 }
 
-func getOpts(c *cli.Context) *Opts {
+func getOpts(c *cli.Context) *opts {
 
-	var opts = &Opts{
+	var opts = &opts{
 		Port:        9042,
 		Consistency: "One",
 		Keyspace:    "cherami",

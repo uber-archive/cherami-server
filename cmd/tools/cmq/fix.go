@@ -60,28 +60,28 @@ func fixsmartretry(c *cli.Context, mc *MetadataClient) error {
 	cqlUpdateCG := "UPDATE consumer_groups SET consumer_group = " + cqlTypeCG + " WHERE uuid = ?"
 	cqlUpdateCGByName := "UPDATE consumer_groups_by_name SET consumer_group = " + cqlTypeCG + " WHERE destination_uuid = ? AND name = ?"
 
-	var uuid gocql.UUID                               // uuid
-	var destination_uuid gocql.UUID                   // uuid
-	var name string                                   // text
-	var status int                                    // int
-	var lock_timeout_seconds int                      // int
-	var max_delivery_count int                        // int
-	var skip_older_messages_seconds int               // int
-	var dead_letter_queue_destination_uuid gocql.UUID // uuid
-	var owner_email string                            // text
-	var start_from int64                              // bigint
-	var is_multi_zone bool                            // boolean
-	var active_zone string                            // text
-	var zone_configs []map[string]interface{}         // frozen<list<frozen<consumer_group_zone_config>>>
-	var delay_seconds int                             // int
-	var options = make(map[string]string)             // options map<text, text>
+	var uuid gocql.UUID                           // uuid
+	var destinationUUID gocql.UUID                // uuid
+	var name string                               // text
+	var status int                                // int
+	var lockTimeoutSeconds int                    // int
+	var maxDeliveryCount int                      // int
+	var skipOlderMessagesSeconds int              // int
+	var deadLetterQueueDestinationUUID gocql.UUID // uuid
+	var ownerEmail string                         // text
+	var startFrom int64                           // bigint
+	var isMultiZone bool                          // boolean
+	var activeZone string                         // text
+	var zoneConfigs []map[string]interface{}      // frozen<list<frozen<consumer_group_zone_config>>>
+	var delaySeconds int                          // int
+	var options = make(map[string]string)         // options map<text, text>
 
 	var nUpdated, nErrors, nDeleted int
 
 	iter := mc.session.Query(cqlReadCG).RetryPolicy(&gocql.SimpleRetryPolicy{NumRetries: 16 /*mc.retries*/}).Iter()
 
-	for iter.Scan(&uuid, &destination_uuid, &name, &status, &lock_timeout_seconds, &max_delivery_count, &skip_older_messages_seconds,
-		&dead_letter_queue_destination_uuid, &owner_email, &start_from, &is_multi_zone, &active_zone, &zone_configs, &delay_seconds, &options) {
+	for iter.Scan(&uuid, &destinationUUID, &name, &status, &lockTimeoutSeconds, &maxDeliveryCount, &skipOlderMessagesSeconds,
+		&deadLetterQueueDestinationUUID, &ownerEmail, &startFrom, &isMultiZone, &activeZone, &zoneConfigs, &delaySeconds, &options) {
 
 		if status == int(shared.ConsumerGroupStatus_DELETED) {
 			nDeleted++
@@ -97,14 +97,14 @@ func fixsmartretry(c *cli.Context, mc *MetadataClient) error {
 		batch := mc.session.NewBatch(gocql.LoggedBatch)
 
 		batch.Query(cqlUpdateCG,
-			uuid, destination_uuid, name, status, lock_timeout_seconds, max_delivery_count, skip_older_messages_seconds,
-			dead_letter_queue_destination_uuid, owner_email, start_from, is_multi_zone, active_zone, zone_configs, delay_seconds, options,
+			uuid, destinationUUID, name, status, lockTimeoutSeconds, maxDeliveryCount, skipOlderMessagesSeconds,
+			deadLetterQueueDestinationUUID, ownerEmail, startFrom, isMultiZone, activeZone, zoneConfigs, delaySeconds, options,
 			uuid)
 
 		batch.Query(cqlUpdateCGByName,
-			uuid, destination_uuid, name, status, lock_timeout_seconds, max_delivery_count, skip_older_messages_seconds,
-			dead_letter_queue_destination_uuid, owner_email, start_from, is_multi_zone, active_zone, zone_configs, delay_seconds, options,
-			destination_uuid, name)
+			uuid, destinationUUID, name, status, lockTimeoutSeconds, maxDeliveryCount, skipOlderMessagesSeconds,
+			deadLetterQueueDestinationUUID, ownerEmail, startFrom, isMultiZone, activeZone, zoneConfigs, delaySeconds, options,
+			destinationUUID, name)
 
 		err := mc.session.ExecuteBatch(batch)
 
@@ -146,16 +146,16 @@ func fixdestuuid(c *cli.Context, mc *MetadataClient) error {
 
 	cqlUpdateCG := "UPDATE consumer_groups SET destination_uuid = ? WHERE uuid = ?"
 
-	var uuid gocql.UUID             // uuid
-	var destination_uuid gocql.UUID // uuid
+	var uuid gocql.UUID            // uuid
+	var destinationUUID gocql.UUID // uuid
 
 	var nUpdated, nErrors, nDeleted int
 
 	iter := mc.session.Query(cqlReadCG).RetryPolicy(&gocql.SimpleRetryPolicy{NumRetries: 16 /*mc.retries*/}).Iter()
 
-	for iter.Scan(&uuid, &destination_uuid) {
+	for iter.Scan(&uuid, &destinationUUID) {
 
-		err := mc.session.Query(cqlUpdateCG, destination_uuid, uuid).Exec()
+		err := mc.session.Query(cqlUpdateCG, destinationUUID, uuid).Exec()
 
 		if err != nil {
 			fmt.Printf("%v: error=%v\n", uuid, err)
