@@ -40,7 +40,7 @@ func showDestinationByPath(c *cli.Context) error {
 	mc, err := newMetadataClient(getOpts(cliContext))
 
 	if err != nil {
-		fmt.Errorf("newMetadataClient error: %v\n", err)
+		fmt.Errorf("newMetadataClient error: %v", err)
 		return nil
 	}
 
@@ -72,7 +72,7 @@ func showDestination(c *cli.Context) error {
 	mc, err := newMetadataClient(getOpts(cliContext))
 
 	if err != nil {
-		fmt.Errorf("newMetadataClient error: %v\n", err)
+		fmt.Errorf("newMetadataClient error: %v", err)
 		return nil
 	}
 
@@ -105,7 +105,7 @@ func showConsumerGroup(c *cli.Context) error {
 	mc, err := newMetadataClient(getOpts(cliContext))
 
 	if err != nil {
-		fmt.Errorf("newMetadataClient error: %v\n", err)
+		fmt.Errorf("newMetadataClient error: %v", err)
 		return nil
 	}
 
@@ -138,7 +138,7 @@ func showExtent(c *cli.Context) error {
 	mc, err := newMetadataClient(getOpts(cliContext))
 
 	if err != nil {
-		fmt.Errorf("newMetadataClient error: %v\n", err)
+		fmt.Errorf("newMetadataClient error: %v", err)
 		return nil
 	}
 
@@ -170,7 +170,7 @@ func showCGExtent(c *cli.Context) error {
 	mc, err := newMetadataClient(getOpts(cliContext))
 
 	if err != nil {
-		fmt.Errorf("newMetadataClient error: %v\n", err)
+		fmt.Errorf("newMetadataClient error: %v", err)
 		return nil
 	}
 
