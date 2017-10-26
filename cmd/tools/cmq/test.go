@@ -12,7 +12,7 @@ import (
 )
 
 /*
-func test(c *cli.Context, mc *MetadataClient) error {
+func test(c *cli.Context, mc *metadataClient) error {
 
 	if c.NArg() < 3 {
 		return fmt.Errorf("specify table and column")
@@ -39,7 +39,7 @@ func test(c *cli.Context, mc *MetadataClient) error {
 */
 
 /*
-func test(c *cli.Context, mc *MetadataClient) error {
+func test(c *cli.Context, mc *metadataClient) error {
 	if c.NArg() == 0 {
 		fmt.Printf("uuid not specified")
 		return nil
@@ -94,7 +94,7 @@ func rowString(row map[string]interface{}) string {
 }
 */
 
-func test(c *cli.Context, mc *MetadataClient) error {
+func test(c *cli.Context, mc *metadataClient) error {
 
 	cql := "SELECT * FROM store_extents"
 

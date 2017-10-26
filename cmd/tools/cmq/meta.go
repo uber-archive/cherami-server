@@ -80,7 +80,7 @@ type pagedScanIter struct {
 	iter  *gocql.Iter
 }
 
-func (m *metadataClient) pagedQueryIter(cql string) *PagedScanIter {
+func (m *metadataClient) pagedQueryIter(cql string) *pagedScanIter {
 
 	query := m.session.Query(cql).Consistency(m.consistency).PageSize(m.pageSize).RetryPolicy(&gocql.SimpleRetryPolicy{NumRetries: m.retries})
 	iter := query.Iter()
@@ -89,10 +89,10 @@ func (m *metadataClient) pagedQueryIter(cql string) *PagedScanIter {
 		return nil
 	}
 
-	return &PagedScanIter{query: query, iter: iter}
+	return &pagedScanIter{query: query, iter: iter}
 }
 
-func (it *PagedScanIter) scan(dest ...interface{}) bool {
+func (it *pagedScanIter) scan(dest ...interface{}) bool {
 
 	if !it.iter.Scan(dest...) {
 
@@ -110,12 +110,12 @@ func (it *PagedScanIter) scan(dest ...interface{}) bool {
 	return true
 }
 
-func (it *PagedScanIter) close() error {
+func (it *pagedScanIter) close() error {
 
 	err := it.iter.Close()
 
 	if err != nil {
-		fmt.Printf("PagedScanIter close error: %v\n", err)
+		fmt.Printf("pagedScanIter close error: %v\n", err)
 	}
 
 	return err

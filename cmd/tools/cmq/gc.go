@@ -53,10 +53,10 @@ func gc(c *cli.Context) error {
 		return nil
 	}
 
-	mc, err := NewMetadataClient(getOpts(cliContext))
+	mc, err := newMetadataClient(getOpts(cliContext))
 
 	if err != nil {
-		fmt.Errorf("NewMetadataClient error: %v\n", err)
+		fmt.Errorf("newMetadataClient error: %v\n", err)
 		return nil
 	}
 

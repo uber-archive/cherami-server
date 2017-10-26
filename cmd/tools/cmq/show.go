@@ -37,10 +37,10 @@ func showDestinationByPath(c *cli.Context) error {
 		return fmt.Errorf("destination path not specified")
 	}
 
-	mc, err := NewMetadataClient(getOpts(cliContext))
+	mc, err := newMetadataClient(getOpts(cliContext))
 
 	if err != nil {
-		fmt.Errorf("NewMetadataClient error: %v\n", err)
+		fmt.Errorf("newMetadataClient error: %v\n", err)
 		return nil
 	}
 
@@ -69,10 +69,10 @@ func showDestination(c *cli.Context) error {
 		return fmt.Errorf("destination uuid not specified")
 	}
 
-	mc, err := NewMetadataClient(getOpts(cliContext))
+	mc, err := newMetadataClient(getOpts(cliContext))
 
 	if err != nil {
-		fmt.Errorf("NewMetadataClient error: %v\n", err)
+		fmt.Errorf("newMetadataClient error: %v\n", err)
 		return nil
 	}
 
@@ -102,10 +102,10 @@ func showConsumerGroup(c *cli.Context) error {
 		return fmt.Errorf("consumer-group uuid not specified")
 	}
 
-	mc, err := NewMetadataClient(getOpts(cliContext))
+	mc, err := newMetadataClient(getOpts(cliContext))
 
 	if err != nil {
-		fmt.Errorf("NewMetadataClient error: %v\n", err)
+		fmt.Errorf("newMetadataClient error: %v\n", err)
 		return nil
 	}
 
@@ -135,10 +135,10 @@ func showExtent(c *cli.Context) error {
 		return fmt.Errorf("extent uuid not specified")
 	}
 
-	mc, err := NewMetadataClient(getOpts(cliContext))
+	mc, err := newMetadataClient(getOpts(cliContext))
 
 	if err != nil {
-		fmt.Errorf("NewMetadataClient error: %v\n", err)
+		fmt.Errorf("newMetadataClient error: %v\n", err)
 		return nil
 	}
 
@@ -167,10 +167,10 @@ func showCGExtent(c *cli.Context) error {
 	if c.NArg() < 2 {
 		return fmt.Errorf("cg/extent uuid not specified")
 	}
-	mc, err := NewMetadataClient(getOpts(cliContext))
+	mc, err := newMetadataClient(getOpts(cliContext))
 
 	if err != nil {
-		fmt.Errorf("NewMetadataClient error: %v\n", err)
+		fmt.Errorf("newMetadataClient error: %v\n", err)
 		return nil
 	}
 

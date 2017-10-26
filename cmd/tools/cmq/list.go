@@ -10,10 +10,10 @@ import (
 
 func listDestinations(c *cli.Context) error {
 
-	mc, err := NewMetadataClient(getOpts(cliContext))
+	mc, err := newMetadataClient(getOpts(cliContext))
 
 	if err != nil {
-		fmt.Errorf("NewMetadataClient error: %v\n", err)
+		fmt.Errorf("newMetadataClient error: %v\n", err)
 		return nil
 	}
 
@@ -107,10 +107,10 @@ func listDestinationsByPath(c *cli.Context) error {
 
 func listConsumerGroups(c *cli.Context) error {
 
-	mc, err := NewMetadataClient(getOpts(cliContext))
+	mc, err := newMetadataClient(getOpts(cliContext))
 
 	if err != nil {
-		fmt.Errorf("NewMetadataClient error: %v\n", err)
+		fmt.Errorf("newMetadataClient error: %v\n", err)
 		return nil
 	}
 
@@ -200,10 +200,10 @@ func listConsumerGroups(c *cli.Context) error {
 
 func listDestinationExtents(c *cli.Context) error {
 
-	mc, err := NewMetadataClient(getOpts(cliContext))
+	mc, err := newMetadataClient(getOpts(cliContext))
 
 	if err != nil {
-		fmt.Errorf("NewMetadataClient error: %v\n", err)
+		fmt.Errorf("newMetadataClient error: %v\n", err)
 		return nil
 	}
 
@@ -273,10 +273,10 @@ func listDestinationExtents(c *cli.Context) error {
 
 func listConsumerGroupExtents(c *cli.Context) error {
 
-	mc, err := NewMetadataClient(getOpts(cliContext))
+	mc, err := newMetadataClient(getOpts(cliContext))
 
 	if err != nil {
-		fmt.Errorf("NewMetadataClient error: %v\n", err)
+		fmt.Errorf("newMetadataClient error: %v\n", err)
 		return nil
 	}
 
@@ -347,10 +347,10 @@ func listConsumerGroupExtents(c *cli.Context) error {
 
 func listStoreExtents(c *cli.Context) error {
 
-	mc, err := NewMetadataClient(getOpts(cliContext))
+	mc, err := newMetadataClient(getOpts(cliContext))
 
 	if err != nil {
-		fmt.Errorf("NewMetadataClient error: %v\n", err)
+		fmt.Errorf("newMetadataClient error: %v\n", err)
 		return nil
 	}
 
@@ -421,10 +421,10 @@ func listOperations(c *cli.Context) error {
 		return fmt.Errorf("specify UUIDs to search for")
 	}
 
-	mc, err := NewMetadataClient(getOpts(cliContext))
+	mc, err := newMetadataClient(getOpts(cliContext))
 
 	if err != nil {
-		fmt.Errorf("NewMetadataClient error: %v\n", err)
+		fmt.Errorf("newMetadataClient error: %v\n", err)
 		return nil
 	}
 

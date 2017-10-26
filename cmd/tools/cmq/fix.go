@@ -8,7 +8,7 @@ import (
 	"github.com/urfave/cli"
 )
 
-func fixsmartretry(c *cli.Context, mc *MetadataClient) error {
+func fixsmartretry(c *cli.Context, mc *metadataClient) error {
 
 	if !c.IsSet("all") && c.NArg() == 0 {
 		fmt.Printf("fix smartretry: specify consumer-group or '-all'\n")
@@ -129,7 +129,7 @@ func fixsmartretry(c *cli.Context, mc *MetadataClient) error {
 	return nil
 }
 
-func fixdestuuid(c *cli.Context, mc *MetadataClient) error {
+func fixdestuuid(c *cli.Context, mc *metadataClient) error {
 
 	if !c.IsSet("all") && c.NArg() == 0 {
 		fmt.Printf("fix destuuid: specify consumer-group or '-all'\n")
