@@ -31,7 +31,7 @@ func printRow(prefix string, row map[string]interface{}) {
 	}
 }
 
-func show_destination_by_path(c *cli.Context) error {
+func showDestinationByPath(c *cli.Context) error {
 
 	if c.NArg() == 0 {
 		return fmt.Errorf("destination path not specified")
@@ -53,7 +53,7 @@ func show_destination_by_path(c *cli.Context) error {
 	row, err := mc.QueryRow(cql)
 
 	if err != nil {
-		fmt.Printf("show_destination_by_path: '%v': %v\n", cql, err)
+		fmt.Printf("showDestinationByPath: '%v': %v\n", cql, err)
 		return nil
 	}
 
@@ -63,7 +63,7 @@ func show_destination_by_path(c *cli.Context) error {
 	return nil
 }
 
-func show_destination(c *cli.Context) error {
+func showDestination(c *cli.Context) error {
 
 	if c.NArg() == 0 {
 		return fmt.Errorf("destination uuid not specified")
@@ -85,7 +85,7 @@ func show_destination(c *cli.Context) error {
 	row, err := mc.QueryRow(cql)
 
 	if err != nil {
-		fmt.Printf("show_destination: '%v': %v\n", cql, err)
+		fmt.Printf("showDestination: '%v': %v\n", cql, err)
 		return nil
 	}
 
@@ -96,7 +96,7 @@ func show_destination(c *cli.Context) error {
 	return nil
 }
 
-func show_consumergroup(c *cli.Context) error {
+func showConsumerGroup(c *cli.Context) error {
 
 	if c.NArg() == 0 {
 		return fmt.Errorf("consumer-group uuid not specified")
@@ -118,7 +118,7 @@ func show_consumergroup(c *cli.Context) error {
 	row, err := mc.QueryRow(cql)
 
 	if err != nil {
-		fmt.Printf("show_consumergroup: '%v': %v\n", cql, err)
+		fmt.Printf("showConsumerGroup: '%v': %v\n", cql, err)
 		return nil
 	}
 
@@ -129,7 +129,7 @@ func show_consumergroup(c *cli.Context) error {
 	return nil
 }
 
-func show_extent(c *cli.Context) error {
+func showExtent(c *cli.Context) error {
 
 	if c.NArg() == 0 {
 		return fmt.Errorf("extent uuid not specified")
@@ -151,7 +151,7 @@ func show_extent(c *cli.Context) error {
 	row, err := mc.QueryRow(cql)
 
 	if err != nil {
-		fmt.Printf("show_extent: '%v': %v\n", cql, err)
+		fmt.Printf("showExtent: '%v': %v\n", cql, err)
 		return nil
 	}
 
@@ -162,7 +162,7 @@ func show_extent(c *cli.Context) error {
 	return nil
 }
 
-func show_cgextent(c *cli.Context) error {
+func showCGExtent(c *cli.Context) error {
 
 	if c.NArg() < 2 {
 		return fmt.Errorf("cg/extent uuid not specified")
@@ -184,7 +184,7 @@ func show_cgextent(c *cli.Context) error {
 	row, err := mc.QueryRow(cql)
 
 	if err != nil {
-		fmt.Printf("show_cgextent: '%v': %v\n", cql, err)
+		fmt.Printf("showCGExtent: '%v': %v\n", cql, err)
 		return nil
 	}
 

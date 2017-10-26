@@ -224,7 +224,7 @@ var cmqCommands = []cli.Command{
 						Usage: "multizone",
 					},
 				},
-				Action: list_destinations,
+				Action: listDestinations,
 			},
 			{
 				Name:    "destinations_by_path",
@@ -243,7 +243,7 @@ var cmqCommands = []cli.Command{
 						Usage: "status",
 					},
 				},
-				Action: list_destinations_by_path,
+				Action: listDestinationsByPath,
 			},
 			{
 				Name:    "consumer_groups",
@@ -266,7 +266,7 @@ var cmqCommands = []cli.Command{
 						Usage: "status",
 					},
 				},
-				Action: list_consumer_groups,
+				Action: listConsumerGroups,
 			},
 			{
 				Name:    "destination_extents",
@@ -285,7 +285,7 @@ var cmqCommands = []cli.Command{
 						Usage: "status",
 					},
 				},
-				Action: list_destination_extents,
+				Action: listDestinationExtents,
 			},
 			{
 				Name:    "consumer_group_extents",
@@ -304,7 +304,7 @@ var cmqCommands = []cli.Command{
 						Usage: "status",
 					},
 				},
-				Action: list_consumer_group_extents,
+				Action: listConsumerGroupExtents,
 			},
 			{
 				Name:    "store_extents",
@@ -323,7 +323,7 @@ var cmqCommands = []cli.Command{
 						Usage: "status",
 					},
 				},
-				Action: list_store_extents,
+				Action: listStoreExtents,
 			},
 			{
 				Name:    "user_operations_by_entity_uuid",
@@ -334,7 +334,7 @@ var cmqCommands = []cli.Command{
 						Usage: "operation type: create, update, delete",
 					},
 				},
-				Action: list_operations,
+				Action: listOperations,
 			},
 		},
 	},
@@ -457,7 +457,7 @@ var cmqCommands = []cli.Command{
 				Name:    "destination_by_path",
 				Aliases: []string{"dbp"},
 				Flags:   []cli.Flag{},
-				Action:  show_destination_by_path,
+				Action:  showDestinationByPath,
 			},
 			{
 				Name:    "destination",
@@ -469,7 +469,7 @@ var cmqCommands = []cli.Command{
 						Usage: "destination uuid",
 					},
 				},
-				Action: show_destination,
+				Action: showDestination,
 			},
 			{
 				Name:    "consumergroup",
@@ -481,36 +481,36 @@ var cmqCommands = []cli.Command{
 						Usage: "consumer-group uuid",
 					},
 				},
-				Action: show_consumergroup,
+				Action: showConsumerGroup,
 			},
 			{
 				Name:    "extent",
 				Aliases: []string{"x"},
 				Flags:   []cli.Flag{},
-				Action:  show_extent,
+				Action:  showExtent,
 			},
 			{
 				Name:    "cgextent",
 				Aliases: []string{"cgx"},
 				Flags:   []cli.Flag{},
-				Action:  show_cgextent,
+				Action:  showCGExtent,
 			},
 		},
 	},
 	cli.Command{
 		Name:    "destination",
 		Aliases: []string{"d"},
-		Action:  show_destination,
+		Action:  showDestination,
 	},
 	cli.Command{
 		Name:    "consumergroup",
 		Aliases: []string{"cg"},
-		Action:  show_consumergroup,
+		Action:  showConsumerGroup,
 	},
 	cli.Command{
 		Name:    "extent",
 		Aliases: []string{"x"},
-		Action:  show_extent,
+		Action:  showExtent,
 	},
 	cli.Command{
 		Name:   "stats",

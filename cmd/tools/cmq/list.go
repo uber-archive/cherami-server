@@ -8,7 +8,7 @@ import (
 	"github.com/urfave/cli"
 )
 
-func list_destinations(c *cli.Context) error {
+func listDestinations(c *cli.Context) error {
 
 	mc, err := NewMetadataClient(getOpts(cliContext))
 
@@ -94,18 +94,18 @@ func list_destinations(c *cli.Context) error {
 	out.Destination(nil, "")
 
 	if err := iter.Close(); err != nil {
-		fmt.Printf("list_destinations: iterator error: %v\n", err)
+		fmt.Printf("listDestinations: iterator error: %v\n", err)
 	}
 
 	return nil
 }
 
-func list_destinations_by_path(c *cli.Context) error {
+func listDestinationsByPath(c *cli.Context) error {
 
-	return fmt.Errorf("list_destinations_by_path: not implemented")
+	return fmt.Errorf("listDestinationsByPath: not implemented")
 }
 
-func list_consumer_groups(c *cli.Context) error {
+func listConsumerGroups(c *cli.Context) error {
 
 	mc, err := NewMetadataClient(getOpts(cliContext))
 
@@ -192,13 +192,13 @@ func list_consumer_groups(c *cli.Context) error {
 	out.ConsumerGroup(nil, "")
 
 	if err := iter.Close(); err != nil {
-		fmt.Printf("list_consumer_groups: iterator error: %v\n", err)
+		fmt.Printf("listConsumerGroups: iterator error: %v\n", err)
 	}
 
 	return nil
 }
 
-func list_destination_extents(c *cli.Context) error {
+func listDestinationExtents(c *cli.Context) error {
 
 	mc, err := NewMetadataClient(getOpts(cliContext))
 
@@ -265,13 +265,13 @@ func list_destination_extents(c *cli.Context) error {
 	out.Extent(nil, "")
 
 	if err := iter.Close(); err != nil {
-		fmt.Printf("list_consumer_groups: iterator error: %v\n", err)
+		fmt.Printf("listConsumerGroups: iterator error: %v\n", err)
 	}
 
 	return nil
 }
 
-func list_consumer_group_extents(c *cli.Context) error {
+func listConsumerGroupExtents(c *cli.Context) error {
 
 	mc, err := NewMetadataClient(getOpts(cliContext))
 
@@ -339,13 +339,13 @@ func list_consumer_group_extents(c *cli.Context) error {
 	out.ConsumerGroupExtent(nil, "")
 
 	if err := iter.Close(); err != nil {
-		fmt.Printf("list_consumer_groups: iterator error: %v\n", err)
+		fmt.Printf("listConsumerGroups: iterator error: %v\n", err)
 	}
 
 	return nil
 }
 
-func list_store_extents(c *cli.Context) error {
+func listStoreExtents(c *cli.Context) error {
 
 	mc, err := NewMetadataClient(getOpts(cliContext))
 
@@ -409,13 +409,13 @@ func list_store_extents(c *cli.Context) error {
 	out.StoreExtent(nil, "")
 
 	if err := iter.Close(); err != nil {
-		fmt.Printf("list_store_extents: iterator error: %v\n", err)
+		fmt.Printf("listStoreExtents: iterator error: %v\n", err)
 	}
 
 	return nil
 }
 
-func list_operations(c *cli.Context) error {
+func listOperations(c *cli.Context) error {
 
 	if c.NArg() == 0 {
 		return fmt.Errorf("specify UUIDs to search for")
@@ -460,7 +460,7 @@ func list_operations(c *cli.Context) error {
 	}
 
 	if err := iter.Close(); err != nil {
-		fmt.Printf("list_operations: iterator error: %v\n", err)
+		fmt.Printf("listOperations: iterator error: %v\n", err)
 	}
 
 	return nil
