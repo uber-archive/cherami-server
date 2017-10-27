@@ -96,7 +96,10 @@ cherami-store-tool: $(DEPS)
 cdb: $(DEPS)
 	go build -i $(EMBED) -o cdb cmd/tools/cdb/*.go
 
-bins: cherami-server cherami-replicator-server cherami-cli cherami-admin cherami-replicator-tool cherami-cassandra-tool cherami-store-tool cdb
+cmq: $(DEPS)
+	go build -i $(EMBED) -o cmq cmd/tools/cmq/*.go
+
+bins: cherami-server cherami-replicator-server cherami-cli cherami-admin cherami-replicator-tool cherami-cassandra-tool cherami-store-tool cdb cmq
 
 cover_profile: lint bins
 	@mkdir -p $(BUILD)
@@ -123,7 +126,7 @@ cover_ci: cover_profile
 	goveralls -coverprofile=$(BUILD)/cover.out -service=travis-ci || echo -e "\x1b[31mCoveralls failed\x1b[m"
 
 clean:
-	rm -f cherami-server cherami-replicator-server cherami-cli cherami-admin cherami-replicator-tool cherami-cassandra-tool cherami-store-tool cdb
+	rm -f cherami-server cherami-replicator-server cherami-cli cherami-admin cherami-replicator-tool cherami-cassandra-tool cherami-store-tool cdb cmq
 	rm -Rf vendor/*
 	rm -Rf $(BUILD)
 
