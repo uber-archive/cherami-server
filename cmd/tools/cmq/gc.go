@@ -261,7 +261,7 @@ func gc(c *cli.Context) error {
 
 		var cgUUID, destUUID, cgName, dlqDestUUID string
 		var status, ttl int
-		var nRows, nDLQ int
+		var nRows, nDLQ, nCGDeleted, nCGDeleting int
 		var nDeletedNoTTL int
 		for iter.Scan(&cgUUID, &cgName, &status, &ttl, &destUUID, &dlqDestUUID) {
 
@@ -270,24 +270,38 @@ func gc(c *cli.Context) error {
 
 			if status != int(shared.ConsumerGroupStatus_DELETED) {
 
-				cgActive[cgUUID] = destUUID
-				destCGs[destUUID] = append(destCGs[destUUID], cgUUID)
+				if status != int(shared.ConsumerGroupStatus_DELETING) {
 
-				if dlqDestUUID != "" {
-					destDLQs[destUUID] = append(destDLQs[destUUID], dlqDestUUID)
-					nDLQ++
+					cgActive[cgUUID] = destUUID
+					destCGs[destUUID] = append(destCGs[destUUID], cgUUID)
+
+					if dlqDestUUID != "" {
+						destDLQs[destUUID] = append(destDLQs[destUUID], dlqDestUUID)
+						nDLQ++
+					}
+
+				} else {
+
+					nCGDeleting++
 				}
 
-			} else if ttl == 0 {
+			} else {
 
-				nDeletedNoTTL++
+				nCGDeleted++
+
+				if ttl == 0 {
+
+					nDeletedNoTTL++
+				}
 			}
 
 			nRows++
 			//fmt.Printf("\rconsumer_groups: %d rows", nRows)
 		}
 
-		fmt.Printf("\rconsumer_groups: %d rows: %d active (found %d DLQs for %d destinations)\n", nRows, len(cgActive), nDLQ, len(destDLQs))
+		fmt.Printf("\rconsumer_groups: %d rows: %d active, %d deleting, %d deleted (found %d DLQs for %d destinations)\n",
+			nRows, len(cgActive), nCGDeleting, nCGDeleted, nDLQ, len(destDLQs))
+
 		if close() != nil {
 			return nil
 		}
@@ -313,11 +327,11 @@ func gc(c *cli.Context) error {
 
 			if status != int(shared.DestinationStatus_DELETED) {
 
-				if status != int(shared.DestinationStatus_DELETING) {
-					destActive[destUUID] = destPath
-				} else {
+				if status == int(shared.DestinationStatus_DELETING) {
 					nDestDeleting++
 				}
+
+				destActive[destUUID] = destPath
 
 			} else {
 
@@ -332,7 +346,7 @@ func gc(c *cli.Context) error {
 			//fmt.Printf("\rdestinations: %d rows", nRows)
 		}
 
-		fmt.Printf("\rdestinations: %d rows: %d active, %d deleting, %d deleted destinations\n", nRows, len(destActive), nDestDeleting, nDestDeleted)
+		fmt.Printf("\rdestinations: %d rows: %d active, %d deleting, %d deleted\n", nRows, len(destActive), nDestDeleting, nDestDeleted)
 		if close() != nil {
 			return nil
 		}
