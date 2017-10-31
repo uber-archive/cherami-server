@@ -63,7 +63,6 @@ var cmqOptions = []cli.Flag{
 	cli.StringSliceFlag{
 		Name:   "output, out, o",
 		Usage:  "cmq output format: short, json, cql, undo, none [default: json]",
-		Value:  &cli.StringSlice{"json"},
 		EnvVar: "CMQ_OUTPUT",
 	},
 }

@@ -27,7 +27,7 @@ func watch(c *cli.Context) error {
 		return nil
 	}
 
-	mc, err := newMetadataClient(getOpts(cliContext))
+	mc, err := newMetadataClient()
 
 	if err != nil {
 		fmt.Errorf("newMetadataClient error: %v", err)

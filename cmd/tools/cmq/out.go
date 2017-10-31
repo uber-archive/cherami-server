@@ -39,6 +39,11 @@ type outContext struct {
 
 func cmqOutputWriter(outTypes []string) (writer cmqWriter) {
 
+	// override 'output' format, if specified
+	if len(outTypes) == 0 {
+		outTypes = []string{`json`}
+	}
+
 	var writers []cmqWriter
 
 	for _, ot := range outTypes {

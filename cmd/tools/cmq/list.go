@@ -10,7 +10,7 @@ import (
 
 func listDestinations(c *cli.Context) error {
 
-	mc, err := newMetadataClient(getOpts(cliContext))
+	mc, err := newMetadataClient()
 
 	if err != nil {
 		fmt.Errorf("newMetadataClient error: %v", err)
@@ -19,7 +19,7 @@ func listDestinations(c *cli.Context) error {
 
 	defer mc.Close()
 
-	out := cmqOutputWriter(cliContext.StringSlice("output"))
+	out := cmqOutputWriter(cliContext.StringSlice(`output`))
 	defer out.close()
 
 	cql := "SELECT * FROM destinations"
@@ -107,7 +107,7 @@ func listDestinationsByPath(c *cli.Context) error {
 
 func listConsumerGroups(c *cli.Context) error {
 
-	mc, err := newMetadataClient(getOpts(cliContext))
+	mc, err := newMetadataClient()
 
 	if err != nil {
 		fmt.Errorf("newMetadataClient error: %v", err)
@@ -116,7 +116,7 @@ func listConsumerGroups(c *cli.Context) error {
 
 	defer mc.Close()
 
-	out := cmqOutputWriter(cliContext.StringSlice("output"))
+	out := cmqOutputWriter(cliContext.StringSlice(`output`))
 	defer out.close()
 
 	cql := "SELECT * FROM consumer_groups"
@@ -200,7 +200,7 @@ func listConsumerGroups(c *cli.Context) error {
 
 func listDestinationExtents(c *cli.Context) error {
 
-	mc, err := newMetadataClient(getOpts(cliContext))
+	mc, err := newMetadataClient()
 
 	if err != nil {
 		fmt.Errorf("newMetadataClient error: %v", err)
@@ -209,7 +209,7 @@ func listDestinationExtents(c *cli.Context) error {
 
 	defer mc.Close()
 
-	out := cmqOutputWriter(cliContext.StringSlice("output"))
+	out := cmqOutputWriter(cliContext.StringSlice(`output`))
 	defer out.close()
 
 	cql := "SELECT * FROM destination_extents"
@@ -273,7 +273,7 @@ func listDestinationExtents(c *cli.Context) error {
 
 func listConsumerGroupExtents(c *cli.Context) error {
 
-	mc, err := newMetadataClient(getOpts(cliContext))
+	mc, err := newMetadataClient()
 
 	if err != nil {
 		fmt.Errorf("newMetadataClient error: %v", err)
@@ -282,7 +282,7 @@ func listConsumerGroupExtents(c *cli.Context) error {
 
 	defer mc.Close()
 
-	out := cmqOutputWriter(cliContext.StringSlice("output"))
+	out := cmqOutputWriter(cliContext.StringSlice(`output`))
 	defer out.close()
 
 	cql := "SELECT * FROM consumer_group_extents"
@@ -347,7 +347,7 @@ func listConsumerGroupExtents(c *cli.Context) error {
 
 func listStoreExtents(c *cli.Context) error {
 
-	mc, err := newMetadataClient(getOpts(cliContext))
+	mc, err := newMetadataClient()
 
 	if err != nil {
 		fmt.Errorf("newMetadataClient error: %v", err)
@@ -356,7 +356,7 @@ func listStoreExtents(c *cli.Context) error {
 
 	defer mc.Close()
 
-	out := cmqOutputWriter(cliContext.StringSlice("output"))
+	out := cmqOutputWriter(cliContext.StringSlice(`output`))
 	defer out.close()
 
 	cql := "SELECT * FROM store_extents"
@@ -421,7 +421,7 @@ func listOperations(c *cli.Context) error {
 		return fmt.Errorf("specify UUIDs to search for")
 	}
 
-	mc, err := newMetadataClient(getOpts(cliContext))
+	mc, err := newMetadataClient()
 
 	if err != nil {
 		fmt.Errorf("newMetadataClient error: %v", err)
@@ -430,7 +430,7 @@ func listOperations(c *cli.Context) error {
 
 	defer mc.Close()
 
-	out := cmqOutputWriter(cliContext.StringSlice("output"))
+	out := cmqOutputWriter(cliContext.StringSlice(`output`))
 	defer out.close()
 
 	cql := "SELECT * FROM user_operations_by_entity_uuid"

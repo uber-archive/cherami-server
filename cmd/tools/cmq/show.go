@@ -37,14 +37,14 @@ func showDestinationByPath(c *cli.Context) error {
 		return fmt.Errorf("destination path not specified")
 	}
 
-	mc, err := newMetadataClient(getOpts(cliContext))
+	mc, err := newMetadataClient()
 
 	if err != nil {
 		fmt.Errorf("newMetadataClient error: %v", err)
 		return nil
 	}
 
-	out := cmqOutputWriter(cliContext.StringSlice("output"))
+	out := cmqOutputWriter(cliContext.StringSlice(`output`))
 	defer out.close()
 
 	path := c.Args()[0]
@@ -69,14 +69,14 @@ func showDestination(c *cli.Context) error {
 		return fmt.Errorf("destination uuid not specified")
 	}
 
-	mc, err := newMetadataClient(getOpts(cliContext))
+	mc, err := newMetadataClient()
 
 	if err != nil {
 		fmt.Errorf("newMetadataClient error: %v", err)
 		return nil
 	}
 
-	out := cmqOutputWriter(cliContext.StringSlice("output"))
+	out := cmqOutputWriter(cliContext.StringSlice(`output`))
 	defer out.close()
 
 	uuid := c.Args()[0]
@@ -102,14 +102,14 @@ func showConsumerGroup(c *cli.Context) error {
 		return fmt.Errorf("consumer-group uuid not specified")
 	}
 
-	mc, err := newMetadataClient(getOpts(cliContext))
+	mc, err := newMetadataClient()
 
 	if err != nil {
 		fmt.Errorf("newMetadataClient error: %v", err)
 		return nil
 	}
 
-	out := cmqOutputWriter(cliContext.StringSlice("output"))
+	out := cmqOutputWriter(cliContext.StringSlice(`output`))
 	defer out.close()
 
 	uuid := c.Args()[0]
@@ -135,14 +135,14 @@ func showExtent(c *cli.Context) error {
 		return fmt.Errorf("extent uuid not specified")
 	}
 
-	mc, err := newMetadataClient(getOpts(cliContext))
+	mc, err := newMetadataClient()
 
 	if err != nil {
 		fmt.Errorf("newMetadataClient error: %v", err)
 		return nil
 	}
 
-	out := cmqOutputWriter(cliContext.StringSlice("output"))
+	out := cmqOutputWriter(cliContext.StringSlice(`output`))
 	defer out.close()
 
 	uuid := c.Args()[0]
@@ -167,14 +167,14 @@ func showCGExtent(c *cli.Context) error {
 	if c.NArg() < 2 {
 		return fmt.Errorf("cg/extent uuid not specified")
 	}
-	mc, err := newMetadataClient(getOpts(cliContext))
+	mc, err := newMetadataClient()
 
 	if err != nil {
 		fmt.Errorf("newMetadataClient error: %v", err)
 		return nil
 	}
 
-	out := cmqOutputWriter(cliContext.StringSlice("output"))
+	out := cmqOutputWriter(cliContext.StringSlice(`output`))
 	defer out.close()
 
 	cgUUID := c.Args()[0]
