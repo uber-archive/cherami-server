@@ -173,26 +173,26 @@ func newCmqWriterShort() *cmqWriterShort {
 func (t *cmqWriterShort) Destination(row map[string]interface{}, annot string) {
 	destUUID := row["uuid"]
 	destPath := row["destination"].(map[string]interface{})["path"]
-	fmt.Printf("destination: %v [%v]\n", destPath, destUUID)
+	fmt.Printf("dest=%v ('%v')\n", destUUID, destPath)
 }
 
 func (t *cmqWriterShort) ConsumerGroup(row map[string]interface{}, annot string) {
 	cgUUID := row["uuid"]
 	cgPath := row["consumer_group"].(map[string]interface{})["name"]
 	destUUID := row["destination_uuid"]
-	fmt.Printf("consumer_group: dest=%v, cg='%v' [%v]\n", destUUID, cgPath, cgUUID)
+	fmt.Printf("dest=%v cg=%v ('%v')\n", destUUID, cgUUID, cgPath)
 }
 
 func (t *cmqWriterShort) Extent(row map[string]interface{}, annot string) {
 	destUUID := row["destination_uuid"]
 	extUUID := row["extent_uuid"]
-	fmt.Printf("extent: dest=%v, ext=%v\n", destUUID, extUUID)
+	fmt.Printf("dest=%v ext=%v\n", destUUID, extUUID)
 }
 
 func (t *cmqWriterShort) ConsumerGroupExtent(row map[string]interface{}, annot string) {
 	cgUUID := row["consumer_group_uuid"]
 	extUUID := row["extent_uuid"]
-	fmt.Printf("consumer_group_extent: cg=%v ext=%v\n", cgUUID, extUUID)
+	fmt.Printf("cg=%v ext=%v\n", cgUUID, extUUID)
 }
 
 func (t *cmqWriterShort) InputExtent(row map[string]interface{}, annot string) {

@@ -23,7 +23,6 @@ func main() {
 	}
 
 	app.After = func(c *cli.Context) error {
-		print("\n")
 		return nil
 	}
 
