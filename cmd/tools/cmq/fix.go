@@ -177,3 +177,52 @@ func fixdestuuid(c *cli.Context, mc *metadataClient) error {
 	fmt.Printf("updated 'destination_uuid' column in 'consumer_groups' for %d rows (%d errors, %d deleted)\n", nUpdated, nErrors, nDeleted)
 	return nil
 }
+
+func fixdestuuidttl(c *cli.Context, mc *metadataClient) error {
+
+	if !c.IsSet("all") && c.NArg() == 0 {
+		fmt.Printf("fix destuuid: specify consumer-group or '-all'\n")
+		return nil
+	}
+
+	verbose := c.Bool("verbose")
+
+	cqlReadCG := "SELECT uuid, TTL(consumer_group), TTL(destination_uuid) FROM consumer_groups"
+
+	if c.NArg() > 0 {
+		cqlReadCG += fmt.Sprintf(" WHERE uuid=%s;", c.Args()[0])
+	}
+
+	cqlUpdateCG := "UPDATE consumer_groups SET destination_uuid = ? WHERE uuid = ?"
+
+	var uuid gocql.UUID            // uuid
+	var destinationUUID gocql.UUID // uuid
+
+	var nUpdated, nErrors, nDeleted int
+
+	iter := mc.session.Query(cqlReadCG).RetryPolicy(&gocql.SimpleRetryPolicy{NumRetries: 16 /*mc.retries*/}).Iter()
+
+	for iter.Scan(&uuid, &destinationUUID) {
+
+		err := mc.session.Query(cqlUpdateCG, destinationUUID, uuid).Exec()
+
+		if err != nil {
+			fmt.Printf("%v: error=%v\n", uuid, err)
+			nErrors++
+			continue
+		}
+
+		if verbose {
+			fmt.Printf("%v: done\n", uuid)
+		}
+
+		nUpdated++
+	}
+
+	if err := iter.Close(); err != nil {
+		fmt.Printf("error from query '%s' error: %v\n", cqlReadCG, err)
+	}
+
+	fmt.Printf("updated 'destination_uuid' column in 'consumer_groups' for %d rows (%d errors, %d deleted)\n", nUpdated, nErrors, nDeleted)
+	return nil
+}
