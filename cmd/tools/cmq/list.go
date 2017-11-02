@@ -26,12 +26,12 @@ func listDestinations(c *cli.Context) error {
 
 	var where []string
 
-	if c.IsSet("multizone") {
-		where = append(where, "is_multi_zone=true")
+	if destMatch := multiMatchWhereClause("uuid", append(c.Args(), c.StringSlice("destination")...)); len(destMatch) > 0 {
+		where = append(where, destMatch)
 	}
 
-	if destMatch := multiMatchWhereClause("uuid", c.StringSlice("destination")); len(destMatch) > 0 {
-		where = append(where, destMatch)
+	if c.IsSet("multizone") {
+		where = append(where, "is_multi_zone=true")
 	}
 
 	cql = appendWhere(cql, where)
@@ -59,7 +59,7 @@ func listDestinations(c *cli.Context) error {
 
 	iter := mc.session.Query(cql).Iter()
 
-	out.Destination(nil, "")
+	out.DestinationStart()
 
 	for {
 		var row = make(map[string]interface{})
@@ -68,30 +68,31 @@ func listDestinations(c *cli.Context) error {
 			break
 		}
 
-		// destUUID := row["uuid"]
+		if len(typeFilters) > 0 || len(statusFilters) > 0 || len(pathFilters) > 0 {
 
-		if len(typeFilters) > 0 &&
-			!matchIntFilters(row["destination"].(map[string]interface{})["type"].(int), typeFilters) {
-			continue
+			dest, ok := row[`destination`].(map[string]interface{})
+
+			if !ok || len(dest) == 0 {
+				continue
+			}
+
+			if len(typeFilters) > 0 && !matchIntFilters(dest["type"].(int), typeFilters) {
+				continue
+			}
+
+			if len(statusFilters) > 0 && !matchIntFilters(dest["status"].(int), statusFilters) {
+				continue
+			}
+
+			if len(pathFilters) > 0 && !matchRegexpFilters(dest["path"].(string), pathFilters) {
+				continue
+			}
 		}
 
-		if len(statusFilters) > 0 &&
-			!matchIntFilters(row["destination"].(map[string]interface{})["status"].(int), statusFilters) {
-			continue
-		}
-
-		if len(pathFilters) > 0 &&
-			!matchRegexpFilters(row["destination"].(map[string]interface{})["path"].(string), pathFilters) {
-			continue
-		}
-
-		// fmt.Printf("%v\n", destUUID)
-		// printRow("\t", row)
-		// fmt.Printf("\n")
 		out.Destination(row, "")
 	}
 
-	out.Destination(nil, "")
+	out.DestinationEnd()
 
 	if err := iter.Close(); err != nil {
 		fmt.Printf("listDestinations: iterator error: %v\n", err)
@@ -122,7 +123,7 @@ func listConsumerGroups(c *cli.Context) error {
 	cql := "SELECT * FROM consumer_groups"
 
 	var where []string
-	if cgMatch := multiMatchWhereClause("uuid", c.StringSlice("consumergroup")); len(cgMatch) > 0 {
+	if cgMatch := multiMatchWhereClause("uuid", append(c.Args(), c.StringSlice("consumergroup")...)); len(cgMatch) > 0 {
 		where = append(where, cgMatch)
 	}
 
@@ -153,7 +154,7 @@ func listConsumerGroups(c *cli.Context) error {
 
 	iter := mc.session.Query(cql).Iter()
 
-	out.ConsumerGroup(nil, "")
+	out.ConsumerGroupStart()
 
 	for {
 		var row = make(map[string]interface{})
@@ -162,34 +163,36 @@ func listConsumerGroups(c *cli.Context) error {
 			break
 		}
 
-		// cgUUID := row["uuid"]
-
 		if len(destFilters) > 0 {
 
-			destUUID := row["destination_uuid"]
+			destUUID, ok := row["destination_uuid"].(gocql.UUID)
 
-			if destUUID != nil && !matchUUIDFilters(destUUID.(gocql.UUID), destFilters) {
+			if !ok || !matchUUIDFilters(destUUID, destFilters) {
 				continue
 			}
 		}
 
-		if len(statusFilters) > 0 &&
-			!matchIntFilters(row["consumer_group"].(map[string]interface{})["status"].(int), statusFilters) {
-			continue
+		if len(statusFilters) > 0 || len(nameFilters) > 0 {
+
+			cg, ok := row["consumer_group"].(map[string]interface{})
+
+			if !ok || len(cg) == 0 {
+				continue
+			}
+
+			if len(statusFilters) > 0 && !matchIntFilters(cg["status"].(int), statusFilters) {
+				continue
+			}
+
+			if len(nameFilters) > 0 && !matchRegexpFilters(cg["name"].(string), nameFilters) {
+				continue
+			}
 		}
 
-		if len(nameFilters) > 0 &&
-			!matchRegexpFilters(row["consumer_group"].(map[string]interface{})["name"].(string), nameFilters) {
-			continue
-		}
-
-		// fmt.Printf("%v\n", cgUUID)
-		// printRow("\t", row)
-		// fmt.Printf("\n")
 		out.ConsumerGroup(row, "")
 	}
 
-	out.ConsumerGroup(nil, "")
+	out.ConsumerGroupEnd()
 
 	if err := iter.Close(); err != nil {
 		fmt.Printf("listConsumerGroups: iterator error: %v\n", err)
@@ -221,7 +224,7 @@ func listDestinationExtents(c *cli.Context) error {
 		where = append(where, destMatch)
 	}
 
-	if extMatch := multiMatchWhereClause("extent_uuid", c.StringSlice("extent")); len(extMatch) > 0 {
+	if extMatch := multiMatchWhereClause("extent_uuid", append(c.Args(), c.StringSlice("extent")...)); len(extMatch) > 0 {
 		where = append(where, extMatch)
 		allowFiltering = true
 	}
@@ -241,7 +244,7 @@ func listDestinationExtents(c *cli.Context) error {
 
 	iter := mc.session.Query(cql).Iter()
 
-	out.Extent(nil, "")
+	out.ExtentStart()
 
 	for {
 		var row = make(map[string]interface{})
@@ -250,22 +253,22 @@ func listDestinationExtents(c *cli.Context) error {
 			break
 		}
 
-		// extUUID := row["extent_uuid"]
+		if len(statusFilters) > 0 {
 
-		if len(statusFilters) > 0 && !matchIntFilters(row["status"].(int), statusFilters) {
-			continue
+			status, ok := row["status"].(int)
+
+			if !ok || !matchIntFilters(status, statusFilters) {
+				continue
+			}
 		}
 
-		// fmt.Printf("%v\n", extUUID)
-		// printRow("\t", row)
-		// fmt.Printf("\n")
 		out.Extent(row, "")
 	}
 
-	out.Extent(nil, "")
+	out.ExtentEnd()
 
 	if err := iter.Close(); err != nil {
-		fmt.Printf("listConsumerGroups: iterator error: %v\n", err)
+		fmt.Printf("listDestinationExtents: iterator error: %v\n", err)
 	}
 
 	return nil
@@ -290,7 +293,7 @@ func listConsumerGroupExtents(c *cli.Context) error {
 	var where []string
 	var allowFiltering = false
 
-	if cgMatch := multiMatchWhereClause("consumer_group_uuid", c.StringSlice("consumergroup")); len(cgMatch) > 0 {
+	if cgMatch := multiMatchWhereClause("consumer_group_uuid", append(c.Args(), c.StringSlice("consumergroup")...)); len(cgMatch) > 0 {
 		where = append(where, cgMatch)
 	}
 
@@ -314,7 +317,7 @@ func listConsumerGroupExtents(c *cli.Context) error {
 
 	iter := mc.session.Query(cql).Iter()
 
-	out.ConsumerGroupExtent(nil, "")
+	out.ConsumerGroupExtentStart()
 
 	for {
 		var row = make(map[string]interface{})
@@ -323,20 +326,19 @@ func listConsumerGroupExtents(c *cli.Context) error {
 			break
 		}
 
-		// cgUUID := row["consumer_group_uuid"]
-		// extUUID := row["extent_uuid"]
+		if len(statusFilters) > 0 {
 
-		if len(statusFilters) > 0 && !matchIntFilters(row["status"].(int), statusFilters) {
-			continue
+			status, ok := row["status"].(int)
+
+			if !ok || !matchIntFilters(status, statusFilters) {
+				continue
+			}
 		}
 
-		// fmt.Printf("cg=%v ext=%v\n", cgUUID, extUUID)
-		// printRow("\t", row)
-		// fmt.Printf("\n")
 		out.ConsumerGroupExtent(row, "")
 	}
 
-	out.ConsumerGroupExtent(nil, "")
+	out.ConsumerGroupExtentEnd()
 
 	if err := iter.Close(); err != nil {
 		fmt.Printf("listConsumerGroups: iterator error: %v\n", err)
@@ -364,7 +366,7 @@ func listStoreExtents(c *cli.Context) error {
 	var where []string
 	var allowFiltering = false
 
-	if extMatch := multiMatchWhereClause("extent_uuid", c.StringSlice("extent")); len(extMatch) > 0 {
+	if extMatch := multiMatchWhereClause("extent_uuid", append(c.Args(), c.StringSlice("extent")...)); len(extMatch) > 0 {
 		where = append(where, extMatch)
 		allowFiltering = true
 	}
@@ -384,7 +386,7 @@ func listStoreExtents(c *cli.Context) error {
 
 	iter := mc.session.Query(cql).Iter()
 
-	out.StoreExtent(nil, "")
+	out.StoreExtentStart()
 
 	for {
 		var row = make(map[string]interface{})
@@ -406,7 +408,79 @@ func listStoreExtents(c *cli.Context) error {
 		out.StoreExtent(row, "")
 	}
 
-	out.StoreExtent(nil, "")
+	out.StoreExtentEnd()
+
+	if err := iter.Close(); err != nil {
+		fmt.Printf("listStoreExtents: iterator error: %v\n", err)
+	}
+
+	return nil
+}
+
+func listInputHostExtents(c *cli.Context) error {
+
+	// TODO: this is currenty just copy-pasted from 'storeExtents'; needs review/work
+
+	mc, err := newMetadataClient()
+
+	if err != nil {
+		fmt.Errorf("newMetadataClient error: %v", err)
+		return nil
+	}
+
+	defer mc.Close()
+
+	out := cmqOutputWriter(cliContext.StringSlice(`output`))
+	defer out.close()
+
+	cql := "SELECT * FROM input_extents"
+
+	var where []string
+	var allowFiltering = false
+
+	if extMatch := multiMatchWhereClause("extent_uuid", append(c.Args(), c.StringSlice("extent")...)); len(extMatch) > 0 {
+		where = append(where, extMatch)
+		allowFiltering = true
+	}
+
+	cql = appendWhere(cql, where)
+
+	var statusFilters []int
+	for _, status := range c.StringSlice("status") {
+		if s := getSxStatus(status); s >= 0 {
+			statusFilters = append(statusFilters, s)
+		}
+	}
+
+	if allowFiltering {
+		cql += "ALLOW FILTERING"
+	}
+
+	iter := mc.session.Query(cql).Iter()
+
+	out.StoreExtentStart()
+
+	for {
+		var row = make(map[string]interface{})
+
+		if !iter.MapScan(row) {
+			break
+		}
+
+		// storeUUID := row["store_uuid"]
+		// extUUID := row["extent_uuid"]
+
+		if len(statusFilters) > 0 && !matchIntFilters(row["status"].(int), statusFilters) {
+			continue
+		}
+
+		// fmt.Printf("store=%v ext=%v\n", storeUUID, extUUID)
+		// printRow("\t", row)
+		// fmt.Printf("\n")
+		out.StoreExtent(row, "")
+	}
+
+	out.StoreExtentEnd()
 
 	if err := iter.Close(); err != nil {
 		fmt.Printf("listStoreExtents: iterator error: %v\n", err)

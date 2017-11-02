@@ -91,7 +91,7 @@ func multiMatchWhereClause(column string, filters []string) (clause string) {
 	default: // > 1
 		for i, d := range filters {
 			if i == 0 {
-				clause = fmt.Sprintf("%s in ( ", column)
+				clause = fmt.Sprintf("%s IN ( ", column)
 			} else {
 				clause += ", "
 			}

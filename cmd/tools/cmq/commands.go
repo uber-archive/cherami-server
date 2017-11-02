@@ -42,7 +42,7 @@ var cmqOptions = []cli.Flag{
 	},
 	cli.StringFlag{
 		Name:   "keyspace, env, k",
-		Usage:  "Cassandra keyspace suffix (ex: 'cherami_staging_dca1a')",
+		Usage:  "Cassandra keyspace",
 		EnvVar: "CHERAMI_KEYSPACE",
 	},
 	cli.DurationFlag{
@@ -499,17 +499,109 @@ var cmqCommands = []cli.Command{
 	cli.Command{
 		Name:    "destination",
 		Aliases: []string{"d"},
-		Action:  showDestination,
+		Flags: []cli.Flag{
+			cli.StringSliceFlag{
+				Name:  "destination, dest, dst, d",
+				Usage: "destination uuid(s)",
+			},
+			cli.StringSliceFlag{
+				Name:  "path, p, n",
+				Usage: "destination path(s)",
+			},
+			cli.StringSliceFlag{
+				Name:  "status, s",
+				Usage: "destination status (enabled, disabled, sendonly, receiveonly, deleting, deleted) ",
+			},
+			cli.StringSliceFlag{
+				Name:  "type, t",
+				Usage: "destination type (plain, timer, log)",
+			},
+			cli.BoolFlag{
+				Name:  "multizone, mz",
+				Usage: "multizone",
+			},
+		},
+		Action: listDestinations,
 	},
 	cli.Command{
 		Name:    "consumergroup",
 		Aliases: []string{"cg"},
-		Action:  showConsumerGroup,
+		Flags: []cli.Flag{
+			cli.StringSliceFlag{
+				Name:  "consumergroup, cg",
+				Usage: "consumer-group uuid(s)",
+			},
+			cli.StringSliceFlag{
+				Name:  "name, n, p",
+				Usage: "consumer-group name(s)",
+			},
+			cli.StringSliceFlag{
+				Name:  "destination, dest, dst, d",
+				Usage: "destination uuid(s)",
+			},
+			cli.StringSliceFlag{
+				Name:  "status, s",
+				Usage: "status",
+			},
+		},
+		Action: listConsumerGroups,
 	},
 	cli.Command{
 		Name:    "extent",
 		Aliases: []string{"x"},
-		Action:  showExtent,
+		Flags: []cli.Flag{
+			cli.StringSliceFlag{
+				Name:  "destination, dest, dst, d",
+				Usage: "destination uuid(s)",
+			},
+			cli.StringSliceFlag{
+				Name:  "extent, e, x",
+				Usage: "extent uuid(s)",
+			},
+			cli.StringSliceFlag{
+				Name:  "status, s",
+				Usage: "status",
+			},
+		},
+		Action: listDestinationExtents,
+	},
+	cli.Command{
+		Name:    "cgextents",
+		Aliases: []string{"cgx"},
+		Flags: []cli.Flag{
+			cli.StringSliceFlag{
+				Name:  "consumergroup, cg",
+				Usage: "consumer-group uuid(s)",
+			},
+			cli.StringSliceFlag{
+				Name:  "extent, e, x",
+				Usage: "extent uuid(s)",
+			},
+			cli.StringSliceFlag{
+				Name:  "status, s",
+				Usage: "status",
+			},
+		},
+		Action: listConsumerGroupExtents,
+	},
+	cli.Command{
+		Name:    "storeextents",
+		Aliases: []string{"sx"},
+		Flags: []cli.Flag{
+			cli.StringSliceFlag{
+				Name:  "store",
+				Usage: "store uuid(s)",
+			},
+			cli.StringSliceFlag{
+				Name:  "extent, e, x",
+				Usage: "extent uuid(s)",
+			},
+			cli.StringSliceFlag{
+				Name:  "status, s",
+				Usage: "status",
+			},
+		},
+		Action: listStoreExtents,
 	},
 	cli.Command{
 		Name:   "stats",

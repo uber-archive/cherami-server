@@ -313,6 +313,7 @@ func gc(c *cli.Context) error {
 
 	// 'destinations' table: find all destinations
 	var destActive = make(map[string]string)
+	var destDeleting = make(map[string]string)
 	{
 		fmt.Printf("destinations: ")
 		cql := `SELECT uuid, destination.path, destination.status, TTL(destination) FROM destinations`

@@ -8,7 +8,16 @@ import (
 	"github.com/urfave/cli"
 )
 
-func fixsmartretry(c *cli.Context, mc *metadataClient) error {
+func fixsmartretry(c *cli.Context) error {
+
+	mc, err := newMetadataClient()
+
+	if err != nil {
+		fmt.Errorf("newMetadataClient error: %v", err)
+		return nil
+	}
+
+	defer mc.Close()
 
 	if !c.IsSet("all") && c.NArg() == 0 {
 		fmt.Printf("fix smartretry: specify consumer-group or '-all'\n")
@@ -129,7 +138,16 @@ func fixsmartretry(c *cli.Context, mc *metadataClient) error {
 	return nil
 }
 
-func fixdestuuid(c *cli.Context, mc *metadataClient) error {
+func fixdestuuid(c *cli.Context) error {
+
+	mc, err := newMetadataClient()
+
+	if err != nil {
+		fmt.Errorf("newMetadataClient error: %v", err)
+		return nil
+	}
+
+	defer mc.Close()
 
 	if !c.IsSet("all") && c.NArg() == 0 {
 		fmt.Printf("fix destuuid: specify consumer-group or '-all'\n")
@@ -138,7 +156,7 @@ func fixdestuuid(c *cli.Context, mc *metadataClient) error {
 
 	verbose := c.Bool("verbose")
 
-	cqlReadCG := "SELECT uuid, consumer_group.destination_uuid FROM consumer_groups"
+	cqlReadCG := "SELECT uuid, consumer_group.status, consumer_group.destination_uuid, destination_uuid FROM consumer_groups"
 
 	if c.NArg() > 0 {
 		cqlReadCG += fmt.Sprintf(" WHERE uuid=%s;", c.Args()[0])
@@ -146,16 +164,38 @@ func fixdestuuid(c *cli.Context, mc *metadataClient) error {
 
 	cqlUpdateCG := "UPDATE consumer_groups SET destination_uuid = ? WHERE uuid = ?"
 
-	var uuid gocql.UUID            // uuid
-	var destinationUUID gocql.UUID // uuid
+	var uuid gocql.UUID
+	var destUUID gocql.UUID
+	var destUUIDCol gocql.UUID
+	var status int
 
-	var nUpdated, nErrors, nDeleted int
+	var nUpdated, nDeleted, nSkipped, nErrors int
 
 	iter := mc.session.Query(cqlReadCG).RetryPolicy(&gocql.SimpleRetryPolicy{NumRetries: 16 /*mc.retries*/}).Iter()
 
-	for iter.Scan(&uuid, &destinationUUID) {
+	for iter.Scan(&uuid, &status, &destUUID, &destUUIDCol) {
 
-		err := mc.session.Query(cqlUpdateCG, destinationUUID, uuid).Exec()
+		if status == int(shared.ConsumerGroupStatus_DELETED) {
+
+			if verbose {
+				fmt.Printf("%v: deleted\n", uuid)
+			}
+
+			nDeleted++
+			continue
+		}
+
+		if destUUIDCol == destUUID {
+
+			if verbose {
+				fmt.Printf("%v: skipped\n", uuid)
+			}
+
+			nSkipped++
+			continue
+		}
+
+		err := mc.session.Query(cqlUpdateCG, destUUID, uuid).Exec()
 
 		if err != nil {
 			fmt.Printf("%v: error=%v\n", uuid, err)
@@ -164,7 +204,7 @@ func fixdestuuid(c *cli.Context, mc *metadataClient) error {
 		}
 
 		if verbose {
-			fmt.Printf("%v: done\n", uuid)
+			fmt.Printf("%v: fixed\n", uuid)
 		}
 
 		nUpdated++
@@ -174,11 +214,22 @@ func fixdestuuid(c *cli.Context, mc *metadataClient) error {
 		fmt.Printf("error from query '%s' error: %v\n", cqlReadCG, err)
 	}
 
-	fmt.Printf("updated 'destination_uuid' column in 'consumer_groups' for %d rows (%d errors, %d deleted)\n", nUpdated, nErrors, nDeleted)
+	fmt.Printf("updated 'destination_uuid' column in 'consumer_groups' for %d rows (%d errors, %d skipped, %d deleted)\n",
+		nUpdated, nErrors, nSkipped, nDeleted)
+
 	return nil
 }
 
-func fixdestuuidttl(c *cli.Context, mc *metadataClient) error {
+func fixdestuuidttl(c *cli.Context) error {
+
+	mc, err := newMetadataClient()
+
+	if err != nil {
+		fmt.Errorf("newMetadataClient error: %v", err)
+		return nil
+	}
+
+	defer mc.Close()
 
 	if !c.IsSet("all") && c.NArg() == 0 {
 		fmt.Printf("fix destuuid: specify consumer-group or '-all'\n")
@@ -198,7 +249,7 @@ func fixdestuuidttl(c *cli.Context, mc *metadataClient) error {
 	var uuid gocql.UUID            // uuid
 	var destinationUUID gocql.UUID // uuid
 
-	var nUpdated, nErrors, nDeleted int
+	var nUpdated, nErrors, nSkipped int
 
 	iter := mc.session.Query(cqlReadCG).RetryPolicy(&gocql.SimpleRetryPolicy{NumRetries: 16 /*mc.retries*/}).Iter()
 
@@ -223,6 +274,6 @@ func fixdestuuidttl(c *cli.Context, mc *metadataClient) error {
 		fmt.Printf("error from query '%s' error: %v\n", cqlReadCG, err)
 	}
 
-	fmt.Printf("updated 'destination_uuid' column in 'consumer_groups' for %d rows (%d errors, %d deleted)\n", nUpdated, nErrors, nDeleted)
+	fmt.Printf("updated 'destination_uuid' column in 'consumer_groups' for %d rows (%d errors, %d skipped)\n", nUpdated, nErrors, nSkipped)
 	return nil
 }
