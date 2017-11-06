@@ -95,11 +95,8 @@ func newConsConnection(id int, cgCache *consumerGroupCache, stream serverStream.
 		cacheTimeout:             timeout,
 		closeChannel:             make(chan struct{}),
 		expiration:               time.Now().Add(timeout),
-		logger: logger.WithFields(bark.Fields{
-			common.TagCnsmID: common.FmtCnsmID(id),
-			common.TagModule: `consConn`,
-		}),
-		cgCache: cgCache,
+		logger:                   logger.WithField(common.TagModule, `consConn`),
+		cgCache:                  cgCache,
 	}
 
 	return conn

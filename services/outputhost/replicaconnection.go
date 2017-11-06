@@ -95,7 +95,7 @@ func newReplicaConnection(stream storeStream.BStoreOpenReadStreamOutCall, extCac
 		name:                replicaConnectionName,
 		creditNotifyCh:      extCache.creditNotifyCh,
 		localCreditCh:       make(chan int32, 5),
-		logger:              logger.WithFields(bark.Fields{common.TagModule: `replConn`}),
+		logger:              logger.WithField(common.TagModule, `replConn`),
 		startingSequence:    startingSequence,
 		consumerM3Client:    extCache.consumerM3Client,
 	}
