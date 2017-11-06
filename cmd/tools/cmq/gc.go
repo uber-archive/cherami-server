@@ -71,6 +71,7 @@ func gc(c *cli.Context) error {
 		destCGs     = make(map[string][]string) // dest-uuid to list of CGs
 		destDLQs    = make(map[string][]string) // dest-uuid to list of DLQs (for its CGs)
 		destExtents = make(map[string][]string) // destination to extents
+		destNoTTL   = make(map[string]string)
 	)
 
 	type inputExtentRow struct {
@@ -85,8 +86,12 @@ func gc(c *cli.Context) error {
 		cgxExtents = make(map[string][]string) // consumer_group_extents: extents to consumer-groups
 		cgxCGs     = make(map[string][]string) // consumer_group_extents: consumer-groups to extents
 
-		extActive = make(map[string]string) // destination_extents
-		cgActive  = make(map[string]string) // consumer_groups
+		extActive  = make(map[string]string) // destination_extents
+		cgActive   = make(map[string]string) // consumer_groups
+		cgDeleting = make(map[string]string) // consumer_groups in 'deleting' state
+
+		destActive   = make(map[string]string) // destinations active
+		destDeleting = make(map[string]string) // destinations in 'deleting' state
 	)
 
 	// get query iterator
@@ -261,7 +266,7 @@ func gc(c *cli.Context) error {
 
 		var cgUUID, destUUID, cgName, dlqDestUUID string
 		var status, ttl int
-		var nRows, nDLQ, nCGDeleted, nCGDeleting int
+		var nRows, nDLQ, nCGDeleted int
 		var nDeletedNoTTL int
 		for iter.Scan(&cgUUID, &cgName, &status, &ttl, &destUUID, &dlqDestUUID) {
 
@@ -270,19 +275,17 @@ func gc(c *cli.Context) error {
 
 			if status != int(shared.ConsumerGroupStatus_DELETED) {
 
-				if status != int(shared.ConsumerGroupStatus_DELETING) {
-
-					cgActive[cgUUID] = destUUID
-					destCGs[destUUID] = append(destCGs[destUUID], cgUUID)
-
-					if dlqDestUUID != "" {
-						destDLQs[destUUID] = append(destDLQs[destUUID], dlqDestUUID)
-						nDLQ++
-					}
-
+				if status == int(shared.ConsumerGroupStatus_DELETING) {
+					cgDeleting[cgUUID] = destUUID
 				} else {
+					cgActive[cgUUID] = destUUID
+				}
 
-					nCGDeleting++
+				destCGs[destUUID] = append(destCGs[destUUID], cgUUID)
+
+				if dlqDestUUID != "" {
+					destDLQs[destUUID] = append(destDLQs[destUUID], dlqDestUUID)
+					nDLQ++
 				}
 
 			} else {
@@ -300,7 +303,7 @@ func gc(c *cli.Context) error {
 		}
 
 		fmt.Printf("\rconsumer_groups: %d rows: %d active, %d deleting, %d deleted (found %d DLQs for %d destinations)\n",
-			nRows, len(cgActive), nCGDeleting, nCGDeleted, nDLQ, len(destDLQs))
+			nRows, len(cgActive), len(cgDeleting), nCGDeleted, nDLQ, len(destDLQs))
 
 		if close() != nil {
 			return nil
@@ -312,15 +315,13 @@ func gc(c *cli.Context) error {
 	}
 
 	// 'destinations' table: find all destinations
-	var destActive = make(map[string]string)
-	var destDeleting = make(map[string]string)
 	{
 		fmt.Printf("destinations: ")
 		cql := `SELECT uuid, destination.path, destination.status, TTL(destination) FROM destinations`
 		iter, close := getIterator(cql)
 		var destUUID, destPath string
 		var status, ttl int
-		var nRows, nDestDeleted, nDestDeleting int
+		var nRows, nDestDeleted int
 		var nDeletedNoTTL int
 		for iter.Scan(&destUUID, &destPath, &status, &ttl) {
 
@@ -329,10 +330,10 @@ func gc(c *cli.Context) error {
 			if status != int(shared.DestinationStatus_DELETED) {
 
 				if status == int(shared.DestinationStatus_DELETING) {
-					nDestDeleting++
+					destDeleting[destUUID] = destPath
+				} else {
+					destActive[destUUID] = destPath
 				}
-
-				destActive[destUUID] = destPath
 
 			} else {
 
@@ -347,7 +348,7 @@ func gc(c *cli.Context) error {
 			//fmt.Printf("\rdestinations: %d rows", nRows)
 		}
 
-		fmt.Printf("\rdestinations: %d rows: %d active, %d deleting, %d deleted\n", nRows, len(destActive), nDestDeleting, nDestDeleted)
+		fmt.Printf("\rdestinations: %d rows: %d active, %d deleting, %d deleted\n", nRows, len(destActive), len(destDeleting), nDestDeleted)
 		if close() != nil {
 			return nil
 		}
@@ -408,6 +409,11 @@ func gc(c *cli.Context) error {
 
 	if nDestPathMismatch > 0 {
 		fmt.Printf("\tWARNING: %d destinations in destinations_by_path do not match path in destinations table!\n", nDestPathMismatch)
+	}
+
+	// include all 'deleting' destinations
+	for d := range destDeleting {
+		destUUIDs[d] = destDeleting[d]
 	}
 
 	// find valid DLQ destinations and include them
