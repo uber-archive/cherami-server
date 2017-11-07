@@ -60,6 +60,7 @@ func watch(c *cli.Context) error {
 		fmt.Printf(" replicate: %.1f msgs/sec [%d msgs]   \n", cgMon.rateReplicate, cgMon.deltaPublish)
 		fmt.Printf(" consume: %.1f msgs/sec [%d msgs]    \n", cgMon.rateConsume, cgMon.deltaConsume)
 		fmt.Printf(" backlog: %d    \n", cgMon.totalBacklog)
+		fmt.Printf("\n %v  \n", time.Now())
 
 		<-ticker.C // don't query more than once every two-seconds
 	}
