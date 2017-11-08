@@ -88,23 +88,24 @@ func gc(c *cli.Context) error {
 		destDLQs    = make(map[string][]string) // dest-uuid to list of DLQs (for its CGs)
 		destExtents = make(map[string][]string) // destination to extents
 
-		destNoTTL         = set.New(0)
-		cgNoTTL           = set.New(0)
-		extNoTTL          = set.New(0)
-		cgExtentsNoTTL    = set.New(0)
-		inputExtentsNoTTL = set.New(0)
-		storeExtentsNoTTL = set.New(0)
+		destActive = make(map[string]string) // destinations active
+		destNoTTL  = set.New(0)
 
-		storeExtentsActive = set.New(0) // store_extents: extent-uuid to store-uuid (for active extents in store_extents)
-		inputExtentsActive = set.New(0) // input_host_extents: extent-uuid to {dest-uuid,input-uuid} (for active extents in input_host_extents)
+		cgActive = set.New(0) // consumer_groups
+		cgNoTTL  = set.New(0)
+
+		extActive = set.New(0) // destination_extents
+		extNoTTL  = set.New(0)
 
 		cgExtentsActive = set.New(0) // consumer_group_extents: extents to consumer-groups
+		cgExtentsNoTTL  = set.New(0)
 
-		extActive  = set.New(0) // destination_extents
-		cgActive   = set.New(0) // consumer_groups
-		cgDeleting = set.New(0) // consumer_groups in 'deleting' state
+		inputExtentsActive = set.New(0) // input_host_extents: extent-uuid to {dest-uuid,input-uuid} (for active extents in input_host_extents)
+		inputExtentsNoTTL  = set.New(0)
 
-		destActive   = make(map[string]string) // destinations active
+		storeExtentsActive = set.New(0) // store_extents: extent-uuid to store-uuid (for active extents in store_extents)
+		storeExtentsNoTTL  = set.New(0)
+
 		destDeleting = make(map[string]string) // destinations in 'deleting' state
 	)
 
@@ -285,7 +286,7 @@ func gc(c *cli.Context) error {
 
 		var cgUUID, destUUID, cgName, dlqDestUUID string
 		var status, ttl int
-		var nRows, nDLQ, nCGDeleted int
+		var nRows, nDLQ, nCGDeleting, nCGDeleted int
 		for iter.Scan(&cgUUID, &cgName, &status, &ttl, &destUUID, &dlqDestUUID) {
 
 			cgPaths[cgUUID] = cgName
@@ -294,7 +295,7 @@ func gc(c *cli.Context) error {
 			if status != int(shared.ConsumerGroupStatus_DELETED) {
 
 				if status == int(shared.ConsumerGroupStatus_DELETING) {
-					cgDeleting.Insert(cgUUID)
+					nCGDeleting++
 				} else {
 					cgActive.Insert(cgUUID)
 				}
@@ -320,7 +321,7 @@ func gc(c *cli.Context) error {
 		}
 
 		fmt.Printf("\rconsumer_groups: %d rows: %d active, %d deleting, %d deleted (found %d DLQs for %d destinations)\n",
-			nRows, cgActive.Count(), cgDeleting.Count(), nCGDeleted, nDLQ, len(destDLQs))
+			nRows, cgActive.Count(), nCGDeleting, nCGDeleted, nDLQ, len(destDLQs))
 
 		if close() != nil {
 			return nil
@@ -428,7 +429,7 @@ func gc(c *cli.Context) error {
 		fmt.Printf("\tWARNING: %d destinations in destinations_by_path do not match path in destinations table!\n", nDestPathMismatch)
 	}
 
-	// include all 'deleting' destinations
+	// all 'deleting' destinations as valid
 	for d := range destDeleting {
 		destValid.Insert(d)
 	}
@@ -436,7 +437,7 @@ func gc(c *cli.Context) error {
 	// find valid DLQ destinations and include them
 	for d, dlqs := range destDLQs {
 
-		// only if the destinations is valid (ie, exists in the destinations_by_path table),
+		// only if the destination is valid (ie, exists in the destinations_by_path table),
 		if _, ok := destByPathActive[d]; ok {
 
 			for _, dlq := range dlqs {
