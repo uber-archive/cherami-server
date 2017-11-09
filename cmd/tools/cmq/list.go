@@ -76,11 +76,11 @@ func listDestinations(c *cli.Context) error {
 				continue
 			}
 
-			if len(typeFilters) > 0 && !matchIntFilters(dest["type"].(int), typeFilters) {
+			if !matchIntFilters(dest["type"].(int), typeFilters) {
 				continue
 			}
 
-			if len(statusFilters) > 0 && !matchIntFilters(dest["status"].(int), statusFilters) {
+			if !matchIntFilters(dest["status"].(int), statusFilters) {
 				continue
 			}
 
@@ -180,11 +180,11 @@ func listConsumerGroups(c *cli.Context) error {
 				continue
 			}
 
-			if len(statusFilters) > 0 && !matchIntFilters(cg["status"].(int), statusFilters) {
+			if !matchIntFilters(cg["status"].(int), statusFilters) {
 				continue
 			}
 
-			if len(nameFilters) > 0 && !matchRegexpFilters(cg["name"].(string), nameFilters) {
+			if !matchRegexpFilters(cg["name"].(string), nameFilters) {
 				continue
 			}
 		}
@@ -398,7 +398,7 @@ func listStoreExtents(c *cli.Context) error {
 		// storeUUID := row["store_uuid"]
 		// extUUID := row["extent_uuid"]
 
-		if len(statusFilters) > 0 && !matchIntFilters(row["status"].(int), statusFilters) {
+		if matchIntFilters(row["status"].(int), statusFilters) {
 			continue
 		}
 
@@ -470,7 +470,7 @@ func listInputHostExtents(c *cli.Context) error {
 		// storeUUID := row["store_uuid"]
 		// extUUID := row["extent_uuid"]
 
-		if len(statusFilters) > 0 && !matchIntFilters(row["status"].(int), statusFilters) {
+		if !matchIntFilters(row["status"].(int), statusFilters) {
 			continue
 		}
 

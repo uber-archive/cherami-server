@@ -175,6 +175,10 @@ func getCGStatus(status string) int {
 		fallthrough
 	case "deleted":
 		return int(shared.ConsumerGroupStatus_DELETED)
+	case "3":
+		fallthrough
+	case "deleting":
+		return int(shared.ConsumerGroupStatus_DELETING)
 	default:
 		return -1
 	}

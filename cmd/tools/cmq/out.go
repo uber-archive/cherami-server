@@ -270,7 +270,7 @@ func (t *cmqWriterShort) ConsumerGroup(row map[string]interface{}, annot string)
 	cgUUID := row["uuid"]
 	cgPath := row["consumer_group"].(map[string]interface{})["name"]
 	destUUID := row["consumer_group"].(map[string]interface{})["destination_uuid"]
-	fmt.Printf("dest=%v cg=%v ('%v')\n", destUUID, cgUUID, cgPath)
+	fmt.Printf("dest=%v cg=%v ('%v') %s\n", destUUID, cgUUID, cgPath, annot)
 }
 
 func (t *cmqWriterShort) Extent(row map[string]interface{}, annot string) {
