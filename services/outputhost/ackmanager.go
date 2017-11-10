@@ -163,6 +163,7 @@ func (ackMgr *ackManager) getNextAckID(address storeHostAddress, sequence common
 }
 
 func (ackMgr *ackManager) stop() {
+	ackMgr.ackLevelTicker.Stop()
 	close(ackMgr.closeChannel)
 	ackMgr.doneWG.Wait()
 }
