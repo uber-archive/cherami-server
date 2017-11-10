@@ -109,10 +109,16 @@ func gc(c *cli.Context) error {
 		destDeleting = make(map[string]string) // destinations in 'deleting' state
 	)
 
+	var consistency = gocql.All // use 'all' consistency
+
+	if cliContext.IsSet("consistency") { // override consistency, if specified
+		consistency, _ = gocql.ParseConsistency(cliContext.String("consistency"))
+	}
+
 	// get query iterator
 	getIterator := func(cql string) (iter *gocql.Iter, close func() error) {
 
-		iter = mc.session.Query(cql).Consistency(gocql.All).RetryPolicy(&gocql.SimpleRetryPolicy{NumRetries: mc.retries}).Iter()
+		iter = mc.session.Query(cql).Consistency(consistency).RetryPolicy(&gocql.SimpleRetryPolicy{NumRetries: mc.retries}).Iter()
 		close = func() (err error) {
 			if err = iter.Close(); err != nil {
 				fmt.Printf("ERROR from query '%v': %v\n", cql, err)
