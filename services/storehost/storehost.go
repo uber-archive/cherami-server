@@ -195,8 +195,8 @@ type (
 		// extStatsReporter reports various stats on active extents
 		extStatsReporter *ExtStatsReporter
 
-		// Storage Monitoring
-		storageMonitor StorageMonitor
+		// Free-space monitor
+		spaceMon SpaceMon
 
 		// metrics aggregated at host level and reported to controller
 		hostMetrics *load.HostMetrics
@@ -283,8 +283,8 @@ func (t *StoreHost) Start(thriftService []thrift.TChanServer) {
 
 	t.xMgr = NewExtentManager(storeMgr, t.m3Client, t.hostMetrics, t.logger)
 
-	t.storageMonitor = NewStorageMonitor(t, t.m3Client, t.hostMetrics, t.logger, baseDir)
-	t.storageMonitor.Start()
+	t.spaceMon = NewSpaceMon(t, t.m3Client, t.hostMetrics, t.logger, baseDir)
+	t.spaceMon.Start()
 
 	t.replMgr = NewReplicationManager(t.xMgr, t.m3Client, t.mClient, t.logger, hostID, t.GetWSConnector())
 
@@ -316,7 +316,7 @@ func (t *StoreHost) Stop() {
 
 	t.loadReporter.Stop()
 	t.hostIDHeartbeater.Stop()
-	t.storageMonitor.Stop()
+	t.spaceMon.Stop()
 	t.replicationJobRunner.Stop()
 	t.extStatsReporter.Stop()
 	t.SCommon.Stop()
@@ -415,7 +415,7 @@ func (t *StoreHost) OpenAppendStream(ctx thrift.Context, call storeStream.BStore
 	}
 
 	// If the disk available space is low, we should fail any request to write extent
-	if t.storageMonitor != nil && t.storageMonitor.GetStorageMode() == SMReadOnly {
+	if t.spaceMon != nil && t.spaceMon.GetMode() == StorageModeReadOnly {
 		call.Done()
 		t.m3Client.IncCounter(metrics.OpenAppendStreamScope, metrics.StorageFailures)
 		log.Error("OpenAppendStream: storehost currently readonly")
@@ -1349,14 +1349,14 @@ func (t *StoreHost) reportHostMetric(reporter common.LoadReporter, diffSecs int6
 	}
 
 	// check and notify read-only state
-	if t.storageMonitor.GetStorageMode() == SMReadOnly {
+	if t.spaceMon.GetMode() == StorageModeReadOnly {
 		hostMetrics.NodeState = common.Int64Ptr(controller.NODE_STATE_READONLY)
 	}
 
 	remDiskSpaceBytes := t.hostMetrics.Get(load.HostMetricFreeDiskSpaceBytes)
 	if remDiskSpaceBytes > 0 {
 		// the remaining disk space computation happens
-		// as part of the storageMonitor thread and the
+		// as part of the spaceMon thread and the
 		// load reporter could be called before the storage
 		// monitor gets a chance to do this computation.
 		// Make sure we don't report zero values in the
