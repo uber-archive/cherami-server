@@ -38,7 +38,7 @@ const (
 	resumeWritesThreshold = 200 * gigaBytes
 )
 
-// interval at which to monitor space
+// monitoring interval
 const spaceMonInterval = 2 * time.Minute
 
 const (
@@ -59,13 +59,13 @@ const (
 )
 
 type (
-	// SpaceMon keep monitoring disk usage, and log/alert/trigger necessary handling
+	// SpaceMon monitors free-space and switches store to read-only on low-space
 	SpaceMon interface {
 		common.Daemon
 		GetMode() StorageMode
 	}
 
-	// SpaceMon is an implementation of SpaceMon.
+	// spaceMon implements SpaceMon interface
 	spaceMon struct {
 		sync.RWMutex
 
@@ -89,7 +89,7 @@ func NewSpaceMon(store *StoreHost, m3Client metrics.Client, hostMetrics *load.Ho
 		m3Client:    m3Client,
 		hostMetrics: hostMetrics,
 		path:        path,
-		mode:        StorageModeReadWrite,
+		mode:        StorageModeReadWrite, // default: read-write
 	}
 }
 
@@ -119,10 +119,9 @@ func (s *spaceMon) GetMode() StorageMode {
 
 func (s *spaceMon) pump() {
 
-	var stat syscall.Statfs_t
+	var path = s.path
 
-	path := s.path
-
+	// if no path specified, use the current working directory
 	if len(path) <= 0 {
 
 		s.logger.Warn("SpaceMon: monitoring path is empty, trying working directory")
@@ -141,16 +140,16 @@ func (s *spaceMon) pump() {
 	ticker := time.NewTicker(spaceMonInterval)
 	defer ticker.Stop()
 
-	for range ticker.C {
-
+	for {
 		select {
+		case <-ticker.C:
+			// continue below to check free-space, etc
 		case <-s.stopCh:
-			return
-		default:
-			// continue below
+			return // done
 		}
 
 		// query available/total space
+		var stat syscall.Statfs_t
 		err := syscall.Statfs(path, &stat)
 		if err != nil {
 			log.WithField(common.TagErr, err).Error("SpaceMon: syscall.Statfs failed", path)
