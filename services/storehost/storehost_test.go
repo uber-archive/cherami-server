@@ -1769,33 +1769,73 @@ func (s *StoreHostSuite) TestStoreHostReplicateExtent() {
 		close(repl1ResC)
 	}()
 
-	var resA error
-	var resB error
+	var err0, err1 error
+	var done0, done1 bool
 
-	// wait a sec to ensure one of the ReplicateExtent calls fails
 	if waitFor(1000, func() bool {
+
 		select {
-		case resA = <-repl0ResC:
-			resB = <-repl1ResC
-			return true
-		case resA = <-repl1ResC:
-			resB = <-repl0ResC
-			return true
-		default:
-			return false
+		case err, ok := <-repl0ResC:
+			if ok {
+				err0 = err
+			} else {
+				done0 = true
+			}
+		case err, ok := <-repl1ResC:
+			if ok {
+				err1 = err
+			} else {
+				done1 = true
+			}
+		default: // don't block
 		}
+
+		return done0 && done1 // until both are done
 	}) {
 		// exactly one should succeed and exactly one should fail
-		s.NotEqual(resA != nil, resB != nil, fmt.Sprintf("TestStoreHostReplicateExtent: only one should fail: resA=%v resB=%v", resA, resB))
+		s.NotEqual(err0 != nil, err1 != nil, fmt.Sprintf("TestStoreHostReplicateExtent: only one should fail: err0=%v err1=%v", err0, err1))
 
-		if resA == nil {
+		if err0 != nil {
 			// we should have got an InternalServiceError
-			_, ok := resB.(*cherami.InternalServiceError)
-			s.True(ok, fmt.Sprintf("TestStoreHostReplicateExtent: expected InternalServiceError: err=%v", resB))
+			_, ok := err0.(*cherami.InternalServiceError)
+			s.True(ok, fmt.Sprintf("TestStoreHostReplicateExtent: expected InternalServiceError: err=%v", err0))
 		} else {
 			// we should have got an InternalServiceError
-			_, ok := resA.(*cherami.InternalServiceError)
-			s.True(ok, fmt.Sprintf("TestStoreHostReplicateExtent: expected InternalServiceError: err=%v", resA))
+			_, ok := err1.(*cherami.InternalServiceError)
+			s.True(ok, fmt.Sprintf("TestStoreHostReplicateExtent: expected InternalServiceError: err=%v", err1))
+		}
+	}
+
+	{
+		// == 4.5 initiate a (third) duplicate request -- which should always fail!
+		repl2ResC := make(chan error)
+		go func() {
+
+			// replicate extent from store0 to store1
+			log.Debugf("[%v].ReplicateExtent(extent=%v, mode=%v, source=%v", store1.hostID, extent, mode, store0.hostID)
+
+			repl2ResC <- store1.ReplicateExtent(extent, mode, store0.hostID)
+
+			close(repl2ResC)
+		}()
+
+		var err2 error
+
+		// wait a sec to ensure one of the ReplicateExtent calls fails
+		if waitFor(1000, func() bool {
+			select {
+			case err2 = <-repl2ResC:
+				return true
+			default:
+				return false
+			}
+		}) {
+			// exactly one should succeed and exactly one should fail
+			s.True(err2 != nil, fmt.Sprintf("TestStoreHostReplicateExtent: duplicate replicate-extent should have failed: err=%v", err2))
+
+			// we should have got an InternalServiceError
+			_, ok := err2.(*cherami.InternalServiceError)
+			s.True(ok, fmt.Sprintf("TestStoreHostReplicateExtent: expected InternalServiceError: err=%v", err2))
 		}
 	}
 
@@ -1852,7 +1892,7 @@ func (s *StoreHostSuite) TestStoreHostReplicateExtent() {
 
 	// == 4. initiate another ReplicateExtent request -- this one should be a no-op; ie,
 	// complete immediately, because the extent already exists on the store and is sealed
-	repl2ErrC := make(chan error)
+	repl3ErrC := make(chan error)
 	go func() {
 
 		// replicate extent from store0 to store1
@@ -1861,18 +1901,18 @@ func (s *StoreHostSuite) TestStoreHostReplicateExtent() {
 		// HACK: set $(CHERAMI_STOREHOST_WS_PORT) to the websocket port of source replica
 		os.Setenv("CHERAMI_STOREHOST_WS_PORT", strconv.FormatInt(int64(store0.wsPort), 10))
 
-		repl2ErrC <- store1.ReplicateExtent(extent, mode, store0.hostID)
+		repl3ErrC <- store1.ReplicateExtent(extent, mode, store0.hostID)
 
-		close(repl2ErrC)
+		close(repl3ErrC)
 	}()
 
 	var err error
 
 	// wait a sec to ensure the ReplicateExtent completes (since the extent exists and is sealed)
 	if waitFor(1000, func() bool {
-		// if we see an error on repl2ErrC, save it
+		// if we see an error on repl3ErrC, save it
 		select {
-		case err = <-repl2ErrC:
+		case err = <-repl3ErrC:
 			return true
 		default:
 			return false
