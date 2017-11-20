@@ -1338,6 +1338,12 @@ func (t *StoreHost) reportHostMetric(reporter common.LoadReporter, diffSecs int6
 		OutgoingBytesCounter:    common.Int64Ptr(bytesOutPerSec),
 		NumberOfConnections:     common.Int64Ptr(numConns),
 		NodeStatus:              common.NodeStatusPtr(t.GetNodeStatus()),
+		NodeState:               common.Int64Ptr(0),
+	}
+
+	// check and notify read-only state
+	if t.storageMonitor.GetStorageMode() == SMReadOnly {
+		hostMetrics.NodeState = common.Int64Ptr(controller.NODE_STATE_READONLY)
 	}
 
 	remDiskSpaceBytes := t.hostMetrics.Get(load.HostMetricFreeDiskSpaceBytes)

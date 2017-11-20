@@ -1,5 +1,5 @@
-hash: b4ac6cca4953caf65596799ec1216e88cc1f27efe83097737844d2da31d9429a
-updated: 2017-10-24T15:20:10.812837238-07:00
+hash: d0c29905b07aed1278050c3471afb0f75bcaa2288b9e1394fa9eee1d52a55fa3
+updated: 2017-11-16T11:59:10.262960188-08:00
 imports:
 - name: github.com/apache/thrift
   version: b2a4d4ae21c789b689dd162deb819665567f481c
@@ -105,7 +105,7 @@ imports:
 - name: github.com/rcrowley/go-metrics
   version: 1f30fe9094a513ce4c700b9a54458bbb0c96996c
 - name: github.com/Shopify/sarama
-  version: bbdbe644099b7fdc8327d5cc69c030945188b2e9
+  version: 240fd146ce68bcafb034cc5dc977229ffbafa8ea
   repo: http://github.com/Shopify/sarama
 - name: github.com/sirupsen/logrus
   version: ba1b36c82c5e05c4f912a88eab0dcd91a171688f
@@ -134,7 +134,7 @@ imports:
   - common/websocket
   - stream
 - name: github.com/uber/cherami-thrift
-  version: ae427f7974d32a42a96f29f0f627e4d343fad8b2
+  version: ce2fc989809bb711289c2420c8979ef37bcf5b61
   subpackages:
   - .generated/go/admin
   - .generated/go/cherami
@@ -174,7 +174,7 @@ imports:
 - name: github.com/urfave/cli
   version: 7bc6a0acffa589f415f88aca16cc1de5ffd66f9c
 - name: golang.org/x/net
-  version: aabf50738bcdd9b207582cbe796b59ed65d56680
+  version: a337091b0525af65de94df2eb7e98bd9962dcbe2
   subpackages:
   - bpf
   - context
