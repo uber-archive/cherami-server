@@ -177,7 +177,7 @@ type (
 		xMgr          *ExtentManager      // extent manager
 		replMgr       *ReplicationManager // replication manager
 		shutdownC     chan struct{}
-		disableWriteC chan struct{}
+		disableWriteC atomic.Value // chan struct{}
 
 		numInConn, numOutConn int64 // number of active inConns/outConns respectively
 
@@ -233,14 +233,13 @@ func NewStoreHost(serviceName string, sCommon common.SCommon, mClient metadata.T
 	m3Client := metrics.NewClient(sCommon.GetMetricsReporter(), metrics.Storage)
 
 	t := &StoreHost{
-		SCommon:       sCommon,
-		opts:          opts,
-		hostMetrics:   load.NewHostMetrics(),
-		shutdownC:     make(chan struct{}),
-		disableWriteC: make(chan struct{}),
-		logger:        logger,
-		m3Client:      m3Client,
-		mClient:       mm.NewMetadataMetricsMgr(mClient, m3Client, logger),
+		SCommon:     sCommon,
+		opts:        opts,
+		hostMetrics: load.NewHostMetrics(),
+		shutdownC:   make(chan struct{}),
+		logger:      logger,
+		m3Client:    m3Client,
+		mClient:     mm.NewMetadataMetricsMgr(mClient, m3Client, logger),
 	}
 
 	return t, []thrift.TChanServer{store.NewTChanBStoreServer(t)}
@@ -303,6 +302,7 @@ func (t *StoreHost) Start(thriftService []thrift.TChanServer) {
 	t.extStatsReporter = NewExtStatsReporter(hostID, t.xMgr, t.mClient, t.logger)
 	t.extStatsReporter.Start()
 
+	t.EnableWrite()
 	atomic.StoreInt32(&t.started, 1) // started
 
 	t.logger.WithField("options", fmt.Sprintf("Store=%v BaseDir=%v", t.opts.Store, t.opts.BaseDir)).
@@ -448,7 +448,7 @@ func (t *StoreHost) OpenAppendStream(ctx thrift.Context, call storeStream.BStore
 		err = in.Stop() // attempt to stop connection
 
 	// listen to extreme situations
-	case <-t.disableWriteC:
+	case <-t.disableWriteC.Load().(chan struct{}):
 		log.Error("OpenAppendStream: writes disabled, stopping inConn")
 		err = in.Stop()
 	}
@@ -1314,12 +1314,12 @@ func (t *StoreHost) Shutdown() {
 // DisableWrite disables all the write
 func (t *StoreHost) DisableWrite() {
 	t.logger.Error("Write disabled")
-	close(t.disableWriteC)
+	close(t.disableWriteC.Load().(chan struct{}))
 }
 
 // EnableWrite enables write mode
 func (t *StoreHost) EnableWrite() {
-	t.disableWriteC = make(chan struct{})
+	t.disableWriteC.Store(make(chan struct{}))
 }
 
 // RegisterWSHandler is the implementation of WSService interface

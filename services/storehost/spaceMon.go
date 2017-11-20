@@ -69,7 +69,7 @@ type (
 	spaceMon struct {
 		sync.RWMutex
 
-		storeHost   *StoreHost // TODO: use this to trigger turning into read only mode
+		storeHost   *StoreHost
 		logger      bark.Logger
 		m3Client    metrics.Client
 		hostMetrics *load.HostMetrics
@@ -185,8 +185,8 @@ func (s *spaceMon) pump() {
 			// disable read-only, if above resume-writes threshold
 			if avail > resumeWritesThreshold {
 
-				s.storeHost.EnableWrite()
 				s.mode = StorageModeReadWrite
+				s.storeHost.EnableWrite()
 
 				xlog.Info("SpaceMon: disabling read-only")
 
@@ -200,8 +200,9 @@ func (s *spaceMon) pump() {
 			xlog.Error("SpaceMon: available space less than alert-threshold")
 
 			if s.mode != StorageModeReadOnly {
-				s.mode = StorageModeReadOnly
+
 				s.storeHost.DisableWrite()
+				s.mode = StorageModeReadOnly
 			}
 
 		case avail < warnThreshold: // warn, if below warn-threshold
