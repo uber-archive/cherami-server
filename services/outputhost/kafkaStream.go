@@ -130,36 +130,34 @@ func GetDefaultKafkaMessageConverter(logger bark.Logger) KafkaMessageConverter {
 	return func(m *s.ConsumerMessage) (c *store.ReadMessageContent) {
 		c = &store.ReadMessageContent{
 			Type: store.ReadMessageContentTypePtr(store.ReadMessageContentType_MESSAGE),
-		}
-
-		c.Message = &store.ReadMessage{
-			Address: common.Int64Ptr(
-				int64(kafkaAddresser.GetStoreAddress(
-					&TopicPartition{
-						Topic:     m.Topic,
-						Partition: m.Partition,
-					},
-					m.Offset,
-					func() bark.Logger {
-						return logger.WithFields(bark.Fields{
-							`module`:    `kafkaStream`,
+			Message: &store.ReadMessage{
+				Address: common.Int64Ptr(
+					int64(kafkaAddresser.GetStoreAddress(
+						&TopicPartition{
+							Topic:     m.Topic,
+							Partition: m.Partition,
+						},
+						m.Offset,
+						func() bark.Logger {
+							return logger.WithFields(bark.Fields{
+								`module`:    `kafkaStream`,
+								`topic`:     m.Topic,
+								`partition`: m.Partition,
+							})
+						},
+					))),
+				Message: &store.AppendMessage{
+					Payload: &cherami.PutMessage{
+						Data: m.Value,
+						UserContext: map[string]string{
+							`key`:       string(m.Key),
 							`topic`:     m.Topic,
-							`partition`: m.Partition,
-						})
+							`partition`: strconv.Itoa(int(m.Partition)),
+							`offset`:    strconv.Itoa(int(m.Offset)),
+						},
+						// TODO: Checksum?
 					},
-				))),
-		}
-
-		c.Message.Message = &store.AppendMessage{
-			Payload: &cherami.PutMessage{
-				Data: m.Value,
-				UserContext: map[string]string{
-					`key`:       string(m.Key),
-					`topic`:     m.Topic,
-					`partition`: strconv.Itoa(int(m.Partition)),
-					`offset`:    strconv.Itoa(int(m.Offset)),
 				},
-				// TODO: Checksum?
 			},
 		}
 
