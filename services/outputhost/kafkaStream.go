@@ -94,12 +94,18 @@ func (k *kafkaStream) Read() (*store.ReadMessageContent, error) {
 		return nil, errKafkaClosed
 	}
 	k.creditSemaphore.Acquire(1) // TODO: Size-based credits
-	return k.kafkaConverter(m), nil
+	c := k.kafkaConverter(m)
+	c.Message.Message.SequenceNumber = common.Int64Ptr(k.getNextSequenceNumber())
+	return c, nil
 }
 
 // ResponseHeaders returns the response headers sent from the server. This will block until server headers have been received.
 func (k *kafkaStream) ResponseHeaders() (map[string]string, error) {
 	return nil, errors.New(`unimplemented`)
+}
+
+func (k *kafkaStream) getNextSequenceNumber() int64 {
+	return atomic.AddInt64(&k.seqNo, 1)
 }
 
 /*
@@ -114,38 +120,45 @@ func OpenKafkaStream(c <-chan *s.ConsumerMessage, kafkaMessageConverter KafkaMes
 		kafkaConverter: kafkaMessageConverter,
 	}
 	if k.kafkaConverter == nil {
-		k.kafkaConverter = GetDefaultKafkaMessageConverter(&k.seqNo, k.logger)
+		k.kafkaConverter = GetDefaultKafkaMessageConverter(k.logger)
 	}
 	return k
 }
 
 // GetDefaultKafkaMessageConverter returns the default kafka message converter
-func GetDefaultKafkaMessageConverter(seqNo *int64, logger bark.Logger) KafkaMessageConverter {
+func GetDefaultKafkaMessageConverter(logger bark.Logger) KafkaMessageConverter {
 	return func(m *s.ConsumerMessage) (c *store.ReadMessageContent) {
 		c = &store.ReadMessageContent{
 			Type: store.ReadMessageContentTypePtr(store.ReadMessageContentType_MESSAGE),
-		}
-
-		c.Message = &store.ReadMessage{
-			Address: common.Int64Ptr(
-				int64(kafkaAddresser.GetStoreAddress(
-					&TopicPartition{
-						Topic:     m.Topic,
-						Partition: m.Partition,
-					},
-					m.Offset,
-					func() bark.Logger {
-						return logger.WithFields(bark.Fields{
-							`module`:    `kafkaStream`,
+			Message: &store.ReadMessage{
+				Address: common.Int64Ptr(
+					int64(kafkaAddresser.GetStoreAddress(
+						&TopicPartition{
+							Topic:     m.Topic,
+							Partition: m.Partition,
+						},
+						m.Offset,
+						func() bark.Logger {
+							return logger.WithFields(bark.Fields{
+								`module`:    `kafkaStream`,
+								`topic`:     m.Topic,
+								`partition`: m.Partition,
+							})
+						},
+					))),
+				Message: &store.AppendMessage{
+					Payload: &cherami.PutMessage{
+						Data: m.Value,
+						UserContext: map[string]string{
+							`key`:       string(m.Key),
 							`topic`:     m.Topic,
-							`partition`: m.Partition,
-						})
+							`partition`: strconv.Itoa(int(m.Partition)),
+							`offset`:    strconv.Itoa(int(m.Offset)),
+						},
+						// TODO: Checksum?
 					},
-				))),
-		}
-
-		c.Message.Message = &store.AppendMessage{
-			SequenceNumber: common.Int64Ptr(atomic.AddInt64(seqNo, 1)),
+				},
+			},
 		}
 
 		if !m.Timestamp.IsZero() {
@@ -153,16 +166,6 @@ func GetDefaultKafkaMessageConverter(seqNo *int64, logger bark.Logger) KafkaMess
 			c.Message.Message.EnqueueTimeUtc = common.Int64Ptr(m.Timestamp.UnixNano())
 		}
 
-		c.Message.Message.Payload = &cherami.PutMessage{
-			Data: m.Value,
-			UserContext: map[string]string{
-				`key`:       string(m.Key),
-				`topic`:     m.Topic,
-				`partition`: strconv.Itoa(int(m.Partition)),
-				`offset`:    strconv.Itoa(int(m.Offset)),
-			},
-			// TODO: Checksum?
-		}
 		return c
 	}
 }
