@@ -313,6 +313,7 @@ func (t *StoreHost) Start(thriftService []thrift.TChanServer) {
 func (t *StoreHost) Stop() {
 
 	atomic.StoreInt32(&t.started, 0) // stopped
+	t.DisableWrite()
 
 	t.loadReporter.Stop()
 	t.hostIDHeartbeater.Stop()
@@ -447,8 +448,8 @@ func (t *StoreHost) OpenAppendStream(ctx thrift.Context, call storeStream.BStore
 		log.Info("OpenAppendStream: shutdown, stopping inConn")
 		err = in.Stop() // attempt to stop connection
 
-	// listen to extreme situations
-	case <-t.disableWriteC.Load().(chan struct{}):
+	// .. or for store to switch to read-only (on low space)
+	case <-t.WriteDisabledNotify():
 		log.Error("OpenAppendStream: writes disabled, stopping inConn")
 		err = in.Stop()
 	}
@@ -1303,8 +1304,9 @@ readMsgsLoop:
 func (t *StoreHost) Shutdown() {
 
 	atomic.StoreInt32(&t.started, 0) // shutdown
-	t.logger.Info("Storehost: shutting down")
+	t.DisableWrite()
 	close(t.shutdownC) // 'broadcast' shutdown, by closing the shutdownC
+	t.logger.Info("Storehost: shutting down")
 	// wait until all connections have been closed
 	if !common.AwaitWaitGroup(&t.shutdownWG, 30*time.Second) {
 		t.logger.Error("Timed out waiting for store host to shutdown")
@@ -1315,6 +1317,10 @@ func (t *StoreHost) Shutdown() {
 func (t *StoreHost) DisableWrite() {
 	t.logger.Error("Write disabled")
 	close(t.disableWriteC.Load().(chan struct{}))
+}
+
+func (t *StoreHost) WriteDisabledNotify() chan struct{} {
+	return t.disableWriteC.Load().(chan struct{})
 }
 
 // EnableWrite enables write mode
