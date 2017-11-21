@@ -21,6 +21,7 @@
 package metadata
 
 import (
+	"sync"
 	"time"
 
 	"github.com/uber/cherami-server/common"
@@ -42,16 +43,42 @@ type metadataMetricsMgr struct {
 	meta m.TChanMetadataService
 	m3   metrics.Client
 	log  bark.Logger
+
+	sync.RWMutex
+	destM3 map[string]metrics.Client
 }
 
 // NewMetadataMetricsMgr creates an instance of metadataMetricsMgr that collects/emits metrics
 func NewMetadataMetricsMgr(metaClient m.TChanMetadataService, m3Client metrics.Client, logger bark.Logger) m.TChanMetadataService {
 
 	return &metadataMetricsMgr{
-		meta: metaClient,
-		m3:   m3Client,
-		log:  logger.WithField(common.TagModule, `metametrics`),
+		meta:   metaClient,
+		m3:     m3Client,
+		log:    logger.WithField(common.TagModule, `metametrics`),
+		destM3: make(map[string]metrics.Client),
 	}
+}
+
+func (m *metadataMetricsMgr) getDestM3Client(destinationPath string) metrics.Client {
+	m.RLock()
+	c, ok := m.destM3[destinationPath]
+	if ok {
+		m.RUnlock()
+		return c
+	}
+
+	m.RUnlock()
+	m.Lock()
+	c, ok = m.destM3[destinationPath]
+	if ok {
+		m.Unlock()
+		return c
+	}
+
+	c = metrics.NewClientWithTags(m.m3, metrics.Metadata, common.GetDestinationTags(destinationPath, m.log))
+	m.destM3[destinationPath] = c
+	m.Unlock()
+	return c
 }
 
 func (m *metadataMetricsMgr) ListEntityOps(ctx thrift.Context, request *m.ListEntityOpsRequest) (result *m.ListEntityOpsResult_, err error) {
@@ -571,6 +598,7 @@ func (m *metadataMetricsMgr) ReadDestination(ctx thrift.Context, request *shared
 	}
 
 	m.m3.RecordTimer(metrics.MetadataReadDestinationScope, metrics.MetadataLatency, latency)
+	m.getDestM3Client(request.GetPath()).RecordTimer(metrics.ReadDestinationScope, metrics.MetadataPerDestLatency, latency)
 
 	return result, err
 }

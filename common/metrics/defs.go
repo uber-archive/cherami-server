@@ -60,6 +60,7 @@ const (
 	Outputhost
 	Storage
 	Replicator
+	Metadata
 )
 
 // Common tags for all services
@@ -683,6 +684,10 @@ var dynamicScopeDefs = map[ServiceIdx]map[int]scopeDefinition{
 		OpenReplicationRemoteReadPerDestScope: {operation: "OpenReplicationRemoteReadStreamPerDest"},
 		OpenReplicationReadPerDestScope:       {operation: "OpenReplicationReadStreamPerDest"},
 	},
+
+	Metadata: {
+		ReadDestinationScope: {operation: "ReadDestination"},
+	},
 }
 
 // Metric enum
@@ -1141,6 +1146,9 @@ const (
 	// ReplicatorHostUpdated indicates a success hosts update
 	ReplicatorHostUpdated
 
+	// MetadataPerDestLatency is the metadata latency per destination
+	MetadataPerDestLatency
+
 	numMetrics
 )
 
@@ -1394,6 +1402,10 @@ var dynamicMetricDefs = map[ServiceIdx]map[int]metricDefinition{
 	Replicator: {
 		ReplicatorInConnPerDestMsgWritten: {Counter, "replicator.inconn.perdestmsgwritten"},
 		ReplicatorInConnPerDestMsgLatency: {Timer, "replicator.inconn.perdestmsglatency"},
+	},
+
+	Metadata: {
+		MetadataPerDestLatency: {Timer, "metadata.latency.dest"},
 	},
 }
 
