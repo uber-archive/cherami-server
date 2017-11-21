@@ -1319,6 +1319,7 @@ func (t *StoreHost) DisableWrite() {
 	close(t.disableWriteC.Load().(chan struct{}))
 }
 
+// WriteDisabledNotify returns a channel that is used to notify when writes are disabled
 func (t *StoreHost) WriteDisabledNotify() chan struct{} {
 	return t.disableWriteC.Load().(chan struct{})
 }
