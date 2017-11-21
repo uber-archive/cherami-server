@@ -34,7 +34,7 @@ import (
 
 const (
 	warnThreshold         = 200 * gigaBytes
-	alertThreshold        = 100 * gigaBytes
+	readOnlyThreshold     = 100 * gigaBytes
 	resumeWritesThreshold = 200 * gigaBytes
 )
 
@@ -195,7 +195,7 @@ func (s *spaceMon) pump() {
 				xlog.Warn(`SpaceMon: continuing in read-only mode`)
 			}
 
-		case avail < alertThreshold: // enable read-only, if below alert-threshold
+		case avail < readOnlyThreshold: // enable read-only, if below alert-threshold
 
 			xlog.Error("SpaceMon: available space less than alert-threshold")
 
