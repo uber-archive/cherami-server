@@ -32,19 +32,20 @@ import (
 )
 
 const (
-	warnThreshold         = 200 * gigaBytes
-	readOnlyThreshold     = 100 * gigaBytes
-	resumeWritesThreshold = 200 * gigaBytes
+	warnThreshold         = 200 * GiB
+	readOnlyThreshold     = 100 * GiB
+	resumeWritesThreshold = 200 * GiB
 )
 
 // monitoring interval
 const spaceMonInterval = 2 * time.Minute
 
 const (
-	kiloBytes = 1024
-	megaBytes = 1024 * kiloBytes
-	gigaBytes = 1024 * megaBytes
-	teraBytes = 1024 * gigaBytes
+	// binary prefixes
+	KiB = 1024
+	MiB = 1024 * KiB
+	GiB = 1024 * MiB
+	TiB = 1024 * GiB
 )
 
 type (
@@ -122,7 +123,7 @@ func (s *SpaceMon) pump() {
 			continue
 		}
 
-		availMiBs, totalMiBs := avail/megaBytes, total/megaBytes
+		availMiBs, totalMiBs := avail/MiB, total/MiB
 		availPercent := 100.0 * float64(avail) / float64(total)
 
 		s.hostMetrics.Set(load.HostMetricFreeDiskSpaceBytes, int64(avail))
