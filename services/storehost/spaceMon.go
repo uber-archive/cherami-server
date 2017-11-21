@@ -186,7 +186,7 @@ func (s *spaceMon) pump() {
 			if avail > resumeWritesThreshold {
 
 				s.mode = StorageModeReadWrite
-				s.storeHost.EnableWrite()
+				s.storeHost.EnableWrites()
 
 				xlog.Info("SpaceMon: disabling read-only")
 
@@ -201,7 +201,7 @@ func (s *spaceMon) pump() {
 
 			if s.mode != StorageModeReadOnly {
 
-				s.storeHost.DisableWrite()
+				s.storeHost.DisableWrites()
 				s.mode = StorageModeReadOnly
 			}
 
