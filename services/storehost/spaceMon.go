@@ -21,8 +21,6 @@
 package storehost
 
 import (
-	"os"
-	"sync"
 	"syscall"
 	"time"
 
@@ -30,6 +28,7 @@ import (
 	"github.com/uber/cherami-server/common"
 	"github.com/uber/cherami-server/common/metrics"
 	"github.com/uber/cherami-server/services/storehost/load"
+	"go.uber.org/atomic"
 )
 
 const (
@@ -59,100 +58,69 @@ const (
 )
 
 type (
-	// SpaceMon monitors free-space and switches store to read-only on low-space
-	SpaceMon interface {
-		common.Daemon
-		GetMode() StorageMode
-	}
-
-	// spaceMon implements SpaceMon interface
-	spaceMon struct {
-		sync.RWMutex
-
+	// SpaceMon monitors free-space and switches stores to read-only on low-space
+	SpaceMon struct {
 		storeHost   *StoreHost
 		logger      bark.Logger
 		m3Client    metrics.Client
 		hostMetrics *load.HostMetrics
 
-		stopCh chan struct{}
-		path   string
-		mode   StorageMode
+		stopCh   chan struct{}
+		path     string
+		readonly *atomic.Bool // read-only
 	}
 )
 
 // NewSpaceMon returns an instance of SpaceMon.
-func NewSpaceMon(store *StoreHost, m3Client metrics.Client, hostMetrics *load.HostMetrics, logger bark.Logger, path string) SpaceMon {
+func NewSpaceMon(store *StoreHost, m3Client metrics.Client, hostMetrics *load.HostMetrics, logger bark.Logger, path string) *SpaceMon {
 
-	return &spaceMon{
+	return &SpaceMon{
 		storeHost:   store,
 		logger:      logger,
 		m3Client:    m3Client,
 		hostMetrics: hostMetrics,
 		path:        path,
-		mode:        StorageModeReadWrite, // default: read-write
+		readonly:    atomic.NewBool(false), // default: read-write
 	}
 }
 
 // Start starts the monitoring
-func (s *spaceMon) Start() {
+func (s *SpaceMon) Start() {
 
-	s.logger.Info("SpaceMon: started")
 	s.stopCh = make(chan struct{})
 	go s.pump()
+	s.storeHost.DisableReadonly()
+
+	s.logger.Info("SpaceMon: started")
 }
 
 // Stop stops the monitoring
-func (s *spaceMon) Stop() {
+func (s *SpaceMon) Stop() {
 
 	close(s.stopCh)
 	s.logger.Info("SpaceMon: stopped")
 }
 
-// GetMode returns the read/write mode of storage
-func (s *spaceMon) GetMode() StorageMode {
+func (s *SpaceMon) pump() {
 
-	s.RLock()
-	defer s.RUnlock()
-
-	return s.mode
-}
-
-func (s *spaceMon) pump() {
-
-	var path = s.path
-
-	// if no path specified, use the current working directory
-	if len(path) <= 0 {
-
-		s.logger.Warn("SpaceMon: monitoring path is empty, trying working directory")
-
-		cwd, err := os.Getwd()
-		if err != nil {
-			s.logger.Error("SpaceMon: os.Getwd() failed", err)
-			return
-		}
-
-		path = cwd
-	}
-
-	log := s.logger.WithField(`path`, path)
+	log := s.logger.WithField(`path`, s.path)
 
 	ticker := time.NewTicker(spaceMonInterval)
 	defer ticker.Stop()
 
 	for {
 		select {
-		case <-ticker.C:
-			// continue below to check free-space, etc
 		case <-s.stopCh:
 			return // done
+		case <-ticker.C:
+			// continue below to check free-space, etc
 		}
 
 		// query available/total space
 		var stat syscall.Statfs_t
-		err := syscall.Statfs(path, &stat)
+		err := syscall.Statfs(s.path, &stat)
 		if err != nil {
-			log.WithField(common.TagErr, err).Error("SpaceMon: syscall.Statfs failed", path)
+			log.WithField(common.TagErr, err).Error("SpaceMon: syscall.Statfs failed")
 			continue
 		}
 
@@ -176,37 +144,33 @@ func (s *spaceMon) pump() {
 			`percent`: availPercent,
 		})
 
-		s.Lock()
-		defer s.Unlock()
-
 		switch {
-		case s.mode == StorageModeReadOnly:
+		case s.readonly.Load(): // disable readonly, if above resume-writes threshold
 
 			// disable read-only, if above resume-writes threshold
 			if avail > resumeWritesThreshold {
 
-				s.mode = StorageModeReadWrite
-				s.storeHost.EnableWrites()
+				if s.readonly.CAS(false, true) {
 
-				xlog.Info("SpaceMon: disabling read-only")
+					xlog.Info("SpaceMon: disabling read-only")
+					s.storeHost.EnableReadonly()
+				}
 
 			} else {
 
-				xlog.Warn(`SpaceMon: continuing in read-only mode`)
+				xlog.Warn(`SpaceMon: continuing in read-only`)
 			}
 
 		case avail < readOnlyThreshold: // enable read-only, if below alert-threshold
 
-			xlog.Error("SpaceMon: available space less than alert-threshold")
+			if s.readonly.CAS(true, false) {
 
-			if s.mode != StorageModeReadOnly {
-
-				s.storeHost.DisableWrites()
-				s.mode = StorageModeReadOnly
+				xlog.Error("SpaceMon: switching to read-only")
+				s.storeHost.DisableReadonly()
 			}
 
 		case avail < warnThreshold: // warn, if below warn-threshold
-			xlog.Warn("SpaceMon: available space less than warn-threshold")
+			xlog.Warn("SpaceMon: warning: running low on space")
 
 		default:
 			xlog.Debug("SpaceMon: monitoring")

@@ -196,7 +196,7 @@ type (
 		extStatsReporter *ExtStatsReporter
 
 		// Free-space monitor
-		spaceMon SpaceMon
+		spaceMon common.Daemon
 
 		// metrics aggregated at host level and reported to controller
 		hostMetrics *load.HostMetrics
@@ -302,7 +302,7 @@ func (t *StoreHost) Start(thriftService []thrift.TChanServer) {
 	t.extStatsReporter = NewExtStatsReporter(hostID, t.xMgr, t.mClient, t.logger)
 	t.extStatsReporter.Start()
 
-	t.EnableWrites()
+	t.DisableReadonly()
 	atomic.StoreInt32(&t.started, 1) // started
 
 	t.logger.WithField("options", fmt.Sprintf("Store=%v BaseDir=%v", t.opts.Store, t.opts.BaseDir)).
@@ -313,7 +313,7 @@ func (t *StoreHost) Start(thriftService []thrift.TChanServer) {
 func (t *StoreHost) Stop() {
 
 	atomic.StoreInt32(&t.started, 0) // stopped
-	t.DisableWrites()
+	t.EnableReadonly()
 
 	t.loadReporter.Stop()
 	t.hostIDHeartbeater.Stop()
@@ -416,7 +416,7 @@ func (t *StoreHost) OpenAppendStream(ctx thrift.Context, call storeStream.BStore
 	}
 
 	// If the disk available space is low, we should fail any request to write extent
-	if t.spaceMon != nil && t.spaceMon.GetMode() == StorageModeReadOnly {
+	if t.spaceMon != nil && t.IsReadonly() {
 		call.Done()
 		t.m3Client.IncCounter(metrics.OpenAppendStreamScope, metrics.StorageFailures)
 		log.Error("OpenAppendStream: storehost currently readonly")
@@ -449,7 +449,7 @@ func (t *StoreHost) OpenAppendStream(ctx thrift.Context, call storeStream.BStore
 		err = in.Stop() // attempt to stop connection
 
 	// .. or for store to switch to read-only (on low space)
-	case <-t.NotifyWritesDisabled():
+	case <-t.NotifyReadonly():
 		log.Error("OpenAppendStream: writes disabled, stopping inConn")
 		err = in.Stop()
 	}
@@ -1304,7 +1304,7 @@ readMsgsLoop:
 func (t *StoreHost) Shutdown() {
 
 	atomic.StoreInt32(&t.started, 0) // shutdown
-	t.DisableWrites()
+	t.EnableReadonly()
 	close(t.shutdownC) // 'broadcast' shutdown, by closing the shutdownC
 	t.logger.Info("Storehost: shutting down")
 	// wait until all connections have been closed
@@ -1313,20 +1313,31 @@ func (t *StoreHost) Shutdown() {
 	}
 }
 
-// DisableWrites disables writes, switching into 'read-only' mode
-func (t *StoreHost) DisableWrites() {
+// EnableReadonly disables writes, switching into 'read-only' mode
+func (t *StoreHost) EnableReadonly() {
 	t.logger.Error("Write disabled")
 	close(t.disableWriteC.Load().(chan struct{}))
 }
 
-// EnableWrites enables writes again (disables read-only)
-func (t *StoreHost) EnableWrites() {
+// DisableReadonly enables writes again (disables read-only)
+func (t *StoreHost) DisableReadonly() {
 	t.disableWriteC.Store(make(chan struct{}))
 }
 
-// NotifyWritesDisabled returns a channel that is used to notify when writes are disabled
-func (t *StoreHost) NotifyWritesDisabled() chan struct{} {
+// NotifyReadonly returns a channel that is used to notify when writes are disabled
+func (t *StoreHost) NotifyReadonly() chan struct{} {
 	return t.disableWriteC.Load().(chan struct{})
+}
+
+// IsReadonly returns whether the store is currently in read-only
+func (t *StoreHost) IsReadonly() bool {
+
+	select {
+	case <-t.NotifyReadonly():
+		return true
+	default:
+		return false
+	}
 }
 
 // RegisterWSHandler is the implementation of WSService interface
@@ -1356,7 +1367,7 @@ func (t *StoreHost) reportHostMetric(reporter common.LoadReporter, diffSecs int6
 	}
 
 	// check and notify read-only state
-	if t.spaceMon.GetMode() == StorageModeReadOnly {
+	if t.IsReadonly() {
 		hostMetrics.NodeState = common.Int64Ptr(controller.NODE_STATE_READONLY)
 	}
 
