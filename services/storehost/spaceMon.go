@@ -47,16 +47,6 @@ const (
 	teraBytes = 1024 * gigaBytes
 )
 
-// StorageMode defines the read write mode of the storage host
-type StorageMode int32
-
-const (
-	// StorageModeReadWrite read/write
-	StorageModeReadWrite StorageMode = iota
-	// StorageModeReadOnly read only
-	StorageModeReadOnly
-)
-
 type (
 	// SpaceMon monitors free-space and switches stores to read-only on low-space
 	SpaceMon struct {
@@ -147,23 +137,22 @@ func (s *SpaceMon) pump() {
 		switch {
 		case s.readonly.Load(): // disable readonly, if above resume-writes threshold
 
-			// disable read-only, if above resume-writes threshold
-			if avail > resumeWritesThreshold {
-
-				if s.readonly.CAS(false, true) {
-
-					xlog.Info("SpaceMon: disabling read-only")
-					s.storeHost.EnableReadonly()
-				}
-
-			} else {
-
+			// if below resume-writes threshold, do nothing
+			if avail < resumeWritesThreshold {
 				xlog.Warn(`SpaceMon: continuing in read-only`)
+				continue
+			}
+
+			// disable readonly, if we have recovered free-space
+			if s.readonly.CAS(true, false) {
+
+				xlog.Info("SpaceMon: disabling read-only")
+				s.storeHost.EnableReadonly()
 			}
 
 		case avail < readOnlyThreshold: // enable read-only, if below alert-threshold
 
-			if s.readonly.CAS(true, false) {
+			if s.readonly.CAS(false, true) {
 
 				xlog.Error("SpaceMon: switching to read-only")
 				s.storeHost.DisableReadonly()
