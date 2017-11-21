@@ -174,10 +174,10 @@ type (
 		shutdownWG sync.WaitGroup
 
 		// the following is used by inConn/outConn
-		xMgr          *ExtentManager      // extent manager
-		replMgr       *ReplicationManager // replication manager
-		shutdownC     chan struct{}
-		disableWriteC atomic.Value // chan struct{}
+		xMgr      *ExtentManager      // extent manager
+		replMgr   *ReplicationManager // replication manager
+		shutdownC chan struct{}
+		readonlyC atomic.Value // chan struct{}
 
 		numInConn, numOutConn int64 // number of active inConns/outConns respectively
 
@@ -1315,18 +1315,17 @@ func (t *StoreHost) Shutdown() {
 
 // EnableReadonly disables writes, switching into 'read-only' mode
 func (t *StoreHost) EnableReadonly() {
-	t.logger.Error("Write disabled")
-	close(t.disableWriteC.Load().(chan struct{}))
+	close(t.readonlyC.Load().(chan struct{}))
 }
 
 // DisableReadonly enables writes again (disables read-only)
 func (t *StoreHost) DisableReadonly() {
-	t.disableWriteC.Store(make(chan struct{}))
+	t.readonlyC.Store(make(chan struct{}))
 }
 
 // NotifyReadonly returns a channel that is used to notify when writes are disabled
 func (t *StoreHost) NotifyReadonly() chan struct{} {
-	return t.disableWriteC.Load().(chan struct{})
+	return t.readonlyC.Load().(chan struct{})
 }
 
 // IsReadonly returns whether the store is currently in read-only
