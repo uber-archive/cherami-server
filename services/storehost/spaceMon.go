@@ -31,20 +31,30 @@ import (
 	"go.uber.org/atomic"
 )
 
-const (
-	warnThreshold         = 200 * GiB
-	readOnlyThreshold     = 100 * GiB
-	resumeWritesThreshold = 200 * GiB
+var (
+	// TODO: make these dynamically configurable!
+
+	// SpaceMonThresholdWarn if free-space below this, emit warning logs
+	SpaceMonThresholdWarn uint64 = 250 * GiB
+
+	// SpaceMonThresholdReadOnly if free-space below this, switch store to read-only
+	SpaceMonThresholdReadOnly uint64 = 200 * GiB
+
+	// SpaceMonThresholdResumeWrites if read-only and free-space exceeds this, then make read-write
+	SpaceMonThresholdResumeWrites uint64 = 275 * GiB
+
+	// SpaceMonInterval interval at which to monitor free-space and take action
+	SpaceMonInterval = 2 * time.Minute
 )
 
-// monitoring interval
-const spaceMonInterval = 2 * time.Minute
-
 const (
-	// binary prefixes
+	// KiB kibibytes
 	KiB = 1024
+	// MiB mebibytes
 	MiB = 1024 * KiB
+	// GiB gibibytes
 	GiB = 1024 * MiB
+	// TiB tebibytes
 	TiB = 1024 * GiB
 )
 
@@ -96,7 +106,7 @@ func (s *SpaceMon) pump() {
 
 	log := s.logger.WithField(`path`, s.path)
 
-	ticker := time.NewTicker(spaceMonInterval)
+	ticker := time.NewTicker(SpaceMonInterval)
 	defer ticker.Stop()
 
 	for {
@@ -139,7 +149,7 @@ func (s *SpaceMon) pump() {
 		case s.readonly.Load(): // disable readonly, if above resume-writes threshold
 
 			// if below resume-writes threshold, do nothing
-			if avail < resumeWritesThreshold {
+			if avail < SpaceMonThresholdResumeWrites {
 				xlog.Warn(`SpaceMon: continuing in read-only`)
 				continue
 			}
@@ -151,7 +161,7 @@ func (s *SpaceMon) pump() {
 				s.storeHost.EnableReadonly()
 			}
 
-		case avail < readOnlyThreshold: // enable read-only, if below alert-threshold
+		case avail < SpaceMonThresholdReadOnly: // enable read-only, if below alert-threshold
 
 			if s.readonly.CAS(false, true) {
 
@@ -159,7 +169,7 @@ func (s *SpaceMon) pump() {
 				s.storeHost.DisableReadonly()
 			}
 
-		case avail < warnThreshold: // warn, if below warn-threshold
+		case avail < SpaceMonThresholdWarn: // warn, if below warn-threshold
 			xlog.Warn("SpaceMon: warning: running low on space")
 
 		default:
