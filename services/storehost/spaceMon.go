@@ -77,7 +77,7 @@ func NewSpaceMon(store *StoreHost, m3Client metrics.Client, hostMetrics *load.Ho
 
 	return &SpaceMon{
 		storeHost:   store,
-		logger:      logger,
+		logger:      logger.WithField(common.TagModule, `spaceMon`),
 		m3Client:    m3Client,
 		hostMetrics: hostMetrics,
 		path:        path,
