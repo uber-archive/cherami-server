@@ -1367,6 +1367,7 @@ func (t *StoreHost) reportHostMetric(reporter common.LoadReporter, diffSecs int6
 
 	// check and notify read-only state
 	if t.IsReadonly() {
+		log.Warn("reportHostMetric: storehost currently readonly")
 		hostMetrics.NodeState = common.Int64Ptr(controller.NODE_STATE_READONLY)
 	}
 

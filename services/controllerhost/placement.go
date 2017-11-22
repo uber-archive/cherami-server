@@ -216,6 +216,16 @@ func (p *DistancePlacement) PickStoreHosts(count int) ([]*common.HostInfo, error
 // meets all requirements to host a new extent.
 func (p *DistancePlacement) doesStoreMeetConstraints(host *common.HostInfo) bool {
 
+	// if the store-node has reported to be in 'read-only' any time in
+	// the last minute, then don't place extents on it.
+	if val, err := p.context.loadMetrics.Get(host.UUID, load.EmptyTag, load.ReadOnly, load.OneMinSum); err == nil && val > 0 {
+		p.context.log.WithFields(bark.Fields{
+			common.TagHostIP: host.Addr,
+			`read-only`:      val,
+			`reason`:         "ReadOnly"}).Info("Placement ignoring store host")
+		return false
+	}
+
 	cfgObj, err := p.context.cfgMgr.Get(common.StoreServiceName, "*", host.Sku, host.Name)
 	if err != nil {
 		return true
@@ -230,16 +240,6 @@ func (p *DistancePlacement) doesStoreMeetConstraints(host *common.HostInfo) bool
 		p.context.log.WithFields(bark.Fields{
 			common.TagHostIP: host.Addr,
 			`reason`:         "AdminDisabled"}).Info("Placement ignoring store host")
-		return false
-	}
-
-	// if the store-node has reported to be in 'read-only' any time in
-	// the last minute, then don't place extents on it.
-	if val, err := p.context.loadMetrics.Get(host.UUID, load.EmptyTag, load.ReadOnly, load.OneMinSum); err == nil && val > 0 {
-		p.context.log.WithFields(bark.Fields{
-			common.TagHostIP: host.Addr,
-			`read-only`:      val,
-			`reason`:         "ReadOnly"}).Info("Placement ignoring store host")
 		return false
 	}
 
