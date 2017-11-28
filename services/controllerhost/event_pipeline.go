@@ -276,13 +276,9 @@ func (executor *retryableEventExecutor) execute(event Event) {
 		context.m3Client.IncCounter(metrics.EventPipelineScope, metrics.ControllerRetries)
 
 		err = event.Handle(executor.context)
-		if err == nil {
+		if err != errRetryable || !executor.sleep(computeRetryInterval()) {
+			// break if non retryable event, or retryable, but cannot sleep due to shut down
 			break
-		}
-		if err == errRetryable {
-			if !executor.sleep(computeRetryInterval()) {
-				break
-			}
 		}
 	}
 
