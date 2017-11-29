@@ -802,6 +802,7 @@ type consumerGroupExtentJSONOutputFields struct {
 	ExtentUUID     string   `json:"extent_uuid"`
 	AckLevelOffset int64    `json:"ack_level_offset"`
 	StoreHosts     []string `json:"storehosts"`
+	OutputHost     string   `json:"outputhost"`
 }
 
 //ListEntityOps lists all CRUD ops related with the destination
@@ -893,10 +894,17 @@ func ListConsumerGroupExtents(c *cli.Context) {
 				storeHosts = append(storeHosts, storeHostAddr)
 			}
 
+			outputHostAddr, err := mClient.UUIDToHostAddr(*cgExtent.OutputHostUUID)
+			if err != nil {
+				outputHostAddr = *cgExtent.OutputHostUUID + toolscommon.UnknownUUID
+			}
+
 			output := &consumerGroupExtentJSONOutputFields{
 				ExtentUUID:     cgExtent.GetExtentUUID(),
 				AckLevelOffset: cgExtent.GetAckLevelOffset(),
-				StoreHosts:     storeHosts}
+				StoreHosts:     storeHosts,
+				OutputHost:     outputHostAddr,
+			}
 			outputStr, _ := json.Marshal(output)
 			fmt.Fprintln(os.Stdout, string(outputStr))
 		}
