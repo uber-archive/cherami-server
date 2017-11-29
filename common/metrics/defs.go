@@ -931,6 +931,8 @@ const (
 	StorageOutMsgChanDepth
 	// StorageDiskAvailableSpaceMB is the available disk space in MB
 	StorageDiskAvailableSpaceMB
+	// StorageDiskAvailableSpacePcnt is the available disk space percentage
+	StorageDiskAvailableSpacePcnt
 
 	// StorageLatencyTimer is the latency for every (non-streaming) request
 	StorageLatencyTimer
@@ -1228,6 +1230,7 @@ var metricDefs = map[ServiceIdx]map[int]metricDefinition{
 		StorageInAckChanDepth:                       {Gauge, "storage.in.ackchan-depth"},
 		StorageOutMsgChanDepth:                      {Gauge, "storage.out.msgchan-depth"},
 		StorageDiskAvailableSpaceMB:                 {Gauge, "storage.disk.availablespace.mb"},
+		StorageDiskAvailableSpacePcnt:               {Gauge, "storage.disk.availablespace.pcnt"},
 		StorageLatencyTimer:                         {Timer, "storage.latency"},
 		StorageWriteStoreLatency:                    {Timer, "storage.write.store-latency"},
 		StorageWriteMessageLatency:                  {Timer, "storage.write.message-latency"},

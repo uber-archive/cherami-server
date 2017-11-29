@@ -32,22 +32,6 @@ import (
 	"github.com/uber/cherami-server/services/storehost/load"
 )
 
-// Monitoring housekeeping will happen every 2 minutes
-const storageMonitoringInterval = time.Duration(2 * time.Minute)
-
-const (
-	thresholdWarn         = 75 * gigaBytes
-	thresholdReadOnly     = 50 * gigaBytes
-	thresholdResumeWrites = 100 * gigaBytes
-)
-
-const (
-	kiloBytes = 1024
-	megaBytes = 1024 * kiloBytes
-	gigaBytes = 1024 * megaBytes
-	teraBytes = 1024 * gigaBytes
-)
-
 // StorageStatus defines the different storage status
 type StorageStatus int32
 
@@ -87,39 +71,35 @@ type (
 	}
 )
 
+// Monitoring housekeeping will happen every 2 minutes
+const storageMonitoringInterval = time.Duration(2 * time.Minute)
+
+const bytesPerMB = 1024 * 1024
+
+const warningThreshold = 0.1        // 10%
+const alertThreshold = 0.05         // 5%
+const resumeWritableThreshold = 0.2 // 20%
+
 // NewStorageMonitor returns an instance of NewStorageMonitor.
 func NewStorageMonitor(store *StoreHost, m3Client metrics.Client, hostMetrics *load.HostMetrics, logger bark.Logger, path string) StorageMonitor {
 	return &storageMonitor{
-		storeHost:      store,
-		logger:         logger,
-		m3Client:       m3Client,
-		hostMetrics:    hostMetrics,
-		monitoringPath: path,
-		mode:           SMReadWrite,
+		storeHost:        store,
+		logger:           logger,
+		m3Client:         m3Client,
+		hostMetrics:      hostMetrics,
+		monitoringTicker: time.NewTicker(storageMonitoringInterval),
+		monitoringPath:   path,
+		mode:             SMReadWrite,
 	}
 }
 
 // Start starts the monitoring
 func (s *storageMonitor) Start() {
+	s.logger.Info("StorageMonitor: started")
 
 	s.closeChannel = make(chan struct{})
 
-	go func() {
-
-		ticker := time.NewTicker(storageMonitoringInterval)
-		defer ticker.Stop()
-
-		for {
-			select {
-			case <-ticker.C:
-				go s.checkStorage()
-			case <-s.closeChannel:
-				return
-			}
-		}
-	}()
-
-	s.logger.Info("StorageMonitor: started")
+	go s.doHouseKeeping()
 }
 
 // Stop stops the monitoring
@@ -152,57 +132,63 @@ func (s *storageMonitor) checkStorage() {
 		path = wd
 	}
 
-	log := s.logger.WithField(`path`, path)
-
 	err := syscall.Statfs(path, &stat)
 	if err != nil {
-		log.WithField(common.TagErr, err).Error("StorageMonitor: syscall.Statfs failed")
+		s.logger.Error("StorageMonitor: syscall.Statfs() failed", path, err)
 		return
 	}
 
-	avail := int64(stat.Bavail) * int64(stat.Bsize)
-	total := int64(stat.Blocks) * int64(stat.Bsize)
+	// Available blocks * size per block = available space in bytes
+	availableMBs := stat.Bavail * uint64(stat.Bsize) / bytesPerMB
+	totalMBs := stat.Blocks * uint64(stat.Bsize) / bytesPerMB
 
-	xlog := log.WithFields(bark.Fields{
-		`availMiB`: avail / megaBytes,
-		`totalMiB`: total / megaBytes,
-	})
-
-	if total <= 0 {
-		xlog.Error(`StorageMonitor: total space unavailable`)
+	if totalMBs <= 0 {
+		s.logger.WithField(`filePath`, path).Error(`Monitoring disk space error: total MBs is not readable`)
 		return
 	}
 
-	s.hostMetrics.Set(load.HostMetricFreeDiskSpaceBytes, avail)
-	s.m3Client.UpdateGauge(metrics.SystemResourceScope, metrics.StorageDiskAvailableSpaceMB, avail/megaBytes)
+	availablePcnt := float32(availableMBs) / float32(totalMBs)
+
+	s.hostMetrics.Set(load.HostMetricFreeDiskSpaceBytes, int64(availableMBs)*bytesPerMB)
+	s.m3Client.UpdateGauge(metrics.SystemResourceScope, metrics.StorageDiskAvailableSpacePcnt, int64(availablePcnt*1000))
+	s.m3Client.UpdateGauge(metrics.SystemResourceScope, metrics.StorageDiskAvailableSpaceMB, int64(availableMBs))
 
 	s.Lock()
 	defer s.Unlock()
 
-	switch {
-	case s.mode == SMReadOnly:
-
-		// disable read-only, if above resume-writes threshold
-		if avail > thresholdResumeWrites {
-			xlog.Info("StorageMonitor: disabling read-only")
+	if s.mode == SMReadOnly {
+		// Whether we can get out of read only mode
+		if availablePcnt > resumeWritableThreshold {
 			s.storeHost.EnableWrite()
 			s.mode = SMReadWrite
+			s.logger.WithFields(bark.Fields{`filePath`: path, `availableMBs`: availableMBs, `totalMBs`: totalMBs, `availablePcnt`: availablePcnt}).Info(`Resumed read/write mode.`)
 		} else {
-			xlog.Warn("StorageMonitor: continuing read-only")
+			s.logger.WithFields(bark.Fields{`filePath`: path, `availableMBs`: availableMBs, `totalMBs`: totalMBs, `availablePcnt`: availablePcnt}).Warn(`In read only mode.`)
 		}
 
-	case avail < thresholdReadOnly: // enable read-only, if below readonly-threshold
-		xlog.Error("StorageMonitor: available space less than readonly-threshold")
+		return
+	}
 
+	if availablePcnt < alertThreshold {
+		s.logger.WithFields(bark.Fields{`filePath`: path, `availableMBs`: availableMBs, `totalMBs`: totalMBs, `availablePcnt`: availablePcnt}).Errorf(`Available disk space lower than alert threshold`)
 		if s.mode != SMReadOnly {
 			s.mode = SMReadOnly
 			s.storeHost.DisableWrite()
 		}
+	} else if availablePcnt < warningThreshold {
+		s.logger.WithFields(bark.Fields{`filePath`: path, `availableMBs`: availableMBs, `totalMBs`: totalMBs, `availablePcnt`: availablePcnt}).Warn(`Available disk space lower than warning threshold`)
+	} else {
+		s.logger.WithFields(bark.Fields{`filePath`: path, `availableMBs`: availableMBs, `totalMBs`: totalMBs, `availablePcnt`: availablePcnt}).Info(`Monitoring disk space`)
+	}
+}
 
-	case avail < thresholdWarn: // warn, if below warn-threshold
-		xlog.Warn("StorageMonitor: available space less than warn-threshold")
-
-	default:
-		xlog.Debug("StorageMonitor: monitoring")
+func (s *storageMonitor) doHouseKeeping() {
+	for {
+		select {
+		case <-s.monitoringTicker.C:
+			go s.checkStorage()
+		case <-s.closeChannel:
+			return
+		}
 	}
 }

@@ -82,14 +82,12 @@ const (
 )
 
 const (
-	// NumConns is a gauge that refers to number of connections
+	// NumConns is a guage that refers to number of connections
 	NumConns MetricName = "numConns"
-	// NumExtentsActive is a gauge that refers to number of active extents
+	// NumExtentsActive is a guage that refers to number of active extents
 	NumExtentsActive = "numExtentsActive"
-	// RemDiskSpaceBytes is a gauge that refers to remaining disk space
+	// RemDiskSpaceBytes is a guage that refers to remaining disk space
 	RemDiskSpaceBytes = "remDiskSpaceBytes"
-	// ReadOnly is a (boolean) gauge that specifies if the store is read-only
-	ReadOnly = "readOnly"
 
 	// MsgsInPerSec refers to incoming messages per sec counter
 	MsgsInPerSec MetricName = "msgsInPerSec"
