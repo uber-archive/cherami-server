@@ -751,6 +751,7 @@ func (msgCache *cgMsgCache) manageMessageDeliveryCache() {
 
 		if fullCount > 3 && common.Now()-lastPumpHealthLog > common.UnixNanoTime(time.Minute) {
 			msgCache.logMessageCacheHealth()
+			lastPumpHealthLog = common.Now()
 		}
 
 		numOutstandingMsgs := msgCache.getOutstandingMsgs()

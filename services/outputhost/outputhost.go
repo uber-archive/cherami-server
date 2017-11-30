@@ -242,12 +242,7 @@ func (h *OutputHost) OpenConsumerStreamHandler(w http.ResponseWriter, r *http.Re
 	})
 
 	// create thrift stream call wrapper and deligate to streaming call
-	if err = h.OpenConsumerStream(ctx, wsStream); err != nil {
-		h.logger.WithField(common.TagDstPth, common.FmtDstPth(path)).
-			WithField(common.TagCnsPth, common.FmtCnsPth(cgName)).
-			WithField(common.TagErr, err).Error("unable to open consume stream")
-		/* Metrics will be logged in OpenConsumerStream*/
-	}
+	h.OpenConsumerStream(ctx, wsStream)
 }
 
 // OpenConsumerStream is the implementation of the thrift handler for the Out service
