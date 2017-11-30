@@ -76,7 +76,7 @@ func newCQLClient(config *SchemaUpdaterConfig) (CQLClient, error) {
 	clusterCfg.Keyspace = config.Keyspace
 	clusterCfg.Timeout = defaultTimeout
 	clusterCfg.ProtoVersion = config.ProtoVersion
-	clusterCfg.Consistency, _ = gocql.ParseConsistency(defaultConsistency)
+	clusterCfg.Consistency = gocql.ParseConsistency(defaultConsistency)
 
 	if config.Username != "" && config.Password != "" {
 		clusterCfg.Authenticator = gocql.PasswordAuthenticator{

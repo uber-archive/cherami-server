@@ -1,12 +1,12 @@
-hash: b4ac6cca4953caf65596799ec1216e88cc1f27efe83097737844d2da31d9429a
-updated: 2017-10-24T15:20:10.812837238-07:00
+hash: d0c29905b07aed1278050c3471afb0f75bcaa2288b9e1394fa9eee1d52a55fa3
+updated: 2017-11-21T15:35:49.705068042-08:00
 imports:
 - name: github.com/apache/thrift
   version: b2a4d4ae21c789b689dd162deb819665567f481c
   subpackages:
   - lib/go/thrift
 - name: github.com/aws/aws-sdk-go
-  version: 011ff14652ceaed8ce090cef3f1d94ec9668bd83
+  version: 8a972b4459c2f2582b06f3e2d74448987cc6e19f
   subpackages:
   - aws
   - aws/awserr
@@ -38,9 +38,9 @@ imports:
 - name: github.com/benbjohnson/clock
   version: 7dc76406b6d3c05b5f71a86293cbcf3c4ea03b19
 - name: github.com/bsm/sarama-cluster
-  version: c4d3d28d22e7bdea71656725bf5cd1d988454b41
+  version: 5efe630369ab4ed5cc4cedeadd61b4d1b2523169
 - name: github.com/cactus/go-statsd-client
-  version: ce77ca9ecdee1c3ffd097e32f9bb832825ccb203
+  version: 91c326c3f7bd20f0226d3d1c289dd9f8ce28d33d
   subpackages:
   - statsd
 - name: github.com/cockroachdb/c-jemalloc
@@ -54,7 +54,7 @@ imports:
 - name: github.com/codegangsta/cli
   version: 0bdeddeeb0f650497d603c4ad7b20cfe685682f6
 - name: github.com/davecgh/go-spew
-  version: ecdeabc65495df2dec95d7c4a4c3e021903035e5
+  version: 6d212800a42e8ab5c146b8ace3490ee17e5225f9
   subpackages:
   - spew
 - name: github.com/dgryski/go-farm
@@ -68,9 +68,9 @@ imports:
 - name: github.com/eapache/queue
   version: 44cc805cf13205b55f69e14bcb69867d1ae92f98
 - name: github.com/go-ini/ini
-  version: 5b3e00af70a9484542169a976dcab8d03e601a17
+  version: d3de07a94d22b4a0972deb4b96d790c2c0ce8333
 - name: github.com/gocql/gocql
-  version: 843f6b1d2288839f5d00f92be11cbbebd600ba51
+  version: 3e8b36f5e9e52cdeb265f385808c504a53db55fc
   subpackages:
   - internal/lru
   - internal/murmur
@@ -93,13 +93,13 @@ imports:
 - name: github.com/pborman/uuid
   version: a97ce2ca70fa5a848076093f05e639a89ca34d06
 - name: github.com/pierrec/lz4
-  version: 08c27939df1bd95e881e2c2367a749964ad1fceb
+  version: 5a3d2245f97fc249850e7802e3c01fad02a1c316
 - name: github.com/pierrec/xxHash
-  version: a0006b13c722f7f12368c00a3d3c2ae8a999a0c6
+  version: 5a004441f897722c627870a981d02b29924215fa
   subpackages:
   - xxHash32
 - name: github.com/pmezard/go-difflib
-  version: 792786c7400a136282c1664665ae0a8db921c6c2
+  version: d8ed2627bdf02c080bf22230dbb337003b7aba2d
   subpackages:
   - difflib
 - name: github.com/rcrowley/go-metrics
@@ -110,9 +110,9 @@ imports:
 - name: github.com/sirupsen/logrus
   version: ba1b36c82c5e05c4f912a88eab0dcd91a171688f
 - name: github.com/stretchr/objx
-  version: 1a9d0bb9f541897e62256577b352fdbc1fb4fd94
+  version: cbeaeb16a013161a98496fad62933b1d21786672
 - name: github.com/stretchr/testify
-  version: 2aa2c176b9dab406a6970f6a55f513e8a8c8b18f
+  version: 69483b4bd14f5845b5a1e55bca19e954e827f1d0
   subpackages:
   - assert
   - mock
@@ -123,7 +123,9 @@ imports:
 - name: github.com/uber-common/bark
   version: 02d883c81a4e7b76904d97efb176efdf4be791bd
 - name: github.com/uber-go/atomic
-  version: 54f72d32435d760d5604f17a82e2435b28dc4ba5
+  version: 8474b86a5a6f79c443ce4b2992817ff32cf208b8
+  subpackages:
+  - utils
 - name: github.com/uber/cherami-client-go
   version: 05b8db6966cc3413c1105a809977febef05ca5a1
   subpackages:
@@ -157,7 +159,7 @@ imports:
   - swim
   - util
 - name: github.com/uber/tchannel-go
-  version: a7ad9ecb640b5f10a0395b38d6319175172b3ab2
+  version: cc230a2942d078a8b01f4a79895dad62e6c572f1
   subpackages:
   - hyperbahn
   - hyperbahn/gen-go/hyperbahn
@@ -174,7 +176,7 @@ imports:
 - name: github.com/urfave/cli
   version: 7bc6a0acffa589f415f88aca16cc1de5ffd66f9c
 - name: golang.org/x/net
-  version: aabf50738bcdd9b207582cbe796b59ed65d56680
+  version: 9dfe39835686865bff950a07b394c12a98ddc811
   subpackages:
   - bpf
   - context
@@ -183,13 +185,13 @@ imports:
   - ipv4
   - ipv6
 - name: golang.org/x/sys
-  version: 8dbc5d05d6edcc104950cc299a1ce6641235bc86
+  version: 0b25a408a50076fbbcae6b7ac0ea5fbb0b085e79
   subpackages:
   - unix
 - name: gopkg.in/inf.v0
   version: 3887ee99ecf07df5b447e9b00d9c0b2adaa9f3e4
 - name: gopkg.in/validator.v2
-  version: 460c83432a98c35224a6fe352acf8b23e067ad06
+  version: 07ffaad256c8e957050ad83d6472eb97d785013d
 - name: gopkg.in/yaml.v2
-  version: eb3733d160e74a9c7e442f435eb3bea458e1d19f
+  version: 287cf08546ab5e7e37d55a84f7ed3fd1db036de5
 testImports: []
