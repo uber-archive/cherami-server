@@ -50,15 +50,17 @@ import (
 
 type (
 	testBase struct {
-		Frontends           map[string]*frontendhost.Frontend
-		InputHosts          map[string]*inputhost.InputHost
-		OutputHosts         map[string]*outputhost.OutputHost
-		StoreHosts          map[string]*storehost.StoreHost
-		Controllers         map[string]*controllerhost.Mcp
-		mClient             *metadata.CassandraMetadataService
-		UUIDResolver        common.UUIDResolver
-		keyspace            string
-		storageBaseDir      string
+		Frontends      map[string]*frontendhost.Frontend
+		InputHosts     map[string]*inputhost.InputHost
+		OutputHosts    map[string]*outputhost.OutputHost
+		StoreHosts     map[string]*storehost.StoreHost
+		Controllers    map[string]*controllerhost.Mcp
+		mClient        *metadata.CassandraMetadataService
+		UUIDResolver   common.UUIDResolver
+		keyspace       string
+		storageBaseDir string
+		auth           configure.Authentication
+
 		*require.Assertions // override suite.Suite.Assertions with require.Assertions; this means that s.NotNil(nil) will stop the test, not merely log an error
 		suite.Suite
 	}
@@ -159,23 +161,17 @@ func (tb *testBase) setupSuiteImpl(t *testing.T) {
 	tb.keyspace = "integration_test"
 	tb.Assertions = require.New(tb.T())
 
-	auth := configure.Authentication{
+	tb.auth = configure.Authentication{
 		Enabled:  true,
 		Username: "cassandra",
 		Password: "cassandra",
 	}
 
 	// create the keyspace first
-	err := metadata.CreateKeyspaceNoSession("127.0.0.1", 9042, tb.keyspace, 1, true, auth)
+	err := metadata.CreateKeyspaceNoSession("127.0.0.1", 9042, tb.keyspace, 1, true, tb.auth)
 	tb.NoError(err)
 
-	tb.mClient, _ = metadata.NewCassandraMetadataService(&configure.MetadataConfig{
-		CassandraHosts: "127.0.0.1",
-		Port:           9042,
-		Keyspace:       tb.keyspace,
-		Consistency:    "One",
-		Authentication: auth,
-	}, nil)
+	tb.mClient = tb.GetNewMetadataClient()
 	tb.NotNil(tb.mClient)
 
 	// Drop the keyspace, if it exists. This preserves the keyspace for inspection if the test fails, and simplifies cleanup
@@ -198,6 +194,18 @@ func (tb *testBase) setupSuiteImpl(t *testing.T) {
 	cassConfig.SetRefreshInterval(10 * time.Millisecond)
 }
 
+func (tb *testBase) GetNewMetadataClient() *metadata.CassandraMetadataService {
+	s, _ := metadata.NewCassandraMetadataService(&configure.MetadataConfig{
+		CassandraHosts: "127.0.0.1",
+		Port:           9042,
+		Keyspace:       tb.keyspace,
+		Consistency:    "One",
+		Authentication: tb.auth,
+	}, nil)
+
+	return s
+}
+
 func (tb *testBase) TearDownSuite() {
 }
 
@@ -208,6 +216,8 @@ func (tb *testBase) SetUp(clusterSz map[string]int, numReplicas int) {
 	tb.storageBaseDir, err = ioutil.TempDir("", "cherami_integration_test_")
 	tb.NoError(err)
 
+	tb.mClient = tb.GetNewMetadataClient()
+	tb.NotNil(tb.mClient)
 	tb.UUIDResolver = common.NewUUIDResolver(tb.mClient)
 	hwInfoReader := common.NewHostHardwareInfoReader(tb.mClient)
 
@@ -232,7 +242,7 @@ func (tb *testBase) SetUp(clusterSz map[string]int, numReplicas int) {
 		dClient := dconfig.NewDconfigClient(configure.NewCommonServiceConfig(), common.StoreServiceName)
 		sCommon := common.NewService(common.StoreServiceName, hostID, cfg, tb.UUIDResolver, hwInfoReader, reporter, dClient, common.NewBypassAuthManager())
 		log.Infof("store ringHosts: %v", cfg.GetRingHosts())
-		sh, tc := storehost.NewStoreHost(common.StoreServiceName, sCommon, tb.mClient, storehostOpts)
+		sh, tc := storehost.NewStoreHost(common.StoreServiceName, sCommon, tb.GetNewMetadataClient(), storehostOpts)
 		sh.Start(tc)
 
 		// start websocket server
@@ -256,7 +266,7 @@ func (tb *testBase) SetUp(clusterSz map[string]int, numReplicas int) {
 		dClient := dconfig.NewDconfigClient(configure.NewCommonServiceConfig(), common.InputServiceName)
 		sCommon := common.NewService(common.InputServiceName, hostID, cfg, tb.UUIDResolver, hwInfoReader, reporter, dClient, common.NewBypassAuthManager())
 		log.Infof("input ringHosts: %v", cfg.GetRingHosts())
-		ih, tc := inputhost.NewInputHost(common.InputServiceName, sCommon, tb.mClient, nil)
+		ih, tc := inputhost.NewInputHost(common.InputServiceName, sCommon, tb.GetNewMetadataClient(), nil)
 		ih.Start(tc)
 		// start websocket server
 		common.WSStart(cfg.GetListenAddress().String(), cfg.GetWebsocketPort(), ih)
@@ -272,7 +282,7 @@ func (tb *testBase) SetUp(clusterSz map[string]int, numReplicas int) {
 
 		sCommon := common.NewService(common.FrontendServiceName, hostID, cfg, tb.UUIDResolver, hwInfoReader, reporter, dClient, common.NewBypassAuthManager())
 		log.Infof("front ringHosts: %v", cfg.GetRingHosts())
-		fh, tc := frontendhost.NewFrontendHost(common.FrontendServiceName, sCommon, tb.mClient, cfgMap[common.FrontendServiceName][i])
+		fh, tc := frontendhost.NewFrontendHost(common.FrontendServiceName, sCommon, tb.GetNewMetadataClient(), cfgMap[common.FrontendServiceName][i])
 		fh.Start(tc)
 		tb.Frontends[hostID] = fh
 		frontendForOut = fh
@@ -288,7 +298,7 @@ func (tb *testBase) SetUp(clusterSz map[string]int, numReplicas int) {
 		oh, tc := outputhost.NewOutputHost(
 			common.OutputServiceName,
 			sCommon,
-			tb.mClient,
+			tb.GetNewMetadataClient(),
 			frontendForOut,
 			nil,
 			cfgMap[common.OutputServiceName][i].GetKafkaConfig(),
@@ -308,7 +318,7 @@ func (tb *testBase) SetUp(clusterSz map[string]int, numReplicas int) {
 		reporter := common.NewTestMetricsReporter()
 		dClient := dconfig.NewDconfigClient(configure.NewCommonServiceConfig(), common.ControllerServiceName)
 		sVice := common.NewService(serviceName, uuid.New(), cfg.ServiceConfig[serviceName], tb.UUIDResolver, hwInfoReader, reporter, dClient, common.NewBypassAuthManager())
-		ch, tc := controllerhost.NewController(cfg, sVice, tb.mClient, common.NewDummyZoneFailoverManager())
+		ch, tc := controllerhost.NewController(cfg, sVice, tb.GetNewMetadataClient(), common.NewDummyZoneFailoverManager())
 		ch.Start(tc)
 		tb.Controllers[hostID] = ch
 	}
