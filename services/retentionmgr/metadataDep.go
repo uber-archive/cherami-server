@@ -92,7 +92,7 @@ func (t *metadataDepImpl) GetDestinations() (destinations []*destinationInfo, er
 				`status`:        dest.status,
 				`hardRetention`: dest.hardRetention,
 				`softRetention`: dest.softRetention,
-			}).Info("GetDestinations: ListDestinationsByUUID output")
+			}).Debug("GetDestinations: ListDestinationsByUUID output")
 		}
 
 		if len(resp.GetNextPageToken()) == 0 {

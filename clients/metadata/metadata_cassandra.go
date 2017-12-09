@@ -180,7 +180,7 @@ const defaultDeleteTTLSeconds = int64(time.Hour*24*30) / int64(time.Second)
 
 const destinationCacheSize = 1048576
 const consumerGroupCacheSize = 1048576
-const cacheTTL = time.Second
+const cacheTTL = 5 * time.Second
 
 // CassandraMetadataService Implements TChanMetadataServiceClient interface
 // TODO: Convert all errors to the ones defined in the thrift API.

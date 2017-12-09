@@ -84,7 +84,7 @@ var (
 
 const (
 	nEventPipelineWorkers      = 2048 // most workers expected to be blocked on I/O
-	hashLockTableSize          = 1024
+	hashLockTableSize          = 8192
 	maxFailedExtentSealSetSize = 8192 // max # of failed extent seals we can keep track of
 	maxExtentSealsPerSecond    = 200
 )
@@ -108,6 +108,7 @@ type (
 		failureDetector     Dfdd
 		log                 bark.Logger
 		dstLock             LockMgr
+		cgLock              LockMgr
 		eventPipeline       EventPipeline
 		resultCache         *resultCache
 		extentMonitor       *extentStateMonitor
@@ -158,9 +159,14 @@ func NewController(cfg configure.CommonAppConfig, sVice *common.Service, metadat
 	deploymentName := sVice.GetConfig().GetDeploymentName()
 	logger := (sVice.GetConfig().GetLogger()).WithFields(bark.Fields{common.TagCtrl: common.FmtCtrl(hostID), common.TagDplName: common.FmtDplName(deploymentName)})
 
-	lockMgr, err := NewLockMgr(hashLockTableSize, common.UUIDHashCode, logger)
+	dstLockMgr, err := NewLockMgr(hashLockTableSize, common.UUIDHashCode, logger)
 	if err != nil {
-		logger.WithField(common.TagErr, err).Fatal(`Failed to create hash lock`)
+		logger.WithField(common.TagErr, err).Fatal(`Failed to create hash lock dstLockMgr`)
+	}
+
+	cgLockMgr, err := NewLockMgr(hashLockTableSize, common.UUIDHashCode, logger)
+	if err != nil {
+		logger.WithField(common.TagErr, err).Fatal(`Failed to create hash lock cgLockMgr`)
 	}
 
 	context := &Context{
@@ -172,7 +178,8 @@ func NewController(cfg configure.CommonAppConfig, sVice *common.Service, metadat
 	context.localZone, _ = common.GetLocalClusterInfo(strings.ToLower(deploymentName))
 	context.zoneFailoverManager = zoneFailoverManager
 
-	context.dstLock = lockMgr
+	context.dstLock = dstLockMgr
+	context.cgLock = cgLockMgr
 	context.m3Client = metrics.NewClient(instance.Service.GetMetricsReporter(), metrics.Controller)
 	instance.mClient = metadata.NewMetadataMetricsMgr(metadataClient, context.m3Client, context.log)
 	context.mm = NewMetadataMgr(instance.mClient, context.m3Client, context.log)
@@ -400,7 +407,7 @@ func (mcp *Mcp) GetOutputHosts(ctx thrift.Context, inReq *c.GetOutputHostsReques
 		return response()
 	}
 
-	if !context.dstLock.TryLock(dstUUID, getLockTimeout(result)) {
+	if !context.cgLock.TryLock(cgUUID, getLockTimeout(result)) {
 		context.m3Client.IncCounter(metrics.GetOutputHostsScope, metrics.ControllerErrTryLockCounter)
 		return response()
 	}
@@ -409,12 +416,12 @@ func (mcp *Mcp) GetOutputHosts(ctx thrift.Context, inReq *c.GetOutputHostsReques
 	// refresh the cache in the mean time
 	result = context.resultCache.readOutputHosts(cgUUID, now)
 	if result.cacheHit && !result.refreshCache {
-		context.dstLock.Unlock(dstUUID)
+		context.cgLock.Unlock(cgUUID)
 		return response()
 	}
 
 	hostIDs, err := refreshOutputHostsForConsGroup(context, dstUUID, cgUUID, *result, now)
-	context.dstLock.Unlock(dstUUID)
+	context.cgLock.Unlock(cgUUID)
 	if err != nil {
 		if isEntityError(err) {
 			context.m3Client.IncCounter(metrics.GetOutputHostsScope, metrics.ControllerErrBadEntityCounter)
