@@ -511,7 +511,7 @@ func (t *RetentionManager) runRetention(jobsC chan<- *retentionJob) bool {
 
 				t.logger.WithFields(bark.Fields{
 					common.TagDst: dest.id,
-					common.TagExt: dest.extents[j],
+					common.TagExt: dest.extents[j].id,
 				}).Info("skipping retention on deleted extent")
 				continue
 			}
@@ -521,14 +521,14 @@ func (t *RetentionManager) runRetention(jobsC chan<- *retentionJob) bool {
 
 				t.logger.WithFields(bark.Fields{
 					common.TagDst: dest.id,
-					common.TagExt: dest.extents[j],
+					common.TagExt: dest.extents[j].id,
 				}).Info("skipping retention on consumed extent within 'delete-defer-period'")
 				continue
 			}
 
 			t.logger.WithFields(bark.Fields{
 				common.TagDst: dest.id,
-				common.TagExt: dest.extents[j],
+				common.TagExt: dest.extents[j].id,
 				`runAt`:       scheduleAt,
 			}).Info("scheduling retention job")
 
