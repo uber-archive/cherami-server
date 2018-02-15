@@ -50,7 +50,7 @@ const (
 	maxExtentsToConsumeForDstDLQ                 = 2
 	minOpenExtentsForDstTimer                    = 2
 	maxExtentsToConsumeForDstTimer               = 64 // timer dst need to consume from all open extents
-	numKafkaExtentsForDstKafka                   = 2
+	numKafkaExtentsForDstKafka                   = 4
 	maxDlqExtentsForDstKafka                     = 2
 	maxExtentsToConsumeForDstKafka               = numKafkaExtentsForDstKafka + maxDlqExtentsForDstKafka
 	minExtentsToConsumeForSingleCGVisibleExtents = 1
