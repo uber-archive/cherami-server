@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/urfave/cli"
+	"math"
 	"time"
 )
 
@@ -555,6 +556,18 @@ var cmqCommands = []cli.Command{
 		Name:    "watch",
 		Aliases: []string{"m"},
 		Action:  watch,
+		Flags: []cli.Flag{
+			cli.DurationFlag{
+				Name:  "delay, d",
+				Value: 2 * time.Second,
+				Usage: "delay between refreshes",
+			},
+			cli.IntFlag{
+				Name:  "number, num, n",
+				Value: math.MaxInt64,
+				Usage: "number of times to run",
+			},
+		},
 	},
 	cli.Command{
 		Name:    "test",

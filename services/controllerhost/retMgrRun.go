@@ -62,7 +62,7 @@ type (
 	retMgrRunner struct {
 		*retMgrRunnerContext
 
-		retentionMgr   *retentionMgr.RetentionManager
+		retentionMgr   *retentionmgr.RetentionManager
 		running        uint32
 		listenC        chan *common.RingpopListenerEvent
 		stopC          chan struct{}
@@ -157,7 +157,7 @@ func (t *retMgrRunner) startRetentionMgr() {
 		// if uninitialized, initialize an instance (will happen only the first time)
 		if t.retentionMgr == nil {
 
-			opts := &retentionMgr.Options{
+			opts := &retentionmgr.Options{
 				RetentionInterval: retentionMgrInterval,
 				// DLQRetentionInterval: dlqRetentionMgrInterval,
 				SingleCGVisibleExtentGracePeriod: singleCGVisibleExtentGracePeriod,
@@ -166,7 +166,7 @@ func (t *retMgrRunner) startRetentionMgr() {
 				LocalZone:                        t.retMgrRunnerContext.localZone,
 			}
 
-			t.retentionMgr = retentionMgr.New(opts, t.metadataClient, t.clientFactory, t.m3Client, t.log)
+			t.retentionMgr = retentionmgr.New(opts, t.metadataClient, t.clientFactory, t.m3Client, t.log)
 		}
 
 		t.log.Debug("retMgrRunner: Starting retention manager")
