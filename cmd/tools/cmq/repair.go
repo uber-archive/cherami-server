@@ -40,7 +40,8 @@ func repair(c *cli.Context) error {
 	askForConfirmation("Delete now")
 
 	run := c.Bool("run")
-	deleteMISSING(mc, plan, run)
+	timeout := c.Duration("timeout")
+	deleteMISSING(mc, plan, run, timeout)
 	return nil
 }
 
@@ -83,7 +84,7 @@ func generatePlan(extentMap map[string]*extentInfo, consumergroupUUID string) []
 }
 
 // deleteMISSING deletes the MISSING extents from cassandra.
-func deleteMISSING(mc *metadataClient, cqls []string, run bool) {
+func deleteMISSING(mc *metadataClient, cqls []string, run bool, timeout time.Duration) {
 	if !run {
 		fmt.Printf("dry run only so no deleting performed. set -run to execute plan.")
 		return
@@ -94,7 +95,7 @@ func deleteMISSING(mc *metadataClient, cqls []string, run bool) {
 		fmt.Printf("Deleted %d MISSING extents", len(deleted))
 	}()
 	for _, cql := range cqls {
-		ctx, _ := context.WithTimeout(context.Background(), time.Second)
+		ctx, _ := context.WithTimeout(context.Background(), timeout)
 		if err := mc.session.Query(cql).WithContext(ctx).Exec(); err != nil {
 			fmt.Printf("Error deleting consumer_group_extents: %s\n", err)
 			return

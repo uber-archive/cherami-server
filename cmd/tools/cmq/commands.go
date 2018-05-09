@@ -667,6 +667,11 @@ var cmqCommands = []cli.Command{
 			cli.BoolFlag{
 				Name: "run, r",
 			},
+			cli.DurationFlag{
+				Name:  "timeout",
+				Value: time.Second,
+				Usage: "timeout for the cassandra call (default: 1 sec)",
+			},
 		},
 	},
 	cli.Command{
