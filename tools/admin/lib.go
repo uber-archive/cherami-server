@@ -25,6 +25,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/rand"
 	"os"
 	"regexp"
 	"strings"
@@ -32,8 +33,10 @@ import (
 
 	"github.com/codegangsta/cli"
 	mcli "github.com/uber/cherami-server/clients/metadata"
+	"github.com/uber/cherami-server/clients/outputhost"
 	"github.com/uber/cherami-server/common"
 	toolscommon "github.com/uber/cherami-server/tools/common"
+	"github.com/uber/cherami-thrift/.generated/go/admin"
 	"github.com/uber/cherami-thrift/.generated/go/cherami"
 	"github.com/uber/cherami-thrift/.generated/go/metadata"
 	"github.com/uber/cherami-thrift/.generated/go/shared"
@@ -43,10 +46,58 @@ const (
 	adminToolService = "cherami-admin"
 )
 
+var uuidRegex, _ = regexp.Compile(`^[[:xdigit:]]{8}-[[:xdigit:]]{4}-[[:xdigit:]]{4}-[[:xdigit:]]{4}-[[:xdigit:]]{12}$`)
+
 // UnloadConsumerGroup unloads the CG on the given outputhost
 func UnloadConsumerGroup(c *cli.Context) {
 	mClient := toolscommon.GetMClient(c, adminToolService)
-	toolscommon.UnloadConsumerGroup(c, mClient)
+	unloadConsumerGroup(c, mClient)
+}
+
+// UnloadConsumerGroup unloads the CG based on cli.Context
+func unloadConsumerGroup(c *cli.Context, mClient mcli.Client) {
+	cgUUID := c.String("cg_uuid")
+	if !uuidRegex.MatchString(cgUUID) {
+		toolscommon.ExitIfError(errors.New("specify a valid cg UUID"))
+	}
+
+	var hostPorts []string
+	if len(c.Args()) > 1 {
+		// if hostPort is specified as first arg, use that.
+		// This retains existing behavior so that existing scripts won't break.
+		hostPorts = append(hostPorts, c.Args()[0])
+	} else {
+		// If no hostPort passed in, then get all outputhosts.
+		reqType := metadata.HostType_HOST
+		req := &metadata.ListHostsRequest{
+			HostType: &reqType,
+			Limit:    common.Int64Ptr(toolscommon.DefaultPageSize),
+		}
+		hostInfoMap := getHostInfoMap(mClient, req)
+		for role, hostDescriptions := range hostInfoMap {
+			if role == "cherami-outputhost" {
+				for _, hostDescription := range hostDescriptions {
+					if hostDescription.HostAddr != nil {
+						hostPorts = append(hostPorts, *hostDescription.HostAddr)
+					}
+				}
+			}
+		}
+	}
+
+	for _, hostPort := range hostPorts {
+		// generate a random instance id to be used to create a client tchannel
+		instanceID := rand.Intn(50000)
+		outputClient, err := outputhost.NewClient(instanceID, hostPort)
+		toolscommon.ExitIfError(err)
+		defer outputClient.Close()
+
+		cgUnloadReq := admin.NewUnloadConsumerGroupsRequest()
+		cgUnloadReq.CgUUIDs = []string{cgUUID}
+
+		err = outputClient.UnloadConsumerGroups(cgUnloadReq)
+		toolscommon.ExitIfError(err)
+	}
 }
 
 // ListAllCgs unloads the CG on the given outputhost
@@ -739,20 +790,28 @@ func ListHosts(c *cli.Context) {
 	hostType := string(c.String("type"))
 	adminToolService := fmt.Sprintf("cherami-%vhost", name)
 
+	mClient := toolscommon.GetMClient(c, adminToolService)
 	reqType := metadata.HostType_HOST
 	if hostType == "history" {
 		reqType = metadata.HostType_UUID
 	}
-
-	var hostsInfo = make(map[string][]*metadata.HostDescription, 0)
-
-	mClient := toolscommon.GetMClient(c, adminToolService)
-
 	req := &metadata.ListHostsRequest{
 		HostType: &reqType,
 		Limit:    common.Int64Ptr(toolscommon.DefaultPageSize),
 	}
+	hostsInfo := getHostInfoMap(mClient, req)
+	if len(name) > 0 {
+		printHosts(adminToolService, hostsInfo[adminToolService])
+	} else {
+		for service, hosts := range hostsInfo {
+			printHosts(service, hosts)
+		}
+	}
+}
 
+// GetHostInfoMap returns the host info map in the current deployment.
+func getHostInfoMap(mClient mcli.Client, req *metadata.ListHostsRequest) map[string][]*metadata.HostDescription {
+	var hostsInfo = make(map[string][]*metadata.HostDescription, 0)
 	for {
 		resp, err := mClient.ListHosts(req)
 		toolscommon.ExitIfError(err)
@@ -775,13 +834,7 @@ func ListHosts(c *cli.Context) {
 			req.PageToken = resp.NextPageToken
 		}
 	}
-	if len(name) > 0 {
-		printHosts(adminToolService, hostsInfo[adminToolService])
-	} else {
-		for service, hosts := range hostsInfo {
-			printHosts(service, hosts)
-		}
-	}
+	return hostsInfo
 }
 
 func printHosts(service string, hosts []*metadata.HostDescription) {
