@@ -661,6 +661,15 @@ var cmqCommands = []cli.Command{
 		},
 	},
 	cli.Command{
+		Name:   "repair",
+		Action: repair,
+		Flags: []cli.Flag{
+			cli.BoolFlag{
+				Name: "run, r",
+			},
+		},
+	},
+	cli.Command{
 		Name:    "test",
 		Aliases: []string{"t"},
 		Action:  test,
