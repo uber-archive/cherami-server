@@ -37,7 +37,9 @@ func repair(c *cli.Context) error {
 	}
 	fmt.Printf("Please confirm the deletion plan above.\n" +
 		"You should confirm that the consumer_group_uuid match ONLY the consumer_group_uuid provided")
-	askForConfirmation("Delete now")
+	if askForConfirmation("Delete now") == false {
+		return nil
+	}
 
 	run := c.Bool("run")
 	timeout := c.Duration("timeout")
