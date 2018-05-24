@@ -22,7 +22,6 @@ func repair(c *cli.Context) error {
 		fmt.Errorf("newMetadataClient error: %v", err)
 		return nil
 	}
-	fmt.Println()
 	consistency := gocql.All
 	if consistencyStr := cliContext.String("consistency"); consistencyStr != "" {
 		consistency = gocql.ParseConsistency(consistencyStr)
