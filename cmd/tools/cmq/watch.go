@@ -48,12 +48,10 @@ func watch(c *cli.Context) error {
 	ctrlc := make(chan os.Signal, 1)
 	signal.Notify(ctrlc, os.Interrupt, syscall.SIGTERM)
 
-	fmt.Printf("SaveScreen\n")
 	SaveScreen()
 
 	go func() {
 		<-ctrlc
-		fmt.Printf("RestoreScreen\n")
 		RestoreScreen()
 		os.Exit(1)
 	}()
