@@ -17,6 +17,7 @@ func printRow(prefix string, row map[string]interface{}) {
 	sort.Strings(keys)
 
 	for _, k := range keys {
+
 		fmt.Printf("%s%v:", prefix, k)
 		switch row[k].(type) {
 		case map[string]interface{}:
@@ -37,28 +38,30 @@ func showDestinationByPath(c *cli.Context) error {
 		return fmt.Errorf("destination path not specified")
 	}
 
-	mc, err := newMetadataClient(getOpts(cliContext))
+	mc, err := newMetadataClient()
 
 	if err != nil {
 		fmt.Errorf("newMetadataClient error: %v", err)
 		return nil
 	}
 
-	out := cmqOutputWriter(cliContext.StringSlice("output"))
+	out := cmqOutputWriter(cliContext.StringSlice(`output`))
 	defer out.close()
 
-	path := c.Args()[0]
-	cql := fmt.Sprintf("SELECT * FROM destinations_by_path WHERE path='%v' ALLOW FILTERING", path)
+	for _, path := range c.Args() {
 
-	row, err := mc.QueryRow(cql)
+		cql := fmt.Sprintf("SELECT * FROM destinations_by_path WHERE path='%v' ALLOW FILTERING", path)
 
-	if err != nil {
-		fmt.Printf("showDestinationByPath: '%v': %v\n", cql, err)
-		return nil
+		row, err := mc.QueryRow(cql)
+
+		if err != nil {
+			fmt.Printf("showDestinationByPath: '%v': %v\n", cql, err)
+			return nil
+		}
+
+		fmt.Printf("destinations_by_path[%v]:\n", path)
+		printRow("\t", row)
 	}
-
-	fmt.Printf("destinations_by_path[%v]:\n", path)
-	printRow("\t", row)
 
 	return nil
 }
@@ -69,29 +72,31 @@ func showDestination(c *cli.Context) error {
 		return fmt.Errorf("destination uuid not specified")
 	}
 
-	mc, err := newMetadataClient(getOpts(cliContext))
+	mc, err := newMetadataClient()
 
 	if err != nil {
 		fmt.Errorf("newMetadataClient error: %v", err)
 		return nil
 	}
 
-	out := cmqOutputWriter(cliContext.StringSlice("output"))
+	out := cmqOutputWriter(cliContext.StringSlice(`output`))
 	defer out.close()
 
-	uuid := c.Args()[0]
-	cql := fmt.Sprintf("SELECT * FROM destinations WHERE uuid=%v", uuid)
+	for _, uuid := range c.Args() {
 
-	row, err := mc.QueryRow(cql)
+		cql := fmt.Sprintf("SELECT * FROM destinations WHERE uuid=%v", uuid)
 
-	if err != nil {
-		fmt.Printf("showDestination: '%v': %v\n", cql, err)
-		return nil
+		row, err := mc.QueryRow(cql)
+
+		if err != nil {
+			fmt.Printf("showDestination: '%v': %v\n", cql, err)
+			return nil
+		}
+
+		// fmt.Printf("destinations[%v]:\n", uuid)
+		// printRow("\t", row)
+		out.Destination(row, "")
 	}
-
-	// fmt.Printf("destinations[%v]:\n", uuid)
-	// printRow("\t", row)
-	out.Destination(row, "")
 
 	return nil
 }
@@ -102,29 +107,31 @@ func showConsumerGroup(c *cli.Context) error {
 		return fmt.Errorf("consumer-group uuid not specified")
 	}
 
-	mc, err := newMetadataClient(getOpts(cliContext))
+	mc, err := newMetadataClient()
 
 	if err != nil {
 		fmt.Errorf("newMetadataClient error: %v", err)
 		return nil
 	}
 
-	out := cmqOutputWriter(cliContext.StringSlice("output"))
+	out := cmqOutputWriter(cliContext.StringSlice(`output`))
 	defer out.close()
 
-	uuid := c.Args()[0]
-	cql := fmt.Sprintf("SELECT * FROM consumer_groups WHERE uuid=%v", uuid)
+	for _, uuid := range c.Args() {
 
-	row, err := mc.QueryRow(cql)
+		cql := fmt.Sprintf("SELECT * FROM consumer_groups WHERE uuid=%v", uuid)
 
-	if err != nil {
-		fmt.Printf("showConsumerGroup: '%v': %v\n", cql, err)
-		return nil
+		row, err := mc.QueryRow(cql)
+
+		if err != nil {
+			fmt.Printf("showConsumerGroup: '%v': %v\n", cql, err)
+			return nil
+		}
+
+		// fmt.Printf("consumergroups[%v]:\n", uuid)
+		// printRow("\t", row)
+		out.ConsumerGroup(row, "")
 	}
-
-	// fmt.Printf("consumergroups[%v]:\n", uuid)
-	// printRow("\t", row)
-	out.ConsumerGroup(row, "")
 
 	return nil
 }
@@ -135,29 +142,31 @@ func showExtent(c *cli.Context) error {
 		return fmt.Errorf("extent uuid not specified")
 	}
 
-	mc, err := newMetadataClient(getOpts(cliContext))
+	mc, err := newMetadataClient()
 
 	if err != nil {
 		fmt.Errorf("newMetadataClient error: %v", err)
 		return nil
 	}
 
-	out := cmqOutputWriter(cliContext.StringSlice("output"))
+	out := cmqOutputWriter(cliContext.StringSlice(`output`))
 	defer out.close()
 
-	uuid := c.Args()[0]
-	cql := fmt.Sprintf("SELECT * FROM destination_extents WHERE extent_uuid=%v ALLOW FILTERING", uuid)
+	for _, uuid := range c.Args() {
 
-	row, err := mc.QueryRow(cql)
+		cql := fmt.Sprintf("SELECT * FROM destination_extents WHERE extent_uuid=%v ALLOW FILTERING", uuid)
 
-	if err != nil {
-		fmt.Printf("showExtent: '%v': %v\n", cql, err)
-		return nil
+		row, err := mc.QueryRow(cql)
+
+		if err != nil {
+			fmt.Printf("showExtent: '%v': %v\n", cql, err)
+			return nil
+		}
+
+		// fmt.Printf("destination_extents[%v]:\n", uuid)
+		// printRow("\t", row)
+		out.Extent(row, "")
 	}
-
-	// fmt.Printf("destination_extents[%v]:\n", uuid)
-	// printRow("\t", row)
-	out.Extent(row, "")
 
 	return nil
 }
@@ -167,14 +176,14 @@ func showCGExtent(c *cli.Context) error {
 	if c.NArg() < 2 {
 		return fmt.Errorf("cg/extent uuid not specified")
 	}
-	mc, err := newMetadataClient(getOpts(cliContext))
+	mc, err := newMetadataClient()
 
 	if err != nil {
 		fmt.Errorf("newMetadataClient error: %v", err)
 		return nil
 	}
 
-	out := cmqOutputWriter(cliContext.StringSlice("output"))
+	out := cmqOutputWriter(cliContext.StringSlice(`output`))
 	defer out.close()
 
 	cgUUID := c.Args()[0]

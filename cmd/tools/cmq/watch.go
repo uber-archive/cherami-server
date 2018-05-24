@@ -4,7 +4,10 @@ import (
 	"bytes"
 	"fmt"
 	"math"
+	"os"
+	"os/signal"
 	"sort"
+	"syscall"
 	"time"
 
 	"github.com/gocql/gocql"
@@ -27,7 +30,7 @@ func watch(c *cli.Context) error {
 		return nil
 	}
 
-	mc, err := newMetadataClient(getOpts(cliContext))
+	mc, err := newMetadataClient()
 
 	if err != nil {
 		fmt.Errorf("newMetadataClient error: %v", err)
@@ -42,7 +45,16 @@ func watch(c *cli.Context) error {
 	var num = c.Int("num")
 	ticker := time.NewTicker(c.Duration("delay")) // don't query more than once every second // TODO: make configurable
 
-	// print("\033[H\033[2J") // clear screen
+	ctrlc := make(chan os.Signal, 1)
+	signal.Notify(ctrlc, os.Interrupt, syscall.SIGTERM)
+
+	SaveScreen()
+
+	go func() {
+		<-ctrlc
+		RestoreScreen()
+		os.Exit(1)
+	}()
 
 	cgMon := newCGWatch(mc, destUUID, cgUUID)
 
@@ -53,10 +65,10 @@ func watch(c *cli.Context) error {
 		output, _, _ := cgMon.refresh()
 
 		if !justOnce {
-			moveCursorHome()
+			MoveCursor(0, 0)
 
 			if i%8 == 0 {
-				clearScreen()
+				ClearScreen()
 			}
 		}
 
@@ -65,6 +77,7 @@ func watch(c *cli.Context) error {
 		fmt.Printf(" replicate: %.1f msgs/sec [%d msgs]   \n", cgMon.rateReplicate, cgMon.deltaPublish)
 		fmt.Printf(" consume: %.1f msgs/sec [%d msgs]    \n", cgMon.rateConsume, cgMon.deltaConsume)
 		fmt.Printf(" backlog: %d    \n", cgMon.totalBacklog)
+		fmt.Printf("\n %v  \n", time.Now())
 
 		if !justOnce {
 			<-ticker.C // don't query more than once every two-seconds
@@ -72,14 +85,6 @@ func watch(c *cli.Context) error {
 	}
 
 	return nil
-}
-
-func clearScreen() {
-	print("\033[H\033[2J") // clear screen and move cursor to (0,0)
-}
-
-func moveCursorHome() {
-	print("\033[H")
 }
 
 type extStatus int
