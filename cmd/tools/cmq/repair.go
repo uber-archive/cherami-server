@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 	"time"
+	"github.com/gocql/gocql"
 )
 
 func repair(c *cli.Context) error {
@@ -17,11 +18,11 @@ func repair(c *cli.Context) error {
 	}
 
 	mc, err := newMetadataClient(getOpts(cliContext))
-
 	if err != nil {
 		fmt.Errorf("newMetadataClient error: %v", err)
 		return nil
 	}
+	mc.consistency = gocql.All
 
 	defer mc.Close()
 
