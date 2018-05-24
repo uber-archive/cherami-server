@@ -4,49 +4,73 @@ import (
 	"fmt"
 )
 
+// SaveScreen saves the screen
 func SaveScreen() {
 	print(`\x1b[?47h`)
 }
 
+// RestoreScreen restores saved screen
 func RestoreScreen() {
 	print(`\x1b[?47l`)
 }
+
+// ClearScreen clears screen
 func ClearScreen() {
 	print("\x1b[H;2J\x1b[2J") // clear screen and move cursor to (0,0)
 }
 
+// MoveCursor moves cursor to specified row/col
 func MoveCursor(row, col int) {
 	fmt.Printf("\x1b[%d;%dH", row, col)
 }
 
 const (
+	// Black color
 	Black = iota
+	// Red color
 	Red
+	// Green color
 	Green
+	// Yellow color
 	Yellow
+	// Blue color
 	Blue
+	// Magenta color
 	Magenta
+	// Cyan color
 	Cyan
+	// White color
 	White
+	// BrightBlack color
 	BrightBlack
+	// BrightRed color
 	BrightRed
+	// BrightGreen color
 	BrightGreen
+	// BrightYellow color
 	BrightYellow
+	// BrightBlue color
 	BrightBlue
+	// BrightMagenta color
 	BrightMagenta
+	// BrightCyan color
 	BrightCyan
+	// BrightWhite color
 	BrightWhite
 )
 
+// AnsiCtrlSeq holds an ansi control sequence
 type AnsiCtrlSeq struct {
 	text string
 	ansi []int
 }
 
+// Text takes a string to use with ansi control sequence
 func Text(text string) *AnsiCtrlSeq {
 	return &AnsiCtrlSeq{text: text}
 }
 
+// String returns the string to output with the appropriate ansi control sequences
 func (t *AnsiCtrlSeq) String() string {
 
 	const (
@@ -79,11 +103,13 @@ func (t *AnsiCtrlSeq) String() string {
 	}
 }
 
+// Width truncates to specified width
 func (t *AnsiCtrlSeq) Width(w int) *AnsiCtrlSeq {
 	t.text = fmt.Sprintf("%*s", w, t.text)
 	return t
 }
 
+// Color adds specified foreground color to text
 func (t *AnsiCtrlSeq) Color(color int) *AnsiCtrlSeq {
 
 	if color <= White {
@@ -94,6 +120,7 @@ func (t *AnsiCtrlSeq) Color(color int) *AnsiCtrlSeq {
 	return t.Color(30 + color - BrightBlack).Bold()
 }
 
+// Background adds specified background color to text
 func (t *AnsiCtrlSeq) Background(color int) *AnsiCtrlSeq {
 
 	if color <= White {
@@ -105,44 +132,23 @@ func (t *AnsiCtrlSeq) Background(color int) *AnsiCtrlSeq {
 	return t.Background(40 + color - White)
 }
 
+// Underline underlines text
 func (t *AnsiCtrlSeq) Underline() *AnsiCtrlSeq {
 
 	t.ansi = append(t.ansi, 4)
 	return t
 }
 
+// Bold emboldens the text
 func (t *AnsiCtrlSeq) Bold() *AnsiCtrlSeq {
 
 	t.ansi = append(t.ansi, 1)
 	return t
 }
 
+// Blink makes text blink
 func (t *AnsiCtrlSeq) Blink() *AnsiCtrlSeq {
 
 	t.ansi = append(t.ansi, 5)
-	return t
-}
-
-func (t *AnsiCtrlSeq) FastBlink() *AnsiCtrlSeq {
-
-	t.ansi = append(t.ansi, 6)
-	return t
-}
-
-func (t *AnsiCtrlSeq) Reverse() *AnsiCtrlSeq {
-
-	t.ansi = append(t.ansi, 7)
-	return t
-}
-
-func (t *AnsiCtrlSeq) AltFont() *AnsiCtrlSeq {
-
-	t.ansi = append(t.ansi, 12)
-	return t
-}
-
-func (t *AnsiCtrlSeq) Overlined() *AnsiCtrlSeq {
-
-	t.ansi = append(t.ansi, 53)
 	return t
 }
