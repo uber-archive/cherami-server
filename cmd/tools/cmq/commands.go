@@ -672,6 +672,11 @@ var cmqCommands = []cli.Command{
 				Value: time.Second,
 				Usage: "timeout for the cassandra call (default: 1 sec)",
 			},
+			cli.StringFlag{
+				Name:  "consistency",
+				Value: "all",
+				Usage: "consistency level for cassandra call",
+			},
 		},
 	},
 	cli.Command{

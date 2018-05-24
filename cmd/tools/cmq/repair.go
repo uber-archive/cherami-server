@@ -4,11 +4,11 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"github.com/gocql/gocql"
 	"github.com/urfave/cli"
 	"os"
 	"strings"
 	"time"
-	"github.com/gocql/gocql"
 )
 
 func repair(c *cli.Context) error {
@@ -22,7 +22,7 @@ func repair(c *cli.Context) error {
 		fmt.Errorf("newMetadataClient error: %v", err)
 		return nil
 	}
-	mc.consistency = gocql.All
+	mc.consistency = gocql.ParseConsistency(cliContext.String("consistency"))
 
 	defer mc.Close()
 
