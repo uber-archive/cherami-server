@@ -42,7 +42,8 @@ func watch(c *cli.Context) error {
 	destUUID := c.Args()[0]
 	cgUUID := c.Args()[1]
 
-	ticker := time.NewTicker(2 * time.Second) // don't query more than once every second // TODO: make configurable
+	var num = c.Int("num")
+	ticker := time.NewTicker(c.Duration("delay")) // don't query more than once every second // TODO: make configurable
 
 	ctrlc := make(chan os.Signal, 1)
 	signal.Notify(ctrlc, os.Interrupt, syscall.SIGTERM)
@@ -59,14 +60,18 @@ func watch(c *cli.Context) error {
 
 	cgMon := newCGWatch(mc, destUUID, cgUUID)
 
-	for i := 0; ; i++ {
+	var justOnce = (num == 1) // make script-friendly
+
+	for i := 0; i < num; i++ {
 
 		output, _, _ := cgMon.refresh()
 
-		if i%8 == 0 {
-			ClearScreen()
-		} else {
+		if !justOnce {
 			MoveCursor(0, 0)
+
+			if i%8 == 0 {
+				ClearScreen()
+			}
 		}
 
 		print(output)
@@ -76,7 +81,9 @@ func watch(c *cli.Context) error {
 		fmt.Printf(" backlog: %d    \n", cgMon.totalBacklog)
 		fmt.Printf("\n %v  \n", time.Now())
 
-		<-ticker.C // don't query more than once every two-seconds
+		if !justOnce {
+			<-ticker.C // don't query more than once every two-seconds
+		}
 	}
 
 	return nil
