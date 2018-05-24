@@ -346,7 +346,7 @@ func newCmqWriterCqlDelete() cmqWriter {
 		fmt.Printf("error creating file: %v\n", prefix+"delete.cql")
 	}
 
-	fmt.Fprintf(t.cql, "CONSISTENCY ALL;")
+	fmt.Fprintf(t.cql, "CONSISTENCY ALL;\n")
 	return t
 }
 
@@ -454,7 +454,7 @@ func newCmqWriterCqlDeleteUndo() cmqWriter {
 		fmt.Printf("error creating file: %v\n", prefix+"undo.cql")
 	}
 
-	fmt.Fprintf(t.cql, "CONSISTENCY ALL;")
+	fmt.Fprintf(t.cql, "CONSISTENCY ALL;\n")
 	return t
 }
 
