@@ -1,5 +1,5 @@
-hash: d0c29905b07aed1278050c3471afb0f75bcaa2288b9e1394fa9eee1d52a55fa3
-updated: 2017-11-21T15:35:49.705068042-08:00
+hash: b4ac6cca4953caf65596799ec1216e88cc1f27efe83097737844d2da31d9429a
+updated: 2018-05-09T15:30:43.818541-07:00
 imports:
 - name: github.com/apache/thrift
   version: b2a4d4ae21c789b689dd162deb819665567f481c
@@ -40,7 +40,7 @@ imports:
 - name: github.com/bsm/sarama-cluster
   version: 5efe630369ab4ed5cc4cedeadd61b4d1b2523169
 - name: github.com/cactus/go-statsd-client
-  version: 91c326c3f7bd20f0226d3d1c289dd9f8ce28d33d
+  version: 138b925ccdf617776955904ba7759fce64406cec
   subpackages:
   - statsd
 - name: github.com/cockroachdb/c-jemalloc
@@ -105,7 +105,7 @@ imports:
 - name: github.com/rcrowley/go-metrics
   version: 1f30fe9094a513ce4c700b9a54458bbb0c96996c
 - name: github.com/Shopify/sarama
-  version: bbdbe644099b7fdc8327d5cc69c030945188b2e9
+  version: f7be6aa2bc7b2e38edf816b08b582782194a1c02
   repo: http://github.com/Shopify/sarama
 - name: github.com/sirupsen/logrus
   version: ba1b36c82c5e05c4f912a88eab0dcd91a171688f
@@ -123,7 +123,7 @@ imports:
 - name: github.com/uber-common/bark
   version: 02d883c81a4e7b76904d97efb176efdf4be791bd
 - name: github.com/uber-go/atomic
-  version: 8474b86a5a6f79c443ce4b2992817ff32cf208b8
+  version: 1ea20fb1cbb1cc08cbd0d913a96dead89aa18289
   subpackages:
   - utils
 - name: github.com/uber/cherami-client-go

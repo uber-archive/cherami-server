@@ -661,6 +661,25 @@ var cmqCommands = []cli.Command{
 		},
 	},
 	cli.Command{
+		Name:   "repair",
+		Action: repair,
+		Flags: []cli.Flag{
+			cli.BoolFlag{
+				Name: "run, r",
+			},
+			cli.DurationFlag{
+				Name:  "timeout",
+				Value: time.Second,
+				Usage: "timeout for the cassandra call (default: 1 sec)",
+			},
+			cli.StringFlag{
+				Name:  "consistency",
+				Value: "all",
+				Usage: "consistency level for cassandra call",
+			},
+		},
+	},
+	cli.Command{
 		Name:    "test",
 		Aliases: []string{"t"},
 		Action:  test,
