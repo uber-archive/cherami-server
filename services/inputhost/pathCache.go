@@ -134,7 +134,7 @@ func (pathCache *inPathCache) updateLastDisconnectTime() {
 
 func (pathCache *inPathCache) isIdleTimedOut() bool {
 	ans := false
-	if pathCache.isActive() && len(pathCache.connections) <= 0 &&
+	if pathCache.isActive() && len(pathCache.connections) == 0 &&
 		time.Since(pathCache.lastDisconnectTime) > idleTimeout {
 		ans = true
 	}
@@ -280,7 +280,7 @@ func (pathCache *inPathCache) pubConnectionClosed(connID connectionID) {
 		pathCache.logger.WithField(`conn`, connID).Info(`updating path cache to remove the connection with ID`)
 		delete(pathCache.connections, connID)
 	}
-	if len(pathCache.connections) <= 0 {
+	if len(pathCache.connections) == 0 {
 		pathCache.lastDisconnectTime = time.Now()
 	}
 	pathCache.Unlock()

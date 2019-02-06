@@ -122,7 +122,7 @@ func (s *storageMonitor) checkStorage() {
 
 	path := s.monitoringPath
 
-	if len(path) <= 0 {
+	if len(path) == 0 {
 		s.logger.Warn("StorageMonitor: monitoring path is empty, try working directory")
 		wd, err := os.Getwd()
 		if err != nil {

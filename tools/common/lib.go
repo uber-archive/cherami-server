@@ -1000,7 +1000,7 @@ func ReadDlq(c *cli.Context, serviceName string) {
 	printDest(desc)
 
 	cgUUID := desc.GetDLQConsumerGroupUUID()
-	if len(cgUUID) <= 0 {
+	if len(cgUUID) == 0 {
 		ExitIfError(errors.New("no dlqConsumerGroupUUID for this destination. Please ensure it is a dlq destination"))
 	}
 
