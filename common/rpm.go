@@ -503,7 +503,7 @@ func (rpm *ringpopMonitorImpl) refresh(service string, currInfo *membershipInfo)
 			}
 
 			names, err := net.LookupAddr(tokens[0])
-			if err != nil || len(names) < 0 {
+			if err != nil || len(names) == 0 {
 				continue
 			}
 
