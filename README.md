@@ -1,6 +1,7 @@
 cherami-server [![Build Status](https://travis-ci.org/uber/cherami-server.svg?branch=master)](https://travis-ci.org/uber/cherami-server) [![Coverage Status](https://coveralls.io/repos/uber/cherami-server/badge.svg?branch=master&service=github)](https://coveralls.io/github/uber/cherami-server?branch=master)
 ==============
 DISCLAIMER: This project is deprecated and not maintained
+
 [Cherami](https://eng.uber.com/cherami) is a distributed, scalable, durable, and highly available message queue system we developed at Uber Engineering to transport asynchronous tasks. 
 
 This repo contains the source code of Cherami server, cross-zone replicator server, and several tools. Your application needs to use the client to interact with the server. The client can be found [here](https://github.com/uber/cherami-client-go).
